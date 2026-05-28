@@ -33,10 +33,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
-    const foundUser = users.find(u => u.email === email && u.password === password);
-    if (foundUser) {
-      setUser(foundUser);
-      localStorage.setItem('prismora_user', JSON.stringify(foundUser));
+    // Query Supabase directly so login works even if users state hasn't loaded yet
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .eq('password', password)
+      .single();
+
+    if (data && !error) {
+      setUser(data);
+      localStorage.setItem('prismora_user', JSON.stringify(data));
       return true;
     }
     return false;
