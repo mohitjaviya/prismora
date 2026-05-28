@@ -167,7 +167,7 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
       }));
 
       const body = {
-        system_instruction: { parts: [{ text: systemContext }] },
+        systemInstruction: { parts: [{ text: systemContext }] },
         contents: [
           ...conversationHistory,
           { role: 'user', parts: [{ text: question }] }
