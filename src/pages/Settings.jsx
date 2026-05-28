@@ -327,26 +327,39 @@ const Settings = () => {
                   <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
                     {salesUsers.length > 0 ? salesUsers.map(su => {
                       const isSelected = formData.managedUsers?.includes(su.id);
+                      const assignedManager = allUsers.find(
+                        m => m.role === 'Manager' && m.id !== editingUser?.id && m.managedUsers?.includes(su.id)
+                      );
+                      const isDisabled = !!assignedManager && !isSelected;
+
                       return (
                         <button
                           key={su.id}
                           type="button"
-                          onClick={() => toggleManagedUser(su.id)}
+                          onClick={() => !isDisabled && toggleManagedUser(su.id)}
+                          disabled={isDisabled}
                           className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                             isSelected 
                               ? 'bg-brand-accent/10 border-brand-accent/30 text-white' 
-                              : 'bg-brand-primary border-white/5 text-slate-400 hover:bg-white/5'
+                              : isDisabled
+                                ? 'bg-brand-primary-dark/50 border-white/5 text-slate-600 cursor-not-allowed'
+                                : 'bg-brand-primary border-white/5 text-slate-400 hover:bg-white/5'
                           }`}
                         >
                           {isSelected ? (
                             <CheckSquare className="text-brand-accent shrink-0" size={18} />
                           ) : (
-                            <Square className="shrink-0 opacity-50" size={18} />
+                            <Square className={`shrink-0 ${isDisabled ? 'opacity-20' : 'opacity-50'}`} size={18} />
                           )}
-                          <div className="text-left">
-                            <div className={`text-sm font-medium ${isSelected ? 'text-white' : ''}`}>{su.name}</div>
-                            <div className="text-xs opacity-70">{su.email}</div>
+                          <div className="text-left flex-1">
+                            <div className={`text-sm font-medium ${isSelected ? 'text-white' : isDisabled ? 'text-slate-600' : ''}`}>{su.name}</div>
+                            <div className={`text-xs ${isDisabled ? 'opacity-40' : 'opacity-70'}`}>{su.email}</div>
                           </div>
+                          {isDisabled && (
+                            <div className="text-[10px] text-brand-accent/50 bg-brand-accent/10 px-2 py-0.5 rounded border border-brand-accent/10">
+                              Assigned to {assignedManager.name}
+                            </div>
+                          )}
                         </button>
                       );
                     }) : (
