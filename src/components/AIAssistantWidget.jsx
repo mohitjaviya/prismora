@@ -143,13 +143,14 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
   const [loading, setLoading] = useState(false);
   const chatContainerRef = useRef(null);
 
-  if (user?.role !== 'Admin') return null;
-
+  // All hooks must be called before any conditional returns
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages, loading]);
+
+  if (user?.role !== 'Admin') return null;
 
   const sendMessage = async (text) => {
     const question = text || input.trim();
