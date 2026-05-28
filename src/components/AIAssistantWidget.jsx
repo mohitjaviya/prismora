@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Send, Bot, User, Sparkles, Trash2, Copy, Check, X } from 'lucide-react';
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const SUGGESTED_QUESTIONS = [
   'What are the total sales this month?',
@@ -167,10 +167,8 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
       }));
 
       const body = {
+        system_instruction: { parts: [{ text: systemContext }] },
         contents: [
-          // Inject system context as a fake first exchange so all API versions accept it
-          { role: 'user', parts: [{ text: systemContext }] },
-          { role: 'model', parts: [{ text: 'Understood. I am PRISM, ready to assist with your PRISMORA CRM data.' }] },
           ...conversationHistory,
           { role: 'user', parts: [{ text: question }] }
         ],
