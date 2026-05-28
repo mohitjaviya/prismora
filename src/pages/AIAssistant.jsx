@@ -108,7 +108,7 @@ const MessageBubble = ({ msg }) => {
         </div>
       )}
       <div className={`max-w-[80%] ${isAI ? '' : 'items-end flex flex-col'}`}>
-        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed space-y-1 ${
+        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed space-y-1 break-all md:break-words whitespace-pre-wrap ${
           isAI
             ? 'bg-brand-primary-light border border-white/10 text-slate-200 rounded-tl-sm'
             : 'bg-gradient-to-br from-brand-accent to-brand-accent-dark text-brand-primary font-medium rounded-tr-sm'
