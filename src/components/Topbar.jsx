@@ -264,7 +264,9 @@ const Topbar = () => {
                             <p className={`text-sm font-medium transition-colors ${isUnread ? 'text-white group-hover:text-brand-accent' : 'text-slate-300 group-hover:text-white'}`}>{ev.message}</p>
                             {isUnread && <span className="w-2 h-2 rounded-full bg-brand-accent mt-1.5 shrink-0 ml-2"></span>}
                           </div>
-                          <p className="text-[10px] text-slate-500 mt-0.5">{formatDistanceToNow(new Date(ev.timestamp), { addSuffix: true })}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            {formatDistanceToNow(new Date(ev.timestamp.endsWith('Z') || ev.timestamp.includes('+') ? ev.timestamp : ev.timestamp + 'Z'), { addSuffix: true })}
+                          </p>
                         </div>
                       </button>
                     );

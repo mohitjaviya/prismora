@@ -36,11 +36,72 @@ const Dashboard = () => {
     }).format(value);
   };
 
+  // Calculate MoM (Month-over-Month) Growth Metrics
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth(); // 0-11
+  const currentYear = currentDate.getFullYear();
+  
+  const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+  const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+  const getMonthYear = (dateStr) => {
+    if (!dateStr) return { m: -1, y: -1 };
+    const d = new Date(dateStr);
+    return { m: d.getMonth(), y: d.getFullYear() };
+  };
+
+  // Leads MoM
+  const currentMonthLeads = visibleLeads.filter(l => {
+    const { m, y } = getMonthYear(l.createdAt);
+    return m === currentMonth && y === currentYear;
+  });
+  const lastMonthLeads = visibleLeads.filter(l => {
+    const { m, y } = getMonthYear(l.createdAt);
+    return m === lastMonth && y === lastMonthYear;
+  });
+  
+  const leadsMoM = lastMonthLeads.length 
+    ? Math.round(((currentMonthLeads.length - lastMonthLeads.length) / lastMonthLeads.length) * 100) 
+    : (currentMonthLeads.length > 0 ? 100 : 0);
+
+  // Conversion Rate MoM (absolute point difference)
+  const currentMonthConv = currentMonthLeads.length 
+    ? (currentMonthLeads.filter(l => l.status === 'Converted').length / currentMonthLeads.length) * 100 : 0;
+  const lastMonthConv = lastMonthLeads.length 
+    ? (lastMonthLeads.filter(l => l.status === 'Converted').length / lastMonthLeads.length) * 100 : 0;
+  const convMoM = Math.round(currentMonthConv - lastMonthConv);
+
+  // Pipeline MoM
+  const currentPipeline = currentMonthLeads
+    .filter(l => l.status !== 'Lost' && l.status !== 'Converted')
+    .reduce((sum, lead) => sum + (lead.dealValue || 0), 0);
+  const lastPipeline = lastMonthLeads
+    .filter(l => l.status !== 'Lost' && l.status !== 'Converted')
+    .reduce((sum, lead) => sum + (lead.dealValue || 0), 0);
+  const pipelineMoM = lastPipeline 
+    ? Math.round(((currentPipeline - lastPipeline) / lastPipeline) * 100) 
+    : (currentPipeline > 0 ? 100 : 0);
+
+  // Revenue MoM
+  const currentMonthOrders = visibleOrders.filter(o => {
+    const { m, y } = getMonthYear(o.date || o.createdAt);
+    return m === currentMonth && y === currentYear;
+  });
+  const lastMonthOrders = visibleOrders.filter(o => {
+    const { m, y } = getMonthYear(o.date || o.createdAt);
+    return m === lastMonth && y === lastMonthYear;
+  });
+  const currentRev = currentMonthOrders.filter(o => o.status !== 'Cancelled').reduce((sum, order) => sum + (order.value || 0), 0);
+  const lastRev = lastMonthOrders.filter(o => o.status !== 'Cancelled').reduce((sum, order) => sum + (order.value || 0), 0);
+  const revMoM = lastRev 
+    ? Math.round(((currentRev - lastRev) / lastRev) * 100) 
+    : (currentRev > 0 ? 100 : 0);
+
   const kpis = [
-    { title: 'Total Leads', value: totalLeads.toLocaleString('en-IN'), icon: <Users size={24} className="text-brand-accent" /> },
-    { title: 'Conversion Rate', value: `${conversionRate}%`, icon: <TrendingUp size={24} className="text-green-400" /> },
-    { title: 'Pipeline Value', value: formatCurrency(pipelineValue), icon: <DollarSign size={24} className="text-brand-accent" /> },
-    { title: 'Total Revenue', value: formatCurrency(totalRevenue), icon: <ShoppingBag size={24} className="text-brand-accent-light" /> },
+    { title: 'Total Leads', value: totalLeads.toLocaleString('en-IN'), icon: <Users size={24} className="text-brand-accent" />, mom: leadsMoM },
+    { title: 'Conversion Rate', value: `${conversionRate}%`, icon: <TrendingUp size={24} className="text-green-400" />, mom: convMoM },
+    { title: 'Pipeline Value', value: formatCurrency(pipelineValue), icon: <DollarSign size={24} className="text-brand-accent" />, mom: pipelineMoM },
+    { title: 'Total Revenue', value: formatCurrency(totalRevenue), icon: <ShoppingBag size={24} className="text-brand-accent-light" />, mom: revMoM },
   ];
 
   // Prepare chart data from real database records
@@ -127,9 +188,9 @@ const Dashboard = () => {
             </div>
             <div className="relative z-10 flex flex-wrap items-baseline gap-2 mt-1">
               <p className="text-2xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300 tracking-tight break-all">{kpi.value}</p>
-              <span className={`text-xs font-medium flex items-center ${idx % 2 === 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {idx % 2 === 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                {idx % 2 === 0 ? '+12%' : '-2%'}
+              <span className={`text-xs font-medium flex items-center ${kpi.mom >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {kpi.mom >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                {kpi.mom > 0 ? '+' : ''}{kpi.mom}%
               </span>
             </div>
           </div>
