@@ -43,25 +43,40 @@ const Dashboard = () => {
     { title: 'Total Revenue', value: formatCurrency(totalRevenue), icon: <ShoppingBag size={24} className="text-brand-accent-light" /> },
   ];
 
-  // Prepare chart data (Mock monthly data for demo scaled to visible revenue)
-  const salesData = [
-    { month: 'Jan', revenue: Math.round(totalRevenue * 0.6) },
-    { month: 'Feb', revenue: Math.round(totalRevenue * 0.75) },
-    { month: 'Mar', revenue: Math.round(totalRevenue * 0.9) },
-    { month: 'Apr', revenue: Math.round(totalRevenue * 0.8) },
-    { month: 'May', revenue: totalRevenue },
-  ];
+  // Prepare chart data from real database records
+  const monthlyRevenue = {};
+  visibleOrders.forEach(order => {
+    if (order.status !== 'Cancelled' && order.date) {
+      const date = new Date(order.date);
+      const monthStr = date.toLocaleString('default', { month: 'short' });
+      monthlyRevenue[monthStr] = (monthlyRevenue[monthStr] || 0) + (order.value || 0);
+    }
+  });
 
-  // Generate drilldown mock data if a month is selected
+  const monthsOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const salesData = monthsOrder
+    .filter(m => monthlyRevenue[m] !== undefined)
+    .map(month => ({
+      month,
+      revenue: monthlyRevenue[month]
+    }));
+
+  // Generate drilldown data for the selected month using real data
   const drilldownData = selectedMonth ? (() => {
-    const monthData = salesData.find(d => d.month === selectedMonth);
-    const rev = monthData ? monthData.revenue : 0;
-    return [
-      { name: 'Ashwagandha', value: Math.round(rev * 0.4) },
-      { name: 'Amla Powder', value: Math.round(rev * 0.25) },
-      { name: 'Triphala', value: Math.round(rev * 0.2) },
-      { name: 'Tulsi Drops', value: Math.round(rev * 0.15) }
-    ];
+    const productsInMonth = {};
+    visibleOrders.forEach(order => {
+      if (order.status !== 'Cancelled' && order.date) {
+        const date = new Date(order.date);
+        const monthStr = date.toLocaleString('default', { month: 'short' });
+        if (monthStr === selectedMonth) {
+          productsInMonth[order.product] = (productsInMonth[order.product] || 0) + (order.value || 0);
+        }
+      }
+    });
+    return Object.keys(productsInMonth).map(product => ({
+      name: product,
+      value: productsInMonth[product]
+    })).sort((a, b) => b.value - a.value);
   })() : [];
 
   const handleBarClick = (data) => {
