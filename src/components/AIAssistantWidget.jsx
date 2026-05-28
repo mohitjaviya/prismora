@@ -167,8 +167,10 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
       }));
 
       const body = {
-        systemInstruction: { parts: [{ text: systemContext }] },
         contents: [
+          // Inject system context as a fake first exchange so all API versions accept it
+          { role: 'user', parts: [{ text: systemContext }] },
+          { role: 'model', parts: [{ text: 'Understood. I am PRISM, ready to assist with your PRISMORA CRM data.' }] },
           ...conversationHistory,
           { role: 'user', parts: [{ text: question }] }
         ],
