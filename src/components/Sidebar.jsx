@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle } from 'lucide-react';
+import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Sidebar = () => {
@@ -12,12 +12,13 @@ const Sidebar = () => {
     { name: 'Geography', path: '/geography', icon: <Map size={20} /> },
   ];
 
-  // Inject Customers after Dashboard for Admins
+  // Inject Customers + AI for Admins
   const navItems = user?.role === 'Admin' 
     ? [
         baseNavItems[0], 
         { name: 'Customers', path: '/customers', icon: <Briefcase size={20} /> },
-        ...baseNavItems.slice(1)
+        ...baseNavItems.slice(1),
+        { name: 'AI Assistant', path: '/ai', icon: <Sparkles size={20} /> },
       ]
     : baseNavItems;
 
