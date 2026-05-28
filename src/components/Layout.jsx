@@ -13,6 +13,7 @@ const Layout = () => {
   const { leads } = useData();
   const { user, canAccessData } = useAuth();
   const [showToast, setShowToast] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([
     {
@@ -66,12 +67,12 @@ const Layout = () => {
       <div className="absolute top-[-20%] left-[-10%] w-[55%] h-[55%] rounded-full bg-brand-accent/8 blur-[140px] animate-pulse-slow pointer-events-none"></div>
       <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-pink-900/15 blur-[130px] animate-pulse-slow pointer-events-none" style={{ animationDelay: '2.5s' }}></div>
       
-      <Sidebar />
+      <Sidebar isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} />
       <div 
         ref={scrollRef}
         className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar z-10"
       >
-        <Topbar />
+        <Topbar setIsMobileMenuOpen={setIsMobileMenuOpen} />
         <main className="p-6 md:p-8 animate-fade-in-up">
           <Outlet />
         </main>

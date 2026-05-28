@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { isToday, formatDistanceToNow } from 'date-fns';
 
-const Topbar = () => {
+const Topbar = ({ setIsMobileMenuOpen }) => {
   const { user, logout, canAccessData } = useAuth();
   const { leads, orders, eventLog } = useData();
   const navigate = useNavigate();
@@ -131,7 +131,10 @@ const Topbar = () => {
   return (
     <header className="h-16 shrink-0 glass-panel border-b border-white/5 flex items-center justify-between px-4 md:px-6 z-20 sticky top-0 rounded-b-xl mx-4 mt-2">
       <div className="flex items-center md:hidden">
-        <button className="text-slate-400 hover:text-white transition-colors">
+        <button 
+          onClick={() => setIsMobileMenuOpen && setIsMobileMenuOpen(true)}
+          className="text-slate-400 hover:text-white transition-colors"
+        >
           <Menu size={24} />
         </button>
         <span className="ml-4 text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 hidden sm:block">PRISMORA</span>
