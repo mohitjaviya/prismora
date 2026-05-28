@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Send, Bot, User, Sparkles, Trash2, Copy, Check } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
-
+import { Send, Bot, User, Sparkles, Trash2, Copy, Check, X } from 'lucide-react';
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -138,7 +136,7 @@ const MessageBubble = ({ msg }) => {
   );
 };
 
-const AIAssistant = () => {
+const AIAssistantWidget = ({ onClose }) => {
   const { leads, orders } = useData();
   const { user, users } = useAuth();
   const [messages, setMessages] = useState([
@@ -151,7 +149,7 @@ const AIAssistant = () => {
   const [loading, setLoading] = useState(false);
   const chatContainerRef = useRef(null);
 
-  if (user?.role !== 'Admin') return <Navigate to="/" replace />;
+  if (user?.role !== 'Admin') return null;
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -217,25 +215,34 @@ const AIAssistant = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 h-[calc(100vh-140px)] w-full max-w-6xl mx-auto">
+    <div className="fixed bottom-6 right-6 w-[400px] max-w-[calc(100vw-3rem)] h-[600px] max-h-[calc(100vh-6rem)] z-[100] glass-panel bg-brand-primary/95 rounded-2xl shadow-2xl flex flex-col gap-3 p-4 animate-fade-in-up border border-brand-accent/30 overflow-hidden">
       {/* Header */}
-      <div className="flex justify-between items-center flex-shrink-0">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-accent to-purple-600 flex items-center justify-center shadow-lg shadow-brand-accent/30">
-              <Sparkles size={16} className="text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-white">PRISM AI Assistant</h1>
+      <div className="flex justify-between items-center flex-shrink-0 border-b border-white/5 pb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-accent to-purple-600 flex items-center justify-center shadow-lg shadow-brand-accent/30">
+            <Sparkles size={16} className="text-white" />
           </div>
-          <p className="text-slate-400 text-sm mt-0.5 ml-10">Ask anything about your leads, orders, and team performance.</p>
+          <div>
+            <h1 className="text-base font-bold text-white leading-none">PRISM AI</h1>
+            <p className="text-[10px] text-slate-400 mt-0.5">Live CRM Intelligence</p>
+          </div>
         </div>
-        <button
-          onClick={clearChat}
-          className="glass-panel hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400 text-slate-400 font-medium px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all"
-        >
-          <Trash2 size={16} />
-          Clear Chat
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={clearChat}
+            className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+            title="Clear Chat"
+          >
+            <Trash2 size={16} />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            title="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Suggested Questions */}
@@ -309,4 +316,4 @@ const AIAssistant = () => {
   );
 };
 
-export default AIAssistant;
+export default AIAssistantWidget;

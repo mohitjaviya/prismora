@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import AIAssistantWidget from './AIAssistantWidget';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
@@ -12,6 +13,7 @@ const Layout = () => {
   const { leads } = useData();
   const { user, canAccessData } = useAuth();
   const [showToast, setShowToast] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [dueLeadsCount, setDueLeadsCount] = useState(0);
   const location = useLocation();
   const scrollRef = useRef(null);
@@ -63,7 +65,7 @@ const Layout = () => {
         ref={scrollRef}
         className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar z-10"
       >
-        <Topbar />
+        <Topbar onOpenChat={() => setIsChatOpen(!isChatOpen)} />
         <main className="p-6 md:p-8 animate-fade-in-up">
           <Outlet />
         </main>
@@ -93,6 +95,9 @@ const Layout = () => {
         </div>,
         document.body
       )}
+
+      {/* Global AI Chatbot Widget */}
+      {isChatOpen && <AIAssistantWidget onClose={() => setIsChatOpen(false)} />}
     </div>
   );
 };

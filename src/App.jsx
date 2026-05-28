@@ -10,7 +10,6 @@ import Geography from './pages/Geography';
 import Settings from './pages/Settings';
 import Customers from './pages/Customers';
 import Profile from './pages/Profile';
-import AIAssistant from './pages/AIAssistant';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -30,7 +29,6 @@ function AppRoutes() {
         <Route path="geography" element={<Geography />} />
         <Route path="settings" element={<Settings />} />
         <Route path="profile" element={<Profile />} />
-        <Route path="ai" element={<AIAssistant />} />
       </Route>
     </Routes>
   );

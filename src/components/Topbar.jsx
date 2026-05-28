@@ -1,11 +1,11 @@
-import { Menu, Bell, User, LogOut, Search, Sun, Moon, CalendarClock, Activity, CheckCircle, XCircle, Package, Truck } from 'lucide-react';
+import { Menu, Bell, User, LogOut, Search, Sun, Moon, CalendarClock, Activity, CheckCircle, XCircle, Package, Truck, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { isToday, formatDistanceToNow } from 'date-fns';
 
-const Topbar = () => {
+const Topbar = ({ onOpenChat }) => {
   const { user, logout, canAccessData } = useAuth();
   const { leads, orders, eventLog } = useData();
   const navigate = useNavigate();
@@ -197,6 +197,17 @@ const Topbar = () => {
           >
             {isDark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
+
+          {user?.role === 'Admin' && (
+            <button 
+              onClick={onOpenChat}
+              className="relative text-slate-400 hover:text-white transition-colors p-2 hover:bg-brand-primary-lighter rounded-full"
+              title="AI Assistant"
+            >
+              <div className="absolute inset-0 bg-brand-accent/20 rounded-full blur-md animate-pulse-slow"></div>
+              <Sparkles size={20} className="relative z-10 text-brand-accent hover:text-brand-accent-light" />
+            </button>
+          )}
 
           <div className="relative">
             <button 
