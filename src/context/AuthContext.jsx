@@ -1,39 +1,29 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
-  // Initialize directly from localStorage so refresh never logs user out
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('prismora_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [users, setUsers] = useState([]);
+const mockUsers = [
+  { id: '1', name: 'Admin User', email: 'admin@prismora.com', role: 'Admin' },
+  { id: '2', name: 'Manager User', email: 'manager@prismora.com', role: 'Manager' },
+  { id: '3', name: 'Surbhi', email: 'surbhi@prismora.com', role: 'Sales' },
+  { id: '4', name: 'Ruta', email: 'ruta@prismora.com', role: 'Sales' },
+  { id: '5', name: 'Krina', email: 'krina@prismora.com', role: 'Sales' },
+  { id: '6', name: 'Janki', email: 'janki@prismora.com', role: 'Sales' },
+];
 
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+
+  // Auto-login for demo purposes or check localStorage
   useEffect(() => {
-    fetchUsers();
+    const savedUser = localStorage.getItem('prismora_user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
   }, []);
 
-  const fetchUsers = async () => {
-    const { data } = await supabase.from('users').select('*');
-    if (data) {
-      setUsers(data);
-      // Refresh the logged-in user's data from DB to keep it up to date
-      const savedUser = localStorage.getItem('prismora_user');
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        const freshUser = data.find(u => u.id === parsed.id);
-        if (freshUser) {
-          setUser(freshUser);
-          localStorage.setItem('prismora_user', JSON.stringify(freshUser));
-        }
-      }
-    }
-  };
-
-  const login = async (email, password) => {
-    const foundUser = users.find(u => u.email === email && u.password === password);
+  const login = (email) => {
+    const foundUser = mockUsers.find(u => u.email === email);
     if (foundUser) {
       setUser(foundUser);
       localStorage.setItem('prismora_user', JSON.stringify(foundUser));
@@ -47,57 +37,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('prismora_user');
   };
 
-  const addUser = async (userData) => {
-    const newId = `U${Date.now()}`;
-    const newUser = {
-      ...userData,
-      password: userData.password || 'password123',
-      id: newId,
-      managedUsers: userData.managedUsers || []
-    };
-    
-    setUsers([...users, newUser]);
-    await supabase.from('users').insert([newUser]);
-  };
-
-  const updateUser = async (id, updatedData) => {
-    setUsers(users.map(u => u.id === id ? { ...u, ...updatedData } : u));
-    await supabase.from('users').update(updatedData).eq('id', id);
-    
-    if (user && user.id === id) {
-      const newUser = { ...user, ...updatedData };
-      setUser(newUser);
-      localStorage.setItem('prismora_user', JSON.stringify(newUser));
-    }
-  };
-
-  const deleteUser = async (id) => {
-    setUsers(users.filter(u => u.id !== id));
-    await supabase.from('users').delete().eq('id', id);
-  };
-
-  // RBAC Helper: Check if current user can see data assigned to `ownerId`
-  const canAccessData = (ownerId) => {
-    if (!user) return false;
-    if (user.role === 'Admin') return true;
-    if (user.role === 'Manager') {
-      return user.id === ownerId || (user.managedUsers && user.managedUsers.includes(ownerId));
-    }
-    return user.id === ownerId; // Sales can only see their own
-  };
-
-  // RBAC Helper: Returns list of users current user can assign data to
-  const getAssignableUsers = () => {
-    if (!user) return [];
-    if (user.role === 'Admin') return users.filter(u => u.role === 'Sales');
-    if (user.role === 'Manager') {
-      return users.filter(u => user.managedUsers && user.managedUsers.includes(u.id));
-    }
-    return []; // Sales can only self-assign (handled separately)
-  };
-
   return (
-    <AuthContext.Provider value={{ user, users, login, logout, addUser, updateUser, deleteUser, canAccessData, getAssignableUsers }}>
+    <AuthContext.Provider value={{ user, login, logout, mockUsers }}>
       {children}
     </AuthContext.Provider>
   );

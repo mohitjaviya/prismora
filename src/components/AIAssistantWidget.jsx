@@ -141,6 +141,8 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
   const { user, users } = useAuth();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [retryCountdown, setRetryCountdown] = useState(0);
+  const retryTimerRef = useRef(null);
   const chatContainerRef = useRef(null);
 
   if (user?.role !== 'Admin') return null;
@@ -151,12 +153,19 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
     }
   }, [messages, loading]);
 
-  const sendMessage = async (text) => {
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current); };
+  }, []);
+
+  const sendMessage = async (text, isRetry = false) => {
     const question = text || input.trim();
     if (!question || loading) return;
 
-    setInput('');
-    setMessages(prev => [...prev, { role: 'user', text: question }]);
+    if (!isRetry) {
+      setInput('');
+      setMessages(prev => [...prev, { role: 'user', text: question }]);
+    }
     setLoading(true);
 
     try {
@@ -187,7 +196,37 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
       const data = await res.json();
       
       if (data.error) {
-        setMessages(prev => [...prev, { role: 'ai', text: `**API Error:** ${data.error.message}` }]);
+        const errMsg = data.error.message || '';
+        // Check if it's a quota/rate limit error
+        const retryMatch = errMsg.match(/retry in (\d+(\.\d+)?)s/i) || errMsg.match(/(\d+(\.\d+)?)\s*s\./i);
+        const retrySeconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+
+        if (errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate') || res.status === 429) {
+          // Show countdown message
+          setMessages(prev => [...prev, { 
+            role: 'ai', 
+            text: `⏳ **Rate limit reached.** I'll automatically retry your question in **${retrySeconds} seconds**. Please wait...`,
+          }]);
+          
+          // Start countdown
+          setRetryCountdown(retrySeconds);
+          let remaining = retrySeconds;
+          const tick = () => {
+            remaining -= 1;
+            setRetryCountdown(remaining);
+            if (remaining > 0) {
+              retryTimerRef.current = setTimeout(tick, 1000);
+            } else {
+              setRetryCountdown(0);
+              // Remove the countdown message and retry
+              setMessages(prev => prev.filter(m => !m.text.includes('Rate limit reached')));
+              sendMessage(question, true);
+            }
+          };
+          retryTimerRef.current = setTimeout(tick, 1000);
+        } else {
+          setMessages(prev => [...prev, { role: 'ai', text: `**API Error:** ${errMsg}` }]);
+        }
       } else if (data.candidates && data.candidates.length > 0) {
         const aiText = data.candidates[0]?.content?.parts?.[0]?.text;
         setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
@@ -281,7 +320,13 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
 
       {/* Input Area */}
       <div className="flex-shrink-0">
-        <div className="glass-panel border border-white/10 rounded-2xl p-2 flex items-end gap-2 focus-within:border-brand-accent/50 transition-colors">
+        {retryCountdown > 0 && (
+          <div className="flex items-center justify-center gap-2 mb-2 text-xs text-brand-accent bg-brand-accent/10 border border-brand-accent/20 rounded-xl px-3 py-2">
+            <span className="animate-pulse">⏳</span>
+            <span>Auto-retrying in <strong>{retryCountdown}s</strong>…</span>
+          </div>
+        )}
+        <div className={`glass-panel border rounded-2xl p-2 flex items-end gap-2 transition-colors ${retryCountdown > 0 ? 'border-brand-accent/30 opacity-60' : 'border-white/10 focus-within:border-brand-accent/50'}`}>
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -291,14 +336,15 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
                 sendMessage();
               }
             }}
-            placeholder="Ask about sales, leads, team performance... (Enter to send)"
+            disabled={retryCountdown > 0}
+            placeholder={retryCountdown > 0 ? `Retrying in ${retryCountdown}s...` : "Ask about sales, leads, team performance... (Enter to send)"}
             rows={1}
-            className="flex-1 bg-transparent text-white placeholder-slate-500 text-sm resize-none outline-none px-2 py-1.5 max-h-32 custom-scrollbar leading-relaxed"
+            className="flex-1 bg-transparent text-white placeholder-slate-500 text-sm resize-none outline-none px-2 py-1.5 max-h-32 custom-scrollbar leading-relaxed disabled:cursor-not-allowed"
             style={{ fieldSizing: 'content' }}
           />
           <button
             onClick={() => sendMessage()}
-            disabled={!input.trim() || loading}
+            disabled={!input.trim() || loading || retryCountdown > 0}
             className="bg-gradient-to-r from-brand-accent to-brand-accent-dark hover:from-brand-accent-light hover:to-brand-accent disabled:opacity-40 disabled:cursor-not-allowed text-brand-primary p-2.5 rounded-xl transition-all hover:scale-105 flex-shrink-0"
           >
             <Send size={18} />
