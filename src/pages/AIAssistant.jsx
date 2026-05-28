@@ -149,12 +149,14 @@ const AIAssistant = () => {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const bottomRef = useRef(null);
+  const chatContainerRef = useRef(null);
 
   if (user?.role !== 'Admin') return <Navigate to="/" replace />;
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   }, [messages, loading]);
 
   const sendMessage = async (text) => {
@@ -245,7 +247,10 @@ const AIAssistant = () => {
       )}
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-2 min-h-0">
+      <div 
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-2 min-h-0"
+      >
         {messages.map((msg, i) => (
           <MessageBubble key={i} msg={msg} />
         ))}
@@ -264,7 +269,6 @@ const AIAssistant = () => {
             </div>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       {/* Input Area */}
