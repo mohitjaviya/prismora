@@ -208,7 +208,7 @@ const AIAssistant = () => {
   };
 
   return (
-    <div className="h-full flex flex-col gap-4 max-h-[calc(100vh-5rem)]">
+    <div className="flex flex-col gap-4 h-[calc(100vh-8rem)] w-full max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex justify-between items-center flex-shrink-0">
         <div>
