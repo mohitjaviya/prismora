@@ -196,9 +196,11 @@ const AIAssistant = () => {
       
       if (data.error) {
         setMessages(prev => [...prev, { role: 'ai', text: `**API Error:** ${data.error.message}` }]);
-      } else {
-        const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response. Please try again.';
+      } else if (data.candidates && data.candidates.length > 0) {
+        const aiText = data.candidates[0]?.content?.parts?.[0]?.text;
         setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
+      } else {
+        setMessages(prev => [...prev, { role: 'ai', text: `**API Debug Info:** ${JSON.stringify(data)}` }]);
       }
     } catch (e) {
       setMessages(prev => [...prev, { role: 'ai', text: `**Network Error:** ${e.message}. Please check the console for details.` }]);
