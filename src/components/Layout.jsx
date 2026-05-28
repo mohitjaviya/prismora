@@ -6,7 +6,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import { isToday, parseISO } from 'date-fns';
-import { Bell, X, CalendarClock } from 'lucide-react';
+import { Bell, X, CalendarClock, Sparkles } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const Layout = () => {
@@ -65,7 +65,7 @@ const Layout = () => {
         ref={scrollRef}
         className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar z-10"
       >
-        <Topbar onOpenChat={() => setIsChatOpen(!isChatOpen)} />
+        <Topbar />
         <main className="p-6 md:p-8 animate-fade-in-up">
           <Outlet />
         </main>
@@ -98,6 +98,18 @@ const Layout = () => {
 
       {/* Global AI Chatbot Widget */}
       {isChatOpen && <AIAssistantWidget onClose={() => setIsChatOpen(false)} />}
+
+      {/* Floating round chat button - bottom right */}
+      {user?.role === 'Admin' && (
+        <button
+          onClick={() => setIsChatOpen(prev => !prev)}
+          className="fixed bottom-6 right-6 z-[99] w-14 h-14 rounded-full bg-gradient-to-br from-brand-accent to-brand-accent-dark shadow-lg shadow-brand-accent/40 flex items-center justify-center hover:scale-110 transition-transform border-2 border-brand-accent/30"
+          title="AI Assistant"
+        >
+          <div className="absolute inset-0 rounded-full bg-brand-accent/30 blur-md animate-pulse-slow"></div>
+          <Sparkles size={22} className="relative z-10 text-white" />
+        </button>
+      )}
     </div>
   );
 };
