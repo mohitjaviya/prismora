@@ -4,21 +4,32 @@ import { supabase } from '../supabaseClient';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  // Initialize directly from localStorage so refresh never logs user out
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('prismora_user');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [users, setUsers] = useState([]);
 
   useEffect(() => {
     fetchUsers();
-
-    const savedUser = localStorage.getItem('prismora_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
   }, []);
 
   const fetchUsers = async () => {
     const { data } = await supabase.from('users').select('*');
-    if (data) setUsers(data);
+    if (data) {
+      setUsers(data);
+      // Refresh the logged-in user's data from DB to keep it up to date
+      const savedUser = localStorage.getItem('prismora_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        const freshUser = data.find(u => u.id === parsed.id);
+        if (freshUser) {
+          setUser(freshUser);
+          localStorage.setItem('prismora_user', JSON.stringify(freshUser));
+        }
+      }
+    }
   };
 
   const login = async (email, password) => {
