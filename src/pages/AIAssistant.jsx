@@ -193,10 +193,15 @@ const AIAssistant = () => {
       });
 
       const data = await res.json();
-      const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response. Please try again.';
-      setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
+      
+      if (data.error) {
+        setMessages(prev => [...prev, { role: 'ai', text: `**API Error:** ${data.error.message}` }]);
+      } else {
+        const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response. Please try again.';
+        setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
+      }
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'ai', text: 'An error occurred while contacting the AI. Please check your API key and internet connection.' }]);
+      setMessages(prev => [...prev, { role: 'ai', text: `**Network Error:** ${e.message}. Please check the console for details.` }]);
     } finally {
       setLoading(false);
     }
