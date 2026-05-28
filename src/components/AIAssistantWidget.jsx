@@ -15,64 +15,60 @@ const SUGGESTED_QUESTIONS = [
 ];
 
 const buildContext = (leads, orders, users) => {
-  const totalRevenue = orders.filter(o => o.status !== 'Cancelled').reduce((s, o) => s + (o.value || 0), 0);
+  const totalRevenue = orders.reduce((s, o) => s + (o.value || 0), 0);
+  const totalLeads = leads.length;
+  const totalOrders = orders.length;
 
-  // Aggregate revenue by product
   const revenueByProduct = {};
   orders.forEach(o => {
-    if (o.status !== 'Cancelled') revenueByProduct[o.product] = (revenueByProduct[o.product] || 0) + (o.value || 0);
+    revenueByProduct[o.product] = (revenueByProduct[o.product] || 0) + (o.value || 0);
   });
 
-  // Aggregate revenue by state
   const revenueByState = {};
   orders.forEach(o => {
-    if (o.status !== 'Cancelled') revenueByState[o.state] = (revenueByState[o.state] || 0) + (o.value || 0);
+    revenueByState[o.state] = (revenueByState[o.state] || 0) + (o.value || 0);
   });
 
-  // Lead status counts
   const leadsByStatus = {};
-  leads.forEach(l => { leadsByStatus[l.status] = (leadsByStatus[l.status] || 0) + 1; });
-
-  // Per-salesperson stats
-  const salesStats = {};
-  orders.forEach(o => {
-    const name = users.find(u => u.id === o.assignedTo)?.name || 'Unassigned';
-    if (!salesStats[name]) salesStats[name] = { revenue: 0, orders: 0, leads: 0 };
-    salesStats[name].revenue += (o.value || 0);
-    salesStats[name].orders += 1;
-  });
   leads.forEach(l => {
-    const name = users.find(u => u.id === l.assignedTo)?.name || 'Unassigned';
-    if (!salesStats[name]) salesStats[name] = { revenue: 0, orders: 0, leads: 0 };
-    salesStats[name].leads += 1;
+    leadsByStatus[l.status] = (leadsByStatus[l.status] || 0) + 1;
   });
 
-  // Top 10 leads by deal value
-  const topLeads = [...leads]
-    .sort((a, b) => (b.dealValue || 0) - (a.dealValue || 0))
-    .slice(0, 10)
-    .map(l => `${l.name} (${l.company}) | Status:${l.status} | Deal:₹${(l.dealValue||0).toLocaleString('en-IN')} | Products:${(l.productInterest||[]).join(',')} | Salesperson:${users.find(u=>u.id===l.assignedTo)?.name||'N/A'}`);
+  const revenueByPerson = {};
+  orders.forEach(o => {
+    const person = users.find(u => u.id === o.assignedTo);
+    const name = person?.name || 'Unassigned';
+    revenueByPerson[name] = (revenueByPerson[name] || 0) + (o.value || 0);
+  });
 
-  // Top 10 orders by value
-  const topOrders = [...orders]
-    .sort((a, b) => (b.value || 0) - (a.value || 0))
-    .slice(0, 10)
-    .map(o => `${o.customerName} | Product:${o.product} | Qty:${o.quantity} | Value:₹${(o.value||0).toLocaleString('en-IN')} | State:${o.state} | Status:${o.status} | Salesperson:${users.find(u=>u.id===o.assignedTo)?.name||'N/A'}`);
+  const leadsByPerson = {};
+  leads.forEach(l => {
+    const person = users.find(u => u.id === l.assignedTo);
+    const name = person?.name || 'Unassigned';
+    leadsByPerson[name] = (leadsByPerson[name] || 0) + 1;
+  });
 
-  return `You are PRISM, an AI assistant in PRISMORA CRM. Be concise, use bullet points, format numbers with ₹. Never make up data.
+  return `
+You are PRISM, an intelligent AI assistant embedded in the PRISMORA CRM system for a personal care products company.
+Be concise, use bullet points where appropriate, format numbers with ₹ and commas. Never make up data — only use what's provided.
 
-=== CRM SUMMARY ===
-Total Revenue: ₹${totalRevenue.toLocaleString('en-IN')} | Total Orders: ${orders.length} | Total Leads: ${leads.length}
-Lead Status: ${JSON.stringify(leadsByStatus)}
+=== LIVE CRM DATA SUMMARY ===
+Total Revenue: ₹${totalRevenue.toLocaleString('en-IN')}
+Total Orders: ${totalOrders}
+Total Leads: ${totalLeads}
+
+Revenue by Salesperson: ${JSON.stringify(revenueByPerson)}
+Leads by Salesperson: ${JSON.stringify(leadsByPerson)}
+Lead Status Breakdown: ${JSON.stringify(leadsByStatus)}
 Revenue by Product: ${JSON.stringify(revenueByProduct)}
 Revenue by State: ${JSON.stringify(revenueByState)}
-Salesperson Stats: ${JSON.stringify(salesStats)}
 
-=== TOP 10 LEADS ===
-${topLeads.join('\n')}
+=== ALL LEADS (${leads.length}) ===
+${leads.map(l => `ID:${l.id} Name:${l.name} Company:${l.company} Status:${l.status} AssignedTo:${users.find(u=>u.id===l.assignedTo)?.name||l.assignedTo} Products:${(l.productInterest||[]).join(', ')} DealValue:₹${(l.dealValue||0).toLocaleString('en-IN')} Source:${l.leadSource||'N/A'} FollowUp:${l.followUpDate ? new Date(l.followUpDate).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
 
-=== TOP 10 ORDERS ===
-${topOrders.join('\n')}`.trim();
+=== ALL ORDERS (${orders.length}) ===
+${orders.map(o => `ID:${o.id} Customer:${o.customerName} Company:${o.companyName||''} Product:${o.product} Qty:${o.quantity} Value:₹${(o.value||0).toLocaleString('en-IN')} State:${o.state} City:${o.city} Status:${o.status} Salesperson:${users.find(u=>u.id===o.assignedTo)?.name||o.assignedTo} Date:${o.date ? new Date(o.date).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
+`.trim();
 };
 
 const MessageBubble = ({ msg }) => {
@@ -145,8 +141,6 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
   const { user, users } = useAuth();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [retryCountdown, setRetryCountdown] = useState(0);
-  const retryTimerRef = useRef(null);
   const chatContainerRef = useRef(null);
 
   if (user?.role !== 'Admin') return null;
@@ -157,26 +151,17 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
     }
   }, [messages, loading]);
 
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current); };
-  }, []);
-
-  const sendMessage = async (text, isRetry = false) => {
+  const sendMessage = async (text) => {
     const question = text || input.trim();
     if (!question || loading) return;
 
-    if (!isRetry) {
-      setInput('');
-      setMessages(prev => [...prev, { role: 'user', text: question }]);
-    }
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', text: question }]);
     setLoading(true);
 
     try {
       const systemContext = buildContext(leads, orders, users);
-      // Only keep last 6 messages to minimize token usage
-      const recentHistory = messages.slice(-6);
-      const conversationHistory = recentHistory.map(m => ({
+      const conversationHistory = messages.map(m => ({
         role: m.role === 'ai' ? 'model' : 'user',
         parts: [{ text: m.text }]
       }));
@@ -202,37 +187,7 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
       const data = await res.json();
       
       if (data.error) {
-        const errMsg = data.error.message || '';
-        // Check if it's a quota/rate limit error
-        const retryMatch = errMsg.match(/retry in (\d+(\.\d+)?)s/i) || errMsg.match(/(\d+(\.\d+)?)\s*s\./i);
-        const retrySeconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
-
-        if (errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate') || res.status === 429) {
-          // Show countdown message
-          setMessages(prev => [...prev, { 
-            role: 'ai', 
-            text: `⏳ **Rate limit reached.** I'll automatically retry your question in **${retrySeconds} seconds**. Please wait...`,
-          }]);
-          
-          // Start countdown
-          setRetryCountdown(retrySeconds);
-          let remaining = retrySeconds;
-          const tick = () => {
-            remaining -= 1;
-            setRetryCountdown(remaining);
-            if (remaining > 0) {
-              retryTimerRef.current = setTimeout(tick, 1000);
-            } else {
-              setRetryCountdown(0);
-              // Remove the countdown message and retry
-              setMessages(prev => prev.filter(m => !m.text.includes('Rate limit reached')));
-              sendMessage(question, true);
-            }
-          };
-          retryTimerRef.current = setTimeout(tick, 1000);
-        } else {
-          setMessages(prev => [...prev, { role: 'ai', text: `**API Error:** ${errMsg}` }]);
-        }
+        setMessages(prev => [...prev, { role: 'ai', text: `**API Error:** ${data.error.message}` }]);
       } else if (data.candidates && data.candidates.length > 0) {
         const aiText = data.candidates[0]?.content?.parts?.[0]?.text;
         setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
@@ -326,13 +281,7 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
 
       {/* Input Area */}
       <div className="flex-shrink-0">
-        {retryCountdown > 0 && (
-          <div className="flex items-center justify-center gap-2 mb-2 text-xs text-brand-accent bg-brand-accent/10 border border-brand-accent/20 rounded-xl px-3 py-2">
-            <span className="animate-pulse">⏳</span>
-            <span>Auto-retrying in <strong>{retryCountdown}s</strong>…</span>
-          </div>
-        )}
-        <div className={`glass-panel border rounded-2xl p-2 flex items-end gap-2 transition-colors ${retryCountdown > 0 ? 'border-brand-accent/30 opacity-60' : 'border-white/10 focus-within:border-brand-accent/50'}`}>
+        <div className="glass-panel border border-white/10 rounded-2xl p-2 flex items-end gap-2 focus-within:border-brand-accent/50 transition-colors">
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -342,15 +291,14 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
                 sendMessage();
               }
             }}
-            disabled={retryCountdown > 0}
-            placeholder={retryCountdown > 0 ? `Retrying in ${retryCountdown}s...` : "Ask about sales, leads, team performance... (Enter to send)"}
+            placeholder="Ask about sales, leads, team performance... (Enter to send)"
             rows={1}
-            className="flex-1 bg-transparent text-white placeholder-slate-500 text-sm resize-none outline-none px-2 py-1.5 max-h-32 custom-scrollbar leading-relaxed disabled:cursor-not-allowed"
+            className="flex-1 bg-transparent text-white placeholder-slate-500 text-sm resize-none outline-none px-2 py-1.5 max-h-32 custom-scrollbar leading-relaxed"
             style={{ fieldSizing: 'content' }}
           />
           <button
             onClick={() => sendMessage()}
-            disabled={!input.trim() || loading || retryCountdown > 0}
+            disabled={!input.trim() || loading}
             className="bg-gradient-to-r from-brand-accent to-brand-accent-dark hover:from-brand-accent-light hover:to-brand-accent disabled:opacity-40 disabled:cursor-not-allowed text-brand-primary p-2.5 rounded-xl transition-all hover:scale-105 flex-shrink-0"
           >
             <Send size={18} />
