@@ -215,7 +215,7 @@ const AIAssistantWidget = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed bottom-24 right-6 w-[380px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100vh-8rem)] z-[100] glass-panel bg-brand-primary/95 rounded-2xl shadow-2xl flex flex-col gap-3 p-4 animate-fade-in-up border border-brand-accent/30 overflow-hidden">
+    <div className="fixed top-[4.5rem] right-4 bottom-4 w-[420px] max-w-[calc(100vw-5rem)] z-[100] glass-panel bg-brand-primary/98 rounded-2xl shadow-2xl flex flex-col gap-3 p-4 animate-fade-in-up border border-brand-accent/30 overflow-hidden">
       {/* Header */}
       <div className="flex justify-between items-center flex-shrink-0 border-b border-white/5 pb-3">
         <div className="flex items-center gap-2">
