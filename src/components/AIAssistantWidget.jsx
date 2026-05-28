@@ -136,15 +136,9 @@ const MessageBubble = ({ msg }) => {
   );
 };
 
-const AIAssistantWidget = ({ onClose }) => {
+const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
   const { leads, orders } = useData();
   const { user, users } = useAuth();
-  const [messages, setMessages] = useState([
-    {
-      role: 'ai',
-      text: `Hello! I'm **PRISM**, your AI business intelligence assistant.\n\nI have access to all your live CRM data — leads, orders, revenue, and team performance. Ask me anything!`,
-    }
-  ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const chatContainerRef = useRef(null);

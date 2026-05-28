@@ -14,6 +14,12 @@ const Layout = () => {
   const { user, canAccessData } = useAuth();
   const [showToast, setShowToast] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([
+    {
+      role: 'ai',
+      text: `Hello! I'm **PRISM**, your AI business intelligence assistant.\n\nI have access to all your live CRM data — leads, orders, revenue, and team performance. Ask me anything!`,
+    }
+  ]);
   const [dueLeadsCount, setDueLeadsCount] = useState(0);
   const location = useLocation();
   const scrollRef = useRef(null);
@@ -97,7 +103,13 @@ const Layout = () => {
       )}
 
       {/* Global AI Chatbot Widget */}
-      {isChatOpen && <AIAssistantWidget onClose={() => setIsChatOpen(false)} />}
+      {isChatOpen && (
+        <AIAssistantWidget
+          onClose={() => setIsChatOpen(false)}
+          messages={chatMessages}
+          setMessages={setChatMessages}
+        />
+      )}
 
       {/* Floating round chat button - bottom right */}
       {user?.role === 'Admin' && (
