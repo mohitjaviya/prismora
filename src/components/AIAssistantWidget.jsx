@@ -15,60 +15,64 @@ const SUGGESTED_QUESTIONS = [
 ];
 
 const buildContext = (leads, orders, users) => {
-  const totalRevenue = orders.reduce((s, o) => s + (o.value || 0), 0);
-  const totalLeads = leads.length;
-  const totalOrders = orders.length;
+  const totalRevenue = orders.filter(o => o.status !== 'Cancelled').reduce((s, o) => s + (o.value || 0), 0);
 
+  // Aggregate revenue by product
   const revenueByProduct = {};
   orders.forEach(o => {
-    revenueByProduct[o.product] = (revenueByProduct[o.product] || 0) + (o.value || 0);
+    if (o.status !== 'Cancelled') revenueByProduct[o.product] = (revenueByProduct[o.product] || 0) + (o.value || 0);
   });
 
+  // Aggregate revenue by state
   const revenueByState = {};
   orders.forEach(o => {
-    revenueByState[o.state] = (revenueByState[o.state] || 0) + (o.value || 0);
+    if (o.status !== 'Cancelled') revenueByState[o.state] = (revenueByState[o.state] || 0) + (o.value || 0);
   });
 
+  // Lead status counts
   const leadsByStatus = {};
-  leads.forEach(l => {
-    leadsByStatus[l.status] = (leadsByStatus[l.status] || 0) + 1;
-  });
+  leads.forEach(l => { leadsByStatus[l.status] = (leadsByStatus[l.status] || 0) + 1; });
 
-  const revenueByPerson = {};
+  // Per-salesperson stats
+  const salesStats = {};
   orders.forEach(o => {
-    const person = users.find(u => u.id === o.assignedTo);
-    const name = person?.name || 'Unassigned';
-    revenueByPerson[name] = (revenueByPerson[name] || 0) + (o.value || 0);
+    const name = users.find(u => u.id === o.assignedTo)?.name || 'Unassigned';
+    if (!salesStats[name]) salesStats[name] = { revenue: 0, orders: 0, leads: 0 };
+    salesStats[name].revenue += (o.value || 0);
+    salesStats[name].orders += 1;
   });
-
-  const leadsByPerson = {};
   leads.forEach(l => {
-    const person = users.find(u => u.id === l.assignedTo);
-    const name = person?.name || 'Unassigned';
-    leadsByPerson[name] = (leadsByPerson[name] || 0) + 1;
+    const name = users.find(u => u.id === l.assignedTo)?.name || 'Unassigned';
+    if (!salesStats[name]) salesStats[name] = { revenue: 0, orders: 0, leads: 0 };
+    salesStats[name].leads += 1;
   });
 
-  return `
-You are PRISM, an intelligent AI assistant embedded in the PRISMORA CRM system for a personal care products company.
-Be concise, use bullet points where appropriate, format numbers with ₹ and commas. Never make up data — only use what's provided.
+  // Top 10 leads by deal value
+  const topLeads = [...leads]
+    .sort((a, b) => (b.dealValue || 0) - (a.dealValue || 0))
+    .slice(0, 10)
+    .map(l => `${l.name} (${l.company}) | Status:${l.status} | Deal:₹${(l.dealValue||0).toLocaleString('en-IN')} | Products:${(l.productInterest||[]).join(',')} | Salesperson:${users.find(u=>u.id===l.assignedTo)?.name||'N/A'}`);
 
-=== LIVE CRM DATA SUMMARY ===
-Total Revenue: ₹${totalRevenue.toLocaleString('en-IN')}
-Total Orders: ${totalOrders}
-Total Leads: ${totalLeads}
+  // Top 10 orders by value
+  const topOrders = [...orders]
+    .sort((a, b) => (b.value || 0) - (a.value || 0))
+    .slice(0, 10)
+    .map(o => `${o.customerName} | Product:${o.product} | Qty:${o.quantity} | Value:₹${(o.value||0).toLocaleString('en-IN')} | State:${o.state} | Status:${o.status} | Salesperson:${users.find(u=>u.id===o.assignedTo)?.name||'N/A'}`);
 
-Revenue by Salesperson: ${JSON.stringify(revenueByPerson)}
-Leads by Salesperson: ${JSON.stringify(leadsByPerson)}
-Lead Status Breakdown: ${JSON.stringify(leadsByStatus)}
+  return `You are PRISM, an AI assistant in PRISMORA CRM. Be concise, use bullet points, format numbers with ₹. Never make up data.
+
+=== CRM SUMMARY ===
+Total Revenue: ₹${totalRevenue.toLocaleString('en-IN')} | Total Orders: ${orders.length} | Total Leads: ${leads.length}
+Lead Status: ${JSON.stringify(leadsByStatus)}
 Revenue by Product: ${JSON.stringify(revenueByProduct)}
 Revenue by State: ${JSON.stringify(revenueByState)}
+Salesperson Stats: ${JSON.stringify(salesStats)}
 
-=== ALL LEADS (${leads.length}) ===
-${leads.map(l => `ID:${l.id} Name:${l.name} Company:${l.company} Status:${l.status} AssignedTo:${users.find(u=>u.id===l.assignedTo)?.name||l.assignedTo} Products:${(l.productInterest||[]).join(', ')} DealValue:₹${(l.dealValue||0).toLocaleString('en-IN')} Source:${l.leadSource||'N/A'} FollowUp:${l.followUpDate ? new Date(l.followUpDate).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
+=== TOP 10 LEADS ===
+${topLeads.join('\n')}
 
-=== ALL ORDERS (${orders.length}) ===
-${orders.map(o => `ID:${o.id} Customer:${o.customerName} Company:${o.companyName||''} Product:${o.product} Qty:${o.quantity} Value:₹${(o.value||0).toLocaleString('en-IN')} State:${o.state} City:${o.city} Status:${o.status} Salesperson:${users.find(u=>u.id===o.assignedTo)?.name||o.assignedTo} Date:${o.date ? new Date(o.date).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
-`.trim();
+=== TOP 10 ORDERS ===
+${topOrders.join('\n')}`.trim();
 };
 
 const MessageBubble = ({ msg }) => {
@@ -170,7 +174,9 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
 
     try {
       const systemContext = buildContext(leads, orders, users);
-      const conversationHistory = messages.map(m => ({
+      // Only keep last 6 messages to minimize token usage
+      const recentHistory = messages.slice(-6);
+      const conversationHistory = recentHistory.map(m => ({
         role: m.role === 'ai' ? 'model' : 'user',
         parts: [{ text: m.text }]
       }));
