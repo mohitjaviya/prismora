@@ -7,8 +7,7 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [showDemoUsers, setShowDemoUsers] = useState(false);
-  const { login, users: mockUsers } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -17,7 +16,7 @@ const Login = () => {
     if (success) {
       navigate('/');
     } else {
-      setError('Invalid email address. Please check your credentials or use a demo account.');
+      setError('Invalid email address or password. Please check your credentials.');
     }
   };
 
@@ -88,32 +87,7 @@ const Login = () => {
             </button>
           </form>
 
-          <div className="mt-5 pt-4 border-t border-white/10">
-            <button 
-              type="button"
-              onClick={() => setShowDemoUsers(!showDemoUsers)}
-              className="flex items-center justify-between w-full text-sm text-slate-400 hover:text-white transition-colors"
-            >
-              <span className="flex items-center gap-2"><ShieldCheck size={16} /> Need a demo account?</span>
-              <ChevronDown size={16} className={`transform transition-transform ${showDemoUsers ? 'rotate-180' : ''}`} />
-            </button>
-            
-            {showDemoUsers && (
-              <div className="mt-4 space-y-2 animate-fade-in-up">
-                {mockUsers.map(u => (
-                  <button 
-                    key={u.id}
-                    type="button"
-                    onClick={() => { setEmail(u.email); setPassword('password123'); }}
-                    className="w-full text-left px-3 py-2 rounded-lg bg-brand-primary-lighter/30 hover:bg-brand-primary-lighter/80 border border-white/5 transition-colors flex items-center justify-between group"
-                  >
-                    <span className="text-sm text-slate-300 group-hover:text-white">{u.email}</span>
-                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-brand-accent/20 text-brand-accent">{u.role}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+
         </div>
         
         <p className="text-center text-xs text-slate-600 mt-4">
