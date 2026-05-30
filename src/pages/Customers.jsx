@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
 
 const Customers = () => {
   const { orders, leads } = useData();
-  const { user, users: allUsers } = useAuth();
+  const { user, users: allUsers, canAccessData } = useAuth();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [productFilter, setProductFilter] = useState('');
@@ -18,16 +18,25 @@ const Customers = () => {
   const [modalYearFilter, setModalYearFilter] = useState('All Time');
   const [modalProductFilter, setModalProductFilter] = useState('All Products');
 
-  // STRICT Security: Only Admin can access this page
-  if (user?.role !== 'Admin') {
-    return <Navigate to="/" replace />;
+  // Route Guard: Anyone logged in can access, view is filtered dynamically
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
+
+  // Filter orders and leads based on RBAC permissions
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => canAccessData(o.assignedTo));
+  }, [orders, canAccessData]);
+
+  const filteredLeads = useMemo(() => {
+    return leads.filter(l => canAccessData(l.assignedTo));
+  }, [leads, canAccessData]);
 
   // Aggregate customer data from Orders
   const customerData = useMemo(() => {
     const customerMap = {};
 
-    orders.forEach(order => {
+    filteredOrders.forEach(order => {
       const name = order.customerName;
       if (!name) return;
 
@@ -59,7 +68,7 @@ const Customers = () => {
     });
 
     // Enhance with Lead data if available
-    leads.forEach(lead => {
+    filteredLeads.forEach(lead => {
       if (customerMap[lead.name]) {
         customerMap[lead.name].email = lead.email;
         customerMap[lead.name].phone = lead.phone;
@@ -70,7 +79,7 @@ const Customers = () => {
       ...c,
       products: Array.from(c.products)
     }));
-  }, [orders, leads]);
+  }, [filteredOrders, filteredLeads]);
 
   // Extract unique products and states for filters
   const availableProducts = useMemo(() => [...new Set(customerData.flatMap(c => c.products))], [customerData]);

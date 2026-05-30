@@ -18,9 +18,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
     const items = [
       { name: 'Dashboard', path: '/', icon: <LayoutDashboard size={20} /> }
     ];
-    if (user.role === 'Admin') {
-      items.push({ name: 'Customers', path: '/customers', icon: <Briefcase size={20} /> });
-    }
+    items.push({ name: 'Customers', path: '/customers', icon: <Briefcase size={20} /> });
     items.push({ name: 'Leads', path: '/leads', icon: <Users size={20} /> });
     items.push({ name: 'Orders', path: '/orders', icon: <ShoppingCart size={20} /> });
     
