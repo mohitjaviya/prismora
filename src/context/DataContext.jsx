@@ -34,6 +34,27 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await supabase.from('invoices').select('*').order('createdAt', { ascending: false });
       if (error) throw error;
       fetchedInvoices = data || [];
+      
+      // If table exists but has no records, check if there are local storage invoices we can use & sync
+      if (fetchedInvoices.length === 0) {
+        const local = localStorage.getItem('prismora_invoices');
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (parsed.length > 0) {
+            fetchedInvoices = parsed;
+            console.log("Syncing local invoices to Supabase...");
+            parsed.forEach(async (inv) => {
+              try {
+                const { error: insertErr } = await supabase.from('invoices').insert([inv]);
+                if (insertErr && (insertErr.code === '42703' || insertErr.message.includes('assignedTo'))) {
+                  const { assignedTo, ...cleanInv } = inv;
+                  await supabase.from('invoices').insert([cleanInv]);
+                }
+              } catch (e) { console.error("Error syncing invoice:", e); }
+            });
+          }
+        }
+      }
     } catch (err) {
       console.warn("Supabase invoices table fetch failed, using localStorage fallback.", err);
       const local = localStorage.getItem('prismora_invoices');
@@ -47,6 +68,23 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await supabase.from('expenses').select('*').order('date', { ascending: false });
       if (error) throw error;
       fetchedExpenses = data || [];
+
+      // If table exists but has no records, check if there are local storage expenses we can use & sync
+      if (fetchedExpenses.length === 0) {
+        const local = localStorage.getItem('prismora_expenses');
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (parsed.length > 0) {
+            fetchedExpenses = parsed;
+            console.log("Syncing local expenses to Supabase...");
+            parsed.forEach(async (exp) => {
+              try {
+                await supabase.from('expenses').insert([exp]);
+              } catch (e) { console.error("Error syncing expense:", e); }
+            });
+          }
+        }
+      }
     } catch (err) {
       console.warn("Supabase expenses table fetch failed, using localStorage fallback.", err);
       const local = localStorage.getItem('prismora_expenses');
@@ -161,7 +199,22 @@ export const DataProvider = ({ children }) => {
 
     try {
       const { error } = await supabase.from('invoices').insert([newInvoice]);
-      if (error) throw error;
+      if (error) {
+        // If the error is code 42703 (undefined column) or mentions 'assignedTo', retry without it
+        if (error.code === '42703' || (error.message && error.message.includes('assignedTo'))) {
+          console.warn("invoices table does not have 'assignedTo' column. Retrying without it.");
+          const { assignedTo, ...cleanInvoice } = newInvoice;
+          const { error: retryError } = await supabase.from('invoices').insert([cleanInvoice]);
+          if (retryError) throw retryError;
+        } else {
+          throw error;
+        }
+      }
+      
+      // If inserted successfully to Supabase, also save to localStorage so we keep them in sync
+      const local = localStorage.getItem('prismora_invoices');
+      const existing = local ? JSON.parse(local) : [];
+      localStorage.setItem('prismora_invoices', JSON.stringify([newInvoice, ...existing]));
     } catch (err) {
       console.warn("Failed to insert invoice to Supabase. Saving to localStorage.", err);
       const local = localStorage.getItem('prismora_invoices');
@@ -201,13 +254,15 @@ export const DataProvider = ({ children }) => {
       const { error } = await supabase.from('invoices').delete().eq('id', id);
       if (error) throw error;
     } catch (err) {
-      console.warn("Failed to delete invoice from Supabase. Deleting from localStorage.", err);
-      const local = localStorage.getItem('prismora_invoices');
-      if (local) {
-        const parsed = JSON.parse(local);
-        const updated = parsed.filter(inv => inv.id !== id);
-        localStorage.setItem('prismora_invoices', JSON.stringify(updated));
-      }
+      console.warn("Failed to delete invoice from Supabase.", err);
+    }
+
+    // Always keep localStorage in sync
+    const local = localStorage.getItem('prismora_invoices');
+    if (local) {
+      const parsed = JSON.parse(local);
+      const updated = parsed.filter(inv => inv.id !== id);
+      localStorage.setItem('prismora_invoices', JSON.stringify(updated));
     }
   };
 
@@ -229,11 +284,13 @@ export const DataProvider = ({ children }) => {
       const { error } = await supabase.from('expenses').insert([newExpense]);
       if (error) throw error;
     } catch (err) {
-      console.warn("Failed to insert expense to Supabase. Saving to localStorage.", err);
-      const local = localStorage.getItem('prismora_expenses');
-      const existing = local ? JSON.parse(local) : [];
-      localStorage.setItem('prismora_expenses', JSON.stringify([newExpense, ...existing]));
+      console.warn("Failed to insert expense to Supabase.", err);
     }
+
+    // Always keep localStorage in sync
+    const local = localStorage.getItem('prismora_expenses');
+    const existing = local ? JSON.parse(local) : [];
+    localStorage.setItem('prismora_expenses', JSON.stringify([newExpense, ...existing]));
 
     logEvent('expense_new', `Logged expense: ${expenseData.category} - ${newExpense.amount}`, expenseData.assignedTo, newId);
   };
@@ -245,13 +302,15 @@ export const DataProvider = ({ children }) => {
       const { error } = await supabase.from('expenses').delete().eq('id', id);
       if (error) throw error;
     } catch (err) {
-      console.warn("Failed to delete expense from Supabase. Deleting from localStorage.", err);
-      const local = localStorage.getItem('prismora_expenses');
-      if (local) {
-        const parsed = JSON.parse(local);
-        const updated = parsed.filter(exp => exp.id !== id);
-        localStorage.setItem('prismora_expenses', JSON.stringify(updated));
-      }
+      console.warn("Failed to delete expense from Supabase.", err);
+    }
+
+    // Always keep localStorage in sync
+    const local = localStorage.getItem('prismora_expenses');
+    if (local) {
+      const parsed = JSON.parse(local);
+      const updated = parsed.filter(exp => exp.id !== id);
+      localStorage.setItem('prismora_expenses', JSON.stringify(updated));
     }
   };
 

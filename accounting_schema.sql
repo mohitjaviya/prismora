@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   tax NUMERIC NOT NULL,
   status TEXT NOT NULL, -- 'Paid', 'Unpaid', 'Overdue'
   "dueDate" TIMESTAMP,
+  "assignedTo" TEXT REFERENCES users(id) ON DELETE SET NULL,
   "createdAt" TIMESTAMP DEFAULT NOW()
 );
 
