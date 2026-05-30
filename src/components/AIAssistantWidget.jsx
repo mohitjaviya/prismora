@@ -6,15 +6,15 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const SUGGESTED_QUESTIONS = [
-  'What are the total sales this month?',
-  'Which salesperson has the most leads?',
-  'Show me all Converted leads',
+  'What is our net profit margin?',
+  'Show me all unpaid or overdue invoices',
+  'What are our total expenses and major categories?',
   'What is the total revenue from Gujarat?',
-  'Which product generates the most revenue?',
+  'Which salesperson has the most leads?',
   'How many pending orders are there?',
 ];
 
-const buildContext = (leads, orders, users) => {
+const buildContext = (leads, orders, users, invoices = [], expenses = []) => {
   const totalRevenue = orders.reduce((s, o) => s + (o.value || 0), 0);
   const totalLeads = leads.length;
   const totalOrders = orders.length;
@@ -48,12 +48,29 @@ const buildContext = (leads, orders, users) => {
     leadsByPerson[name] = (leadsByPerson[name] || 0) + 1;
   });
 
+  // Financial Calculations
+  const totalIncome = invoices
+    .filter(inv => inv.status === 'Paid')
+    .reduce((sum, inv) => sum + Number(inv.amount || 0) + Number(inv.tax || 0), 0);
+
+  const totalOutstanding = invoices
+    .filter(inv => inv.status === 'Unpaid' || inv.status === 'Overdue')
+    .reduce((sum, inv) => sum + Number(inv.amount || 0) + Number(inv.tax || 0), 0);
+
+  const totalExpensesValue = expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+  const netProfit = totalIncome - totalExpensesValue;
+
+  const expensesByCategory = {};
+  expenses.forEach(exp => {
+    expensesByCategory[exp.category] = (expensesByCategory[exp.category] || 0) + Number(exp.amount || 0);
+  });
+
   return `
 You are PRISM, an intelligent AI assistant embedded in the PRISMORA CRM system for a personal care products company.
 Be concise, use bullet points where appropriate, format numbers with ₹ and commas. Never make up data — only use what's provided.
 
 === LIVE CRM DATA SUMMARY ===
-Total Revenue: ₹${totalRevenue.toLocaleString('en-IN')}
+Total Sales Revenue (from orders): ₹${totalRevenue.toLocaleString('en-IN')}
 Total Orders: ${totalOrders}
 Total Leads: ${totalLeads}
 
@@ -62,6 +79,19 @@ Leads by Salesperson: ${JSON.stringify(leadsByPerson)}
 Lead Status Breakdown: ${JSON.stringify(leadsByStatus)}
 Revenue by Product: ${JSON.stringify(revenueByProduct)}
 Revenue by State: ${JSON.stringify(revenueByState)}
+
+=== LIVE FINANCIAL & ACCOUNTING DATA ===
+Total Invoice Earnings (Paid Invoices): ₹${totalIncome.toLocaleString('en-IN')}
+Total Expenses Logged: ₹${totalExpensesValue.toLocaleString('en-IN')}
+Net Operating Profit: ₹${netProfit.toLocaleString('en-IN')}
+Outstanding Receivables (Unpaid Invoices): ₹${totalOutstanding.toLocaleString('en-IN')}
+Expenses by Category: ${JSON.stringify(expensesByCategory)}
+
+=== ALL INVOICES (${invoices.length}) ===
+${invoices.map(inv => `ID:${inv.id} Customer:${inv.customerName} OrderID:${inv.orderId || 'Custom'} Total:₹${(Number(inv.amount) + Number(inv.tax)).toLocaleString('en-IN')} Status:${inv.status} Due:${inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
+
+=== ALL EXPENSES (${expenses.length}) ===
+${expenses.map(exp => `ID:${exp.id} Category:${exp.category} Amount:₹${Number(exp.amount).toLocaleString('en-IN')} Desc:${exp.description || 'N/A'} Date:${exp.date ? new Date(exp.date).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
 
 === ALL LEADS (${leads.length}) ===
 ${leads.map(l => `ID:${l.id} Name:${l.name} Company:${l.company} Status:${l.status} AssignedTo:${users.find(u=>u.id===l.assignedTo)?.name||l.assignedTo} Products:${(l.productInterest||[]).join(', ')} DealValue:₹${(l.dealValue||0).toLocaleString('en-IN')} Source:${l.leadSource||'N/A'} FollowUp:${l.followUpDate ? new Date(l.followUpDate).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
@@ -137,7 +167,7 @@ const MessageBubble = ({ msg }) => {
 };
 
 const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
-  const { leads, orders } = useData();
+  const { leads, orders, invoices, expenses } = useData();
   const { user, users } = useAuth();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -161,7 +191,7 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
     setLoading(true);
 
     try {
-      const systemContext = buildContext(leads, orders, users);
+      const systemContext = buildContext(leads, orders, users, invoices, expenses);
       const conversationHistory = messages.map(m => ({
         role: m.role === 'ai' ? 'model' : 'user',
         parts: [{ text: m.text }]

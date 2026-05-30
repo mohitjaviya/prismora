@@ -10,6 +10,7 @@ import Geography from './pages/Geography';
 import Settings from './pages/Settings';
 import Customers from './pages/Customers';
 import Profile from './pages/Profile';
+import Accounting from './pages/Accounting';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -26,6 +27,7 @@ function AppRoutes() {
         <Route path="leads" element={<Leads />} />
         <Route path="orders" element={<Orders />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="accounting" element={<Accounting />} />
         <Route path="geography" element={<Geography />} />
         <Route path="settings" element={<Settings />} />
         <Route path="profile" element={<Profile />} />

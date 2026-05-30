@@ -20,6 +20,15 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
   const [readIds, setReadIds] = useState([]);
 
   useEffect(() => {
+    if (user) {
+      const saved = localStorage.getItem(`prismora_read_notifications_${user.id}`);
+      setReadIds(saved ? JSON.parse(saved) : []);
+    } else {
+      setReadIds([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light');
@@ -100,12 +109,20 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
 
   const handleMarkAllRead = () => {
     const allIds = [...dueToday.map(l => l.id), ...visibleEvents.map(e => e.id)];
-    setReadIds(Array.from(new Set([...readIds, ...allIds])));
+    const newIds = Array.from(new Set([...readIds, ...allIds]));
+    setReadIds(newIds);
+    if (user) {
+      localStorage.setItem(`prismora_read_notifications_${user.id}`, JSON.stringify(newIds));
+    }
   };
 
   const markAsReadAndNavigate = (id, path) => {
     if (!readIds.includes(id)) {
-      setReadIds([...readIds, id]);
+      const newIds = [...readIds, id];
+      setReadIds(newIds);
+      if (user) {
+        localStorage.setItem(`prismora_read_notifications_${user.id}`, JSON.stringify(newIds));
+      }
     }
     setNotificationsOpen(false);
     navigateToResult(path, id);

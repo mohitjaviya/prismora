@@ -69,6 +69,17 @@
       radial-gradient(ellipse 80% 50% at 20% -10%, rgba(212,24,108,0.08) 0%, transparent 60%),
       radial-gradient(ellipse 60% 40% at 80% 110%, rgba(168,16,90,0.06) 0%, transparent 60%);
   }
+
+  /* Disable spin buttons for input type="number" globally */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }
 
 /* ─── Utilities ──────────────────────────────────────────────────────────── */
@@ -111,5 +122,79 @@
            hover:from-brand-accent hover:to-brand-accent-light
            transition-all hover:scale-105;
     box-shadow: 0 4px 20px rgba(212,24,108,0.35);
+  }
+}
+
+/* ─── Print Styles for Invoices ────────────────────────────────────────── */
+@media print {
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    background-image: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  
+  /* Hide the rest of the app and other portals */
+  body > :not(.print-modal-wrapper) {
+    display: none !important;
+  }
+  
+  .no-print,
+  button,
+  .btn-accent {
+    display: none !important;
+  }
+  
+  /* Reset print modal wrapper so it is static, visible, and flows normally */
+  .print-modal-wrapper {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    backdrop-filter: none !important;
+    z-index: auto !important;
+  }
+  
+  /* Reset the modal box container to fill the page, removing rounded corners and shadows */
+  .print-modal-box {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+  }
+  
+  /* Force text and borders to print in black & white */
+  #printable-invoice-container {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  
+  #printable-invoice-container * {
+    color: #000000 !important;
+    border-color: #cbd5e1 !important;
   }
 }

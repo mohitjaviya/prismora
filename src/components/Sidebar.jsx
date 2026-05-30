@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X } from 'lucide-react';
+import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
@@ -12,14 +12,24 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
     { name: 'Geography', path: '/geography', icon: <Map size={20} /> },
   ];
 
-  // Inject Customers for Admins
-  const navItems = user?.role === 'Admin' 
-    ? [
-        baseNavItems[0], 
-        { name: 'Customers', path: '/customers', icon: <Briefcase size={20} /> },
-        ...baseNavItems.slice(1)
-      ]
-    : baseNavItems;
+  // Dynamically build navItems based on role
+  let navItems = [...baseNavItems];
+  if (user) {
+    const items = [
+      { name: 'Dashboard', path: '/', icon: <LayoutDashboard size={20} /> }
+    ];
+    if (user.role === 'Admin') {
+      items.push({ name: 'Customers', path: '/customers', icon: <Briefcase size={20} /> });
+    }
+    items.push({ name: 'Leads', path: '/leads', icon: <Users size={20} /> });
+    items.push({ name: 'Orders', path: '/orders', icon: <ShoppingCart size={20} /> });
+    
+    if (user.role === 'Admin') {
+      items.push({ name: 'Accounting', path: '/accounting', icon: <Wallet size={20} /> });
+    }
+    items.push({ name: 'Geography', path: '/geography', icon: <Map size={20} /> });
+    navItems = items;
+  }
 
   const closeMobileMenu = () => setIsMobileMenuOpen && setIsMobileMenuOpen(false);
 

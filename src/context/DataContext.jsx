@@ -8,6 +8,8 @@ export const DataProvider = ({ children }) => {
   const [orders, setOrders] = useState([]);
   const [eventLog, setEventLog] = useState([]);
   const [products, setProducts] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [expenses, setExpenses] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -25,6 +27,32 @@ export const DataProvider = ({ children }) => {
 
     const { data: productsData } = await supabase.from('products').select('name');
     if (productsData) setProducts(productsData.map(p => p.name));
+
+    // Fetch Invoices with fallback
+    let fetchedInvoices = [];
+    try {
+      const { data, error } = await supabase.from('invoices').select('*').order('createdAt', { ascending: false });
+      if (error) throw error;
+      fetchedInvoices = data || [];
+    } catch (err) {
+      console.warn("Supabase invoices table fetch failed, using localStorage fallback.", err);
+      const local = localStorage.getItem('prismora_invoices');
+      fetchedInvoices = local ? JSON.parse(local) : [];
+    }
+    setInvoices(fetchedInvoices);
+
+    // Fetch Expenses with fallback
+    let fetchedExpenses = [];
+    try {
+      const { data, error } = await supabase.from('expenses').select('*').order('date', { ascending: false });
+      if (error) throw error;
+      fetchedExpenses = data || [];
+    } catch (err) {
+      console.warn("Supabase expenses table fetch failed, using localStorage fallback.", err);
+      const local = localStorage.getItem('prismora_expenses');
+      fetchedExpenses = local ? JSON.parse(local) : [];
+    }
+    setExpenses(fetchedExpenses);
   };
 
   const logEvent = async (type, message, assignedTo, dataId) => {
@@ -117,12 +145,124 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  const addInvoice = async (invoiceData) => {
+    const maxId = invoices.reduce((max, inv) => {
+      const num = parseInt(inv.id.replace('INV-', ''), 10);
+      return !isNaN(num) && num > max ? num : max;
+    }, 0);
+    const newId = `INV-${maxId + 1}`;
+    const newInvoice = {
+      ...invoiceData,
+      id: newId,
+      createdAt: new Date().toISOString()
+    };
+
+    setInvoices(prev => [newInvoice, ...prev]);
+
+    try {
+      const { error } = await supabase.from('invoices').insert([newInvoice]);
+      if (error) throw error;
+    } catch (err) {
+      console.warn("Failed to insert invoice to Supabase. Saving to localStorage.", err);
+      const local = localStorage.getItem('prismora_invoices');
+      const existing = local ? JSON.parse(local) : [];
+      localStorage.setItem('prismora_invoices', JSON.stringify([newInvoice, ...existing]));
+    }
+
+    logEvent('invoice_new', `Invoice generated for ${invoiceData.customerName}: ${newId}`, invoiceData.assignedTo, newId);
+  };
+
+  const updateInvoiceStatus = async (id, status) => {
+    const oldInvoice = invoices.find(inv => inv.id === id);
+    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status } : inv));
+
+    try {
+      const { error } = await supabase.from('invoices').update({ status }).eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      console.warn("Failed to update invoice in Supabase. Updating in localStorage.", err);
+      const local = localStorage.getItem('prismora_invoices');
+      if (local) {
+        const parsed = JSON.parse(local);
+        const updated = parsed.map(inv => inv.id === id ? { ...inv, status } : inv);
+        localStorage.setItem('prismora_invoices', JSON.stringify(updated));
+      }
+    }
+
+    if (oldInvoice) {
+      logEvent('invoice_status_update', `Invoice ${id} marked as ${status}`, oldInvoice.assignedTo, id);
+    }
+  };
+
+  const deleteInvoice = async (id) => {
+    setInvoices(prev => prev.filter(inv => inv.id !== id));
+
+    try {
+      const { error } = await supabase.from('invoices').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      console.warn("Failed to delete invoice from Supabase. Deleting from localStorage.", err);
+      const local = localStorage.getItem('prismora_invoices');
+      if (local) {
+        const parsed = JSON.parse(local);
+        const updated = parsed.filter(inv => inv.id !== id);
+        localStorage.setItem('prismora_invoices', JSON.stringify(updated));
+      }
+    }
+  };
+
+  const addExpense = async (expenseData) => {
+    const maxId = expenses.reduce((max, exp) => {
+      const num = parseInt(exp.id.replace('EXP-', ''), 10);
+      return !isNaN(num) && num > max ? num : max;
+    }, 0);
+    const newId = `EXP-${maxId + 1}`;
+    const newExpense = {
+      ...expenseData,
+      id: newId,
+      createdAt: new Date().toISOString()
+    };
+
+    setExpenses(prev => [newExpense, ...prev]);
+
+    try {
+      const { error } = await supabase.from('expenses').insert([newExpense]);
+      if (error) throw error;
+    } catch (err) {
+      console.warn("Failed to insert expense to Supabase. Saving to localStorage.", err);
+      const local = localStorage.getItem('prismora_expenses');
+      const existing = local ? JSON.parse(local) : [];
+      localStorage.setItem('prismora_expenses', JSON.stringify([newExpense, ...existing]));
+    }
+
+    logEvent('expense_new', `Logged expense: ${expenseData.category} - ${newExpense.amount}`, expenseData.assignedTo, newId);
+  };
+
+  const deleteExpense = async (id) => {
+    setExpenses(prev => prev.filter(exp => exp.id !== id));
+
+    try {
+      const { error } = await supabase.from('expenses').delete().eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      console.warn("Failed to delete expense from Supabase. Deleting from localStorage.", err);
+      const local = localStorage.getItem('prismora_expenses');
+      if (local) {
+        const parsed = JSON.parse(local);
+        const updated = parsed.filter(exp => exp.id !== id);
+        localStorage.setItem('prismora_expenses', JSON.stringify(updated));
+      }
+    }
+  };
+
   return (
     <DataContext.Provider value={{ 
-      leads, orders, eventLog, products,
+      leads, orders, eventLog, products, invoices, expenses,
       addLead, updateLead, deleteLead,
       addOrder, updateOrder, deleteOrder,
-      addProduct
+      addProduct,
+      addInvoice, updateInvoiceStatus, deleteInvoice,
+      addExpense, deleteExpense
     }}>
       {children}
     </DataContext.Provider>
