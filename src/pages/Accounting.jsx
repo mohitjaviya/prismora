@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
@@ -16,20 +16,37 @@ import {
 const CHART_COLORS = ['#D4186C', '#6366F1', '#A78BFA', '#38BDF8', '#34D399', '#FBBF24'];
 
 const Accounting = () => {
-  const { user, users } = useAuth();
+  const { user, users, canAccessData } = useAuth();
   const { 
-    orders, invoices, expenses, 
+    orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, 
     addInvoice, updateInvoiceStatus, deleteInvoice,
     addExpense, deleteExpense 
   } = useData();
 
-  // Route Guard: Only Admins can access Accounting
-  if (!user || user.role !== 'Admin') {
-    return <Navigate to="/" replace />;
+  // Route Guard: Anyone logged in can access, view is filtered dynamically
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
-  // State variables
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'invoices' | 'expenses'
+  // Filter orders, invoices, and expenses based on user role (RBAC)
+  const orders = useMemo(() => {
+    return rawOrders.filter(o => canAccessData(o.assignedTo));
+  }, [rawOrders, canAccessData]);
+
+  const invoices = useMemo(() => {
+    return rawInvoices.filter(inv => {
+      if (canAccessData(inv.assignedTo)) return true;
+      const order = rawOrders.find(o => o.id === inv.orderId);
+      return order && canAccessData(order.assignedTo);
+    });
+  }, [rawInvoices, rawOrders, canAccessData]);
+
+  const expenses = useMemo(() => {
+    return rawExpenses.filter(exp => canAccessData(exp.assignedTo));
+  }, [rawExpenses, canAccessData]);
+
+  // State variables - non-Admins start on 'invoices' tab since overview is Admin-only
+  const [activeTab, setActiveTab] = useState(user.role === 'Admin' ? 'overview' : 'invoices'); // 'overview' | 'invoices' | 'expenses'
   const [invoiceFilter, setInvoiceFilter] = useState('All'); // 'All' | 'Paid' | 'Unpaid' | 'Overdue'
   
   // Modals state
@@ -261,16 +278,18 @@ const Accounting = () => {
 
       {/* Tabs Menu */}
       <div className="flex border-b border-white/5 pb-px">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
-            activeTab === 'overview'
-              ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
-              : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          Overview
-        </button>
+        {user?.role === 'Admin' && (
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
+              activeTab === 'overview'
+                ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
+                : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Overview
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('invoices')}
           className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
@@ -294,7 +313,7 @@ const Accounting = () => {
       </div>
 
       {/* Tab Contents */}
-      {activeTab === 'overview' && (
+      {activeTab === 'overview' && user?.role === 'Admin' && (
         <div className="space-y-6">
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">

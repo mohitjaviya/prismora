@@ -22,9 +22,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
     items.push({ name: 'Leads', path: '/leads', icon: <Users size={20} /> });
     items.push({ name: 'Orders', path: '/orders', icon: <ShoppingCart size={20} /> });
     
-    if (user.role === 'Admin') {
-      items.push({ name: 'Accounting', path: '/accounting', icon: <Wallet size={20} /> });
-    }
+    items.push({ name: 'Accounting', path: '/accounting', icon: <Wallet size={20} /> });
     items.push({ name: 'Geography', path: '/geography', icon: <Map size={20} /> });
     navItems = items;
   }
