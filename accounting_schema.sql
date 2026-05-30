@@ -22,3 +22,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   "assignedTo" TEXT REFERENCES users(id) ON DELETE SET NULL,
   "createdAt" TIMESTAMP DEFAULT NOW()
 );
+
+-- Disable Row Level Security to match other PRISMORA tables
+ALTER TABLE invoices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
+
