@@ -4,39 +4,50 @@ import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 
 const DataContext = createContext();
 
+// Synchronously hydrate state from the browser's cached copy so the UI renders
+// instantly on load; fetchData() then refreshes from Supabase in the background.
+const lsInit = (key) => {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : [];
+  } catch {
+    return [];
+  }
+};
+
 export const DataProvider = ({ children }) => {
-  // ── Original CRM State ──────────────────────────────────────────────────
-  const [leads, setLeads] = useState([]);
-  const [orders, setOrders] = useState([]);
+  // ── Original CRM State (hydrated from cache for instant load) ────────────
+  const [leads, setLeads] = useState(() => lsInit('prismora_leads'));
+  const [orders, setOrders] = useState(() => lsInit('prismora_orders'));
   const [eventLog, setEventLog] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [productCatalog, setProductCatalog] = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [creditNotes, setCreditNotes] = useState([]);
-  const [expenses, setExpenses] = useState([]);
+  const [productCatalog, setProductCatalog] = useState(() => lsInit('prismora_product_catalog'));
+  const [products, setProducts] = useState(() => lsInit('prismora_product_catalog').map(p => p.name).filter(Boolean));
+  const [invoices, setInvoices] = useState(() => lsInit('prismora_invoices'));
+  const [creditNotes, setCreditNotes] = useState(() => lsInit('prismora_credit_notes'));
+  const [expenses, setExpenses] = useState(() => lsInit('prismora_expenses'));
 
   // ── Phase 1 Enterprise State ────────────────────────────────────────────
-  const [inventory, setInventory] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [grn, setGrn] = useState([]);
-  const [purchaseReturns, setPurchaseReturns] = useState([]);
-  const [distributors, setDistributors] = useState([]);
-  const [dealers, setDealers] = useState([]);
-  const [retailers, setRetailers] = useState([]);
-  const [schemes, setSchemes] = useState([]);
-  const [complaints, setComplaints] = useState([]);
-  const [territories, setTerritories] = useState([]);
-  const [beatPlans, setBeatPlans] = useState([]);
-  const [attendance, setAttendance] = useState([]);
-  const [visitReports, setVisitReports] = useState([]);
-  const [sfaExpenses, setSfaExpenses] = useState([]);
-  const [vendorPayments, setVendorPayments] = useState([]);
+  const [inventory, setInventory] = useState(() => lsInit('prismora_inventory'));
+  const [vendors, setVendors] = useState(() => lsInit('prismora_vendors'));
+  const [purchaseOrders, setPurchaseOrders] = useState(() => lsInit('prismora_purchase_orders'));
+  const [grn, setGrn] = useState(() => lsInit('prismora_grn'));
+  const [purchaseReturns, setPurchaseReturns] = useState(() => lsInit('prismora_purchase_returns'));
+  const [distributors, setDistributors] = useState(() => lsInit('prismora_distributors'));
+  const [dealers, setDealers] = useState(() => lsInit('prismora_dealers'));
+  const [retailers, setRetailers] = useState(() => lsInit('prismora_retailers'));
+  const [schemes, setSchemes] = useState(() => lsInit('prismora_schemes'));
+  const [complaints, setComplaints] = useState(() => lsInit('prismora_complaints'));
+  const [territories, setTerritories] = useState(() => lsInit('prismora_territories'));
+  const [beatPlans, setBeatPlans] = useState(() => lsInit('prismora_beat_plans'));
+  const [attendance, setAttendance] = useState(() => lsInit('prismora_attendance'));
+  const [visitReports, setVisitReports] = useState(() => lsInit('prismora_visit_reports'));
+  const [sfaExpenses, setSfaExpenses] = useState(() => lsInit('prismora_sfa_expenses'));
+  const [vendorPayments, setVendorPayments] = useState(() => lsInit('prismora_vendor_payments'));
 
   // ── Distributor Portal State ────────────────────────────────────────────
-  const [distributorPayments, setDistributorPayments] = useState([]);
-  const [schemeClaims, setSchemeClaims] = useState([]);
-  const [distributorIncentives, setDistributorIncentives] = useState([]);
+  const [distributorPayments, setDistributorPayments] = useState(() => lsInit('prismora_distributor_payments'));
+  const [schemeClaims, setSchemeClaims] = useState(() => lsInit('prismora_scheme_claims'));
+  const [distributorIncentives, setDistributorIncentives] = useState(() => lsInit('prismora_distributor_incentives'));
 
   const DEFAULT_CATALOG = [
     { id: 'P1', name: 'Herbal Hair Oil 100ml', category: 'Hair Care', hsnCode: '30049011', gstPct: 12, mrp: 250, distributorPrice: 150, dealerPrice: 180, retailerPrice: 200, uom: 'BOTTLE', createdAt: new Date().toISOString() },
