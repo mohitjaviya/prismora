@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { LogIn, Mail, ArrowRight, ShieldCheck, ChevronDown, Lock } from 'lucide-react';
 
 const Login = () => {
@@ -12,9 +12,13 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const success = await login(email, password);
-    if (success) {
+    const result = await login(email, password);
+    if (result === true) {
       navigate('/');
+    } else if (result === 'pending') {
+      setError('Your account is awaiting admin approval. Please check back soon.');
+    } else if (result === 'rejected') {
+      setError('Your registration was not approved. Please contact support.');
     } else {
       setError('Invalid email address or password. Please check your credentials.');
     }
@@ -87,9 +91,17 @@ const Login = () => {
             </button>
           </form>
 
-
+          <p className="text-center text-xs text-slate-500 mt-5">
+            New distributor? <Link to="/register-distributor" className="text-brand-accent hover:underline font-medium">Register here</Link>
+          </p>
+          <p className="text-center text-xs text-slate-500 mt-1.5">
+            New dealer? <Link to="/register-dealer" className="text-brand-accent hover:underline font-medium">Register here</Link>
+          </p>
+          <p className="text-center text-xs text-slate-500 mt-1.5">
+            New retailer? <Link to="/register-retailer" className="text-brand-accent hover:underline font-medium">Register here</Link>
+          </p>
         </div>
-        
+
         <p className="text-center text-xs text-slate-600 mt-4">
           © {new Date().getFullYear()} Janki Herbals Pvt. Ltd.<br/>All rights reserved.
         </p>

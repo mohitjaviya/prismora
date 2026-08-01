@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { useAuth } from '../context/AuthContext';
-import { Users, TrendingUp, ShoppingBag, DollarSign, ArrowUpRight, ArrowDownRight, Clock, ChevronLeft } from 'lucide-react';
+import { useAuth, isAdminRole } from '../context/AuthContext';
+import { Users, TrendingUp, ShoppingBag, DollarSign, ArrowUpRight, ArrowDownRight, Clock, ChevronLeft, Target, Edit3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts';
+import DistributorDashboard from './DistributorDashboard';
+import DealerDashboard from './DealerDashboard';
+import RetailerDashboard from './RetailerDashboard';
+import DirectorDashboard from './DirectorDashboard';
 
 const COLORS = ['#6366F1', '#818CF8', '#A78BFA', '#38BDF8', '#818CF8'];
 const LEAD_COLORS = ['#38BDF8', '#6366F1', '#A78BFA', '#F472B6', '#34D399', '#FBBF24'];
@@ -11,6 +15,17 @@ const Dashboard = () => {
   const { leads, orders } = useData();
   const { user, canAccessData } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [monthlyTarget, setMonthlyTarget] = useState(() => {
+    const saved = localStorage.getItem('prismora_monthly_target');
+    return saved ? Number(saved) : 100000;
+  });
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [tempTarget, setTempTarget] = useState('');
+
+  if (user?.role === 'Distributor') return <DistributorDashboard />;
+  if (user?.role === 'Dealer') return <DealerDashboard />;
+  if (user?.role === 'Retailer') return <RetailerDashboard />;
+  if (user?.role === 'Director') return <DirectorDashboard />;
 
   // Filter data based on role using the RBAC helper
   const visibleLeads = leads.filter(l => canAccessData(l.assignedTo));
@@ -196,6 +211,67 @@ const Dashboard = () => {
           </div>
         ))}
       </div>
+
+      {/* Monthly Target Progress Banner */}
+      {(() => {
+        const targetPct = monthlyTarget > 0 ? Math.min(100, Math.round((currentRev / monthlyTarget) * 100)) : 0;
+        const remaining = Math.max(0, monthlyTarget - currentRev);
+        return (
+          <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-gradient-to-r from-brand-accent/5 to-transparent">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center text-brand-accent flex-shrink-0">
+                  <Target size={20} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue Target</span>
+                    {isAdminRole(user?.role) && (
+                      <button
+                        onClick={() => { setEditingTarget(true); setTempTarget(String(monthlyTarget)); }}
+                        className="p-1 text-slate-600 hover:text-brand-accent transition-colors"
+                        title="Edit target"
+                      >
+                        <Edit3 size={12} />
+                      </button>
+                    )}
+                  </div>
+                  {editingTarget ? (
+                    <form onSubmit={e => { e.preventDefault(); const v = Number(tempTarget); if (v > 0) { setMonthlyTarget(v); localStorage.setItem('prismora_monthly_target', String(v)); } setEditingTarget(false); }} className="flex items-center gap-2">
+                      <input autoFocus type="number" min="1" value={tempTarget} onChange={e => setTempTarget(e.target.value)} className="w-32 glass-input rounded-lg px-3 py-1.5 text-sm text-white" />
+                      <button type="submit" className="text-xs btn-accent px-3 py-1.5 rounded-lg">Set</button>
+                      <button type="button" onClick={() => setEditingTarget(false)} className="text-xs text-slate-400 hover:text-white">Cancel</button>
+                    </form>
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-lg font-extrabold text-white">{formatCurrency(currentRev)}</span>
+                      <span className="text-xs text-slate-500">of {formatCurrency(monthlyTarget)} target</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-4 flex-shrink-0">
+                <div className="text-right">
+                  <div className={`text-2xl font-extrabold ${targetPct >= 100 ? 'text-brand-accent' : targetPct >= 70 ? 'text-amber-400' : 'text-slate-300'}`}>{targetPct}%</div>
+                  <div className="text-[10px] text-slate-500">{targetPct >= 100 ? '🎉 Target Hit!' : `₹${remaining.toLocaleString('en-IN')} remaining`}</div>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${targetPct >= 100 ? 'bg-brand-accent' : targetPct >= 70 ? 'bg-amber-400' : 'bg-blue-400'}`}
+                  style={{ width: `${targetPct}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-slate-600 mt-1">
+                <span>₹0</span>
+                <span>{formatCurrency(monthlyTarget)}</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -1,17 +1,20 @@
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import AIAssistantWidget from './AIAssistantWidget';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
-import { isToday, parseISO } from 'date-fns';
-import { Bell, X, CalendarClock, Sparkles } from 'lucide-react';
+import { isToday } from 'date-fns';
+import { Bell, X, CalendarClock, Sparkles, ShieldX } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const Layout = () => {
   const { leads } = useData();
-  const { user, canAccessData } = useAuth();
+  const { user, canAccessData, isAdmin, isSales } = useAuth();
+  const [searchParams] = useSearchParams();
+  const accessDenied = searchParams.get('denied') === '1';
+  const [showAccessDenied, setShowAccessDenied] = useState(accessDenied);
   const [showToast, setShowToast] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -34,12 +37,11 @@ const Layout = () => {
 
   useEffect(() => {
     if (user && leads.length > 0) {
-      // Find leads assigned to the user that are due today
+      // Find leads assigned to the user that are due today — only show to Sales-tier users
       const dueToday = leads.filter(l => {
-        if (user.role !== 'Sales') return false; // Hide follow-ups from Admin/Manager
+        if (!isSales) return false; // Hide follow-up toasts from Admin/Manager/other roles
         if (!canAccessData(l.assignedTo)) return false;
         if (!l.followUpDate) return false;
-        // The mock data followUpDate is an ISO string, but might be adjusted dynamically
         try {
           return isToday(new Date(l.followUpDate)) && l.status !== 'Converted' && l.status !== 'Lost';
         } catch(e) { return false; }
@@ -78,6 +80,24 @@ const Layout = () => {
         </main>
       </div>
 
+      {/* Access Denied toast — fires when PermissionGuard redirects here */}
+      {showAccessDenied && createPortal(
+        <div className="fixed top-20 right-6 z-[200] animate-fade-in-up">
+          <div className="glass-panel bg-brand-primary/95 border border-red-500/30 rounded-xl p-4 shadow-2xl flex items-start gap-4 min-w-[300px] max-w-sm relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+            <div className="p-2 bg-red-500/10 rounded-lg text-red-400">
+              <ShieldX size={24} />
+            </div>
+            <div className="flex-1 pr-6">
+              <h4 className="text-white font-bold text-sm mb-1">Access Denied</h4>
+              <p className="text-slate-400 text-xs leading-relaxed">You don't have permission to access that page.</p>
+            </div>
+            <button onClick={() => setShowAccessDenied(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white transition-colors p-1"><X size={14} /></button>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Global Toast Notification */}
       {showToast && createPortal(
         <div className="fixed top-20 right-6 z-[200] animate-fade-in-up">
@@ -112,8 +132,8 @@ const Layout = () => {
         />
       )}
 
-      {/* Floating round chat button - bottom right */}
-      {user?.role === 'Admin' && (
+      {/* Floating round chat button — visible to Admin-tier roles */}
+      {isAdmin && (
         <button
           onClick={() => setIsChatOpen(prev => !prev)}
           className="fixed bottom-6 right-6 z-[99] w-14 h-14 rounded-full bg-gradient-to-br from-brand-accent to-brand-accent-dark shadow-lg shadow-brand-accent/40 flex items-center justify-center hover:scale-110 transition-transform border-2 border-brand-accent/30"

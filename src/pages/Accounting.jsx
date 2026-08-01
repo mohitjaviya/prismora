@@ -6,21 +6,22 @@ import { createPortal } from 'react-dom';
 import { 
   Wallet, TrendingUp, Plus, Trash2, Calendar, FileText, 
   CheckCircle, Clock, AlertCircle, ShoppingCart, ArrowUpRight, 
-  ArrowDownRight, Check, X, CreditCard, DollarSign, Printer 
+  ArrowDownRight, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, Legend, PieChart, Pie, Cell 
 } from 'recharts';
+import { sendWhatsAppAlert, sendEmailAlert, templates } from '../utils/notificationUtils';
 
 const CHART_COLORS = ['#D4186C', '#6366F1', '#A78BFA', '#38BDF8', '#34D399', '#FBBF24'];
 
 const Accounting = () => {
-  const { user, users, canAccessData } = useAuth();
-  const { 
-    orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, 
+  const { user, users, canAccessData, canAccess } = useAuth();
+   const {
+    orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, leads, productCatalog, distributors,
     addInvoice, updateInvoiceStatus, deleteInvoice,
-    addExpense, deleteExpense 
+    addExpense, deleteExpense, creditNotes, addCreditNote
   } = useData();
 
   // Route Guard: Anyone logged in can access, view is filtered dynamically
@@ -46,13 +47,15 @@ const Accounting = () => {
   }, [rawExpenses, canAccessData]);
 
   // State variables - non-Admins start on 'invoices' tab since overview is Admin-only
-  const [activeTab, setActiveTab] = useState(user.role === 'Admin' ? 'overview' : 'invoices'); // 'overview' | 'invoices' | 'expenses'
+  const [activeTab, setActiveTab] = useState(canAccess('accounting', 'full') ? 'overview' : 'invoices'); // 'overview' | 'invoices' | 'expenses'
   const [invoiceFilter, setInvoiceFilter] = useState('All'); // 'All' | 'Paid' | 'Unpaid' | 'Overdue'
   
   // Modals state
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [printInvoice, setPrintInvoice] = useState(null);
+  const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
+  const [creditForm, setCreditForm] = useState({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
 
   // Form states
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -84,6 +87,17 @@ const Accounting = () => {
 
   const unpaidInvoices = invoices.filter(inv => inv.status === 'Unpaid' || inv.status === 'Overdue');
   const outstandingAmount = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.amount || 0) + Number(inv.tax || 0), 0);
+
+  const previewTaxRate = useMemo(() => {
+    if (selectedOrderId) {
+      const order = orders.find(o => o.id === selectedOrderId);
+      if (order) {
+        const prod = productCatalog.find(p => p.name === order.product);
+        if (prod) return prod.gstPct / 100;
+      }
+    }
+    return 0.18; // default 18% custom invoice
+  }, [selectedOrderId, orders, productCatalog]);
 
   // Helper for formatting Currency
   const formatCurrency = (val) => {
@@ -176,7 +190,6 @@ const Accounting = () => {
     !invoices.some(inv => inv.orderId === order.id)
   );
 
-  // Handles custom/order invoice generation
   const handleGenerateInvoiceSubmit = (e) => {
     e.preventDefault();
     
@@ -198,8 +211,7 @@ const Accounting = () => {
       return;
     }
 
-    const taxRate = 0.18; // 18% GST
-    const calculatedTax = Math.round(amount * taxRate);
+    const calculatedTax = Math.round(amount * previewTaxRate);
 
     addInvoice({
       orderId,
@@ -249,6 +261,21 @@ const Accounting = () => {
     return inv.status === invoiceFilter;
   });
 
+  const handleCreditSubmit = (e) => {
+    e.preventDefault();
+    const amount = Number(creditForm.amount);
+    if (!creditForm.customerName || isNaN(amount) || amount <= 0) { alert('Enter a valid customer and amount.'); return; }
+    addCreditNote({
+      customerName: creditForm.customerName,
+      invoiceId: creditForm.invoiceId || null,
+      amount,
+      reason: creditForm.reason,
+      recordedBy: user.id
+    });
+    setCreditForm({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
+    setIsCreditModalOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -268,6 +295,12 @@ const Accounting = () => {
             <Plus size={16} /> Log Expense
           </button>
           <button
+            onClick={() => setIsCreditModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-primary-light border border-white/10 hover:border-brand-accent/50 text-slate-200 rounded-xl transition-all"
+          >
+            <FileText size={16} /> Credit Note
+          </button>
+          <button
             onClick={() => setIsInvoiceModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm btn-accent rounded-xl"
           >
@@ -278,7 +311,7 @@ const Accounting = () => {
 
       {/* Tabs Menu */}
       <div className="flex border-b border-white/5 pb-px">
-        {user?.role === 'Admin' && (
+        {canAccess('accounting', 'full') && (
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
@@ -310,10 +343,20 @@ const Accounting = () => {
         >
           Expenses ({expenses.length})
         </button>
+        <button
+          onClick={() => setActiveTab('credit')}
+          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
+            activeTab === 'credit'
+              ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
+              : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          Credit Notes ({(creditNotes || []).length})
+        </button>
       </div>
 
       {/* Tab Contents */}
-      {activeTab === 'overview' && user?.role === 'Admin' && (
+      {activeTab === 'overview' && canAccess('accounting', 'full') && (
         <div className="space-y-6">
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
@@ -330,7 +373,7 @@ const Accounting = () => {
               <div className="mt-2 text-xs text-slate-500 flex items-center gap-1">
                 <span>Base: {formatCurrency(totalIncome)}</span>
                 <span>•</span>
-                <span>GST (18%): {formatCurrency(totalTax)}</span>
+                <span>GST: {formatCurrency(totalTax)}</span>
               </div>
             </div>
 
@@ -532,6 +575,62 @@ const Accounting = () => {
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center gap-2">
+                              {inv.status !== 'Paid' && (() => {
+                                // ── Resolve customer contact details dynamically ──────────────────────
+                                const orderObj = inv.orderId ? rawOrders.find(o => o.id === inv.orderId) : null;
+                                const leadObj = leads.find(l => l.name?.toLowerCase() === inv.customerName?.toLowerCase() || l.company?.toLowerCase() === inv.customerName?.toLowerCase());
+                                const distObj = distributors?.find(d => d.name?.toLowerCase() === inv.customerName?.toLowerCase());
+
+                                const phone = orderObj?.phone || leadObj?.phone || distObj?.phone || '9876543210';
+                                const email = orderObj?.email || leadObj?.email || distObj?.email || 'accounts@prismora.com';
+                                
+                                const totalValue = Number(inv.amount || 0) + Number(inv.tax || 0);
+                                
+                                // Calculate calendar day difference
+                                const dueDateObj = new Date(inv.dueDate);
+                                const todayObj = new Date();
+                                const todayStart = new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate());
+                                const dueStart = new Date(dueDateObj.getFullYear(), dueDateObj.getMonth(), dueDateObj.getDate());
+                                
+                                const msDiff = todayStart.getTime() - dueStart.getTime();
+                                const daysDiff = Math.round(msDiff / 86400000); // positive if overdue, negative if upcoming
+                                const formattedDate = dueDateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                                
+                                let statusText = '';
+                                if (daysDiff > 0) {
+                                  statusText = `is currently overdue by ${daysDiff} day${daysDiff > 1 ? 's' : ''}`;
+                                } else if (daysDiff < 0) {
+                                  const absDiff = Math.abs(daysDiff);
+                                  statusText = `is due in ${absDiff} day${absDiff > 1 ? 's' : ''} (on ${formattedDate})`;
+                                } else {
+                                  statusText = `is due today`;
+                                }
+                                
+                                const messageText = `Hi ${inv.customerName},\n\nThis is a payment reminder from Prismora. Invoice ${inv.id} for ₹${totalValue.toLocaleString('en-IN')} ${statusText}. Please arrange for payment at your earliest convenience.\n\nThank you,\nPrismora Finance Team`;
+
+                                return (
+                                  <>
+                                    <button
+                                      onClick={() => sendWhatsAppAlert(phone, messageText)}
+                                      className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
+                                      title={`Send WhatsApp Reminder to ${phone}`}
+                                    >
+                                      <MessageSquare size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => sendEmailAlert(
+                                        email,
+                                        `Payment Reminder: Invoice ${inv.id}`,
+                                        messageText
+                                      )}
+                                      className="p-1 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+                                      title={`Send Email Reminder to ${email}`}
+                                    >
+                                      <Mail size={16} />
+                                    </button>
+                                  </>
+                                );
+                              })()}
                               {inv.status !== 'Paid' && (
                                 <button
                                   onClick={() => updateInvoiceStatus(inv.id, 'Paid')}
@@ -550,22 +649,22 @@ const Accounting = () => {
                                   <AlertCircle size={16} />
                                 </button>
                               )}
-                                <button
-                                  onClick={() => setPrintInvoice(inv)}
-                                  className="p-1 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"
-                                  title="Print GST Invoice"
-                                >
-                                  <Printer size={16} />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (confirm("Delete this invoice?")) deleteInvoice(inv.id);
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                                  title="Delete Invoice"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                              <button
+                                onClick={() => setPrintInvoice(inv)}
+                                className="p-1 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"
+                                title="Print GST Invoice"
+                              >
+                                <Printer size={16} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm("Delete this invoice?")) deleteInvoice(inv.id);
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                title="Delete Invoice"
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -637,6 +736,89 @@ const Accounting = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'credit' && (
+        <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                  <th className="p-4">Credit Note ID</th>
+                  <th className="p-4">Customer</th>
+                  <th className="p-4">Against Invoice</th>
+                  <th className="p-4">Reason</th>
+                  <th className="p-4 text-right">Amount</th>
+                  <th className="p-4">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-sm text-slate-300">
+                {(creditNotes || []).length > 0 ? creditNotes.map(cn => (
+                  <tr key={cn.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
+                    <td className="p-4 font-bold text-white font-mono text-xs">{cn.id}</td>
+                    <td className="p-4 font-medium">{cn.customerName}</td>
+                    <td className="p-4 text-slate-400 font-mono text-xs">{cn.invoiceId || '—'}</td>
+                    <td className="p-4"><span className="text-xs bg-rose-500/10 text-rose-300 border border-rose-500/20 px-2 py-0.5 rounded-full">{cn.reason}</span></td>
+                    <td className="p-4 text-right font-bold text-emerald-400">{formatCurrency(cn.amount)}</td>
+                    <td className="p-4 text-slate-400">{formatDate(cn.createdAt)}</td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan="6" className="p-8 text-center text-slate-500">
+                    No credit notes issued yet. Use "Credit Note" above to record a sales return or adjustment.
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Issue Credit Note */}
+      {isCreditModalOpen && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsCreditModalOpen(false)} />
+          <div className="relative glass-panel bg-brand-primary w-full max-w-lg rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 p-6">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2"><FileText className="text-brand-accent" size={20} />Issue Credit Note</h3>
+              <button onClick={() => setIsCreditModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleCreditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Against Invoice (optional)</label>
+                <select value={creditForm.invoiceId} onChange={e => {
+                  const inv = invoices.find(i => i.id === e.target.value);
+                  setCreditForm(f => ({ ...f, invoiceId: e.target.value, customerName: inv ? inv.customerName : f.customerName, amount: inv ? String(Number(inv.amount || 0) + Number(inv.tax || 0)) : f.amount }));
+                }} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
+                  <option value="" className="bg-brand-primary text-slate-500">-- None / Manual --</option>
+                  {invoices.map(i => <option key={i.id} value={i.id} className="bg-brand-primary">{i.id} — {i.customerName} ({formatCurrency(Number(i.amount || 0) + Number(i.tax || 0))})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Customer Name *</label>
+                <input type="text" required value={creditForm.customerName} onChange={e => setCreditForm(f => ({ ...f, customerName: e.target.value }))} placeholder="e.g. Gujarat Super Stockist" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Credit Amount (₹) *</label>
+                  <input type="number" required min="1" value={creditForm.amount} onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Reason *</label>
+                  <select value={creditForm.reason} onChange={e => setCreditForm(f => ({ ...f, reason: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
+                    {['Sales Return', 'Damaged Goods', 'Price Adjustment', 'Overbilling', 'Scheme Credit', 'Other'].map(r => <option key={r} value={r} className="bg-brand-primary">{r}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="bg-brand-primary-lighter/30 rounded-xl p-3 border border-white/5 text-xs text-slate-400">
+                This reduces the customer's outstanding balance by the credit amount.
+              </div>
+              <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
+                <button type="button" onClick={() => setIsCreditModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Issue Credit Note</button>
+              </div>
+            </form>
+          </div>
+        </div>, document.body
       )}
 
       {/* Modal: Generate Invoice */}
@@ -765,19 +947,19 @@ const Accounting = () => {
                   />
                 </div>
 
-                {customAmount && (
+                 {customAmount && (
                   <div className="bg-brand-primary-lighter/40 rounded-xl p-3 border border-white/5 text-xs text-slate-400 space-y-1">
                     <div className="flex justify-between">
                       <span>Base Amount:</span>
                       <span className="font-semibold text-slate-200">{formatCurrency(Number(customAmount))}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>GST (18%):</span>
-                      <span className="font-semibold text-slate-200">{formatCurrency(Number(customAmount) * 0.18)}</span>
+                      <span>GST ({previewTaxRate * 100}%):</span>
+                      <span className="font-semibold text-slate-200">{formatCurrency(Number(customAmount) * previewTaxRate)}</span>
                     </div>
                     <div className="border-t border-white/5 pt-1.5 flex justify-between font-bold text-white text-sm">
                       <span>Total Invoiced Value:</span>
-                      <span className="text-brand-accent">{formatCurrency(Number(customAmount) * 1.18)}</span>
+                      <span className="text-brand-accent">{formatCurrency(Number(customAmount) * (1 + previewTaxRate))}</span>
                     </div>
                   </div>
                 )}

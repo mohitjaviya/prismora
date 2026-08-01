@@ -1,7 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// manually parse .env
+const envFile = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+const env = {};
+envFile.split('\n').forEach(line => {
+  const [key, ...value] = line.split('=');
+  if (key && value.length > 0) {
+    env[key.trim()] = value.join('=').trim().replace(/['"]/g, '');
+  }
+});
+
+const supabaseUrl = env['VITE_SUPABASE_URL'];
+const supabaseAnonKey = env['VITE_SUPABASE_ANON_KEY'];
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error("Missing Supabase credentials in environment variables.");
@@ -64,7 +80,19 @@ async function seed() {
 
   // Seed Products
   const { error: productsError } = await supabase.from('products').upsert(
-    initialCatalog.map(name => ({ name }))
+    initialCatalog.map((name, idx) => ({ 
+      id: `P${idx + 101}`, 
+      name,
+      category: 'Wellness',
+      hsnCode: '30049011',
+      gstPct: 12,
+      mrp: 200,
+      distributorPrice: 100,
+      dealerPrice: 120,
+      retailerPrice: 140,
+      uom: 'BOTTLE',
+      createdAt: new Date().toISOString()
+    }))
   );
   if (productsError) console.error("Error seeding products:", productsError);
   else console.log("Products seeded.");

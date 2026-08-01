@@ -22,7 +22,7 @@ const supabaseKey = env['VITE_SUPABASE_ANON_KEY'];
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function test() {
-  const { data, error } = await supabase.from('prismora_users').select('*');
+  const { data, error } = await supabase.from('users').select('*');
   if (error) console.error("Error:", error);
   else console.log("Users in DB:", data);
 }

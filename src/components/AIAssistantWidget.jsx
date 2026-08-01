@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useData } from '../context/DataContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isAdminRole } from '../context/AuthContext';
 import { Send, Bot, User, Sparkles, Trash2, Copy, Check, X } from 'lucide-react';
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
@@ -180,7 +180,7 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
     }
   }, [messages, loading]);
 
-  if (user?.role !== 'Admin') return null;
+  if (!isAdminRole(user?.role)) return null;
 
   const sendMessage = async (text) => {
     const question = text || input.trim();

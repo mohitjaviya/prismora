@@ -419,8 +419,21 @@ const Customers = () => {
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="font-medium">{order.product}</div>
-                            <div className="text-xs text-slate-500">Qty: {order.quantity}</div>
+                            {Array.isArray(order.items) && order.items.length > 0 ? (
+                              <div className="space-y-1">
+                                {order.items.map((it, idx) => (
+                                  <div key={idx} className="flex items-center justify-between gap-3 text-xs">
+                                    <span className="text-slate-200">• {it.name}</span>
+                                    <span className="text-slate-500 flex-shrink-0">Qty: {it.quantity}{it.total ? ` · ₹${Number(it.total).toLocaleString('en-IN')}` : ''}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <>
+                                <div className="font-medium">{order.product}</div>
+                                <div className="text-xs text-slate-500">Qty: {order.quantity}</div>
+                              </>
+                            )}
                           </td>
                           <td className="px-4 py-3 font-bold text-brand-accent">
                             ₹{order.value.toLocaleString()}

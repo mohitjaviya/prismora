@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp \"C:\\\\Users\\\\PREMIUM\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--PRISMORA\\\\a9446e8c-7264-4db8-b801-d07f67d89ce0\\\\scratchpad\\\\verify.js\" \"d:/PRISMORA/.verify-tmp.cjs\")",
+      "Bash(node .verify-tmp.cjs)"
+    ]
+  }
+}

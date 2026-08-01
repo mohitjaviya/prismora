@@ -1,13 +1,15 @@
-import { Menu, Bell, User, LogOut, Search, Sun, Moon, CalendarClock, Activity, CheckCircle, XCircle, Package, Truck } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Menu, Bell, User, LogOut, Search, Sun, Moon, CalendarClock, Activity, CheckCircle, XCircle, Package, Truck, Wallet, MessageSquareWarning, Users } from 'lucide-react';
+import { useAuth, isAdminRole } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
+import { useNotifications } from '../context/NotificationContext';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { isToday, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 
 const Topbar = ({ setIsMobileMenuOpen }) => {
   const { user, logout, canAccessData } = useAuth();
-  const { leads, orders, eventLog } = useData();
+  const { leads, orders } = useData();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -15,18 +17,6 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
   const [isDark, setIsDark] = useState(true);
   const [searchResults, setSearchResults] = useState({ leads: [], orders: [] });
   const searchRef = useRef(null);
-
-  // Track which notifications have been read
-  const [readIds, setReadIds] = useState([]);
-
-  useEffect(() => {
-    if (user) {
-      const saved = localStorage.getItem(`prismora_read_notifications_${user.id}`);
-      setReadIds(saved ? JSON.parse(saved) : []);
-    } else {
-      setReadIds([]);
-    }
-  }, [user]);
 
   useEffect(() => {
     if (isDark) {
@@ -59,7 +49,6 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
 
     const lowerQuery = query.toLowerCase();
     
-    // Filter logic respecting user role
     const visibleLeads = leads.filter(l => canAccessData(l.assignedTo));
     const visibleOrders = orders.filter(o => canAccessData(o.assignedTo));
 
@@ -87,62 +76,35 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
     navigate(`${path}?searchId=${id}`);
   };
 
-  // Compute due leads globally for notifications (ONLY for Sales users)
-  const dueToday = leads.filter(l => {
-    if (user?.role !== 'Sales') return false; // Hide follow-ups from Admin/Manager
-    if (!canAccessData(l.assignedTo)) return false;
-    if (!l.followUpDate) return false;
-    try {
-      return isToday(new Date(l.followUpDate)) && l.status !== 'Converted' && l.status !== 'Lost';
-    } catch(e) { return false; }
-  });
-
-  // Filter event log for Managers and Admins only
-  const visibleEvents = (user?.role === 'Admin' || user?.role === 'Manager')
-    ? (eventLog || []).filter(ev => canAccessData(ev.assignedTo))
-    : [];
-
-  const unreadDueToday = dueToday.filter(l => !readIds.includes(l.id));
-  const unreadEvents = visibleEvents.filter(ev => !readIds.includes(ev.id));
-  const unreadCount = unreadDueToday.length + unreadEvents.length;
-  const totalNotifications = dueToday.length + visibleEvents.length;
-
-  const handleMarkAllRead = () => {
-    const allIds = [...dueToday.map(l => l.id), ...visibleEvents.map(e => e.id)];
-    const newIds = Array.from(new Set([...readIds, ...allIds]));
-    setReadIds(newIds);
-    if (user) {
-      localStorage.setItem(`prismora_read_notifications_${user.id}`, JSON.stringify(newIds));
-    }
-  };
-
-  const markAsReadAndNavigate = (id, path) => {
-    if (!readIds.includes(id)) {
-      const newIds = [...readIds, id];
-      setReadIds(newIds);
-      if (user) {
-        localStorage.setItem(`prismora_read_notifications_${user.id}`, JSON.stringify(newIds));
-      }
-    }
+  const handleNotificationClick = (n) => {
+    markAsRead(n.id);
     setNotificationsOpen(false);
-    navigateToResult(path, id);
+    navigate(n.link);
   };
 
-  const getEventIcon = (type) => {
-    switch(type) {
-      case 'lead_new': return <Activity size={14} className="text-blue-400" />;
-      case 'lead_converted': return <CheckCircle size={14} className="text-brand-accent" />;
-      case 'lead_lost': return <XCircle size={14} className="text-red-400" />;
-      case 'order_processing': return <Package size={14} className="text-blue-400" />;
-      case 'order_delivered': return <Truck size={14} className="text-green-400" />;
-      default: return <Activity size={14} className="text-slate-400" />;
+  const getNotifIcon = (type) => {
+    switch (type) {
+      case 'critical_stock':
+        return <Package size={14} className="text-rose-400" />;
+      case 'overdue_payment':
+        return <Wallet size={14} className="text-orange-400" />;
+      case 'new_complaint':
+        return <MessageSquareWarning size={14} className="text-amber-400" />;
+      case 'lead_assigned':
+        return <Users size={14} className="text-blue-400" />;
+      default:
+        return <Activity size={14} className="text-slate-400" />;
     }
   };
 
-  const getEventPath = (type) => {
-    if (type.startsWith('lead')) return '/leads';
-    if (type.startsWith('order')) return '/orders';
-    return '/';
+  const getNotifBg = (type) => {
+    switch (type) {
+      case 'critical_stock': return 'bg-rose-500/10 border-rose-500/20';
+      case 'overdue_payment': return 'bg-orange-500/10 border-orange-500/20';
+      case 'new_complaint': return 'bg-amber-500/10 border-amber-500/20';
+      case 'lead_assigned': return 'bg-blue-500/10 border-blue-500/20';
+      default: return 'bg-slate-500/10 border-white/5';
+    }
   };
 
   return (
@@ -225,7 +187,7 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
             >
               <Bell size={20} />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-brand-primary shadow-sm shadow-red-500/50 animate-pulse"></span>
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-brand-primary shadow-sm shadow-red-500/50 animate-pulse"></span>
               )}
             </button>
 
@@ -234,68 +196,46 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
                 <div className="px-4 py-2 border-b border-white/5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-white text-sm">Notifications</h3>
-                    {unreadCount > 0 && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">{unreadCount} New</span>}
+                    {unreadCount > 0 && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">{unreadCount} New</span>}
                   </div>
-                  {unreadCount > 0 && (
-                    <button onClick={handleMarkAllRead} className="text-xs text-brand-accent hover:text-brand-accent-light transition-colors">
-                      Mark all read
-                    </button>
-                  )}
+                  <div className="flex gap-2">
+                    {unreadCount > 0 && (
+                      <button onClick={markAllAsRead} className="text-xs text-brand-accent hover:underline">
+                        Read All
+                      </button>
+                    )}
+                    {notifications.length > 0 && (
+                      <button onClick={clearAll} className="text-xs text-slate-500 hover:text-slate-300">
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                  
-                  {/* Due Today Follow-ups */}
-                  {dueToday.map(lead => {
-                    const isUnread = !readIds.includes(lead.id);
-                    return (
-                      <button 
-                        key={lead.id} 
-                        onClick={() => markAsReadAndNavigate(lead.id, '/leads')}
-                        className={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 flex items-start gap-3 group ${isUnread ? 'bg-white/5' : ''}`}
-                      >
-                        <div className="p-1.5 bg-brand-accent/10 text-brand-accent rounded-lg shrink-0 mt-0.5">
-                          <CalendarClock size={14} />
+                <div className="max-h-80 overflow-y-auto custom-scrollbar divide-y divide-white/5">
+                  {notifications.length > 0 ? notifications.map(n => (
+                    <button 
+                      key={n.id} 
+                      onClick={() => handleNotificationClick(n)}
+                      className={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-start gap-3 group ${!n.isRead ? 'bg-white/5' : ''}`}
+                    >
+                      <div className={`p-2 rounded-xl border shrink-0 mt-0.5 ${getNotifBg(n.type)}`}>
+                        {getNotifIcon(n.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start gap-2">
+                          <p className={`text-xs font-semibold group-hover:text-brand-accent transition-colors truncate ${!n.isRead ? 'text-white font-bold' : 'text-slate-400'}`}>{n.title}</p>
+                          {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-brand-accent mt-1.5 shrink-0"></span>}
                         </div>
-                        <div className="flex-1">
-                          <div className="flex justify-between items-start">
-                            <p className={`text-sm font-medium group-hover:text-brand-accent transition-colors ${isUnread ? 'text-white' : 'text-slate-300'}`}>{lead.name}</p>
-                            {isUnread && <span className="w-2 h-2 rounded-full bg-brand-accent mt-1.5"></span>}
-                          </div>
-                          <p className="text-xs text-slate-400 mt-0.5">Follow-up scheduled for today.</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                  {/* Real-time Event Notifications (Admin/Manager only) */}
-                  {visibleEvents.map(ev => {
-                    const isUnread = !readIds.includes(ev.id);
-                    return (
-                      <button 
-                        key={ev.id} 
-                        onClick={() => markAsReadAndNavigate(ev.id, getEventPath(ev.type))}
-                        className={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 flex items-start gap-3 group ${isUnread ? 'bg-white/5' : ''}`}
-                      >
-                        <div className="p-1.5 bg-white/5 rounded-lg shrink-0 mt-0.5">
-                          {getEventIcon(ev.type)}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex justify-between items-start">
-                            <p className={`text-sm font-medium transition-colors ${isUnread ? 'text-white group-hover:text-brand-accent' : 'text-slate-300 group-hover:text-white'}`}>{ev.message}</p>
-                            {isUnread && <span className="w-2 h-2 rounded-full bg-brand-accent mt-1.5 shrink-0 ml-2"></span>}
-                          </div>
-                          <p className="text-[10px] text-slate-500 mt-0.5">
-                            {formatDistanceToNow(new Date(ev.timestamp.endsWith('Z') || ev.timestamp.includes('+') ? ev.timestamp : ev.timestamp + 'Z'), { addSuffix: true })}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                  {totalNotifications === 0 && (
-                    <div className="px-4 py-6 text-center text-slate-400 text-sm">
+                        <p className="text-xs text-slate-400 mt-1 leading-normal break-words line-clamp-2">{n.message}</p>
+                        <p className="text-[10px] text-slate-600 mt-1.5 font-medium">
+                          {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </button>
+                  )) : (
+                    <div className="px-4 py-8 text-center text-slate-500 text-xs">
                       <Bell size={24} className="mx-auto mb-2 opacity-20" />
-                      No new notifications
+                      All caught up! No notifications.
                     </div>
                   )}
                 </div>
@@ -321,11 +261,11 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
                   <p className="text-xs text-slate-500 mt-0.5">{user?.role}</p>
                 </div>
                 <button 
-                  onClick={() => { setDropdownOpen(false); navigate(user?.role === 'Admin' ? '/settings' : '/profile'); }}
+                  onClick={() => { setDropdownOpen(false); navigate(isAdminRole(user?.role) ? '/settings' : '/profile'); }}
                   className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5"
                 >
                   <User size={16} className="text-brand-accent" />
-                  {user?.role === 'Admin' ? 'Settings' : 'My Profile'}
+                  {isAdminRole(user?.role) ? 'Settings' : 'My Profile'}
                 </button>
                 <button 
                   onClick={handleLogout}
