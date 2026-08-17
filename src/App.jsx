@@ -23,6 +23,7 @@ import Complaints from './pages/Complaints';
 import Schemes from './pages/Schemes';
 import Reports from './pages/Reports';
 import AIInsights from './pages/AIInsights';
+import MLLab from './pages/MLLab';
 import SFA from './pages/SFA';
 import DistributorOrders from './pages/DistributorOrders';
 import DealerOrders from './pages/DealerOrders';
@@ -82,6 +83,7 @@ function AppRoutes() {
         <Route path="schemes" element={<PermissionGuard module="schemes"><Schemes /></PermissionGuard>} />
         <Route path="reports" element={<PermissionGuard module="reports"><Reports /></PermissionGuard>} />
         <Route path="ai-insights" element={<PermissionGuard module="reports"><AIInsights /></PermissionGuard>} />
+        <Route path="ml-lab" element={<PermissionGuard module="reports"><MLLab /></PermissionGuard>} />
         <Route path="geography" element={<PermissionGuard module="geography"><Geography /></PermissionGuard>} />
         <Route path="settings" element={<PermissionGuard module="settings"><Settings /></PermissionGuard>} />
         <Route path="profile" element={<Profile />} />

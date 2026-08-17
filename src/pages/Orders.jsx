@@ -39,7 +39,7 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, distributors, dealers, retailers } = useData();
   const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -54,6 +54,8 @@ const Orders = () => {
   const [splitQuantities, setSplitQuantities] = useState({});
   const [isPartialModalOpen, setIsPartialModalOpen] = useState(false);
   const [partialQty, setPartialQty] = useState('');
+  const [partialError, setPartialError] = useState('');
+  const [isDelivering, setIsDelivering] = useState(false);
 
   // Warehouse Manager / Dispatch Team fulfill orders across every sales rep,
   // so they aren't restricted to the row-level "my own orders" visibility
@@ -66,9 +68,11 @@ const Orders = () => {
     .reduce((sum, b) => sum + Math.max(0, (b.quantity || 0) - (b.reserved || 0)), 0);
 
   const getStockShortfalls = (order) => {
+    // For a single-product order already part-delivered, only what's still
+    // outstanding needs to be in stock — not the original full quantity.
     const lineItems = Array.isArray(order.items) && order.items.length > 0
       ? order.items.map(i => ({ name: i.name, quantity: Number(i.quantity || 0) }))
-      : [{ name: order.product, quantity: Number(order.quantity || 0) }];
+      : [{ name: order.product, quantity: Number(order.quantity || 0) - Number(order.deliveredQty || 0) }];
     return lineItems
       .map(li => ({ ...li, available: getAvailableQty(li.name) }))
       .filter(li => li.name && li.available < li.quantity);
@@ -78,6 +82,13 @@ const Orders = () => {
     if (!canSetOrderStatus(user?.role, targetStatus)) {
       const owners = STATUS_STAGE_OWNERS[targetStatus];
       setStatusError(`Only ${owners ? owners.join('/') : 'Admin'} can set this status.`);
+      return;
+    }
+    // A cancelled order is void. The stepper hides its buttons, but the status
+    // dropdown stays live, so without this a cancelled order could be pushed
+    // straight to Delivered — deducting stock and billing for a void order.
+    if (formData.status === 'Cancelled' && targetStatus !== 'Cancelled') {
+      setStatusError('This order was cancelled. Create a new order instead of reviving it.');
       return;
     }
     // Block ALL forward fulfillment stages when stock is short — you can't
@@ -130,6 +141,7 @@ const Orders = () => {
   // Partial delivery applies to single-product orders (multi-item orders use Split)
   const isSingleProduct = (order) => !(Array.isArray(order.items) && order.items.length > 1);
   const orderRemainingQty = (order) => Number(order.quantity || 0) - Number(order.deliveredQty || 0);
+  const deliveryPct = (delivered, total) => Number(total) > 0 ? Math.min(100, Math.round((Number(delivered || 0) / Number(total)) * 100)) : 0;
 
   const canPartialDeliver = () => {
     if (!editingOrder || !isSingleProduct(formData)) return false;
@@ -143,16 +155,29 @@ const Orders = () => {
     if (!editingOrder) return;
     const suggested = Math.min(orderRemainingQty(formData), Math.max(0, getAvailableQty(formData.product)));
     setPartialQty(String(suggested));
+    setPartialError('');
     setIsPartialModalOpen(true);
   };
 
-  const confirmPartialDelivery = () => {
-    if (!editingOrder) return;
+  const confirmPartialDelivery = async () => {
+    if (!editingOrder || isDelivering) return;
     const qty = Number(partialQty);
     if (qty <= 0) return;
-    deliverPartial(editingOrder.id, qty);
-    setIsPartialModalOpen(false);
-    closeModal();
+    setPartialError('');
+    setIsDelivering(true);
+    try {
+      // Awaited so a rejected delivery (e.g. not enough stock) surfaces here
+      // instead of the modal closing as though it succeeded.
+      const result = await deliverPartial(editingOrder.id, qty);
+      if (result && !result.ok) {
+        setPartialError(result.error || 'Could not record this delivery.');
+        return;
+      }
+      setIsPartialModalOpen(false);
+      closeModal();
+    } finally {
+      setIsDelivering(false);
+    }
   };
 
   // Sales roles hand off fulfillment entirely — they get one action
@@ -391,8 +416,20 @@ const Orders = () => {
                         {order.status}
                       </span>
                       {order.status === 'Partially Delivered' && (
-                        <div className="mt-1.5 text-[10px] font-semibold text-teal-400">
-                          {order.deliveredQty || 0} / {order.quantity} delivered · {order.quantity - (order.deliveredQty || 0)} pending
+                        <div className="mt-1.5 w-32">
+                          <div className="flex items-center justify-between text-[10px] font-semibold text-teal-400">
+                            <span>{deliveryPct(order.deliveredQty, order.quantity)}% fulfilled</span>
+                            <span className="text-slate-500">{order.quantity - (order.deliveredQty || 0)} pending</span>
+                          </div>
+                          <div className="mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-teal-400"
+                              style={{ width: `${deliveryPct(order.deliveredQty, order.quantity)}%` }}
+                            />
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-slate-500">
+                            {order.deliveredQty || 0} / {order.quantity} delivered
+                          </div>
                         </div>
                       )}
                       {order.receivedByDistributor && (
@@ -554,14 +591,37 @@ const Orders = () => {
               <div className="grid grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Customer Name *</label>
-                  <input 
-                    required 
-                    type="text" 
-                    value={formData.customerName} 
+                  <input
+                    required
+                    type="text"
+                    value={formData.customerName}
                     onChange={e => {
                       const val = e.target.value;
-                      const matchedLead = leads?.find(l => l.name?.toLowerCase() === val.toLowerCase());
-                      if (matchedLead) {
+                      const norm = val.trim().toLowerCase();
+                      // Link to an actual channel-partner record when the typed name matches
+                      // one exactly — without this, the order carries no distributorId/
+                      // dealerId/retailerId and never shows up on that partner's own portal,
+                      // even though the customer name looks identical on screen.
+                      const matchedDistributor = distributors?.find(d => d.name?.toLowerCase() === norm);
+                      const matchedDealer = !matchedDistributor && dealers?.find(d => d.name?.toLowerCase() === norm);
+                      const matchedRetailer = !matchedDistributor && !matchedDealer && retailers?.find(r => r.name?.toLowerCase() === norm);
+                      const matchedParty = matchedDistributor || matchedDealer || matchedRetailer;
+                      const matchedLead = !matchedParty && leads?.find(l => l.name?.toLowerCase() === norm);
+
+                      if (matchedParty) {
+                        setFormData(prev => ({
+                          ...prev,
+                          customerName: val,
+                          companyName: prev.companyName || matchedParty.name || '',
+                          phone: prev.phone || matchedParty.phone || matchedParty.contactPhone || '',
+                          email: prev.email || matchedParty.email || '',
+                          state: prev.state || matchedParty.state || '',
+                          city: prev.city || matchedParty.city || '',
+                          distributorId: matchedDistributor ? matchedDistributor.id : undefined,
+                          dealerId: matchedDealer ? matchedDealer.id : undefined,
+                          retailerId: matchedRetailer ? matchedRetailer.id : undefined,
+                        }));
+                      } else if (matchedLead) {
                         setFormData(prev => ({
                           ...prev,
                           customerName: val,
@@ -574,14 +634,26 @@ const Orders = () => {
                           value: prev.value || matchedLead.dealValue || ''
                         }));
                       } else {
+                        // No match on this keystroke — clear any stale party link from a
+                        // previous exact match so the order doesn't stay bound to a party
+                        // whose name the user has since edited away from.
                         setFormData(prev => ({
                           ...prev,
-                          customerName: val
+                          customerName: val,
+                          distributorId: undefined,
+                          dealerId: undefined,
+                          retailerId: undefined,
                         }));
                       }
-                    }} 
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent" 
+                    }}
+                    className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent"
                   />
+                  {(formData.distributorId || formData.dealerId || formData.retailerId) && (
+                    <p className="mt-1 text-[11px] text-emerald-400 flex items-center gap-1">
+                      <CheckCircle size={11} />
+                      Linked to {formData.distributorId ? 'distributor' : formData.dealerId ? 'dealer' : 'retailer'} record — will appear on their portal.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Company Name</label>
@@ -761,15 +833,42 @@ const Orders = () => {
                 <p className="mt-1.5 text-xs text-slate-500">Max {Math.min(orderRemainingQty(formData), getAvailableQty(formData.product))} (limited by stock & remaining qty). The rest stays pending on this order.</p>
               </div>
               {Number(partialQty) > 0 && (
-                <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-3 text-sm text-teal-400 font-medium">
-                  After this: {(Number(formData.deliveredQty || 0) + Number(partialQty))} / {formData.quantity} delivered.
-                  {(Number(formData.deliveredQty || 0) + Number(partialQty)) >= Number(formData.quantity) ? ' Order will be fully Delivered.' : ' Order will be Partially Delivered.'}
+                <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-3 text-sm text-teal-400 font-medium space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span>
+                      After this: {(Number(formData.deliveredQty || 0) + Number(partialQty))} / {formData.quantity} delivered
+                    </span>
+                    <span className="font-bold">
+                      {deliveryPct(Number(formData.deliveredQty || 0) + Number(partialQty), formData.quantity)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-teal-400"
+                      style={{ width: `${deliveryPct(Number(formData.deliveredQty || 0) + Number(partialQty), formData.quantity)}%` }}
+                    />
+                  </div>
+                  <div>
+                    {(Number(formData.deliveredQty || 0) + Number(partialQty)) >= Number(formData.quantity) ? 'Order will be fully Delivered.' : 'Order will be Partially Delivered.'}
+                  </div>
+                </div>
+              )}
+              {partialError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-300 font-medium">
+                  {partialError}
                 </div>
               )}
             </div>
             <div className="px-6 py-4 border-t border-slate-700 flex justify-end gap-3">
               <button type="button" onClick={() => setIsPartialModalOpen(false)} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium">Cancel</button>
-              <button type="button" onClick={confirmPartialDelivery} className="px-5 py-2 bg-emerald-500/90 hover:bg-emerald-500 text-white font-bold rounded-lg transition-all">Confirm Delivery</button>
+              <button
+                type="button"
+                onClick={confirmPartialDelivery}
+                disabled={isDelivering}
+                className="px-5 py-2 bg-emerald-500/90 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+              >
+                {isDelivering ? 'Recording…' : 'Confirm Delivery'}
+              </button>
             </div>
           </div>
         </div>, document.body

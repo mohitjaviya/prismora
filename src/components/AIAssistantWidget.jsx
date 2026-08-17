@@ -2,8 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isAdminRole } from '../context/AuthContext';
 import { Send, Bot, User, Sparkles, Trash2, Copy, Check, X } from 'lucide-react';
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+import { askPrism } from '../utils/prismEngine';
 
 const SUGGESTED_QUESTIONS = [
   'What is our net profit margin?',
@@ -12,94 +11,10 @@ const SUGGESTED_QUESTIONS = [
   'What is the total revenue from Gujarat?',
   'Which salesperson has the most leads?',
   'How many pending orders are there?',
+  'Forecast demand for next month',
+  'Which distributors are at churn risk?',
+  'Which products are running low on stock?',
 ];
-
-const buildContext = (leads, orders, users, invoices = [], expenses = []) => {
-  const totalRevenue = orders.reduce((s, o) => s + (o.value || 0), 0);
-  const totalLeads = leads.length;
-  const totalOrders = orders.length;
-
-  const revenueByProduct = {};
-  orders.forEach(o => {
-    revenueByProduct[o.product] = (revenueByProduct[o.product] || 0) + (o.value || 0);
-  });
-
-  const revenueByState = {};
-  orders.forEach(o => {
-    revenueByState[o.state] = (revenueByState[o.state] || 0) + (o.value || 0);
-  });
-
-  const leadsByStatus = {};
-  leads.forEach(l => {
-    leadsByStatus[l.status] = (leadsByStatus[l.status] || 0) + 1;
-  });
-
-  const revenueByPerson = {};
-  orders.forEach(o => {
-    const person = users.find(u => u.id === o.assignedTo);
-    const name = person?.name || 'Unassigned';
-    revenueByPerson[name] = (revenueByPerson[name] || 0) + (o.value || 0);
-  });
-
-  const leadsByPerson = {};
-  leads.forEach(l => {
-    const person = users.find(u => u.id === l.assignedTo);
-    const name = person?.name || 'Unassigned';
-    leadsByPerson[name] = (leadsByPerson[name] || 0) + 1;
-  });
-
-  // Financial Calculations
-  const totalIncome = invoices
-    .filter(inv => inv.status === 'Paid')
-    .reduce((sum, inv) => sum + Number(inv.amount || 0) + Number(inv.tax || 0), 0);
-
-  const totalOutstanding = invoices
-    .filter(inv => inv.status === 'Unpaid' || inv.status === 'Overdue')
-    .reduce((sum, inv) => sum + Number(inv.amount || 0) + Number(inv.tax || 0), 0);
-
-  const totalExpensesValue = expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
-  const netProfit = totalIncome - totalExpensesValue;
-
-  const expensesByCategory = {};
-  expenses.forEach(exp => {
-    expensesByCategory[exp.category] = (expensesByCategory[exp.category] || 0) + Number(exp.amount || 0);
-  });
-
-  return `
-You are PRISM, an intelligent AI assistant embedded in the PRISMORA CRM system for a personal care products company.
-Be concise, use bullet points where appropriate, format numbers with ₹ and commas. Never make up data — only use what's provided.
-
-=== LIVE CRM DATA SUMMARY ===
-Total Sales Revenue (from orders): ₹${totalRevenue.toLocaleString('en-IN')}
-Total Orders: ${totalOrders}
-Total Leads: ${totalLeads}
-
-Revenue by Salesperson: ${JSON.stringify(revenueByPerson)}
-Leads by Salesperson: ${JSON.stringify(leadsByPerson)}
-Lead Status Breakdown: ${JSON.stringify(leadsByStatus)}
-Revenue by Product: ${JSON.stringify(revenueByProduct)}
-Revenue by State: ${JSON.stringify(revenueByState)}
-
-=== LIVE FINANCIAL & ACCOUNTING DATA ===
-Total Invoice Earnings (Paid Invoices): ₹${totalIncome.toLocaleString('en-IN')}
-Total Expenses Logged: ₹${totalExpensesValue.toLocaleString('en-IN')}
-Net Operating Profit: ₹${netProfit.toLocaleString('en-IN')}
-Outstanding Receivables (Unpaid Invoices): ₹${totalOutstanding.toLocaleString('en-IN')}
-Expenses by Category: ${JSON.stringify(expensesByCategory)}
-
-=== ALL INVOICES (${invoices.length}) ===
-${invoices.map(inv => `ID:${inv.id} Customer:${inv.customerName} OrderID:${inv.orderId || 'Custom'} Total:₹${(Number(inv.amount) + Number(inv.tax)).toLocaleString('en-IN')} Status:${inv.status} Due:${inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
-
-=== ALL EXPENSES (${expenses.length}) ===
-${expenses.map(exp => `ID:${exp.id} Category:${exp.category} Amount:₹${Number(exp.amount).toLocaleString('en-IN')} Desc:${exp.description || 'N/A'} Date:${exp.date ? new Date(exp.date).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
-
-=== ALL LEADS (${leads.length}) ===
-${leads.map(l => `ID:${l.id} Name:${l.name} Company:${l.company} Status:${l.status} AssignedTo:${users.find(u=>u.id===l.assignedTo)?.name||l.assignedTo} Products:${(l.productInterest||[]).join(', ')} DealValue:₹${(l.dealValue||0).toLocaleString('en-IN')} Source:${l.leadSource||'N/A'} FollowUp:${l.followUpDate ? new Date(l.followUpDate).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
-
-=== ALL ORDERS (${orders.length}) ===
-${orders.map(o => `ID:${o.id} Customer:${o.customerName} Company:${o.companyName||''} Product:${o.product} Qty:${o.quantity} Value:₹${(o.value||0).toLocaleString('en-IN')} State:${o.state} City:${o.city} Status:${o.status} Salesperson:${users.find(u=>u.id===o.assignedTo)?.name||o.assignedTo} Date:${o.date ? new Date(o.date).toLocaleDateString('en-IN') : 'N/A'}`).join('\n')}
-`.trim();
-};
 
 const MessageBubble = ({ msg }) => {
   const [copied, setCopied] = useState(false);
@@ -147,6 +62,31 @@ const MessageBubble = ({ msg }) => {
             msg.text
           )}
         </div>
+        {isAI && msg.meta && (
+          <div className="mt-1.5 ml-1 flex flex-wrap items-center gap-1.5">
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/20">
+              intent: {msg.meta.intent}
+            </span>
+            {msg.meta.followUp && (
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                follow-up
+              </span>
+            )}
+            {(msg.meta.corrections || []).map((c, i) => (
+              <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                {c.from} → {c.to}
+              </span>
+            ))}
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10">
+              {msg.meta.confidence}% match
+            </span>
+            {Object.entries(msg.meta.entities || {}).map(([k, v]) => (
+              <span key={k} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                {k}: {typeof v === 'object' ? v.label : v}
+              </span>
+            ))}
+          </div>
+        )}
         {isAI && (
           <button
             onClick={handleCopy}
@@ -167,11 +107,12 @@ const MessageBubble = ({ msg }) => {
 };
 
 const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
-  const { leads, orders, invoices, expenses } = useData();
+  const { leads, orders, invoices, expenses, inventory, productCatalog, distributors } = useData();
   const { user, users } = useAuth();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const chatContainerRef = useRef(null);
+  const contextRef = useRef(null); // last turn's intent + entities, for follow-ups
 
   // All hooks must be called before any conditional returns
   useEffect(() => {
@@ -190,52 +131,39 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
     setMessages(prev => [...prev, { role: 'user', text: question }]);
     setLoading(true);
 
+    // Brief delay so the typing indicator is perceptible on instant local answers.
+    await new Promise(r => setTimeout(r, 250));
+
     try {
-      const systemContext = buildContext(leads, orders, users, invoices, expenses);
-      const conversationHistory = messages.map(m => ({
-        role: m.role === 'ai' ? 'model' : 'user',
-        parts: [{ text: m.text }]
-      }));
-
-      const body = {
-        system_instruction: { parts: [{ text: systemContext }] },
-        contents: [
-          ...conversationHistory,
-          { role: 'user', parts: [{ text: question }] }
-        ],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 1024,
-        }
-      };
-
-      const res = await fetch(GEMINI_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      const data = await res.json();
-      
-      if (data.error) {
-        setMessages(prev => [...prev, { role: 'ai', text: `**API Error:** ${data.error.message}` }]);
-      } else if (data.candidates && data.candidates.length > 0) {
-        const aiText = data.candidates[0]?.content?.parts?.[0]?.text;
-        setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
-      } else {
-        setMessages(prev => [...prev, { role: 'ai', text: `**API Debug Info:** ${JSON.stringify(data)}` }]);
-      }
+      const result = askPrism(
+        question,
+        { leads, orders, users, invoices, expenses, inventory, productCatalog, distributors },
+        contextRef.current,
+      );
+      contextRef.current = result.context;
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: result.text,
+        meta: {
+          intent: result.intent,
+          confidence: result.confidence,
+          entities: result.entities,
+          corrections: result.corrections,
+          followUp: result.followUp,
+        },
+      }]);
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'ai', text: `**Network Error:** ${e.message}. Please check the console for details.` }]);
+      setMessages(prev => [...prev, { role: 'ai', text: `**Engine error:** ${e.message}` }]);
     } finally {
       setLoading(false);
     }
   };
 
   const clearChat = () => {
+    contextRef.current = null;
     setMessages([{
       role: 'ai',
-      text: `Hello! I'm **PRISM**, your AI business intelligence assistant.\n\nI have access to all your live CRM data — leads, orders, revenue, and team performance. Ask me anything!`,
+      text: `Hello! I'm **PRISM**, your business intelligence assistant.\n\nI work across your live data — orders, leads, invoices, expenses, inventory and distributors — and answer questions instantly.\n\nAsk me anything, or type **help** to see what I can do.`,
     }]);
   };
 
@@ -249,7 +177,7 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
           </div>
           <div>
             <h1 className="text-base font-bold text-white leading-none">PRISM AI</h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Live CRM Intelligence</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Live Business Intelligence</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -335,7 +263,7 @@ const AIAssistantWidget = ({ onClose, messages, setMessages }) => {
             <Send size={18} />
           </button>
         </div>
-        <p className="text-center text-xs text-slate-600 mt-1.5">PRISM can make mistakes. Verify important data in the dashboard.</p>
+        <p className="text-center text-xs text-slate-600 mt-1.5">PRISM reads live data. Verify critical figures in the dashboard.</p>
       </div>
     </div>
   );

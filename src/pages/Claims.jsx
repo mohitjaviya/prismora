@@ -46,8 +46,12 @@ export default function Claims() {
   const [reviewNotes, setReviewNotes] = useState('');
 
   const visibleClaims = useMemo(() => {
+    // A party whose own record can't be resolved must see nothing. Without this,
+    // `c[field] === party?.id` becomes `undefined === undefined`, which matches
+    // every unassigned claim and leaks it to them.
+    if (isParty && !party?.id) return [];
     const base = isParty
-      ? schemeClaims.filter(c => c[PARTY_ID_FIELD[user?.role]] === party?.id)
+      ? schemeClaims.filter(c => c[PARTY_ID_FIELD[user?.role]] === party.id)
       : schemeClaims;
     return base.filter(c => {
       const matchSearch = !search || c.schemeName.toLowerCase().includes(search.toLowerCase()) || c.id.toLowerCase().includes(search.toLowerCase());
@@ -62,7 +66,7 @@ export default function Claims() {
   }, [schemes, user]);
 
   const myOrders = useMemo(() =>
-    orders.filter(o => o[PARTY_ID_FIELD[user?.role]] === party?.id),
+    party?.id ? orders.filter(o => o[PARTY_ID_FIELD[user?.role]] === party.id) : [],
     [orders, party, user]
   );
 

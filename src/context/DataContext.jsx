@@ -15,6 +15,33 @@ const lsInit = (key) => {
   }
 };
 
+/**
+ * Persist a Supabase mutation, surfacing failures instead of hiding them.
+ *
+ * supabase-js resolves with `{ error }` rather than throwing when a query is
+ * rejected, so wrapping a call in a bare try/catch catches almost nothing: a
+ * missing column, a type mismatch or an RLS denial all come back as a resolved
+ * promise carrying an error, and get discarded. The write silently doesn't
+ * happen while local state reports success — which is exactly how the missing
+ * `deliveredQty` column went unnoticed. This checks both failure modes.
+ *
+ * Returns true on success so callers can branch on it; existing callers that
+ * ignore the result still get the console error.
+ */
+const persist = async (label, query) => {
+  try {
+    const { error } = await query;
+    if (error) {
+      console.error(`[Prismora] Could not save ${label} — this change will be lost on refresh:`, error.message || error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(`[Prismora] Could not save ${label} (network or unexpected error):`, err?.message || err);
+    return false;
+  }
+};
+
 export const DataProvider = ({ children }) => {
   // ── Original CRM State (hydrated from cache for instant load) ────────────
   const [leads, setLeads] = useState(() => lsInit('prismora_leads'));
@@ -286,7 +313,7 @@ export const DataProvider = ({ children }) => {
     processedInvoices.forEach(async (inv) => {
       const original = fetchedInvoices.find(orig => orig.id === inv.id);
       if (original && original.status === 'Unpaid' && inv.status === 'Overdue') {
-        try { await supabase.from('invoices').update({ status: 'Overdue' }).eq('id', inv.id); } catch { /* ok */ }
+        await persist('invoices update', supabase.from('invoices').update({ status: 'Overdue' }).eq('id', inv.id));
       }
     });
 
@@ -652,7 +679,7 @@ export const DataProvider = ({ children }) => {
     const next = [newLead, ...leads];
     setLeads(next);
     localStorage.setItem('prismora_leads', JSON.stringify(next));
-    try { await supabase.from('leads').insert([newLead]); } catch { /* ok */ }
+    await persist('leads insert', supabase.from('leads').insert([newLead]));
     logEvent('lead_new', `New Lead added: ${lead.name}`, lead.assignedTo, newId);
   };
 
@@ -681,7 +708,7 @@ export const DataProvider = ({ children }) => {
 
     setLeads(next);
     localStorage.setItem('prismora_leads', JSON.stringify(next));
-    try { await supabase.from('leads').update(updatedData).eq('id', id); } catch { /* ok */ }
+    await persist('leads update', supabase.from('leads').update(updatedData).eq('id', id));
     
     if (oldLead && oldLead.status !== updatedData.status) {
       if (shouldCreateOrder) {
@@ -725,7 +752,7 @@ export const DataProvider = ({ children }) => {
           return nextOrders;
         });
         
-        try { await supabase.from('orders').insert([newOrderObj]); } catch { /* ok */ }
+        await persist('orders insert', supabase.from('orders').insert([newOrderObj]));
         logEvent('order_created', `Auto-order ${newOrderId} created from converted lead`, assignedSp, newOrderId);
       } else if (shouldCancelOrder) {
         const targetOrder = orders.find(o => 
@@ -758,7 +785,7 @@ export const DataProvider = ({ children }) => {
     const next = leads.filter(l => l.id !== id);
     setLeads(next);
     localStorage.setItem('prismora_leads', JSON.stringify(next));
-    try { await supabase.from('leads').delete().eq('id', id); } catch { /* ok */ }
+    await persist('leads delete', supabase.from('leads').delete().eq('id', id));
   };
 
   // ── Orders ───────────────────────────────────────────────────────────────
@@ -772,7 +799,7 @@ export const DataProvider = ({ children }) => {
     const next = [newOrder, ...orders];
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    try { await supabase.from('orders').insert([newOrder]); } catch { /* ok */ }
+    await persist('orders insert', supabase.from('orders').insert([newOrder]));
     if (newOrder.distributorId || newOrder.dealerId || newOrder.retailerId) generateIncentivesForOrder(newOrder);
     return newId;
   };
@@ -789,7 +816,14 @@ export const DataProvider = ({ children }) => {
       let remaining = quantity;
       const batches = inventory
         .filter(b => b.product === name && b.quantity > 0)
-        .sort((a, b) => new Date(a.expiryDate || 0) - new Date(b.expiryDate || 0));
+        // FEFO: soonest expiry first. Batches with no expiry date are consumed
+        // LAST — `new Date(undefined || 0)` would put them at the epoch, draining
+        // non-expiring stock before genuinely near-expiry stock and inverting FEFO.
+        .sort((a, b) => {
+          const ax = a.expiryDate ? new Date(a.expiryDate).getTime() : Infinity;
+          const bx = b.expiryDate ? new Date(b.expiryDate).getTime() : Infinity;
+          return ax - bx;
+        });
 
       for (const batch of batches) {
         if (remaining <= 0) break;
@@ -801,7 +835,7 @@ export const DataProvider = ({ children }) => {
           localStorage.setItem('prismora_inventory', JSON.stringify(nextInv));
           return nextInv;
         });
-        try { await supabase.from('inventory').update({ quantity: newQty }).eq('id', batch.id); } catch { /* ok */ }
+        await persist('inventory update', supabase.from('inventory').update({ quantity: newQty }).eq('id', batch.id));
       }
 
       if (remaining > 0) {
@@ -815,7 +849,7 @@ export const DataProvider = ({ children }) => {
     const next = orders.map(o => o.id === id ? { ...o, ...updatedData } : o);
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    try { await supabase.from('orders').update(updatedData).eq('id', id); } catch { /* ok */ }
+    await persist('orders update', supabase.from('orders').update(updatedData).eq('id', id));
     if (oldOrder && oldOrder.status !== updatedData.status) {
       if (updatedData.status === 'Processing') {
         logEvent('order_processing', `Order Processing: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
@@ -824,12 +858,42 @@ export const DataProvider = ({ children }) => {
       } else if (updatedData.status === 'Shipped') {
         logEvent('order_shipped', `Order Shipped: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
       } else if (updatedData.status === 'Delivered') {
+        // Guard against re-delivering an order that was already fulfilled once
+        // (e.g. Delivered -> Cancelled -> Delivered). Without this, stock is
+        // deducted a second time and a duplicate invoice is raised against the
+        // party, silently inflating both consumption and receivables.
+        if (oldOrder.fulfilledAt) {
+          logEvent('order_delivered', `Order re-marked Delivered (already fulfilled ${oldOrder.fulfilledAt}) — stock and billing skipped: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
+          return;
+        }
         logEvent('order_delivered', `Order Delivered: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
         const finalOrder = { ...oldOrder, ...updatedData, id };
-        await deductInventoryForOrder(finalOrder);
+        // If earlier partial deliveries already deducted some of this order's
+        // stock, only deduct what's left now — otherwise this double-counts
+        // the units already taken out of inventory. Doesn't apply to
+        // multi-item orders, which don't support partial delivery.
+        const alreadyDelivered = Number(oldOrder.deliveredQty || 0);
+        const deductionOrder = alreadyDelivered > 0 && !(Array.isArray(finalOrder.items) && finalOrder.items.length > 0)
+          ? { ...finalOrder, quantity: Number(finalOrder.quantity || 0) - alreadyDelivered }
+          : finalOrder;
+        await deductInventoryForOrder(deductionOrder);
         if (finalOrder.distributorId || finalOrder.dealerId || finalOrder.retailerId) await billPartyForOrder(finalOrder);
+        await markOrderFulfilled(id);
       }
     }
+  };
+
+  // Stamps the order as having had its stock deducted and its invoice raised, so
+  // a later status change back to "Delivered" can't trigger either a second time.
+  const markOrderFulfilled = async (id) => {
+    const fulfilledAt = new Date().toISOString();
+    setOrders(prev => {
+      const next = prev.map(o => o.id === id ? { ...o, fulfilledAt } : o);
+      localStorage.setItem('prismora_orders', JSON.stringify(next));
+      return next;
+    });
+    const { error } = await supabase.from('orders').update({ fulfilledAt }).eq('id', id);
+    if (error) console.error(`Failed to record fulfilment stamp for order ${id} — a repeat "Delivered" could double-bill:`, error);
   };
 
   // Partial delivery: record that `deliverQty` more units of a (single-product)
@@ -838,19 +902,31 @@ export const DataProvider = ({ children }) => {
   // ordered quantity is met — at which point it becomes "Delivered" and bills.
   const deliverPartial = async (id, deliverQty) => {
     const order = orders.find(o => o.id === id);
-    if (!order || deliverQty <= 0) return;
+    if (!order || deliverQty <= 0) return { ok: false, error: 'Invalid order or quantity.' };
     const totalQty = Number(order.quantity || 0);
     const already = Number(order.deliveredQty || 0);
     const newDelivered = Math.min(totalQty, already + Number(deliverQty));
     const actualNow = newDelivered - already;
-    if (actualNow <= 0) return;
+    if (actualNow <= 0) return { ok: false, error: 'Nothing left to deliver on this order.' };
+
+    // You can't deliver stock you don't physically hold. The modal's `max` attribute
+    // isn't enforced (the input sits outside a <form>), so a typed-in quantity must
+    // be validated here or the order gets marked Delivered and the customer billed
+    // for goods that never left the warehouse.
+    const availableNow = inventory
+      .filter(b => b.product === order.product)
+      .reduce((sum, b) => sum + Math.max(0, (b.quantity || 0) - (b.reserved || 0)), 0);
+    if (actualNow > availableNow) {
+      return { ok: false, error: `Only ${availableNow} unit(s) of ${order.product} in stock — cannot deliver ${actualNow}.` };
+    }
+
     const fullyDone = newDelivered >= totalQty;
     const updatedData = { deliveredQty: newDelivered, status: fullyDone ? 'Delivered' : 'Partially Delivered' };
 
     const next = orders.map(o => o.id === id ? { ...o, ...updatedData } : o);
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    try { await supabase.from('orders').update(updatedData).eq('id', id); } catch { /* ok */ }
+    await persist('partial delivery', supabase.from('orders').update(updatedData).eq('id', id));
 
     // Deduct only the units delivered in this instalment (single product)
     await deductInventoryForOrder({ ...order, items: undefined, product: order.product, quantity: actualNow, id });
@@ -860,6 +936,8 @@ export const DataProvider = ({ children }) => {
     if (fullyDone && (order.distributorId || order.dealerId || order.retailerId)) {
       await billPartyForOrder({ ...order, ...updatedData });
     }
+    if (fullyDone) await markOrderFulfilled(id);
+    return { ok: true };
   };
 
   // Generates an invoice for a delivered distributor/dealer order and adds its
@@ -878,9 +956,16 @@ export const DataProvider = ({ children }) => {
       assignedTo: order.assignedTo,
       createdAt: new Date().toISOString()
     };
-    setInvoices(prev => [newInvoice, ...prev]);
-    localStorage.setItem('prismora_invoices', JSON.stringify([newInvoice, ...invoices]));
-    try { await supabase.from('invoices').insert([newInvoice]); } catch { /* ok */ }
+    // Persist from the functional update, not the closed-over `invoices` — two
+    // deliveries billing back-to-back both read the same stale array and the
+    // second write would drop the first invoice from the cache entirely.
+    setInvoices(prev => {
+      const next = [newInvoice, ...prev];
+      localStorage.setItem('prismora_invoices', JSON.stringify(next));
+      return next;
+    });
+    const { error: invoiceError } = await supabase.from('invoices').insert([newInvoice]);
+    if (invoiceError) console.error(`Failed to save invoice ${newInvoiceId} to the database — it will be lost on next refresh:`, invoiceError);
     logEvent('invoice_new', `Invoice generated for ${order.customerName}: ${newInvoiceId}`, order.assignedTo, newInvoiceId);
 
     if (order.distributorId) {
@@ -890,7 +975,7 @@ export const DataProvider = ({ children }) => {
         const nextDist = distributors.map(d => d.id === dist.id ? { ...d, outstandingAmount: newOutstanding } : d);
         setDistributors(nextDist);
         localStorage.setItem('prismora_distributors', JSON.stringify(nextDist));
-        try { await supabase.from('distributors').update({ outstandingAmount: newOutstanding }).eq('id', dist.id); } catch { /* ok */ }
+        await persist('distributors update', supabase.from('distributors').update({ outstandingAmount: newOutstanding }).eq('id', dist.id));
       }
     } else if (order.dealerId) {
       const dealer = dealers.find(d => d.id === order.dealerId);
@@ -899,7 +984,7 @@ export const DataProvider = ({ children }) => {
         const nextDealers = dealers.map(d => d.id === dealer.id ? { ...d, outstandingAmount: newOutstanding } : d);
         setDealers(nextDealers);
         localStorage.setItem('prismora_dealers', JSON.stringify(nextDealers));
-        try { await supabase.from('dealers').update({ outstandingAmount: newOutstanding }).eq('id', dealer.id); } catch { /* ok */ }
+        await persist('dealers update', supabase.from('dealers').update({ outstandingAmount: newOutstanding }).eq('id', dealer.id));
       }
     } else if (order.retailerId) {
       const retailer = retailers.find(r => r.id === order.retailerId);
@@ -908,7 +993,7 @@ export const DataProvider = ({ children }) => {
         const nextRetailers = retailers.map(r => r.id === retailer.id ? { ...r, outstandingAmount: newOutstanding } : r);
         setRetailers(nextRetailers);
         localStorage.setItem('prismora_retailers', JSON.stringify(nextRetailers));
-        try { await supabase.from('retailers').update({ outstandingAmount: newOutstanding }).eq('id', retailer.id); } catch { /* ok */ }
+        await persist('retailers update', supabase.from('retailers').update({ outstandingAmount: newOutstanding }).eq('id', retailer.id));
       }
     }
   };
@@ -917,7 +1002,7 @@ export const DataProvider = ({ children }) => {
     const next = orders.filter(o => o.id !== id);
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    try { await supabase.from('orders').delete().eq('id', id); } catch { /* ok */ }
+    await persist('orders delete', supabase.from('orders').delete().eq('id', id));
   };
 
   // Lets a distributor self-acknowledge physical receipt of an order —
@@ -928,7 +1013,7 @@ export const DataProvider = ({ children }) => {
     const next = orders.map(o => o.id === id ? { ...o, receivedByDistributor: true, receivedAt } : o);
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    try { await supabase.from('orders').update({ receivedByDistributor: true, receivedAt }).eq('id', id); } catch { /* ok */ }
+    await persist('orders update', supabase.from('orders').update({ receivedByDistributor: true, receivedAt }).eq('id', id));
     if (order) logEvent('order_receipt_confirmed', `${order.customerName} confirmed receipt of order ${id}`, order.assignedTo, id);
   };
 
@@ -1001,32 +1086,38 @@ export const DataProvider = ({ children }) => {
     const next = [splitOrderObj, ...orders.map(o => o.id === id ? { ...o, ...updatedOriginal } : o)];
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    try { await supabase.from('orders').insert([splitOrderObj]); } catch { /* ok */ }
-    try { await supabase.from('orders').update(updatedOriginal).eq('id', id); } catch { /* ok */ }
+    await persist('orders insert', supabase.from('orders').insert([splitOrderObj]));
+    await persist('orders update', supabase.from('orders').update(updatedOriginal).eq('id', id));
     logEvent('order_split', `Order ${id} split — ${updatedOriginal.quantity} unit(s) proceeding now, ${splitOrderObj.quantity} unit(s) moved to new order ${newOrderId} pending restock`, order.assignedTo, id);
   };
 
   // ── Products ─────────────────────────────────────────────────────────────
   const addProduct = async (productData) => {
+    // Callers pass either a full product object (Settings' catalog form) or just
+    // a product-name string (Orders and Leads, which save custom typed products).
+    // Spreading a raw string would explode it into numeric character keys and a
+    // nameless catalog row, so normalise to an object first.
+    const normalized = typeof productData === 'string' ? { name: productData } : (productData || {});
+    const name = String(normalized.name || '').trim();
+    if (!name) return;
+
+    // Orders/Leads call this on every save, not only for genuinely new products —
+    // bail out if this name is already catalogued so we don't pile up duplicates.
+    if (productCatalog.some(p => String(p?.name || '').toLowerCase() === name.toLowerCase())) return;
+
     const newId = `P${Date.now()}`;
-    const newProduct = { ...productData, id: newId, createdAt: new Date().toISOString() };
-    
+    const newProduct = { ...normalized, name, id: newId, createdAt: new Date().toISOString() };
+
     setProductCatalog(prev => {
       const next = [newProduct, ...prev];
       localStorage.setItem('prismora_product_catalog', JSON.stringify(next));
       return next;
     });
-    
-    setProducts(prev => {
-      if (!prev.includes(productData.name)) {
-        return [...prev, productData.name];
-      }
-      return prev;
-    });
 
-    try { await supabase.from('products').insert([newProduct]); }
-    catch { /* ok */ }
-    logEvent('product_added', `Added product: ${productData.name}`, null, newId);
+    setProducts(prev => (prev.includes(name) ? prev : [...prev, name]));
+
+    await persist('products insert', supabase.from('products').insert([newProduct]));
+    logEvent('product_added', `Added product: ${name}`, null, newId);
   };
 
   const updateProduct = async (id, updatedData) => {
@@ -1041,8 +1132,7 @@ export const DataProvider = ({ children }) => {
       setProducts(prev => prev.map(name => name === oldProd.name ? updatedData.name : name));
     }
 
-    try { await supabase.from('products').update(updatedData).eq('id', id); }
-    catch { /* ok */ }
+    await persist('products update', supabase.from('products').update(updatedData).eq('id', id));
   };
 
   const deleteProduct = async (id) => {
@@ -1057,8 +1147,7 @@ export const DataProvider = ({ children }) => {
       setProducts(prev => prev.filter(name => name !== oldProd.name));
     }
 
-    try { await supabase.from('products').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('products delete', supabase.from('products').delete().eq('id', id));
   };
 
   // ── Invoices ─────────────────────────────────────────────────────────────
@@ -1128,24 +1217,34 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_credit_notes', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('credit_notes').insert([newCN]); } catch { /* ok */ }
+    await persist('credit_notes insert', supabase.from('credit_notes').insert([newCN]));
 
     const amount = Number(cnData.amount || 0);
     const name = (cnData.customerName || '').toLowerCase();
-    const applyCredit = (list, setter, table) => {
+    const applyCredit = async (list, setter, table) => {
       const match = list.find(p => (p.name || '').toLowerCase() === name);
       if (!match) return false;
       const newOutstanding = Math.max(0, (match.outstandingAmount || 0) - amount);
       const next = list.map(p => p.id === match.id ? { ...p, outstandingAmount: newOutstanding } : p);
       setter(next);
       localStorage.setItem(`prismora_${table}`, JSON.stringify(next));
-      try { supabase.from(table).update({ outstandingAmount: newOutstanding }).eq('id', match.id); } catch { /* ok */ }
+      // Must be awaited: without it the promise escapes the try/catch entirely and
+      // a failed balance write is never noticed, silently reverting on next fetch.
+      const { error } = await supabase.from(table).update({ outstandingAmount: newOutstanding }).eq('id', match.id);
+      if (error) console.error(`Credit note: failed to update ${table} outstanding balance — will revert on next refresh:`, error);
       return true;
     };
-    // Match against whichever channel the customer belongs to
-    applyCredit(distributors, setDistributors, 'distributors') ||
-      applyCredit(dealers, setDealers, 'dealers') ||
-      applyCredit(retailers, setRetailers, 'retailers');
+    // Match against whichever channel the customer belongs to. Awaited in sequence
+    // rather than `a() || b()` — now that applyCredit is async it returns a Promise,
+    // which is always truthy, so `||` would stop after the first call and never try
+    // dealers or retailers.
+    const credited = await applyCredit(distributors, setDistributors, 'distributors')
+      || await applyCredit(dealers, setDealers, 'dealers')
+      || await applyCredit(retailers, setRetailers, 'retailers');
+
+    if (!credited) {
+      console.warn(`Credit note ${newId}: no distributor/dealer/retailer named "${cnData.customerName}" — the note was recorded but no outstanding balance was reduced.`);
+    }
 
     logEvent('credit_note', `Credit note ${newId} issued to ${cnData.customerName} for ₹${amount} (${cnData.reason || 'adjustment'})`, cnData.recordedBy, newId);
   };
@@ -1208,8 +1307,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('inventory').update(updatedData).eq('id', id); }
-    catch { /* ok */ }
+    await persist('inventory update', supabase.from('inventory').update(updatedData).eq('id', id));
   };
 
   const deleteInventoryItem = async (id) => {
@@ -1219,8 +1317,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('inventory').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('inventory delete', supabase.from('inventory').delete().eq('id', id));
     if (item) logEvent('inventory_deleted', `Stock removed: ${item.product}`, null, id);
   };
 
@@ -1233,8 +1330,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('inventory').update({ quantity: newQty }).eq('id', id); }
-    catch { /* ok */ }
+    await persist('inventory update', supabase.from('inventory').update({ quantity: newQty }).eq('id', id));
     logEvent('stock_adjusted', `Stock ${adjustment > 0 ? '+' : ''}${adjustment} for ${item.product}: ${reason}`, null, id);
   };
 
@@ -1259,9 +1355,9 @@ export const DataProvider = ({ children }) => {
       return next;
     });
 
-    try { await supabase.from('inventory').update({ quantity: newSrcQty }).eq('id', batchId); } catch { /* ok */ }
-    if (dest) { try { await supabase.from('inventory').update({ quantity: dest.quantity + qty }).eq('id', dest.id); } catch { /* ok */ } }
-    else { try { await supabase.from('inventory').insert([newDestItem]); } catch { /* ok */ } }
+    await persist('inventory update', supabase.from('inventory').update({ quantity: newSrcQty }).eq('id', batchId));
+    if (dest) { await persist('inventory update', supabase.from('inventory').update({ quantity: dest.quantity + qty }).eq('id', dest.id)); }
+    else { await persist('inventory insert', supabase.from('inventory').insert([newDestItem])); }
     logEvent('stock_transfer', `Transferred ${qty} of ${src.product} from ${src.warehouse} → ${toWarehouse}${notes ? ` (${notes})` : ''}`, null, batchId);
   };
 
@@ -1274,8 +1370,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_vendors', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('vendors').insert([newVendor]); }
-    catch { /* ok */ }
+    await persist('vendors insert', supabase.from('vendors').insert([newVendor]));
     logEvent('vendor_added', `Vendor added: ${vendorData.name}`, null, newId);
   };
 
@@ -1285,8 +1380,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_vendors', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('vendors').update(updatedData).eq('id', id); }
-    catch { /* ok */ }
+    await persist('vendors update', supabase.from('vendors').update(updatedData).eq('id', id));
   };
 
   const deleteVendor = async (id) => {
@@ -1295,8 +1389,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_vendors', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('vendors').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('vendors delete', supabase.from('vendors').delete().eq('id', id));
   };
 
   // ── Purchase Orders ───────────────────────────────────────────────────────
@@ -1312,8 +1405,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('purchase_orders').insert([newPO]); }
-    catch { /* ok */ }
+    await persist('purchase_orders insert', supabase.from('purchase_orders').insert([newPO]));
     logEvent('po_created', `Purchase Order ${newId} created for ${poData.vendorName}`, poData.assignedTo, newId);
   };
 
@@ -1323,8 +1415,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('purchase_orders').update({ status }).eq('id', id); }
-    catch { /* ok */ }
+    await persist('purchase_orders update', supabase.from('purchase_orders').update({ status }).eq('id', id));
     logEvent('po_status_update', `Purchase Order ${id} → ${status}`, null, id);
   };
 
@@ -1334,8 +1425,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('purchase_orders').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('purchase_orders delete', supabase.from('purchase_orders').delete().eq('id', id));
   };
 
   // ── GRN ───────────────────────────────────────────────────────────────────
@@ -1369,7 +1459,7 @@ export const DataProvider = ({ children }) => {
       const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: newOutstanding } : v);
       setVendors(nextVendors);
       localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
-      try { await supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id); } catch { /* ok */ }
+      await persist('vendors update', supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id));
     }
   };
 
@@ -1382,7 +1472,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_vendor_payments', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('vendor_payments').insert([newPayment]); } catch { /* ok */ }
+    await persist('vendor_payments insert', supabase.from('vendor_payments').insert([newPayment]));
 
     const vendor = vendors.find(v => v.id === paymentData.vendorId);
     if (vendor) {
@@ -1390,7 +1480,7 @@ export const DataProvider = ({ children }) => {
       const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: newOutstanding } : v);
       setVendors(nextVendors);
       localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
-      try { await supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id); } catch { /* ok */ }
+      await persist('vendors update', supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id));
     }
     logEvent('vendor_payment', `Payment of ₹${paymentData.amount} recorded for ${vendor?.name || paymentData.vendorId}`, paymentData.recordedBy, newId);
   };
@@ -1407,7 +1497,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_purchase_returns', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('purchase_returns').insert([newReturn]); } catch { /* ok */ }
+    await persist('purchase_returns insert', supabase.from('purchase_returns').insert([newReturn]));
 
     // Credit the vendor payable (we owe them less now)
     const vendor = vendors.find(v => v.id === returnData.vendorId);
@@ -1416,7 +1506,7 @@ export const DataProvider = ({ children }) => {
       const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: newOutstanding } : v);
       setVendors(nextVendors);
       localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
-      try { await supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id); } catch { /* ok */ }
+      await persist('vendors update', supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id));
     }
 
     // Remove the returned units from inventory (goods physically leave)
@@ -1439,8 +1529,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributors', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('distributors').insert([newDist]); }
-    catch { /* ok */ }
+    await persist('distributors insert', supabase.from('distributors').insert([newDist]));
     logEvent('distributor_added', `New distributor: ${distData.name} (${distData.territory})`, null, newId);
     return newId;
   };
@@ -1451,8 +1540,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributors', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('distributors').update(updatedData).eq('id', id); }
-    catch { /* ok */ }
+    await persist('distributors update', supabase.from('distributors').update(updatedData).eq('id', id));
   };
 
   const deleteDistributor = async (id) => {
@@ -1461,8 +1549,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributors', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('distributors').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('distributors delete', supabase.from('distributors').delete().eq('id', id));
   };
 
   // ── Dealers ──────────────────────────────────────────────────────────────
@@ -1474,8 +1561,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_dealers', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('dealers').insert([newDealer]); }
-    catch { /* ok */ }
+    await persist('dealers insert', supabase.from('dealers').insert([newDealer]));
     logEvent('dealer_added', `New dealer: ${dealerData.name} (${dealerData.territory})`, null, newId);
     return newId;
   };
@@ -1486,8 +1572,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_dealers', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('dealers').update(updatedData).eq('id', id); }
-    catch { /* ok */ }
+    await persist('dealers update', supabase.from('dealers').update(updatedData).eq('id', id));
   };
 
   const deleteDealer = async (id) => {
@@ -1496,8 +1581,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_dealers', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('dealers').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('dealers delete', supabase.from('dealers').delete().eq('id', id));
   };
 
   // ── Retailers ────────────────────────────────────────────────────────────
@@ -1509,8 +1593,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_retailers', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('retailers').insert([newRetailer]); }
-    catch { /* ok */ }
+    await persist('retailers insert', supabase.from('retailers').insert([newRetailer]));
     logEvent('retailer_added', `New retailer: ${retailerData.name} (${retailerData.territory})`, null, newId);
     return newId;
   };
@@ -1521,8 +1604,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_retailers', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('retailers').update(updatedData).eq('id', id); }
-    catch { /* ok */ }
+    await persist('retailers update', supabase.from('retailers').update(updatedData).eq('id', id));
   };
 
   const deleteRetailer = async (id) => {
@@ -1531,8 +1613,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_retailers', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('retailers').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('retailers delete', supabase.from('retailers').delete().eq('id', id));
   };
 
   // ── Schemes ───────────────────────────────────────────────────────────────
@@ -1544,8 +1625,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_schemes', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('schemes').insert([newScheme]); }
-    catch { /* ok */ }
+    await persist('schemes insert', supabase.from('schemes').insert([newScheme]));
     logEvent('scheme_created', `Scheme created: ${schemeData.name}`, null, newId);
   };
 
@@ -1555,8 +1635,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_schemes', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('schemes').update(updatedData).eq('id', id); }
-    catch { /* ok */ }
+    await persist('schemes update', supabase.from('schemes').update(updatedData).eq('id', id));
   };
 
   const deleteScheme = async (id) => {
@@ -1565,8 +1644,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_schemes', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('schemes').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('schemes delete', supabase.from('schemes').delete().eq('id', id));
   };
 
   // ── Complaints ────────────────────────────────────────────────────────────
@@ -1582,8 +1660,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_complaints', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('complaints').insert([newComplaint]); }
-    catch { /* ok */ }
+    await persist('complaints insert', supabase.from('complaints').insert([newComplaint]));
     logEvent('complaint_registered', `Complaint ${newId}: ${complaintData.complaintType} by ${complaintData.customerName}`, complaintData.assignedTo, newId);
   };
 
@@ -1593,8 +1670,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_complaints', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('complaints').update({ status, resolution }).eq('id', id); }
-    catch { /* ok */ }
+    await persist('complaints update', supabase.from('complaints').update({ status, resolution }).eq('id', id));
     logEvent('complaint_updated', `Complaint ${id} → ${status}`, null, id);
   };
 
@@ -1604,8 +1680,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_complaints', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('complaints').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('complaints delete', supabase.from('complaints').delete().eq('id', id));
   };
 
   // ── Territories ────────────────────────────────────────────────────────────
@@ -1617,8 +1692,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_territories', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('territories').insert([newTerritory]); }
-    catch { /* ok */ }
+    await persist('territories insert', supabase.from('territories').insert([newTerritory]));
     logEvent('territory_created', `Territory created: ${territoryData.name}`, null, newId);
   };
 
@@ -1628,8 +1702,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_territories', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('territories').update(updatedData).eq('id', id); }
-    catch { /* ok */ }
+    await persist('territories update', supabase.from('territories').update(updatedData).eq('id', id));
   };
 
   const deleteTerritory = async (id) => {
@@ -1638,8 +1711,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_territories', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('territories').delete().eq('id', id); }
-    catch { /* ok */ }
+    await persist('territories delete', supabase.from('territories').delete().eq('id', id));
   };
 
   // ── SFA Beat Plans ─────────────────────────────────────────────────────────
@@ -1651,7 +1723,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('beat_plans').insert([newBeat]); } catch { /* ok */ }
+    await persist('beat_plans insert', supabase.from('beat_plans').insert([newBeat]));
     logEvent('beat_plan_created', `Beat Plan assigned for date ${beatData.date}`, beatData.executiveId, newId);
   };
 
@@ -1661,7 +1733,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('beat_plans').update({ status }).eq('id', id); } catch { /* ok */ }
+    await persist('beat_plans update', supabase.from('beat_plans').update({ status }).eq('id', id));
   };
 
   // ── SFA Attendance ────────────────────────────────────────────────────────
@@ -1673,7 +1745,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_attendance', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('attendance').insert([newRecord]); } catch { /* ok */ }
+    await persist('attendance insert', supabase.from('attendance').insert([newRecord]));
     logEvent('attendance_checkin', `User checked in: ${attendanceData.status}`, attendanceData.userId, newId);
   };
 
@@ -1683,7 +1755,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_attendance', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('attendance').update(updatedData).eq('id', id); } catch { /* ok */ }
+    await persist('attendance update', supabase.from('attendance').update(updatedData).eq('id', id));
   };
 
   // ── SFA Visit Reports ──────────────────────────────────────────────────────
@@ -1695,7 +1767,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_visit_reports', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('visit_reports').insert([newReport]); } catch { /* ok */ }
+    await persist('visit_reports insert', supabase.from('visit_reports').insert([newReport]));
     logEvent('visit_submitted', `Visit report logged for outlet: ${visitData.outletName}`, visitData.executiveId, newId);
   };
 
@@ -1708,7 +1780,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_sfa_expenses', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('sfa_expenses').insert([newExp]); } catch { /* ok */ }
+    await persist('sfa_expenses insert', supabase.from('sfa_expenses').insert([newExp]));
   };
 
   const updateSFAExpense = async (id, updatedData) => {
@@ -1717,7 +1789,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_sfa_expenses', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('sfa_expenses').update(updatedData).eq('id', id); } catch { /* ok */ }
+    await persist('sfa_expenses update', supabase.from('sfa_expenses').update(updatedData).eq('id', id));
   };
 
   // ── Distributor Payments (Outstanding Ledger credits) ──────────────────────
@@ -1729,7 +1801,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('distributor_payments').insert([newPayment]); } catch { /* ok */ }
+    await persist('distributor_payments insert', supabase.from('distributor_payments').insert([newPayment]));
 
     const dist = distributors.find(d => d.id === paymentData.distributorId);
     if (dist) {
@@ -1747,7 +1819,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('distributor_payments').insert([newPayment]); } catch { /* ok */ }
+    await persist('distributor_payments insert', supabase.from('distributor_payments').insert([newPayment]));
 
     const dealer = dealers.find(d => d.id === paymentData.dealerId);
     if (dealer) {
@@ -1765,7 +1837,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('distributor_payments').insert([newPayment]); } catch { /* ok */ }
+    await persist('distributor_payments insert', supabase.from('distributor_payments').insert([newPayment]));
 
     const retailer = retailers.find(r => r.id === paymentData.retailerId);
     if (retailer) {
@@ -1784,7 +1856,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_scheme_claims', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('scheme_claims').insert([newClaim]); } catch { /* ok */ }
+    await persist('scheme_claims insert', supabase.from('scheme_claims').insert([newClaim]));
     logEvent('scheme_claim_submitted', `Scheme claim submitted for ${claimData.schemeName}`, null, newId);
   };
 
@@ -1794,7 +1866,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_scheme_claims', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('scheme_claims').update({ status, reviewNotes }).eq('id', id); } catch { /* ok */ }
+    await persist('scheme_claims update', supabase.from('scheme_claims').update({ status, reviewNotes }).eq('id', id));
     logEvent('scheme_claim_updated', `Scheme claim ${id} → ${status}`, null, id);
   };
 
@@ -1837,7 +1909,7 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_distributor_incentives', JSON.stringify(next));
         return next;
       });
-      try { await supabase.from('distributor_incentives').insert([newIncentive]); } catch { /* ok */ }
+      await persist('distributor_incentives insert', supabase.from('distributor_incentives').insert([newIncentive]));
       logEvent('incentive_earned', `Incentive earned on order ${order.id} via scheme ${scheme.name}`, null, newId);
     });
   };
@@ -1848,7 +1920,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributor_incentives', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('distributor_incentives').update({ status: 'Paid' }).eq('id', id); } catch { /* ok */ }
+    await persist('distributor_incentives update', supabase.from('distributor_incentives').update({ status: 'Paid' }).eq('id', id));
   };
 
   return (

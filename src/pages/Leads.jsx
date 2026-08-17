@@ -754,7 +754,7 @@ const Leads = () => {
                     <option value="Retailer" className="bg-brand-primary">Retailer</option>
                   </select>
                 </div>
-                {user?.role !== 'Sales' && (
+                {!isSalesRole(user?.role) && (
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1.5">Assign To</label>
                     <select value={formData.assignedTo} onChange={e => setFormData({...formData, assignedTo: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>

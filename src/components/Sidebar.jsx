@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase,
   UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2,
   MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck,
-  Boxes, Tags, FileCheck2, Gift, Brain
+  Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -32,7 +32,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
       ops: ['/orders', '/inventory', '/purchases', '/distributors', '/dealers', '/retailers', '/stock', '/price-list'].includes(path) || prev.ops,
       finance: ['/accounting', '/schemes', '/ledger', '/claims', '/incentives'].includes(path) || prev.finance,
       support: ['/complaints'].includes(path) || prev.support,
-      analytics: ['/reports', '/ai-insights'].includes(path) || prev.analytics,
+      analytics: ['/reports', '/ai-insights', '/ml-lab'].includes(path) || prev.analytics,
     }));
   }, [location.pathname]);
 
@@ -87,6 +87,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
       items: [
         { name: 'Reports', path: '/reports', icon: <BarChart3 size={18} />, module: 'reports' },
         { name: 'AI Insights', path: '/ai-insights', icon: <Brain size={18} />, module: 'reports' },
+        { name: 'ML Lab', path: '/ml-lab', icon: <FlaskConical size={18} />, module: 'reports' },
       ]
     }
   ];

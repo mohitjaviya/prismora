@@ -1,0 +1,789 @@
+<meta charset="utf-8">
+<title>PRISM AI — Internship Project Report</title>
+<style>
+  @page { size: A4; margin: 25mm 22mm; }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.6; color: #000; max-width: 190mm; margin: 0 auto; padding: 10mm; }
+  h1 { font-size: 18pt; text-align: center; margin: 0 0 6pt; }
+  h2 { font-size: 15pt; border-bottom: 1.5pt solid #000; padding-bottom: 4pt; margin-top: 26pt; page-break-after: avoid; }
+  h3 { font-size: 13pt; margin-top: 18pt; page-break-after: avoid; }
+  h4 { font-size: 12pt; margin-top: 14pt; font-style: italic; page-break-after: avoid; }
+  p { text-align: justify; margin: 8pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12pt 0; font-size: 10.5pt; page-break-inside: avoid; }
+  th, td { border: 0.75pt solid #333; padding: 5pt 7pt; text-align: left; vertical-align: top; }
+  th { background: #e8e8e8; font-weight: bold; }
+  td.num, th.num { text-align: right; }
+  code, .mono { font-family: "Consolas", "Courier New", monospace; font-size: 10pt; }
+  pre { font-family: "Consolas", "Courier New", monospace; font-size: 9.5pt; background: #f4f4f4; border: 0.75pt solid #bbb; padding: 8pt; white-space: pre-wrap; page-break-inside: avoid; line-height: 1.35; }
+  .page-break { page-break-before: always; }
+  .center { text-align: center; }
+  .caption { font-size: 10pt; text-align: center; font-style: italic; margin: 4pt 0 14pt; }
+  .title-page { text-align: center; padding-top: 30mm; }
+  .title-page .main { font-size: 24pt; font-weight: bold; margin: 12pt 0; }
+  .title-page .sub { font-size: 14pt; margin: 6pt 0; }
+  .fill { background: #fff3b0; padding: 0 3pt; }
+  ul, ol { margin: 8pt 0 8pt 18pt; }
+  li { margin: 4pt 0; text-align: justify; }
+  .toc td { border: none; padding: 3pt 0; }
+  .toc .dots { border-bottom: 1px dotted #666; }
+  blockquote { margin: 10pt 20pt; font-style: italic; border-left: 2pt solid #999; padding-left: 10pt; }
+</style>
+
+<!-- ══════════════════════════ TITLE PAGE ══════════════════════════ -->
+<div class="title-page">
+  <div class="sub">A Project Report on</div>
+  <div class="main">PRISM AI</div>
+  <div class="sub"><em>A Hybrid Natural Language Interface for Enterprise<br>Business Intelligence</em></div>
+  <br>
+  <div class="sub">Submitted in partial fulfilment of the requirements for the<br>
+  Artificial Intelligence Internship Programme</div>
+  <br><br>
+  <div class="sub"><strong>Submitted by</strong></div>
+  <div class="sub" style="font-size:16pt"><span class="fill">[Your Full Name]</span></div>
+  <div class="sub">Enrolment No.: <span class="fill">[Enrolment Number]</span></div>
+  <br>
+  <div class="sub"><strong>Under the Guidance of</strong></div>
+  <div class="sub"><span class="fill">[Faculty Guide Name]</span> &nbsp;|&nbsp; <span class="fill">[Industry Mentor Name]</span></div>
+  <br>
+  <div class="sub"><strong>Organisation</strong></div>
+  <div class="sub"><span class="fill">[Company Name]</span></div>
+  <br><br>
+  <div class="sub">Department of Computer Science and Engineering</div>
+  <div class="sub"><span class="fill">[University / Institute Name]</span></div>
+  <div class="sub"><span class="fill">[Month, Year]</span></div>
+</div>
+
+<!-- ══════════════════════════ DECLARATION ══════════════════════════ -->
+<div class="page-break"></div>
+<h2 class="center" style="border:none">Student Declaration</h2>
+
+<p>I, <span class="fill">[Your Full Name]</span>, bearing enrolment number <span class="fill">[Enrolment Number]</span>, hereby declare that the project report entitled <strong>“PRISM AI — A Hybrid Natural Language Interface for Enterprise Business Intelligence”</strong> submitted to <span class="fill">[University / Institute Name]</span> is a record of original work carried out by me during my Artificial Intelligence internship at <span class="fill">[Company Name]</span> from <span class="fill">[Start Date]</span> to <span class="fill">[End Date]</span>.</p>
+
+<p>The design of the natural-language processing engine, the construction of the labelled training corpus, the from-scratch implementation of the TF-IDF vectoriser and the Naive Bayes classifiers, the experimental evaluation, and the analysis presented in this report are my own work. All external sources consulted have been duly acknowledged in the References section. The measurements reported in Chapter 4 were produced by executing the evaluation harness described in Section 3.8 against the corpus and code submitted alongside this report, and are fully reproducible.</p>
+
+<p>This work has not been submitted previously, in whole or in part, for the award of any other degree or diploma.</p>
+
+<br><br>
+<table style="border:none">
+<tr>
+  <td style="border:none">Date: <span class="fill">[Date]</span><br>Place: <span class="fill">[Place]</span></td>
+  <td style="border:none; text-align:right">
+    <br><br>__________________________<br>
+    <span class="fill">[Your Full Name]</span>
+  </td>
+</tr>
+</table>
+
+<!-- ══════════════════════════ ACKNOWLEDGEMENT ══════════════════════════ -->
+<div class="page-break"></div>
+<h2 class="center" style="border:none">Acknowledgements</h2>
+
+<p>I would like to record my sincere thanks to <span class="fill">[Company Name]</span> for extending the opportunity to work as an Artificial Intelligence intern, and for providing access to a live enterprise system on which the work described in this report could be grounded. Building against a system that real users depend on, rather than a synthetic dataset, shaped nearly every engineering decision reported here.</p>
+
+<p>I am grateful to my industry mentor, <span class="fill">[Industry Mentor Name]</span>, for insisting on measured evidence rather than intuition when I claimed an improvement. That discipline is the reason Chapter 4 reports a cross-validated figure alongside a single-split one, and the reason an unsuccessful experiment is documented in Section 4.4 instead of being quietly dropped.</p>
+
+<p>I thank my faculty guide, <span class="fill">[Faculty Guide Name]</span>, and the Department of Computer Science and Engineering at <span class="fill">[University / Institute Name]</span>, for their academic supervision and for their guidance on structuring an empirical evaluation.</p>
+
+<p>Finally, I thank my family for their patience and encouragement throughout the internship period.</p>
+
+<br><br>
+<p style="text-align:right"><span class="fill">[Your Full Name]</span></p>
+
+<!-- ══════════════════════════ ABBREVIATIONS ══════════════════════════ -->
+<div class="page-break"></div>
+<h2 class="center" style="border:none">List of Abbreviations</h2>
+
+<table>
+<tr><th style="width:22%">Abbreviation</th><th>Expansion</th></tr>
+<tr><td class="mono">AI</td><td>Artificial Intelligence</td></tr>
+<tr><td class="mono">NLP</td><td>Natural Language Processing</td></tr>
+<tr><td class="mono">NLU</td><td>Natural Language Understanding</td></tr>
+<tr><td class="mono">NER</td><td>Named Entity Recognition</td></tr>
+<tr><td class="mono">TF–IDF</td><td>Term Frequency – Inverse Document Frequency</td></tr>
+<tr><td class="mono">MNB</td><td>Multinomial Naive Bayes</td></tr>
+<tr><td class="mono">CNB</td><td>Complement Naive Bayes</td></tr>
+<tr><td class="mono">CV</td><td>Cross-Validation</td></tr>
+<tr><td class="mono">DST</td><td>Dialogue State Tracking</td></tr>
+<tr><td class="mono">LLM</td><td>Large Language Model</td></tr>
+<tr><td class="mono">API</td><td>Application Programming Interface</td></tr>
+<tr><td class="mono">CRM / ERP</td><td>Customer Relationship Management / Enterprise Resource Planning</td></tr>
+<tr><td class="mono">BI</td><td>Business Intelligence</td></tr>
+<tr><td class="mono">OOV</td><td>Out Of Vocabulary</td></tr>
+<tr><td class="mono">RFM</td><td>Recency, Frequency, Monetary</td></tr>
+</table>
+
+<h3>List of Tables</h3>
+<table class="toc">
+<tr><td style="width:18%">Table 3.1</td><td>Intent inventory of the PRISM engine</td></tr>
+<tr><td>Table 3.2</td><td>Edit-distance budget by token length</td></tr>
+<tr><td>Table 4.1</td><td>Headline classifier performance</td></tr>
+<tr><td>Table 4.2</td><td>Five-fold cross-validation fold scores</td></tr>
+<tr><td>Table 4.3</td><td>Per-class precision, recall and F1</td></tr>
+<tr><td>Table 4.4</td><td>Experimental iteration history</td></tr>
+<tr><td>Table 4.5</td><td>Algorithm comparison — MNB versus CNB</td></tr>
+<tr><td>Table 4.6</td><td>Capability comparison — rule engine versus classifier</td></tr>
+<tr><td>Table 4.7</td><td>Challenges encountered and resolutions applied</td></tr>
+</table>
+
+<h3>List of Figures</h3>
+<table class="toc">
+<tr><td style="width:18%">Figure 3.1</td><td>End-to-end system architecture of PRISM AI</td></tr>
+<tr><td>Figure 3.2</td><td>The seven-stage linguistic processing pipeline</td></tr>
+<tr><td>Figure 4.1</td><td>Accuracy progression across experimental iterations</td></tr>
+<tr><td>Figure 4.2</td><td>Confusion structure before and after corpus disambiguation</td></tr>
+</table>
+
+<!-- ══════════════════════════ ABSTRACT ══════════════════════════ -->
+<div class="page-break"></div>
+<h2 class="center" style="border:none">Abstract</h2>
+
+<p>Enterprise resource planning systems accumulate operational data far faster than their users can interrogate it. A distribution business running such a system typically stores orders, invoices, expenses, inventory batches and channel-partner records across dozens of normalised tables, yet the people who most need answers from that data — owners, sales managers, warehouse supervisors — are rarely fluent in the reporting tools that expose it. The practical consequence is that routine questions such as <em>“which products are running low?”</em> or <em>“who owes us money?”</em> require either a pre-built report or a technically skilled intermediary.</p>
+
+<p>This report documents the design, implementation and empirical evaluation of <strong>PRISM AI</strong>, a natural language interface built during an Artificial Intelligence internship and deployed inside a production CRM/ERP platform serving a personal-care products distributor. The system converts free-text business questions into structured queries against live operational data and returns computed answers, without transmitting any business data to an external service.</p>
+
+<p>The work follows a deliberately hybrid design. A <strong>symbolic natural-language engine</strong> performs the operational path: text normalisation, stop-word removal, suffix stemming, synonym-to-concept expansion across 23 semantic groups, weighted intent classification over 17 intents, gazetteer-based named entity recognition, Damerau–Levenshtein fuzzy matching for typo tolerance, and dialogue state tracking for follow-up questions. In parallel, a <strong>statistical classifier</strong> was implemented entirely from first principles — a TF–IDF vectoriser over unigram and bigram features feeding a Multinomial Naive Bayes model with Laplace smoothing — and trained on a hand-constructed corpus of 659 labelled queries spanning the same 17 intents.</p>
+
+<p>The classifier attains <strong>85.8% accuracy</strong> on a stratified held-out test set of 169 queries and <strong>78.7% (± 2.7%) accuracy under five-fold cross-validation</strong>, with a macro-averaged F1 score of <strong>0.859</strong>. Against the 5.9% accuracy expected from uniform random assignment across 17 classes, the cross-validated result represents an improvement of approximately 13.3×. Reaching that figure required three distinct experimental iterations, documented in full. An initial implementation achieved only 45.9%; a cross-validated grid search over 180 hyperparameter configurations raised this to 54.6%; expanding the corpus lifted it to 75.8%; and a targeted correction of label ambiguity in the training data — identified through systematic error analysis rather than assumed — produced the final 85.8%.</p>
+
+<p>A notable negative result is reported alongside the positive ones. Complement Naive Bayes, an algorithm specifically formulated for text classification with overlapping class vocabularies, was implemented and evaluated on the expectation that it would resolve the dominant confusion. It yielded an improvement of 0.4 percentage points, within run-to-run variance. This finding redirected effort from algorithm selection towards training-data quality, where the actual defect lay, and is retained in this report because the diagnostic reasoning it enabled was more valuable than the accuracy it failed to deliver.</p>
+
+<p><strong>Keywords:</strong> Natural Language Processing, Intent Classification, Named Entity Recognition, Naive Bayes, TF–IDF, Dialogue State Tracking, Approximate String Matching, Business Intelligence, Hybrid AI Systems.</p>
+
+<!-- ══════════════════════════ CHAPTER 1 ══════════════════════════ -->
+<div class="page-break"></div>
+<h2>Chapter 1: Introduction</h2>
+
+<p>Software that stores business data well does not necessarily make that data accessible. Over the past decade, small and mid-sized distribution businesses in India have adopted integrated CRM and ERP platforms at a rapid rate, digitising order books, ledgers and stock registers that were previously maintained on paper or in spreadsheets. The digitisation itself has largely succeeded. What has not kept pace is the interface through which non-technical staff retrieve information from these systems.</p>
+
+<p>The dominant interaction model remains the dashboard: a fixed arrangement of charts and tables authored in advance by a developer. Dashboards serve recurring questions well, but they are structurally unable to serve the long tail of ad-hoc questions that characterise day-to-day operations. When a sales manager wants to know whether a particular distributor has slowed down, or a warehouse supervisor wants to know which items will exhaust before the next purchase order arrives, the dashboard either happens to contain that view or it does not. When it does not, the question is either abandoned or escalated to someone who can write a query.</p>
+
+<p>Conversational interfaces offer a route around this constraint, and the emergence of large language models has made such interfaces broadly available. That availability, however, carries three costs that matter acutely in this setting. First, answering a question about business data using a hosted model requires transmitting that data to a third-party service, which is difficult to justify for financial records. Second, each query incurs both monetary cost and network latency. Third, and most seriously for a system of record, a generative model may produce a fluent and confident numerical answer that is simply incorrect.</p>
+
+<p>The work reported here takes a different position. Rather than delegating comprehension to a hosted model, it constructs the comprehension layer directly: the system parses the question, identifies what is being asked, extracts which entities it concerns, and then computes the answer arithmetically from live records. Numbers are never generated — they are calculated. This design forgoes open-ended reasoning in exchange for determinism, zero marginal cost, complete data confidentiality and arithmetic correctness, a trade that is favourable for the class of questions an operational business actually asks.</p>
+
+<h3>1.1 Objectives of the Internship</h3>
+
+<p>The internship was structured around the following objectives:</p>
+
+<ol>
+  <li>To study the classical natural-language understanding pipeline — normalisation, tokenisation, stemming, intent classification and entity recognition — and implement each stage without recourse to a pre-built NLP library.</li>
+  <li>To design and construct a labelled training corpus adequate for supervised intent classification in a specific business domain, and to understand empirically how corpus size and corpus quality each affect model performance.</li>
+  <li>To implement TF–IDF feature extraction and Naive Bayes classification from mathematical first principles, including Laplace smoothing and numerically stable posterior computation, in order to understand the algorithms rather than merely invoke them.</li>
+  <li>To establish a rigorous evaluation methodology — stratified splitting, k-fold cross-validation, per-class precision/recall/F1, and confusion analysis — and to use it to drive development decisions rather than to justify them after the fact.</li>
+  <li>To compare a symbolic, rule-driven approach against a statistical, learned approach on an identical task, and to characterise the conditions under which each is preferable.</li>
+  <li>To integrate the resulting components into a production application such that the work is usable by real operators, not merely demonstrable in a notebook.</li>
+</ol>
+
+<h3>1.2 Scope of the Report</h3>
+
+<p>This report covers the AI and NLP components of the platform. Specifically, it documents the symbolic language engine (<code>prismEngine.js</code>, 868 lines), the machine-learning subsystem (<code>naiveBayes.js</code>, 403 lines, and the labelled corpus in <code>trainingData.js</code>, 711 lines), the conversational interface component, the predictive-analytics module, and the evaluation dashboard that renders model metrics to the end user.</p>
+
+<p>The surrounding CRM/ERP application — order management, inventory control, accounting, purchase management, field-force automation and role-based access control — constitutes the environment in which this work is deployed and is described only where it supplies the data or the context necessary to understand a design decision. Its implementation is outside the scope of this report.</p>
+
+<p>Two further boundaries should be stated explicitly. The predictive-analytics module described in Section 3.7 employs statistical heuristics — moving averages, recency scoring and velocity extrapolation — and is characterised as such throughout; it is not represented as machine learning. Additionally, an earlier iteration of the conversational assistant delegated comprehension to a hosted large language model; that approach was replaced by the work described here, and the rationale for the replacement is given in Section 2.4.</p>
+
+<h3>1.3 Organisation Profile</h3>
+
+<p><span class="fill">[Company Name]</span> is <span class="fill">[insert a two-to-three sentence description: year of establishment, location, principal business activity, and the domains in which it operates. If the internship was conducted through a training provider, state the provider's accreditation here.]</span></p>
+
+<p>The internship was undertaken in the <span class="fill">[Artificial Intelligence / Machine Learning]</span> track, in <span class="fill">[remote / hybrid / on-site]</span> mode, over a period of <span class="fill">[N]</span> weeks from <span class="fill">[Start Date]</span> to <span class="fill">[End Date]</span>. The deployment environment for the project was Prismora, a production CRM/ERP platform operated by a personal-care products distributor, with live order, invoice, inventory and channel-partner data.</p>
+
+<h3>1.4 Internship Structure and Timeline</h3>
+
+<table>
+<tr><th style="width:16%">Phase</th><th style="width:34%">Focus</th><th>Principal Deliverable</th></tr>
+<tr><td>Phase&nbsp;1</td><td>Domain familiarisation and requirement analysis</td><td>Catalogue of the question types operators actually ask, derived from the existing reporting surface; initial intent inventory</td></tr>
+<tr><td>Phase&nbsp;2</td><td>Symbolic NLP pipeline</td><td>Normalisation, stemming, synonym expansion, weighted intent classification and gazetteer-based entity extraction across 17 intents</td></tr>
+<tr><td>Phase&nbsp;3</td><td>Robustness and conversational capability</td><td>Damerau–Levenshtein fuzzy matching for typo tolerance; dialogue state tracking for follow-up questions</td></tr>
+<tr><td>Phase&nbsp;4</td><td>Statistical learning</td><td>Labelled corpus construction; TF–IDF vectoriser and Multinomial Naive Bayes implemented from first principles</td></tr>
+<tr><td>Phase&nbsp;5</td><td>Evaluation and iterative improvement</td><td>Cross-validated grid search; error analysis; corpus disambiguation; comparative evaluation against Complement Naive Bayes</td></tr>
+<tr><td>Phase&nbsp;6</td><td>Integration and documentation</td><td>In-application evaluation dashboard exposing live model metrics; this report</td></tr>
+</table>
+
+<!-- ══════════════════════════ CHAPTER 2 ══════════════════════════ -->
+<div class="page-break"></div>
+<h2>Chapter 2: Literature Review and Problem Statement</h2>
+
+<h3>2.1 Domain Overview</h3>
+
+<p>Task-oriented dialogue systems — those built to accomplish a bounded set of user goals rather than to converse freely — are conventionally decomposed into three components: intent classification, which determines what the user wants; slot filling or named entity recognition, which determines the parameters of that request; and dialogue state tracking, which maintains context across conversational turns. This decomposition is the organising principle of commercial assistants and remains the standard reference architecture for goal-directed systems. The implementation reported here follows it directly, and the correspondence between the three classical components and the modules described in Chapter 3 is deliberate.</p>
+
+<h3>2.2 Review of Existing Approaches</h3>
+
+<h4>2.2.1 Rule-based and symbolic systems</h4>
+
+<p>The earliest natural-language interfaces to databases were entirely symbolic, mapping surface forms to queries through hand-authored grammars and keyword rules. Such systems are wholly deterministic and completely auditable: for any output, the responsible rule can be identified. Their weakness is equally clear — coverage extends exactly as far as the rules an author has written, and every unanticipated phrasing constitutes a failure. They are, however, uniquely suited to situations where a wrong answer is more costly than no answer, and where the domain vocabulary is bounded.</p>
+
+<h4>2.2.2 Statistical text classification</h4>
+
+<p>Treating intent recognition as supervised text classification permits generalisation to phrasings absent from the training data. The standard representation is TF–IDF, which weights each term by its frequency within a document against its rarity across the corpus, thereby suppressing ubiquitous terms and elevating discriminative ones. Multinomial Naive Bayes remains a strong baseline for this representation despite its conditional-independence assumption being plainly violated by natural language; its efficiency and its stability on small corpora keep it in practical use. Rennie et al. (2003) identified systematic weaknesses in the multinomial formulation when class sizes or vocabularies are uneven, and proposed Complement Naive Bayes, which estimates each class's parameters from the complement of that class. This variant was implemented and evaluated as part of the present work; the outcome is reported in Section 4.4.</p>
+
+<h4>2.2.3 Neural and transformer-based approaches</h4>
+
+<p>Contemporary state-of-the-art intent classification uses contextual embeddings from pre-trained transformer encoders, which capture word order and semantic similarity in a manner bag-of-words representations cannot. The accuracy advantage is substantial. The costs, however, are a model of tens or hundreds of megabytes, inference latency, and a training requirement well beyond what could be satisfied by a corpus constructed by one intern over an internship period. For a component that must execute within a browser and return an answer instantaneously, these costs were judged prohibitive at the present scale, though the limitation this imposes is acknowledged directly in Section 5.2.</p>
+
+<h4>2.2.4 Large language models as a comprehension layer</h4>
+
+<p>Delegating comprehension to a hosted generative model — supplying business records as prompt context and requesting an answer — is the lowest-effort route to broad coverage, and was the approach taken by the initial version of the assistant this project replaced. Evaluation of that version surfaced four objections. Every query transmitted order, invoice and expense records to a third-party endpoint. Each query cost money and took between one and three seconds. Availability depended on network connectivity and on the provider's uptime. Most consequentially, the model occasionally produced numerically incorrect figures stated with complete confidence — an acceptable failure mode for a drafting tool and an unacceptable one for a system of record.</p>
+
+<h3>2.3 Problem Statement</h3>
+
+<p>The problem addressed by this work may be stated as follows:</p>
+
+<blockquote>Given a free-text business question posed by a non-technical operator, determine the operator's intent and the entities the question concerns, and return a numerically correct answer computed from live operational data — subject to the constraints that no business data may leave the client environment, that the response must be effectively instantaneous, that the system must incur no per-query cost, and that reported figures must be computed rather than generated.</blockquote>
+
+<p>Four subsidiary requirements follow from deployment in a real workplace. The system must tolerate misspelling, since operators type quickly on mobile devices. It must support follow-up questions, since a question such as <em>“and last month?”</em> is meaningless in isolation but natural in sequence. It must decline explicitly when a question falls outside its competence, rather than guessing. And it must expose its reasoning, so that a user can judge whether an answer addressed the question actually asked.</p>
+
+<h3>2.4 Rationale for a Hybrid Architecture</h3>
+
+<p>The rule-based and statistical approaches fail in complementary directions. A rule system fails on unanticipated phrasing but never fails silently: the intent is either matched or it is not, and the decision is inspectable. A statistical classifier generalises to novel phrasing but offers no comparable guarantee, and — as Section 4.5 shows — inherits any inconsistency present in its training labels.</p>
+
+<p>The architecture adopted here retains both. The symbolic engine serves the operational path, because it additionally performs entity extraction and dialogue state tracking, which the classifier does not attempt. The statistical classifier is trained, evaluated and exposed alongside it, providing a quantified measure of how far a learned model reaches on the same task and, through disagreement between the two, a diagnostic signal indicating where the rule vocabulary is incomplete.</p>
+
+<!-- ══════════════════════════ CHAPTER 3 ══════════════════════════ -->
+<div class="page-break"></div>
+<h2>Chapter 3: Methodology</h2>
+
+<h3>3.1 System Architecture</h3>
+
+<p>PRISM AI executes entirely on the client. Business data is read from the application's state layer, which is itself synchronised with a PostgreSQL backend; no component of the language system communicates with any external endpoint. Figure 3.1 shows the overall flow.</p>
+
+<pre>
+                        User question (free text)
+                                  |
+                                  v
+        +-------------------------------------------------+
+        |   STAGE A — Linguistic preprocessing            |
+        |   normalise -> tokenise -> stop-words -> stem   |
+        +-------------------------------------------------+
+                                  |
+                    +-------------+-------------+
+                    v                           v
+    +-------------------------------+  +---------------------------+
+    |  STAGE B — Symbolic engine    |  |  STAGE C — ML classifier  |
+    |  synonym -> concept expansion |  |  TF-IDF vectorisation     |
+    |  weighted intent scoring      |  |  Multinomial Naive Bayes  |
+    |  gazetteer NER + fuzzy match  |  |  softmax posterior        |
+    |  dialogue state tracking      |  |                           |
+    +-------------------------------+  +---------------------------+
+                    |                           |
+                    v                           v
+    +-------------------------------+  +---------------------------+
+    |  Answer computed from live    |  |  Predicted intent +       |
+    |  records (arithmetic only)    |  |  calibrated confidence    |
+    +-------------------------------+  +---------------------------+
+                    |                           |
+                    v                           v
+              Conversational UI          Evaluation dashboard
+</pre>
+<p class="caption">Figure 3.1 — End-to-end system architecture. The symbolic engine (Stage B) serves the operational path; the trained classifier (Stage C) is evaluated against the identical preprocessing output.</p>
+
+<p>Both branches consume the output of the same preprocessing stage. This is a deliberate methodological choice: because the two approaches are compared in Section 4.6, any difference in their measured behaviour is attributable to the classification method rather than to differences in tokenisation.</p>
+
+<h3>3.2 Linguistic Preprocessing</h3>
+
+<p>Raw input passes through four transformations before any classification occurs.</p>
+
+<p><strong>Normalisation</strong> lowercases the input and removes punctuation, while preserving the currency symbol, the percent sign, the decimal point and the hyphen, each of which carries meaning in this domain. Whitespace is collapsed.</p>
+
+<p><strong>Tokenisation</strong> splits on whitespace, followed by removal of a stop-word list covering determiners, auxiliaries, pronouns and conversational filler. The list was tuned by inspection: interrogatives such as <em>how</em>, <em>which</em> and <em>who</em> are deliberately retained, since they are among the strongest available signals for distinguishing a count request from a value request.</p>
+
+<p><strong>Stemming</strong> applies suffix stripping so that morphological variants collapse to a shared root — <em>invoices</em>, <em>invoicing</em> and <em>invoiced</em> all reduce to a common form. A rule-based stripper was chosen over a full Porter implementation because the domain vocabulary is bounded and the additional precision of a complete algorithm was not measurable against the added complexity.</p>
+
+<p><strong>Concept expansion</strong> maps each surviving token to a canonical concept through a synonym dictionary of 23 semantic groups. This stage is what allows <em>turnover</em>, <em>sales</em>, <em>topline</em> and <em>billing</em> to be recognised as expressions of a single underlying idea, and it is the principal mechanism by which the symbolic engine achieves coverage without an example of every phrasing.</p>
+
+<h3>3.3 Intent Classification — Symbolic Path</h3>
+
+<p>Each of the 17 intents is defined by a set of required concepts, a set of supporting concepts and a set of negative concepts. An intent scores by accumulating weight for each required and supporting concept present in the input, and is disqualified outright if a negative concept appears. The highest-scoring intent above a confidence floor is selected; if no intent clears the floor, the system returns an explicit statement of non-comprehension rather than its best guess. Table 3.1 lists the inventory.</p>
+
+<table>
+<tr><th style="width:26%">Intent</th><th>Question class served</th></tr>
+<tr><td class="mono">revenue_total</td><td>Aggregate sales value, optionally scoped by period or region</td></tr>
+<tr><td class="mono">revenue_by_product</td><td>Sales decomposed across the product catalogue</td></tr>
+<tr><td class="mono">revenue_by_state</td><td>Sales decomposed geographically</td></tr>
+<tr><td class="mono">order_summary</td><td>Order counts and values, filterable by fulfilment status</td></tr>
+<tr><td class="mono">lead_summary</td><td>Pipeline composition and conversion statistics</td></tr>
+<tr><td class="mono">team_performance</td><td>Revenue and conversion attributed to individual staff</td></tr>
+<tr><td class="mono">profit</td><td>Net profitability and margin</td></tr>
+<tr><td class="mono">outstanding</td><td>Receivables outstanding and overdue</td></tr>
+<tr><td class="mono">invoice_list</td><td>Billing records and their settlement status</td></tr>
+<tr><td class="mono">expense_breakdown</td><td>Expenditure decomposed by category</td></tr>
+<tr><td class="mono">stock_level</td><td>Current inventory position and holding value</td></tr>
+<tr><td class="mono">low_stock</td><td>Items approaching depletion; replenishment priority</td></tr>
+<tr><td class="mono">dead_stock</td><td>Items with no recent movement; locked working capital</td></tr>
+<tr><td class="mono">forecast</td><td>Projected demand derived from historical movement</td></tr>
+<tr><td class="mono">churn</td><td>Channel partners exhibiting disengagement</td></tr>
+<tr><td class="mono">customer_lookup</td><td>Customer ranking and transaction history</td></tr>
+<tr><td class="mono">help</td><td>Capability disclosure and greeting handling</td></tr>
+</table>
+<p class="caption">Table 3.1 — Intent inventory of the PRISM engine.</p>
+
+<h3>3.4 Named Entity Recognition</h3>
+
+<p>Entity recognition is performed by gazetteer matching against the live database rather than against a static list. Product names are drawn from the current catalogue, personnel names from the user table, customer and distributor names from the partner tables, and state names from the territory configuration. A consequence of this design worth noting is that the recogniser requires no retraining when the business adds a product or onboards a distributor — the new entity becomes recognisable the moment it is persisted.</p>
+
+<p>Two further entity classes are extracted by pattern rather than by gazetteer: fulfilment and pipeline statuses, matched against their controlled vocabularies, and temporal expressions such as <em>today</em>, <em>last week</em> or <em>this quarter</em>, which are resolved into concrete date ranges.</p>
+
+<h3>3.5 Approximate String Matching</h3>
+
+<p>Operators type quickly and misspell often, and an interface that fails on a single transposed character is of limited practical use. Tolerance is provided by the <strong>Damerau–Levenshtein</strong> edit distance, which extends the standard Levenshtein formulation with an adjacent-transposition operation.</p>
+
+<p>The choice of Damerau over plain Levenshtein was empirically motivated. Transposition is among the most frequent categories of keyboard error, and the standard formulation charges two edits for a single transposed pair: <span class="mono">unpiad → unpaid</span> is distance 2 under Levenshtein but distance 1 under Damerau. Since a tight edit budget is required to control false positives, this single-unit difference determines whether the most common real-world typo is corrected at all.</p>
+
+<p>The implementation terminates early: if every cell in a row of the dynamic-programming matrix already exceeds the permitted budget, no completion can fall within it, and the computation is abandoned. This bounds the cost of comparing a token against the full vocabulary.</p>
+
+<p>An asymmetric edit budget is applied, and this proved essential. Correction is governed by two distinct policies:</p>
+
+<table>
+<tr><th style="width:30%">Token class</th><th style="width:22%">Length</th><th class="num" style="width:16%">Budget</th><th>Justification</th></tr>
+<tr><td rowspan="2">Domain concept terms</td><td>≤ 6 characters</td><td class="num">1</td><td rowspan="2">Short function words collide readily; a loose budget converts valid input into false matches</td></tr>
+<tr><td>&gt; 6 characters</td><td class="num">2</td></tr>
+<tr><td rowspan="3">Proper nouns</td><td>≤ 4 characters</td><td class="num">1</td><td rowspan="3">Product and person names are distinctive; collisions are improbable, so greater tolerance is safe</td></tr>
+<tr><td>5–8 characters</td><td class="num">2</td></tr>
+<tr><td>&gt; 8 characters</td><td class="num">3</td></tr>
+</table>
+<p class="caption">Table 3.2 — Edit-distance budget by token class and length.</p>
+
+<p>Three defects surfaced during testing of this component, each of which required a structural rather than a parametric remedy, and each of which is documented in Table 4.7.</p>
+
+<h3>3.6 Dialogue State Tracking</h3>
+
+<p>Questions in sequence depend on their predecessors. <em>“And last month?”</em> carries no independent meaning; it inherits both the subject and the metric of the question preceding it. The system maintains, after each successfully answered turn, the resolved intent together with the entities that participated in it.</p>
+
+<p>A subsequent turn is classified as a continuation when any of three conditions holds: it opens with a continuation marker (<em>what about</em>, <em>how about</em>, <em>and</em>, <em>same for</em>); it contains a referential expression (<em>it</em>, <em>them</em>, <em>their</em>, <em>that</em>) without an independently resolvable intent; or it names a concrete entity while matching no intent of its own. On continuation, the prior intent is inherited and entities are merged, with newly supplied entities overriding their remembered counterparts and unmentioned ones persisting. The following exchange illustrates the mechanism:</p>
+
+<pre>
+User  : revenue by state
+PRISM : Gujarat  Rs 95,000 (76%)  |  Maharashtra  Rs 30,000 (24%)
+
+User  : what about Gujarat?          [continuation marker -> intent inherited]
+PRISM : Gujarat — Rs 95,000, 2 orders, 76% of national sales
+
+User  : and last 30 days?            [continuation -> entity {state} retained,
+PRISM : Gujarat — Rs 50,000, 1 order  entity {timeframe} newly supplied]
+</pre>
+
+<h3>3.7 Predictive Analytics Module</h3>
+
+<p>A separate analytics surface derives forward-looking indicators from the same operational data. It is important to characterise these methods accurately: they are <strong>statistical heuristics, not machine learning</strong>. No parameters are fitted and no model is trained. Demand projection uses a three-month moving average per product with a trend adjustment; depletion forecasting divides available stock by observed daily consumption velocity; disengagement scoring combines order recency with a decline term; dead-stock detection flags catalogue items with no movement over a fixed window; and opportunity prioritisation applies a weighted sum over pipeline stage, deal value and recency. These techniques are appropriate to the data volumes available and are transparent to the operator, but they are reported here as descriptive analytics rather than as learned models.</p>
+
+<h3>3.8 Statistical Classifier — Implementation</h3>
+
+<p>The machine-learning subsystem was implemented without any external library, so that each mathematical step could be examined directly.</p>
+
+<h4>3.8.1 Corpus construction</h4>
+
+<p>A corpus of <strong>659 labelled queries</strong> was authored by hand across the 17 intents, with between 30 and 55 examples per class. Phrasings were varied deliberately along four dimensions — length, register, word order and lexical choice — so that the model would learn discriminative terms rather than memorise sentence templates. Indian-English business vocabulary (<em>godown</em>, <em>party</em>, <em>offtake</em>, <em>lakh</em>) was included because it reflects the register in which the system's users actually speak.</p>
+
+<h4>3.8.2 Feature extraction</h4>
+
+<p>Features comprise unigrams and bigrams over the preprocessed token stream. Bigrams were included because short business queries hinge on word pairs that unigrams cannot separate: <em>how many</em> requests a count while <em>how much</em> requests a value, and the two differ in exactly one token. Bigrams occurring in fewer than three documents are discarded, as a bigram appearing once encodes a specific training sentence rather than a generalisable pattern.</p>
+
+<p>Term weights follow the smoothed TF–IDF formulation</p>
+
+<p class="center mono">idf(t) = ln[ (1 + n) / (1 + df(t)) ] + 1</p>
+
+<p>where <em>n</em> is the document count and <em>df(t)</em> the document frequency of term <em>t</em>. Vectors are subsequently L2-normalised so that query length does not influence classification.</p>
+
+<h4>3.8.3 Multinomial Naive Bayes</h4>
+
+<p>Class-conditional feature likelihoods are estimated with Lidstone smoothing:</p>
+
+<p class="center mono">P(t | c) = ( Σ<sub>d∈c</sub> w(t,d) + α ) / ( Σ<sub>t'</sub> Σ<sub>d∈c</sub> w(t',d) + α·|V| )</p>
+
+<p>with α = 0.3 and |V| the vocabulary size. Smoothing is not optional here: an unsmoothed estimate assigns zero probability to any term unobserved in a class, and since scores are accumulated in log space, a single such term would collapse the entire posterior to negative infinity. Classification maximises the log posterior</p>
+
+<p class="center mono">ĉ = argmax<sub>c</sub> [ ln P(c) + Σ<sub>t</sub> w(t) · ln P(t | c) ]</p>
+
+<p>and posteriors are recovered by a softmax with the maximum score subtracted before exponentiation, which prevents overflow.</p>
+
+<h4>3.8.4 Complement Naive Bayes</h4>
+
+<p>Complement Naive Bayes was additionally implemented for comparison. Rather than estimating each class's parameters from its own documents, CNB estimates them from every document <em>not</em> in the class and selects the class whose complement fits least well. The formulation includes a weight-normalisation step which prevents classes with larger vocabularies from dominating. The motivating hypothesis was that CNB would resolve the dominant confusion identified in error analysis; Section 4.4 reports the outcome.</p>
+
+<h4>3.8.5 Evaluation methodology</h4>
+
+<p>Evaluation follows four principles adopted at the outset and held to throughout.</p>
+
+<p><strong>Stratified splitting.</strong> The corpus is divided 75:25 with class proportions preserved, guaranteeing that every intent is represented in both partitions.</p>
+
+<p><strong>Determinism.</strong> All shuffling derives from a seeded pseudo-random generator, so that any reported figure can be reproduced exactly.</p>
+
+<p><strong>Cross-validation.</strong> Five-fold cross-validation is reported alongside the single-split figure. On a corpus of this size a single split is materially affected by which examples happen to fall into the test partition, and the cross-validated mean is treated as the honest estimate throughout this report.</p>
+
+<p><strong>Per-class reporting.</strong> Aggregate accuracy can mask systematic failure on individual classes. Precision, recall and F1 are therefore reported per intent, together with the full confusion matrix, and it was inspection of that matrix — not the aggregate figure — that identified the defect resolved in Section 4.5.</p>
+
+<!-- ══════════════════════════ CHAPTER 4 ══════════════════════════ -->
+<div class="page-break"></div>
+<h2>Chapter 4: Results and Discussion</h2>
+
+<h3>4.1 Headline Performance</h3>
+
+<p>Table 4.1 records the performance of the final classifier. All figures were produced by executing the evaluation harness against the submitted corpus and are reproducible under the fixed seed.</p>
+
+<table>
+<tr><th style="width:52%">Metric</th><th class="num" style="width:24%">Value</th><th class="num">Baseline</th></tr>
+<tr><td>Test-set accuracy (held-out, stratified)</td><td class="num"><strong>85.8%</strong> (145 / 169)</td><td class="num">5.9%</td></tr>
+<tr><td>Five-fold cross-validated accuracy</td><td class="num"><strong>78.7% ± 2.7%</strong></td><td class="num">5.9%</td></tr>
+<tr><td>Macro-averaged F1 score</td><td class="num"><strong>0.859</strong></td><td class="num">—</td></tr>
+<tr><td>Training-set accuracy</td><td class="num">98.8%</td><td class="num">—</td></tr>
+<tr><td>Corpus size</td><td class="num">659 labelled queries</td><td class="num">—</td></tr>
+<tr><td>Training / test partition</td><td class="num">490 / 169</td><td class="num">—</td></tr>
+<tr><td>Vocabulary (unigram + bigram)</td><td class="num">476 features</td><td class="num">—</td></tr>
+<tr><td>Intent classes</td><td class="num">17</td><td class="num">—</td></tr>
+<tr><td>Training time (fit + 5-fold CV)</td><td class="num">≈ 48 ms</td><td class="num">—</td></tr>
+<tr><td>Misclassified test queries</td><td class="num">24 / 169</td><td class="num">—</td></tr>
+</table>
+<p class="caption">Table 4.1 — Headline classifier performance. Baseline denotes the accuracy expected from uniform random assignment across 17 classes.</p>
+
+<p>The cross-validated figure of 78.7% represents an improvement of approximately 13.3× over random assignment. The 7.1-point gap between the single-split result and the cross-validated mean is itself informative: it quantifies how much a single partition can flatter a model on a corpus of this size, and it is the reason the lower figure is treated as authoritative throughout this report.</p>
+
+<table>
+<tr><th>Fold</th><th class="num">1</th><th class="num">2</th><th class="num">3</th><th class="num">4</th><th class="num">5</th><th class="num">Mean</th><th class="num">Std. dev.</th></tr>
+<tr><td>Accuracy</td><td class="num">81.0%</td><td class="num">75.7%</td><td class="num">80.3%</td><td class="num">81.4%</td><td class="num">75.2%</td><td class="num"><strong>78.7%</strong></td><td class="num">2.7%</td></tr>
+</table>
+<p class="caption">Table 4.2 — Five-fold cross-validation fold scores.</p>
+
+<h3>4.2 Per-Class Performance</h3>
+
+<table>
+<tr><th style="width:30%">Intent</th><th class="num">Precision</th><th class="num">Recall</th><th class="num">F1</th><th class="num">Support</th></tr>
+<tr><td class="mono">profit</td><td class="num">1.00</td><td class="num">0.92</td><td class="num">0.96</td><td class="num">13</td></tr>
+<tr><td class="mono">dead_stock</td><td class="num">1.00</td><td class="num">0.91</td><td class="num">0.95</td><td class="num">11</td></tr>
+<tr><td class="mono">lead_summary</td><td class="num">0.91</td><td class="num">1.00</td><td class="num">0.95</td><td class="num">10</td></tr>
+<tr><td class="mono">expense_breakdown</td><td class="num">1.00</td><td class="num">0.89</td><td class="num">0.94</td><td class="num">9</td></tr>
+<tr><td class="mono">forecast</td><td class="num">0.89</td><td class="num">1.00</td><td class="num">0.94</td><td class="num">8</td></tr>
+<tr><td class="mono">stock_level</td><td class="num">1.00</td><td class="num">0.89</td><td class="num">0.94</td><td class="num">9</td></tr>
+<tr><td class="mono">low_stock</td><td class="num">0.82</td><td class="num">1.00</td><td class="num">0.90</td><td class="num">9</td></tr>
+<tr><td class="mono">team_performance</td><td class="num">1.00</td><td class="num">0.80</td><td class="num">0.89</td><td class="num">10</td></tr>
+<tr><td class="mono">revenue_by_product</td><td class="num">0.83</td><td class="num">0.91</td><td class="num">0.87</td><td class="num">11</td></tr>
+<tr><td class="mono">invoice_list</td><td class="num">0.80</td><td class="num">0.89</td><td class="num">0.84</td><td class="num">9</td></tr>
+<tr><td class="mono">outstanding</td><td class="num">0.89</td><td class="num">0.80</td><td class="num">0.84</td><td class="num">10</td></tr>
+<tr><td class="mono">churn</td><td class="num">0.86</td><td class="num">0.75</td><td class="num">0.80</td><td class="num">8</td></tr>
+<tr><td class="mono">help</td><td class="num">0.90</td><td class="num">0.69</td><td class="num">0.78</td><td class="num">13</td></tr>
+<tr><td class="mono">customer_lookup</td><td class="num">0.70</td><td class="num">0.88</td><td class="num">0.78</td><td class="num">8</td></tr>
+<tr><td class="mono">revenue_total</td><td class="num">0.69</td><td class="num">0.82</td><td class="num">0.75</td><td class="num">11</td></tr>
+<tr><td class="mono">revenue_by_state</td><td class="num">0.78</td><td class="num">0.70</td><td class="num">0.74</td><td class="num">10</td></tr>
+<tr><td class="mono">order_summary</td><td class="num">0.67</td><td class="num">0.80</td><td class="num">0.73</td><td class="num">10</td></tr>
+</table>
+<p class="caption">Table 4.3 — Per-class precision, recall and F1 on the held-out test set, ordered by F1.</p>
+
+<p>Three observations follow from Table 4.3.</p>
+
+<p>Six intents achieve F1 at or above 0.90. These are classes possessing distinctive vocabulary with little overlap elsewhere in the corpus — <span class="mono">dead_stock</span> owns <em>unsold</em>, <em>stagnant</em> and <em>obsolete</em>; <span class="mono">forecast</span> owns <em>predict</em>, <em>projection</em> and <em>demand</em>.</p>
+
+<p>The <span class="mono">help</span> intent exhibits high precision (0.90) with markedly lower recall (0.69). The asymmetry is diagnostic: when the model assigns <span class="mono">help</span> it is almost always correct, but it fails to recognise a substantial minority of instances. The cause is that greetings such as <em>“good morning”</em> or <em>“menu”</em> contain essentially no domain vocabulary, leaving the classifier with almost no signal to act upon.</p>
+
+<p>The weakest classes — <span class="mono">order_summary</span>, <span class="mono">revenue_by_state</span> and <span class="mono">revenue_total</span> — all exhibit precision below recall, indicating over-prediction. <span class="mono">revenue_total</span> in particular functions as an absorbing class for money-related queries that the model cannot place more specifically, a residual effect of the ambiguity discussed in Section 4.5.</p>
+
+<h3>4.3 Experimental Iteration History</h3>
+
+<p>The final figure was not obtained in a single attempt. Four distinct iterations were conducted, each preceded by a diagnostic step that determined what to change.</p>
+
+<table>
+<tr><th style="width:6%">#</th><th style="width:30%">Intervention</th><th class="num" style="width:14%">CV accuracy</th><th class="num" style="width:10%">Δ</th><th>Diagnostic reasoning</th></tr>
+<tr>
+  <td>1</td><td>Initial implementation — 244 examples, default hyperparameters</td>
+  <td class="num">47.1%</td><td class="num">—</td>
+  <td>Training accuracy of 93.4% against 45.9% on test indicated substantial overfitting</td>
+</tr>
+<tr>
+  <td>2</td><td>Cross-validated grid search, 180 configurations</td>
+  <td class="num">54.6%</td><td class="num">+7.5</td>
+  <td>L2-normalised vectors sum to approximately 1, leaving log-scores too closely spaced; softmax output was near-uniform at roughly 10% across all 17 classes</td>
+</tr>
+<tr>
+  <td>3</td><td>Corpus expansion, 244 → 616 examples</td>
+  <td class="num">75.8%</td><td class="num">+21.2</td>
+  <td>Approximately 11 training examples per class was insufficient to estimate reliable likelihoods over a 266-term vocabulary</td>
+</tr>
+<tr>
+  <td>4</td><td>Corpus disambiguation following confusion analysis</td>
+  <td class="num"><strong>78.7%</strong></td><td class="num">+2.9</td>
+  <td>A single confusion pair accounted for 14% of all test errors; the cause was inconsistent labelling in the training data rather than model capacity</td>
+</tr>
+</table>
+<p class="caption">Table 4.4 — Experimental iteration history. Accuracies are five-fold cross-validated to permit comparison across iterations.</p>
+
+<pre>
+CV accuracy progression
+
+Iteration 1  |##############################                    | 47.1%
+Iteration 2  |###################################               | 54.6%
+Iteration 3  |################################################  | 75.8%
+Iteration 4  |##################################################| 78.7%
+             0%                                              100%
+</pre>
+<p class="caption">Figure 4.1 — Accuracy progression across experimental iterations.</p>
+
+<p>The largest single gain, 21.2 points, came from enlarging the corpus rather than from any modification to the algorithm. This is consistent with the general observation that on small datasets the quantity and quality of labelled data dominate model selection, and it is the most transferable finding of the project.</p>
+
+<h3>4.4 A Negative Result: Complement Naive Bayes</h3>
+
+<p>Following iteration 3, error analysis identified overlapping class vocabulary as the dominant failure mode. Complement Naive Bayes addresses precisely this condition and was therefore implemented, together with sublinear term-frequency scaling, and evaluated across 80 configurations under identical cross-validation.</p>
+
+<table>
+<tr><th style="width:34%">Configuration</th><th class="num">Best CV accuracy</th><th class="num">Mean reported confidence</th></tr>
+<tr><td>Multinomial Naive Bayes</td><td class="num">75.3%</td><td class="num">95%</td></tr>
+<tr><td>Complement Naive Bayes</td><td class="num">75.7%</td><td class="num">6%</td></tr>
+<tr><td>Sublinear TF (either variant)</td><td class="num">no measurable change</td><td class="num">—</td></tr>
+</table>
+<p class="caption">Table 4.5 — Algorithm comparison under identical five-fold cross-validation.</p>
+
+<p>The improvement of 0.4 percentage points falls well within the 2.7-point standard deviation across folds and cannot be distinguished from noise. Furthermore, CNB's weight-normalisation step compressed the posterior distribution so severely that reported confidence collapsed to approximately 6% — technically a correct argmax, but useless as a value displayed to a user.</p>
+
+<p>This result is retained in the report because its diagnostic value exceeded its accuracy value. The hypothesis under test was that the deficiency lay in the algorithm. The measurement refuted that hypothesis, and in doing so redirected effort towards the training data, where the defect actually resided. Had CNB been adopted on the strength of its theoretical suitability without measurement, the underlying labelling problem would have persisted undetected.</p>
+
+<h3>4.5 Error Analysis and Corpus Disambiguation</h3>
+
+<p>Inspection of the confusion matrix after iteration 3 revealed that errors were not uniformly distributed. A single ordered pair — true <span class="mono">profit</span> predicted as <span class="mono">revenue_total</span> — accounted for four of the 31 test errors, approximately 14% of the total. No other pair exceeded two.</p>
+
+<p>Examination of the training examples for both classes exposed the cause:</p>
+
+<pre>
+Labelled revenue_total : "how much money did we make from sales"
+Labelled revenue_total : "total earnings from orders"
+Labelled revenue_total : "what did we earn last week"
+
+Labelled profit        : "how much profit did we make"
+Labelled profit        : "what is our earning after costs"
+Labelled profit        : "net earnings figure"
+</pre>
+
+<p>The terms <em>earn</em>, <em>money</em> and <em>make</em> appeared with comparable frequency under both labels. The model had learned exactly what the corpus taught it — that these terms are uninformative — and the failure was therefore an artefact of the training data, not a limitation of the classifier.</p>
+
+<p>The remedy restructured the lexical territory of the two classes. <span class="mono">revenue_total</span> was re-anchored on unambiguous turnover vocabulary (<em>turnover</em>, <em>topline</em>, <em>sales value</em>, <em>billing</em>), and the ambiguous earning-related phrasings were reassigned to <span class="mono">profit</span>, where they were reinforced with additional examples. A second, smaller leak was found and corrected in the same pass: a <span class="mono">churn</span> example phrased <em>“which partners have <u>low</u> activity”</em> was drawing the term <em>low</em> towards <span class="mono">low_stock</span>.</p>
+
+<table>
+<tr><th style="width:44%">Measure</th><th class="num">Before</th><th class="num">After</th><th class="num">Change</th></tr>
+<tr><td>Test-set accuracy</td><td class="num">80.4%</td><td class="num">85.8%</td><td class="num">+5.4 pts</td></tr>
+<tr><td>Cross-validated accuracy</td><td class="num">75.8%</td><td class="num">78.7%</td><td class="num">+2.9 pts</td></tr>
+<tr><td>Standard deviation across folds</td><td class="num">± 4.3%</td><td class="num">± 2.7%</td><td class="num">−1.6 pts</td></tr>
+<tr><td>Macro F1</td><td class="num">0.802</td><td class="num">0.859</td><td class="num">+0.057</td></tr>
+<tr><td>Largest single confusion pair</td><td class="num">4 instances</td><td class="num">2 instances</td><td class="num">−50%</td></tr>
+<tr><td><span class="mono">profit</span> F1</td><td class="num">0.67</td><td class="num">0.96</td><td class="num">+0.29</td></tr>
+</table>
+<p class="caption">Figure 4.2 / Table — Effect of corpus disambiguation. The reduction in fold variance indicates improved stability, not merely improved mean accuracy.</p>
+
+<p>The <span class="mono">profit → revenue_total</span> confusion was eliminated entirely. The narrowing of the standard deviation from ±4.3% to ±2.7% is arguably the more meaningful outcome: the model became consistent across partitions rather than merely better on average, which is what one expects when a genuine source of label noise is removed rather than a split being fortuitously favourable.</p>
+
+<h3>4.6 Comparative Evaluation: Symbolic Engine versus Statistical Classifier</h3>
+
+<table>
+<tr><th style="width:30%">Property</th><th style="width:35%">Symbolic engine</th><th>Statistical classifier</th></tr>
+<tr><td>Coverage of novel phrasing</td><td>Limited to authored vocabulary</td><td>Generalises to unseen wordings</td></tr>
+<tr><td>Behaviour on unknown input</td><td>Declines explicitly</td><td>Returns nearest class regardless</td></tr>
+<tr><td>Named entity recognition</td><td>Supported (live gazetteer)</td><td>Not attempted</td></tr>
+<tr><td>Dialogue state tracking</td><td>Supported</td><td>Not attempted</td></tr>
+<tr><td>Typo tolerance</td><td>Damerau–Levenshtein correction</td><td>Implicit only, via shared n-grams</td></tr>
+<tr><td>Auditability</td><td>Responsible rule identifiable</td><td>Feature contributions inspectable</td></tr>
+<tr><td>Maintenance on vocabulary change</td><td>Manual rule authoring</td><td>Corpus extension and retraining</td></tr>
+<tr><td>Measured accuracy</td><td>Not directly comparable<sup>†</sup></td><td>78.7% ± 2.7% (5-fold CV)</td></tr>
+</table>
+<p class="caption">Table 4.6 — Capability comparison. <sup>†</sup>The symbolic engine is not evaluated on the same corpus, since that corpus was authored after the engine's vocabulary and would measure agreement with its own design rather than independent generalisation.</p>
+
+<p>The final point merits emphasis, as it constitutes a methodological caution. Evaluating the rule engine against a corpus written with knowledge of its vocabulary would produce an inflated figure measuring self-consistency rather than generalisation. The two systems are therefore compared qualitatively on capability, and only the classifier — which was evaluated against data held out from its own training — is assigned a numerical accuracy.</p>
+
+<p>Both are exposed simultaneously in the application's evaluation dashboard, where a user may enter any query and observe both verdicts. Disagreement between them is surfaced explicitly, and in practice indicates one of two conditions: a phrasing the rule vocabulary does not yet cover, or a query the classifier has assigned on weak evidence.</p>
+
+<h3>4.7 Challenges Encountered and Resolutions</h3>
+
+<table>
+<tr><th style="width:38%">Challenge</th><th>Resolution</th></tr>
+<tr>
+  <td>Softmax posteriors were near-uniform, reporting approximately 10% confidence across all 17 classes</td>
+  <td>Diagnosed as a consequence of L2 normalisation compressing the dynamic range of log-scores. A scaling factor was introduced, sharpening the posterior without altering the argmax</td>
+</tr>
+<tr>
+  <td>Fuzzy matching corrected <span class="mono">"doing" → "owing"</span> and <span class="mono">"trader" → "order"</span>, both valid words</td>
+  <td>Edit budget for short tokens reduced to a single edit, and a protected-word list added so that correctly spelled common words are never subjected to correction</td>
+</tr>
+<tr>
+  <td>The phrase <em>"total spending"</em> matched the order status <em>pending</em></td>
+  <td>Substring matching replaced with whole-word boundary matching for controlled vocabularies, whose members are short and collide readily with ordinary words</td>
+</tr>
+<tr>
+  <td>Transposition errors, the most common category of typing mistake, were charged two edits under Levenshtein and therefore fell outside the permitted budget</td>
+  <td>Damerau–Levenshtein adopted, which treats an adjacent transposition as a single edit and brings the dominant real-world error class within budget</td>
+</tr>
+<tr>
+  <td>A single confusion pair accounted for 14% of all classification errors</td>
+  <td>Root-caused to ambiguous labelling rather than model capacity; lexical territory of the two classes was restructured, eliminating the error class</td>
+</tr>
+<tr>
+  <td>Complement Naive Bayes, adopted on theoretical grounds, delivered no measurable benefit</td>
+  <td>Retained as a documented negative result; effort redirected to training-data quality, where measurement indicated the actual defect lay</td>
+</tr>
+<tr>
+  <td>Model reported approximately 100% confidence on every query at the highest-scoring scale setting</td>
+  <td>A lower scale was selected. Accuracy was statistically indistinguishable, but the confidence distribution spanned a usable 64–100% range — preferred because the value is displayed to users and must be meaningful</td>
+</tr>
+</table>
+<p class="caption">Table 4.7 — Challenges encountered and resolutions applied.</p>
+
+<h3>4.8 Key Takeaways</h3>
+
+<ol>
+  <li><strong>Data quality dominated algorithm selection.</strong> Corpus work delivered 24.1 points of improvement across iterations 3 and 4; the algorithmic substitution delivered 0.4 points, within noise.</li>
+  <li><strong>Aggregate accuracy conceals structure.</strong> The defect resolved in Section 4.5 was invisible in the aggregate figure and apparent only in the confusion matrix. Per-class reporting was not a presentational nicety but the instrument that located the fault.</li>
+  <li><strong>A negative result can be more informative than a positive one.</strong> The CNB experiment failed to improve accuracy but succeeded in refuting a hypothesis, which is what redirected effort productively.</li>
+  <li><strong>Calibration is a distinct concern from accuracy.</strong> A configuration may maximise correctness while rendering its confidence output meaningless. Where confidence is displayed, it must be treated as part of the deliverable.</li>
+  <li><strong>Cross-validation is essential at this scale.</strong> The single-split figure exceeded the cross-validated mean by 7.1 points; reporting only the former would have overstated the system's capability.</li>
+</ol>
+
+<!-- ══════════════════════════ CHAPTER 5 ══════════════════════════ -->
+<div class="page-break"></div>
+<h2>Chapter 5: Conclusion and Recommendations</h2>
+
+<h3>5.1 Conclusion</h3>
+
+<p>This internship produced a working natural-language interface to a production enterprise system, together with a rigorously evaluated statistical classifier for the same task. The symbolic engine implements the three canonical components of a task-oriented dialogue system — intent classification, named entity recognition and dialogue state tracking — with Damerau–Levenshtein approximate matching providing tolerance to the misspellings that characterise real operator input. The statistical classifier, implemented from mathematical first principles without recourse to any machine-learning library, achieves 85.8% accuracy on held-out data and 78.7% (± 2.7%) under five-fold cross-validation across 17 intent classes, approximately 13.3 times the random baseline.</p>
+
+<p>The system satisfies the constraints set out in Section 2.3. No business data leaves the client environment. Responses are computed rather than generated, so a numerical answer is either correct or absent — never plausibly wrong. Marginal cost per query is zero and inference is instantaneous. The system declines explicitly when a question falls outside its competence.</p>
+
+<p>The more durable outcome, however, is methodological. The accuracy progression from 47.1% to 78.7% was not achieved by trying successive algorithms until one performed better. Each iteration was preceded by a diagnostic step that identified what was actually failing: overfitting was diagnosed from the divergence between training and test accuracy; near-uniform posteriors were traced to normalisation compressing the score range; and the dominant confusion pair was root-caused to inconsistent labelling in data authored by hand. The intervention that produced the largest gain was corpus expansion, and the intervention that failed was the algorithmic substitution undertaken on the strongest theoretical grounds. Measuring before changing, and retaining the result when the measurement contradicted the expectation, is the principal transferable lesson of the work.</p>
+
+<h3>5.2 Limitations</h3>
+
+<p>Four limitations are acknowledged.</p>
+
+<p><strong>Representational ceiling.</strong> A bag-of-words model with bigrams encodes no word order beyond adjacent pairs. Queries whose meaning depends on longer-range structure cannot be resolved reliably, and this bounds achievable accuracy irrespective of further corpus growth.</p>
+
+<p><strong>Corpus scale and provenance.</strong> At 659 examples the corpus remains small, and the persistent gap between training accuracy (98.8%) and cross-validated accuracy (78.7%) indicates residual overfitting. The corpus was moreover authored by a single individual, and therefore reflects one person's expectations about phrasing rather than an observed distribution of real user queries.</p>
+
+<p><strong>Bounded competence.</strong> The system answers within 17 defined intents and cannot perform open-ended reasoning, multi-step analysis or hypothetical inference. This is a deliberate consequence of the architecture, not a defect, but it is a real constraint on applicability.</p>
+
+<p><strong>Heuristic analytics.</strong> The predictive module employs statistical heuristics rather than fitted models, as stated in Section 3.7. Its outputs are descriptive extrapolations and should not be interpreted as learned forecasts.</p>
+
+<h3>5.3 Recommendations for Future Work</h3>
+
+<ol>
+  <li><strong>Collect real query logs.</strong> The single highest-value next step is to instrument the deployed system and accumulate genuine user queries with their resolved intents. This would replace an author's expectations with an observed distribution and would supply training data at a scale hand-authoring cannot reach.</li>
+  <li><strong>Introduce sentence embeddings.</strong> A compact sentence-transformer producing dense semantic representations would overcome the bag-of-words ceiling by recognising semantic similarity between queries sharing no vocabulary. A quantised model is feasible in-browser, and this is the most direct path past approximately 85% accuracy.</li>
+  <li><strong>Calibrate reported confidence.</strong> Naive Bayes posteriors are known to be poorly calibrated. Applying Platt scaling or isotonic regression on a validation partition would align the displayed confidence with observed correctness, permitting a principled abstention threshold.</li>
+  <li><strong>Extend intent coverage.</strong> Procurement, scheme and claim management, complaint handling and field-force attendance are represented in the underlying platform but are not yet addressed by the language interface.</li>
+  <li><strong>Add genuine unsupervised learning.</strong> K-means clustering over RFM features would provide data-driven customer segmentation, complementing the present supervised classification with an unsupervised technique on the same operational data.</li>
+  <li><strong>Employ the classifier in the operational path.</strong> At present the classifier is evaluated and displayed but does not serve live queries. A hybrid arrangement — classifier for intent, symbolic engine for entities and dialogue state — would combine the generalisation of the former with the precision of the latter.</li>
+</ol>
+
+<!-- ══════════════════════════ REFERENCES ══════════════════════════ -->
+<div class="page-break"></div>
+<h2>References</h2>
+
+<ol>
+  <li>Rennie, J. D. M., Shih, L., Teevan, J., and Karger, D. R. (2003). “Tackling the Poor Assumptions of Naive Bayes Text Classifiers.” <em>Proceedings of the Twentieth International Conference on Machine Learning (ICML)</em>, pp. 616–623.</li>
+  <li>Damerau, F. J. (1964). “A Technique for Computer Detection and Correction of Spelling Errors.” <em>Communications of the ACM</em>, 7(3), pp. 171–176.</li>
+  <li>Levenshtein, V. I. (1966). “Binary Codes Capable of Correcting Deletions, Insertions and Reversals.” <em>Soviet Physics Doklady</em>, 10(8), pp. 707–710.</li>
+  <li>Manning, C. D., Raghavan, P., and Schütze, H. (2008). <em>Introduction to Information Retrieval</em>. Cambridge University Press. (Chapters 6 and 13 — term weighting and text classification.)</li>
+  <li>Jurafsky, D., and Martin, J. H. (2024). <em>Speech and Language Processing</em>, 3rd edition draft. (Chapters 4 and 15 — Naive Bayes classification and dialogue systems.)</li>
+  <li>Porter, M. F. (1980). “An Algorithm for Suffix Stripping.” <em>Program: Electronic Library and Information Systems</em>, 14(3), pp. 130–137.</li>
+  <li>McCallum, A., and Nigam, K. (1998). “A Comparison of Event Models for Naive Bayes Text Classification.” <em>AAAI-98 Workshop on Learning for Text Categorization</em>.</li>
+  <li>Pedregosa, F., et al. (2011). “Scikit-learn: Machine Learning in Python.” <em>Journal of Machine Learning Research</em>, 12, pp. 2825–2830. (Consulted for the smoothed IDF and Complement Naive Bayes formulations.)</li>
+  <li>Platt, J. (1999). “Probabilistic Outputs for Support Vector Machines and Comparisons to Regularized Likelihood Methods.” <em>Advances in Large Margin Classifiers</em>, pp. 61–74.</li>
+</ol>
+
+<!-- ══════════════════════════ APPENDIX ══════════════════════════ -->
+<div class="page-break"></div>
+<h2>Appendix A: Selected Implementation Extracts</h2>
+
+<h3>A.1 Damerau–Levenshtein Distance with Early Termination</h3>
+
+<pre>
+const editDistance = (a, b, max = 2) =&gt; {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) &gt; max) return max + 1;
+  let prev2 = null;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) =&gt; i);
+  for (let i = 1; i &lt;= a.length; i++) {
+    const cur = [i];
+    let rowBest = i;
+    for (let j = 1; j &lt;= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let d = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      if (i &gt; 1 &amp;&amp; j &gt; 1 &amp;&amp; a[i - 1] === b[j - 2] &amp;&amp; a[i - 2] === b[j - 1]) {
+        d = Math.min(d, prev2[j - 2] + 1);       // adjacent transposition
+      }
+      cur[j] = d;
+      if (d &lt; rowBest) rowBest = d;
+    }
+    if (rowBest &gt; max) return max + 1;           // whole row exceeds budget
+    prev2 = prev;
+    prev = cur;
+  }
+  return prev[b.length];
+};
+</pre>
+
+<h3>A.2 Multinomial Naive Bayes — Parameter Estimation</h3>
+
+<pre>
+fit(vectors, labels, nFeatures) {
+  this.classes = [...new Set(labels)].sort();
+  const classIdx = new Map(this.classes.map((c, i) =&gt; [c, i]));
+  const counts = new Array(this.classes.length).fill(0);
+  const featureSum = this.classes.map(() =&gt; new Float64Array(nFeatures));
+
+  vectors.forEach((vec, i) =&gt; {
+    const ci = classIdx.get(labels[i]);
+    counts[ci]++;
+    vec.forEach((w, fi) =&gt; { featureSum[ci][fi] += w; });
+  });
+
+  this.logPrior = counts.map(c =&gt; Math.log(c / labels.length));
+
+  this.logLikelihood = featureSum.map(row =&gt; {
+    let total = 0;
+    for (let i = 0; i &lt; nFeatures; i++) total += row[i];
+    const denom = total + this.alpha * nFeatures;    // Lidstone smoothing
+    const out = new Float64Array(nFeatures);
+    for (let i = 0; i &lt; nFeatures; i++)
+      out[i] = Math.log((row[i] + this.alpha) / denom);
+    return out;
+  });
+  return this;
+}
+</pre>
+
+<h3>A.3 Numerically Stable Posterior Computation</h3>
+
+<pre>
+predictProba(vec) {
+  const scores = this.decisionFunction(vec);
+  const max = Math.max(...scores);
+  const exp = scores.map(s =&gt; Math.exp(s - max));   // shift prevents overflow
+  const sum = exp.reduce((a, b) =&gt; a + b, 0);
+  return exp.map(e =&gt; e / sum);
+}
+</pre>
+
+<h3>A.4 Dialogue State Inheritance</h3>
+
+<pre>
+// A turn continues the previous one when it opens with a continuation marker,
+// refers back pronominally, or names an entity without an intent of its own.
+if (isFollowUp(question, entities, !!HANDLERS[intent], prior)) {
+  const fresh = Object.fromEntries(
+    Object.entries(entities).filter(([, v]) =&gt; v)
+  );
+  entities = { ...prior.entities, ...fresh };   // new values override remembered
+  if (!HANDLERS[intent]) {
+    intent = prior.intent;
+    score  = Math.max(score, 13);
+  }
+  followUp = true;
+}
+</pre>
+
+<h3>A.5 Reproducing the Reported Metrics</h3>
+
+<p>All figures in Chapter 4 are produced by the evaluation harness under a fixed seed (42) and are reproducible by invoking:</p>
+
+<pre>
+import { trainIntentModel } from './src/utils/ml/naiveBayes';
+
+const result = trainIntentModel();          // seed 42, 75:25 split, 5-fold CV
+console.log(result.metrics.accuracy);       // 0.858
+console.log(result.cv.mean, result.cv.sd);  // 0.787, 0.027
+console.log(result.metrics.macroF1);        // 0.859
+</pre>
+
+<p>The same figures are rendered live within the application at the <em>ML Lab</em> route, which trains the model in the browser on page load and displays the headline metrics, per-class table, confusion matrix and the full list of misclassified test queries.</p>

@@ -382,6 +382,15 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS "receivedAt" TIMESTAMP WITH TIME ZON
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "splitFromOrderId" TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "splitIntoOrderId" TEXT;
 
+-- Cumulative quantity delivered so far, for orders fulfilled across more
+-- than one instalment when stock falls short of the full order quantity
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "deliveredQty" NUMERIC DEFAULT 0;
+
+-- Set once an order's stock has been deducted and its invoice raised. Guards
+-- against a repeat "Delivered" transition double-deducting stock and issuing
+-- a second invoice against the same order.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "fulfilledAt" TIMESTAMP WITH TIME ZONE;
+
 CREATE TABLE IF NOT EXISTS distributor_payments (
   id TEXT PRIMARY KEY,
   "distributorId" TEXT REFERENCES distributors(id) ON DELETE CASCADE,

@@ -60,7 +60,10 @@ export default function Purchases() {
   const kpis = useMemo(() => ({
     total: purchaseOrders.length,
     pending: purchaseOrders.filter(p => p.status === 'Confirmed').length,
+    // Only committed spend counts — a Draft was never sent to the vendor and a
+    // Cancelled PO represents no obligation, so including either overstates spend.
     thisMonth: purchaseOrders.filter(p => {
+      if (p.status === 'Draft' || p.status === 'Cancelled') return false;
       const d = new Date(p.createdAt); const now = new Date();
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).reduce((s, p) => s + (p.total || 0), 0),

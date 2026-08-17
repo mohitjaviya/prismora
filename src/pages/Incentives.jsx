@@ -27,8 +27,12 @@ export default function Incentives() {
   const [statusFilter, setStatusFilter] = useState('All');
 
   const visible = useMemo(() => {
+    // A party whose own record can't be resolved must see nothing. Without this,
+    // `i[field] === party?.id` becomes `undefined === undefined`, which matches
+    // every unassigned incentive and leaks it to them.
+    if (isParty && !party?.id) return [];
     const base = isParty
-      ? distributorIncentives.filter(i => i[PARTY_ID_FIELD[user?.role]] === party?.id)
+      ? distributorIncentives.filter(i => i[PARTY_ID_FIELD[user?.role]] === party.id)
       : distributorIncentives;
     return base.filter(i => {
       const matchSearch = !search || i.schemeName.toLowerCase().includes(search.toLowerCase()) || i.orderId?.toLowerCase().includes(search.toLowerCase());
