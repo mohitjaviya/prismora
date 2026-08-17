@@ -39,7 +39,7 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, distributors, dealers, retailers } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, distributors, dealers, retailers, productCatalog } = useData();
   const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -66,6 +66,33 @@ const Orders = () => {
   const getAvailableQty = (productName) => inventory
     .filter(b => b.product === productName)
     .reduce((sum, b) => sum + Math.max(0, (b.quantity || 0) - (b.reserved || 0)), 0);
+
+  // Rate depends on which tier the order is billed to — a distributor pays
+  // distributorPrice, not MRP. Falls back to MRP for a direct customer with no
+  // channel-partner link.
+  const getUnitRate = (productName, order) => {
+    const p = (productCatalog || []).find(x => x.name === productName);
+    if (!p) return 0;
+    if (order?.distributorId) return Number(p.distributorPrice || 0);
+    if (order?.dealerId) return Number(p.dealerPrice || 0);
+    if (order?.retailerId) return Number(p.retailerPrice || 0);
+    return Number(p.mrp || 0);
+  };
+
+  const rateLabel = (order) =>
+    order?.distributorId ? 'distributor price'
+      : order?.dealerId ? 'dealer price'
+        : order?.retailerId ? 'retailer price'
+          : 'MRP';
+
+  // Once stock has physically moved or the order has been billed, quantity is
+  // frozen: editing it would desynchronise inventory and the invoice already
+  // raised. Amendments go through Split or a fresh order instead.
+  const isQuantityLocked = () => {
+    if (!editingOrder) return false;
+    if (Number(formData.deliveredQty || 0) > 0) return true;
+    return ['Shipped', 'Partially Delivered', 'Delivered'].includes(formData.status);
+  };
 
   const getStockShortfalls = (order) => {
     // For a single-product order already part-delivered, only what's still
@@ -258,7 +285,23 @@ const Orders = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
+    // An order already cleared for fulfilment can have its quantity raised
+    // above what's in stock. The status guard only runs on a status *change*,
+    // so without re-checking here the order would sit at "Ready for Dispatch"
+    // promising units that don't exist.
+    if (editingOrder && ['Ready for Dispatch', 'Shipped', 'Delivered'].includes(formData.status)) {
+      const shortfalls = getStockShortfalls(formData);
+      if (shortfalls.length > 0) {
+        setStatusError(
+          `Cannot save — this quantity exceeds available stock: ${shortfalls
+            .map(s => `${s.name} (need ${s.quantity}, have ${s.available})`)
+            .join('; ')}. Reduce the quantity, or move the order back to Processing.`
+        );
+        return;
+      }
+    }
+
     // Save custom product to global catalog if new
     if (formData.product && formData.product.trim() !== '') {
       addProduct(formData.product);
@@ -691,7 +734,16 @@ const Orders = () => {
                           setIsCustomProduct(true);
                           setFormData({...formData, product: ''});
                         } else {
-                          setFormData({...formData, product: e.target.value});
+                          // Rate is product-specific, so switching product
+                          // re-derives the value from the current quantity.
+                          const name = e.target.value;
+                          const rate = getUnitRate(name, formData);
+                          const qty = Number(formData.quantity || 0);
+                          setFormData(prev => ({
+                            ...prev,
+                            product: name,
+                            value: rate > 0 && qty > 0 ? String(Math.round(qty * rate)) : prev.value,
+                          }));
                         }
                       }}
                       className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
@@ -745,11 +797,40 @@ const Orders = () => {
                 )}
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Quantity</label>
-                  <input type="number" required value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    disabled={isQuantityLocked()}
+                    value={formData.quantity}
+                    onChange={e => {
+                      const qty = e.target.value;
+                      // Recompute value from qty x tier rate. Only fires when
+                      // quantity or product changes, so a manually negotiated
+                      // value entered afterwards is left alone.
+                      const rate = getUnitRate(formData.product, formData);
+                      setFormData(prev => ({
+                        ...prev,
+                        quantity: qty,
+                        value: rate > 0 && qty !== '' ? String(Math.round(Number(qty) * rate)) : prev.value,
+                      }));
+                    }}
+                    className="w-full glass-input rounded-lg px-4 py-2.5 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  {isQuantityLocked() && (
+                    <p className="mt-1 text-[11px] text-amber-400">
+                      Locked — stock has already moved against this order. Use Split or raise a new order to change quantity.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Order Value (₹)</label>
                   <input type="number" required value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  {getUnitRate(formData.product, formData) > 0 && (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Auto-calculated at ₹{getUnitRate(formData.product, formData).toLocaleString('en-IN')} / unit ({rateLabel(formData)}). Editable if negotiated.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">State *</label>
