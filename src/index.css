@@ -50,9 +50,28 @@
 .light body               { @apply text-slate-800; }
 .light .glass-panel       { @apply bg-white/85 border-pink-100 shadow-md; }
 .light .glass-input       { @apply bg-white border-pink-200 text-slate-900 placeholder-slate-400; }
-.light .text-white        { color: #1A0A12 !important; }
-.light .text-slate-400    { color: #6B4B5E !important; }
-.light .text-slate-300    { color: #3D1F30 !important; }
+/* Light-theme text ramp. The dark theme reads light-to-dark (slate-200 is the
+   brightest, slate-600 the most muted); light theme inverts it, so each step
+   maps to a progressively lighter plum. Every value below clears WCAG AA
+   (4.5:1) against both #FFFFFF and the tinted panel #F7EFF5 — slate-200 was
+   previously unmapped and rendered at 1.23:1, i.e. effectively invisible. */
+.light .text-white        { color: #1A0A12 !important; }  /* 19.2:1 */
+.light .text-slate-200    { color: #2A1420 !important; }  /* 17.2:1 */
+.light .text-slate-300    { color: #3D1F30 !important; }  /* 14.6:1 */
+.light .text-slate-400    { color: #6B4B5E !important; }  /*  7.5:1 */
+.light .text-slate-500    { color: #7D5A6C !important; }  /*  5.9:1 */
+.light .text-slate-600    { color: #856175 !important; }  /*  5.3:1 */
+/* Hover/group-hover variants compile to their own selectors (.hover\:text-white:hover),
+   so the rules above never reach them. Left unmapped, hovering any of these turned
+   the label pure white against a near-white surface — none of the 97 hover:text-white
+   sites darken their background on hover, so the text simply vanished mid-hover. */
+.light .hover\:text-white:hover              { color: #1A0A12 !important; }
+.light .hover\:text-slate-300:hover          { color: #3D1F30 !important; }
+.light .hover\:text-slate-400:hover          { color: #6B4B5E !important; }
+.light .hover\:text-slate-600:hover          { color: #856175 !important; }
+.light .group:hover .group-hover\:text-slate-200 { color: #2A1420 !important; }
+.light .group:hover .group-hover\:text-slate-400 { color: #6B4B5E !important; }
+
 .light .from-white        { --tw-gradient-from: #1A0A12 !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
 .light .to-slate-300      { --tw-gradient-to: #3D1F30 !important; }
 .light .to-slate-400      { --tw-gradient-to: #6B4B5E !important; }

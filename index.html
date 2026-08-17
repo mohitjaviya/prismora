@@ -8,6 +8,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <title>PRISMORA | Sales Intelligence</title>
+    <script>
+      // Runs before first paint so the page never flashes the wrong theme, and
+      // so screens rendered outside the app shell (e.g. Login, which has no
+      // Topbar) still get a theme class. Light is the default; an explicit
+      // choice made via the toggle is remembered across sessions.
+      (function () {
+        var theme = 'light';
+        try {
+          if (localStorage.getItem('prismora_theme') === 'dark') theme = 'dark';
+        } catch (e) { /* storage blocked (private mode) — fall back to light */ }
+        document.documentElement.classList.add(theme);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

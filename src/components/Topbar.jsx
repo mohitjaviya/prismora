@@ -14,18 +14,21 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isDark, setIsDark] = useState(true);
+  // Seeded from the same key the pre-paint script in index.html reads, so the
+  // toggle's state always agrees with the class already on <html>.
+  const [isDark, setIsDark] = useState(() => {
+    try { return localStorage.getItem('prismora_theme') === 'dark'; } catch { return false; }
+  });
   const [searchResults, setSearchResults] = useState({ leads: [], orders: [] });
   const searchRef = useRef(null);
 
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    } else {
-      document.documentElement.classList.add('light');
-      document.documentElement.classList.remove('dark');
-    }
+    const root = document.documentElement;
+    root.classList.toggle('dark', isDark);
+    root.classList.toggle('light', !isDark);
+    // Persist so the choice survives a refresh — previously the theme reset to
+    // dark on every page load because it was only ever component state.
+    try { localStorage.setItem('prismora_theme', isDark ? 'dark' : 'light'); } catch { /* storage blocked */ }
   }, [isDark]);
 
   useEffect(() => {
