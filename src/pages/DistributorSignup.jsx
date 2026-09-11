@@ -69,11 +69,11 @@ const DistributorSignup = () => {
   const labelCls = "block text-sm font-medium text-slate-300 mb-1.5";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brand-primary relative overflow-hidden py-10">
+    <div className="min-h-svh flex justify-center bg-brand-primary relative overflow-x-hidden py-10">
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-brand-accent/20 blur-[130px] animate-pulse-slow pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-pink-900/25 blur-[120px] animate-pulse-slow pointer-events-none" style={{ animationDelay: '2s' }}></div>
 
-      <div className="relative z-10 w-full max-w-[520px] px-6">
+      <div className="relative z-10 my-auto w-full max-w-[520px] px-6">
         <div className="flex flex-col items-center justify-center mb-3 animate-fade-in-up -mt-6">
           <img src="/logo.png" alt="PRISMORA Logo" className="w-56 h-auto -mt-14 -mb-14 relative z-10 pointer-events-none" />
           <p className="text-slate-400 text-center text-sm relative z-20">Distributor Registration</p>
@@ -92,7 +92,7 @@ const DistributorSignup = () => {
               </p>
               <button
                 onClick={() => navigate('/login')}
-                className="w-full bg-white text-brand-primary hover:bg-slate-200 font-bold rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full btn-accent font-bold rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-brand-accent/30"
               >
                 Back to Sign In <ArrowRight size={18} />
               </button>
@@ -180,7 +180,7 @@ const DistributorSignup = () => {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full bg-white text-brand-primary hover:bg-slate-200 font-bold rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-white/10 disabled:opacity-60"
+                  className="w-full btn-accent font-bold rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-brand-accent/30 disabled:opacity-60 text-white"
                 >
                   {submitting ? 'Submitting...' : 'Submit Registration'} <ArrowRight size={18} />
                 </button>
