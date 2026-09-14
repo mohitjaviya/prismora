@@ -117,6 +117,13 @@ export const PERMISSIONS = {
 
 const AuthContext = createContext();
 
+// Password never travels further than the sign-in check.
+const withoutPassword = (u) => {
+  if (!u) return u;
+  const { password, ...rest } = u;
+  return rest;
+};
+
 export const AuthProvider = ({ children }) => {
   // Initialize directly from localStorage so refresh never logs user out
   const [user, setUser] = useState(() => {
@@ -125,67 +132,46 @@ export const AuthProvider = ({ children }) => {
   });
   const [users, setUsers] = useState([]);
 
-  const DEFAULT_USERS = [
-    { id: 'U-admin',    name: 'Prismora Admin',           email: 'admin@prismora.com',     role: 'Super Admin',       password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-dir-1',   name: 'Arvind Mehta (Director)',   email: 'director@prismora.com',  role: 'Director',          password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-mgr-1',   name: 'Rajesh Kumar (North Mgr)',  email: 'rajesh@prismora.com',    role: 'Sales Manager',     password: 'password123', managedUsers: ['U-sales-1', 'U-sales-2'], status: 'Active' },
-    { id: 'U-mgr-2',   name: 'Sunita Rao (South Mgr)',    email: 'sunita@prismora.com',    role: 'Sales Manager',     password: 'password123', managedUsers: ['U-sales-3', 'U-sales-4'], status: 'Active' },
-    { id: 'U-sales-1', name: 'Rahul Sharma (Gujarat)',    email: 'rahul@prismora.com',     role: 'Sales Executive',   password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-sales-2', name: 'Amit Patel (Delhi)',        email: 'amit@prismora.com',      role: 'Sales Executive',   password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-sales-3', name: 'Vikram Singh (Mumbai)',     email: 'vikram@prismora.com',    role: 'Sales Executive',   password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-sales-4', name: 'Kiran Nair (Bangalore)',   email: 'kiran@prismora.com',     role: 'Sales Executive',   password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-pur-1',   name: 'Deepak Verma (Purchase)',  email: 'purchase@prismora.com',  role: 'Purchase Manager',  password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-wh-1',    name: 'Suresh Gupta (Warehouse)', email: 'warehouse@prismora.com', role: 'Warehouse Manager', password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-acc-1',   name: 'Priya Shah (Accounts)',    email: 'accounts@prismora.com',  role: 'Accounts',          password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-disp-1',  name: 'Ravi Yadav (Dispatch)',    email: 'dispatch@prismora.com',  role: 'Dispatch Team',     password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-cs-1',    name: 'Anita Desai (Support)',    email: 'support@prismora.com',   role: 'Customer Support',  password: 'password123', managedUsers: [], status: 'Active' },
-    { id: 'U-dist-1',  name: 'Krishna Distributors',     email: 'dist@prismora.com',      role: 'Distributor',       password: 'password123', managedUsers: [], status: 'Active', distributorId: 'DIST-1' },
-    { id: 'U-deal-1',  name: 'Mohan Dealers',            email: 'dealer@prismora.com',    role: 'Dealer',            password: 'password123', managedUsers: [], status: 'Active', dealerId: 'DEAL-1' },
-    { id: 'U-ret-1',   name: 'Geeta Retailers',          email: 'retail@prismora.com',    role: 'Retailer',          password: 'password123', managedUsers: [], status: 'Active', retailerId: 'RET-1' },
-  ];
 
   useEffect(() => {
     fetchUsers();
   }, []);
 
   const fetchUsers = async () => {
-    let fetched = [];
+    // Accounts come from Supabase and nowhere else. There used to be a
+    // DEFAULT_USERS list merged in here and used as a login fallback, which
+    // shipped a working Super Admin password inside the JavaScript bundle —
+    // anyone who opened the deployed site could sign in as admin@prismora.com.
     try {
       const { data, error } = await supabase.from('users').select('*');
       if (error) throw error;
-      fetched = data || [];
-      if (fetched.length === 0) {
-        const local = localStorage.getItem('prismora_users');
-        fetched = local ? JSON.parse(local) : DEFAULT_USERS;
+      const fetched = data || [];
+      setUsers(fetched);
+
+      // Refresh the signed-in user's own record so a role or permission change
+      // takes effect without them signing out.
+      const savedUser = localStorage.getItem('prismora_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        const fresh = fetched.find(u => u.id === parsed.id);
+        if (fresh) {
+          const safe = withoutPassword(fresh);
+          setUser(safe);
+          localStorage.setItem('prismora_user', JSON.stringify(safe));
+        } else {
+          // The account no longer exists — end the session rather than keep
+          // trusting a stale copy in this browser.
+          logout();
+        }
       }
     } catch (err) {
-      const local = localStorage.getItem('prismora_users');
-      fetched = local ? JSON.parse(local) : DEFAULT_USERS;
-    }
-
-    // Always merge DEFAULT_USERS so new default accounts are available
-    // even when old localStorage cache exists — never overwrites existing users
-    const existingIds = new Set(fetched.map(u => u.id));
-    const merged = [...fetched, ...DEFAULT_USERS.filter(u => !existingIds.has(u.id))];
-    localStorage.setItem('prismora_users', JSON.stringify(merged));
-    setUsers(merged);
-    
-    // Refresh the logged-in user's data
-    const savedUser = localStorage.getItem('prismora_user');
-    if (savedUser) {
-      const parsed = JSON.parse(savedUser);
-      const freshUser = fetched.find(u => u.id === parsed.id);
-      if (freshUser) {
-        setUser(freshUser);
-        localStorage.setItem('prismora_user', JSON.stringify(freshUser));
-      }
+      console.error('[Prismora] Could not load user accounts from Supabase.', err?.message || err);
     }
   };
 
   // Returns true (success) | false (invalid credentials) | 'pending' | 'rejected'
   const login = async (email, password) => {
     try {
-      // 1. Try querying Supabase directly
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -193,28 +179,22 @@ export const AuthProvider = ({ children }) => {
         .eq('password', password)
         .single();
 
-      if (data && !error) {
-        if (data.status === 'Pending') return 'pending';
-        if (data.status === 'Rejected') return 'rejected';
-        setUser(data);
-        localStorage.setItem('prismora_user', JSON.stringify(data));
-        return true;
-      }
-    } catch (err) {
-      console.warn("Supabase query failed during login, checking local users state.", err);
-    }
+      if (error || !data) return false;
+      if (data.status === 'Pending') return 'pending';
+      if (data.status === 'Rejected') return 'rejected';
 
-    // 2. Fallback to searching the loaded users list state (which contains local storage + DEFAULT_USERS)
-    const matched = users.find(u => u.email === email && u.password === password);
-    if (matched) {
-      if (matched.status === 'Pending') return 'pending';
-      if (matched.status === 'Rejected') return 'rejected';
-      setUser(matched);
-      localStorage.setItem('prismora_user', JSON.stringify(matched));
+      // The password is never kept in the session copy — it does not need to be
+      // in this browser once the account has been verified.
+      const safe = withoutPassword(data);
+      setUser(safe);
+      localStorage.setItem('prismora_user', JSON.stringify(safe));
       return true;
+    } catch (err) {
+      // No offline fallback: a browser that cannot reach Supabase cannot verify
+      // a password, and guessing is how the demo-account hole worked.
+      console.error('[Prismora] Sign-in failed — could not reach the account service.', err?.message || err);
+      return false;
     }
-
-    return false;
   };
 
   const logout = () => {
@@ -224,9 +204,15 @@ export const AuthProvider = ({ children }) => {
 
   const addUser = async (userData) => {
     const newId = `U${Date.now()}`;
+    // No default password. Every caller (Settings, and the three signup forms)
+    // collects one and Settings enforces a policy on it, so falling back to a
+    // known string here only ever created an account anyone could guess into.
+    if (!userData.password) {
+      console.error('[Prismora] Refusing to create an account with no password.');
+      return null;
+    }
     const newUser = {
       ...userData,
-      password: userData.password || 'password123',
       id: newId,
       managedUsers: userData.managedUsers || [],
       status: userData.status || 'Active'
