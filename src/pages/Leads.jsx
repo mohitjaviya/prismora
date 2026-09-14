@@ -10,7 +10,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 
 const STATUSES = [
-  'Lead Created', 'Call', 'Sample Sent', 'Meeting', 
+  'Lead Created', 'Call', 'Sample Sent', 'Meeting',
   'Negotiation', 'Distributor Approved', 'First Order', 'Active', 'Lost'
 ];
 
@@ -29,7 +29,7 @@ const Leads = () => {
   const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [selectedLeadView, setSelectedLeadView] = useState(null);
@@ -39,7 +39,7 @@ const Leads = () => {
   const [salespersonFilter, setSalespersonFilter] = useState('');
 
   const baseVisibleLeads = leads.filter(l => canAccessData(l.assignedTo));
-  const visibleLeads = (salespersonFilter 
+  const visibleLeads = (salespersonFilter
     ? baseVisibleLeads.filter(l => l.assignedTo === salespersonFilter)
     : baseVisibleLeads)
     .sort((a, b) => {
@@ -114,7 +114,7 @@ const Leads = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (formData.status === 'Converted') {
       if (!formData.state || !formData.state.trim() || !formData.city || !formData.city.trim()) {
         alert("⚠️ Cannot convert lead: Please select a State and enter a City first.");
@@ -201,9 +201,9 @@ const Leads = () => {
               const isDueSoon = daysUntilFollowUp !== null && daysUntilFollowUp <= 2 && lead.status !== 'First Order' && lead.status !== 'Active';
 
               return (
-                <tr 
-                  key={lead.id} 
-                  id={`lead-row-${lead.id}`} 
+                <tr
+                  key={lead.id}
+                  id={`lead-row-${lead.id}`}
                   onClick={() => setSelectedLeadView(lead)}
                   className={`hover:bg-brand-primary-lighter/30 transition-colors cursor-pointer group ${highlightedRowId === lead.id ? 'bg-brand-accent/20' : ''}`}
                 >
@@ -217,7 +217,7 @@ const Leads = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1 mb-1">
-                      {(Array.isArray(lead.productInterest) ? lead.productInterest : [lead.productInterest]).filter(Boolean).slice(0,2).map(p => (
+                      {(Array.isArray(lead.productInterest) ? lead.productInterest : [lead.productInterest]).filter(Boolean).slice(0, 2).map(p => (
                         <span key={p} className="text-xs bg-brand-accent/10 text-brand-accent border border-brand-accent/20 px-2 py-0.5 rounded-full">{p}</span>
                       ))}
                       {Array.isArray(lead.productInterest) && lead.productInterest.length > 2 && (
@@ -241,14 +241,14 @@ const Leads = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleOpenModal(lead); }} 
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleOpenModal(lead); }}
                       className="text-blue-400 hover:text-blue-300 mr-3 transition-colors"
                     >
                       <Edit2 size={16} />
                     </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }} 
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }}
                       className="text-red-400 hover:text-red-300 transition-colors"
                     >
                       <Trash2 size={16} />
@@ -278,11 +278,11 @@ const Leads = () => {
                 <h3 className="font-semibold text-slate-200">{status}</h3>
                 <span className="text-xs font-medium bg-brand-primary-lighter px-2 py-1 rounded-full">{columnLeads.length}</span>
               </div>
-              
+
               <Droppable droppableId={status}>
                 {(provided, snapshot) => (
-                  <div 
-                    ref={provided.innerRef} 
+                  <div
+                    ref={provided.innerRef}
                     {...provided.droppableProps}
                     className={`flex-1 overflow-y-auto custom-scrollbar p-1 rounded-lg transition-colors ${snapshot.isDraggingOver ? 'bg-brand-primary-lighter/30' : ''}`}
                   >
@@ -304,8 +304,8 @@ const Leads = () => {
                               <div className="flex justify-between items-start mb-2">
                                 <h4 className="font-bold text-white text-sm">{lead.name}</h4>
                                 <div className="flex gap-2">
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); handleOpenModal(lead); }} 
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleOpenModal(lead); }}
                                     className="text-slate-400 hover:text-blue-400 transition-colors"
                                   >
                                     <Edit2 size={14} />
@@ -340,16 +340,16 @@ const Leads = () => {
           <h1 className="text-2xl font-bold text-white">Lead Management</h1>
           <p className="text-slate-400 text-sm">Manage and track your potential customers.</p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="flex bg-brand-primary-light/80 p-1 rounded-xl border border-white/5 backdrop-blur-sm">
-            <button 
+            <button
               onClick={() => setViewMode('table')}
               className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-brand-primary-lighter text-brand-accent shadow-sm' : 'text-slate-400 hover:text-white'}`}
             >
               <List size={18} />
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('board')}
               className={`p-2 rounded-lg transition-all ${viewMode === 'board' ? 'bg-brand-primary-lighter text-brand-accent shadow-sm' : 'text-slate-400 hover:text-white'}`}
             >
@@ -370,7 +370,7 @@ const Leads = () => {
             </select>
           )}
 
-          <button 
+          <button
             onClick={handleExport}
             className="glass-panel hover:bg-brand-primary-lighter/80 text-white font-medium px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5"
           >
@@ -378,7 +378,7 @@ const Leads = () => {
             <span className="hidden sm:inline">Export</span>
           </button>
 
-          <button 
+          <button
             onClick={() => handleOpenModal()}
             className="bg-gradient-to-r from-brand-accent to-brand-accent-dark hover:from-brand-accent-light hover:to-brand-accent text-brand-primary font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:scale-105 shadow-lg shadow-brand-accent/20"
           >
@@ -387,7 +387,7 @@ const Leads = () => {
           </button>
         </div>
       </div>
-      
+
       {viewMode === 'table' ? renderTable() : renderKanban()}
 
       {/* Read-Only Lead Details Modal */}
@@ -408,7 +408,7 @@ const Leads = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button 
+                <button
                   onClick={() => {
                     const leadToEdit = selectedLeadView;
                     setSelectedLeadView(null);
@@ -423,7 +423,7 @@ const Leads = () => {
                 </button>
               </div>
             </div>
-            
+
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-brand-primary-light/50 space-y-6">
               {/* Status Stepper Timeline or Lost Warning Banner */}
               {selectedLeadView.status === 'Lost' ? (
@@ -439,47 +439,44 @@ const Leads = () => {
                 return (
                   <div className="bg-brand-primary/80 border border-white/5 rounded-2xl p-4 shadow-inner">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-4">Lead Progress Journey</span>
-                    <div className="relative flex items-center justify-between">
+                    <div className="relative flex items-start justify-between">
                       {/* Connector Line */}
-                      <div className="absolute left-6 right-6 top-3.5 -translate-y-1/2 h-0.5 bg-slate-800 pointer-events-none">
-                        <div 
+                      <div className="absolute left-[14px] right-[14px] top-[14px] -translate-y-1/2 h-0.5 bg-slate-800 pointer-events-none">
+                        <div
                           className="h-full bg-brand-accent transition-all duration-500"
                           style={{
-                            width: `${
-                              (progressiveStages.indexOf(selectedLeadView.status) / (progressiveStages.length - 1)) * 100
-                            }%`
+                            width: `${(progressiveStages.indexOf(selectedLeadView.status) / (progressiveStages.length - 1)) * 100
+                              }%`
                           }}
                         />
                       </div>
-                      
+
                       {/* Nodes */}
                       {progressiveStages.map((status, idx) => {
                         const activeIdx = progressiveStages.indexOf(selectedLeadView.status);
                         const isCompleted = idx < activeIdx;
                         const isActive = idx === activeIdx;
-                        
+
                         return (
                           <div key={status} className="relative z-10 flex flex-col items-center">
-                            <div 
-                              className={`w-7 h-7 rounded-full border-2 flex items-center justify-center font-bold text-[10px] transition-all duration-300 ${
-                                isActive 
-                                  ? 'bg-brand-accent border-brand-accent text-white shadow-lg shadow-brand-accent/30 scale-110' 
-                                  : isCompleted 
-                                    ? 'bg-brand-primary border-brand-accent text-brand-accent' 
+                            <div
+                              className={`w-7 h-7 rounded-full border-2 flex items-center justify-center font-bold text-[10px] transition-all duration-300 ${isActive
+                                  ? 'bg-brand-accent border-brand-accent text-white shadow-lg shadow-brand-accent/30 scale-110'
+                                  : isCompleted
+                                    ? 'bg-brand-primary border-brand-accent text-brand-accent'
                                     : 'bg-brand-primary border-slate-700 text-slate-500'
-                              }`}
+                                }`}
                               title={status}
                             >
                               {isCompleted ? '✓' : idx + 1}
                             </div>
-                            <span 
-                              className={`text-[8px] mt-1.5 font-bold text-center max-w-[65px] transition-colors ${
-                                isActive 
-                                  ? 'text-brand-accent font-extrabold' 
-                                  : isCompleted 
-                                    ? 'text-slate-300' 
+                            <span
+                              className={`text-[9px] leading-tight mt-1.5 font-bold text-center max-w-[65px] transition-colors ${isActive
+                                  ? 'text-brand-accent font-extrabold'
+                                  : isCompleted
+                                    ? 'text-slate-300'
                                     : 'text-slate-500'
-                              }`}
+                                }`}
                             >
                               {status}
                             </span>
@@ -492,11 +489,11 @@ const Leads = () => {
               })()}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
+
                 {/* Contact Information */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-white/10 pb-2">Contact Details</h3>
-                  
+
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-brand-primary rounded-lg text-brand-accent mt-0.5"><Mail size={16} /></div>
                     <div>
@@ -504,7 +501,7 @@ const Leads = () => {
                       <p className="text-white font-medium">{selectedLeadView.email || 'N/A'}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-brand-primary rounded-lg text-brand-accent mt-0.5"><Phone size={16} /></div>
                     <div>
@@ -512,7 +509,7 @@ const Leads = () => {
                       <p className="text-white font-medium">{selectedLeadView.phone || 'N/A'}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-brand-primary rounded-lg text-brand-accent mt-0.5"><User size={16} /></div>
                     <div>
@@ -528,7 +525,7 @@ const Leads = () => {
                     <div>
                       <p className="text-xs text-slate-400">City / District & State</p>
                       <p className="text-white font-medium">
-                        {selectedLeadView.city || selectedLeadView.state 
+                        {selectedLeadView.city || selectedLeadView.state
                           ? `${selectedLeadView.city || ''}${selectedLeadView.city && selectedLeadView.state ? ', ' : ''}${selectedLeadView.state || ''}`
                           : 'Not specified'
                         }
@@ -543,7 +540,7 @@ const Leads = () => {
                 {/* Deal Information */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-white/10 pb-2">Deal Information</h3>
-                  
+
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-brand-primary rounded-lg text-brand-accent mt-0.5"><Package size={16} /></div>
                     <div className="flex-1">
@@ -558,7 +555,7 @@ const Leads = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-brand-primary rounded-lg text-brand-accent mt-0.5"><DollarSign size={16} /></div>
                     <div>
@@ -566,7 +563,7 @@ const Leads = () => {
                       <p className="text-brand-accent font-bold text-lg">₹{selectedLeadView.dealValue?.toLocaleString() || '0'}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-brand-primary rounded-lg text-brand-accent mt-0.5"><Calendar size={16} /></div>
                     <div>
@@ -579,7 +576,7 @@ const Leads = () => {
 
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-brand-primary rounded-lg text-brand-accent mt-0.5">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" /></svg>
                     </div>
                     <div>
                       <p className="text-xs text-slate-400">Lead Source</p>
@@ -589,7 +586,7 @@ const Leads = () => {
 
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-brand-primary rounded-lg text-brand-accent mt-0.5">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
                     </div>
                     <div>
                       <p className="text-xs text-slate-400">Lead Type</p>
@@ -626,7 +623,7 @@ const Leads = () => {
                     )}
                   </div>
                 </div>
-                
+
               </div>
             </div>
           </div>
@@ -642,24 +639,24 @@ const Leads = () => {
               <h2 className="text-xl font-bold text-white">{editingLead ? 'Edit Lead' : 'Add New Lead'}</h2>
               <button onClick={closeModal} className="text-slate-400 hover:text-white transition-colors">✕</button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Name</label>
-                  <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input type="text" required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Company</label>
-                  <input type="text" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input type="text" value={formData.company} onChange={e => setFormData({ ...formData, company: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
-                  <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Phone</label>
-                  <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input type="text" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">
@@ -673,7 +670,7 @@ const Leads = () => {
                       {formData.productInterest.map(p => (
                         <span key={p} className="flex items-center gap-1.5 text-xs bg-brand-accent/15 text-brand-accent border border-brand-accent/30 px-3 py-1.5 rounded-full font-medium">
                           {p}
-                          <button type="button" onClick={() => setFormData({...formData, productInterest: formData.productInterest.filter(x => x !== p)})} className="hover:text-white transition-colors text-brand-accent/70">✕</button>
+                          <button type="button" onClick={() => setFormData({ ...formData, productInterest: formData.productInterest.filter(x => x !== p) })} className="hover:text-white transition-colors text-brand-accent/70">✕</button>
                         </span>
                       ))}
                     </div>
@@ -692,7 +689,7 @@ const Leads = () => {
                             e.preventDefault();
                             const val = e.target.value.trim();
                             if (val && !(formData.productInterest || []).includes(val)) {
-                              setFormData({...formData, productInterest: [...(formData.productInterest || []), val]});
+                              setFormData({ ...formData, productInterest: [...(formData.productInterest || []), val] });
                             }
                             e.target.value = '';
                             setIsCustomProduct(false);
@@ -708,7 +705,7 @@ const Leads = () => {
                         if (e.target.value === '__ADD_NEW__') {
                           setIsCustomProduct(true);
                         } else if (e.target.value && !(formData.productInterest || []).includes(e.target.value)) {
-                          setFormData({...formData, productInterest: [...(formData.productInterest || []), e.target.value]});
+                          setFormData({ ...formData, productInterest: [...(formData.productInterest || []), e.target.value] });
                         }
                       }}
                       className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
@@ -724,12 +721,12 @@ const Leads = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Deal Value (₹)</label>
-                  <input type="number" required value={formData.dealValue} onChange={e => setFormData({...formData, dealValue: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input type="number" required value={formData.dealValue} onChange={e => setFormData({ ...formData, dealValue: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Lead Source</label>
-                  <select value={formData.leadSource || ''} onChange={e => setFormData({...formData, leadSource: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
+                  <select value={formData.leadSource || ''} onChange={e => setFormData({ ...formData, leadSource: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Source --</option>
                     <option value="Exhibition" className="bg-brand-primary">Exhibition</option>
                     <option value="Reference" className="bg-brand-primary">Reference</option>
@@ -746,7 +743,7 @@ const Leads = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Lead Type</label>
-                  <select value={formData.leadType || ''} onChange={e => setFormData({...formData, leadType: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
+                  <select value={formData.leadType || ''} onChange={e => setFormData({ ...formData, leadType: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Lead Type --</option>
                     <option value="Distributor" className="bg-brand-primary">Distributor</option>
                     <option value="Super Stockist" className="bg-brand-primary">Super Stockist</option>
@@ -757,7 +754,7 @@ const Leads = () => {
                 {!isSalesRole(user?.role) && (
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1.5">Assign To</label>
-                    <select value={formData.assignedTo} onChange={e => setFormData({...formData, assignedTo: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
+                    <select value={formData.assignedTo} onChange={e => setFormData({ ...formData, assignedTo: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                       <option value="" className="bg-brand-primary">Select Salesperson</option>
                       {getAssignableUsers().map(u => (
                         <option key={u.id} value={u.id} className="bg-brand-primary">{u.name}</option>
@@ -765,10 +762,10 @@ const Leads = () => {
                     </select>
                   </div>
                 )}
-                
+
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Status</label>
-                  <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
+                  <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                     {STATUSES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
                   </select>
                 </div>
@@ -776,7 +773,7 @@ const Leads = () => {
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">State (Optional)</label>
                   <select
                     value={formData.state || ''}
-                    onChange={e => setFormData({...formData, state: e.target.value, city: ''})}
+                    onChange={e => setFormData({ ...formData, state: e.target.value, city: '' })}
                     className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
                     style={{ colorScheme: 'dark' }}
                   >
@@ -791,7 +788,7 @@ const Leads = () => {
                   {formData.state && STATE_DISTRICTS[formData.state] ? (
                     <select
                       value={formData.city || ''}
-                      onChange={e => setFormData({...formData, city: e.target.value})}
+                      onChange={e => setFormData({ ...formData, city: e.target.value })}
                       className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
                       style={{ colorScheme: 'dark' }}
                     >
@@ -804,7 +801,7 @@ const Leads = () => {
                     <input
                       type="text"
                       value={formData.city || ''}
-                      onChange={e => setFormData({...formData, city: e.target.value})}
+                      onChange={e => setFormData({ ...formData, city: e.target.value })}
                       placeholder={formData.state ? `Enter city/district in ${formData.state}...` : "Select a state first..."}
                       disabled={!formData.state}
                       className="w-full glass-input rounded-lg px-4 py-2.5 text-white disabled:opacity-50 disabled:cursor-not-allowed"
@@ -816,29 +813,29 @@ const Leads = () => {
                   <input
                     type="text"
                     value={formData.territory || ''}
-                    onChange={e => setFormData({...formData, territory: e.target.value})}
+                    onChange={e => setFormData({ ...formData, territory: e.target.value })}
                     placeholder="e.g. Maharashtra West, Gujarat South..."
                     className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Follow Up Date</label>
-                  <input type="date" value={formData.followUpDate} onChange={e => setFormData({...formData, followUpDate: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
+                  <input type="date" value={formData.followUpDate} onChange={e => setFormData({ ...formData, followUpDate: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
                 </div>
               </div>
-              
+
               <div className="mt-4">
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">Remarks / Notes</label>
-                <textarea rows="3" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white custom-scrollbar" placeholder="Add primary remarks or notes..."></textarea>
+                <textarea rows="3" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white custom-scrollbar" placeholder="Add primary remarks or notes..."></textarea>
               </div>
 
               {/* Documents & File Attachments Upload Mock */}
               <div className="mt-4 col-span-2">
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">Lead Documents & Attachments</label>
                 <div className="border-2 border-dashed border-slate-700 rounded-xl p-4 text-center hover:border-brand-accent/50 transition-colors relative cursor-pointer bg-brand-primary-lighter/10">
-                  <input 
-                    type="file" 
-                    multiple 
+                  <input
+                    type="file"
+                    multiple
                     className="absolute inset-0 opacity-0 cursor-pointer"
                     onChange={e => {
                       const files = Array.from(e.target.files).map(f => f.name);
@@ -858,7 +855,7 @@ const Leads = () => {
                     {(formData.attachments || []).map((file, idx) => (
                       <span key={idx} className="flex items-center gap-1.5 text-xs bg-slate-800 text-slate-300 px-2.5 py-1.5 rounded-lg border border-slate-700">
                         {file}
-                        <button type="button" onClick={() => setFormData({...formData, attachments: formData.attachments.filter((_, i) => i !== idx)})} className="text-red-400 hover:text-red-300 font-bold ml-1">✕</button>
+                        <button type="button" onClick={() => setFormData({ ...formData, attachments: formData.attachments.filter((_, i) => i !== idx) })} className="text-red-400 hover:text-red-300 font-bold ml-1">✕</button>
                       </span>
                     ))}
                   </div>
@@ -874,7 +871,7 @@ const Leads = () => {
             </form>
           </div>
         </div>
-      , document.body)}
+        , document.body)}
     </div>
   );
 };

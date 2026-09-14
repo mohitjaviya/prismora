@@ -210,7 +210,7 @@ const Orders = () => {
   // Sales roles hand off fulfillment entirely — they get one action
   // ("Assign to Warehouse Manager") instead of the full pipeline stepper.
   const isSalesOnlyRole = STATUS_STAGE_OWNERS['Processing'].includes(user?.role);
-  const visibleOrders = (salespersonFilter 
+  const visibleOrders = (salespersonFilter
     ? baseVisibleOrders.filter(o => o.assignedTo === salespersonFilter)
     : baseVisibleOrders)
     .sort((a, b) => {
@@ -371,14 +371,14 @@ const Orders = () => {
             </select>
           )}
 
-          <button 
+          <button
             onClick={handleExport}
             className="glass-panel hover:bg-brand-primary-lighter/80 text-white font-medium px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5"
           >
             <Download size={18} className="text-brand-accent" />
             <span className="hidden sm:inline">Export</span>
           </button>
-          <button 
+          <button
             onClick={() => handleOpenModal()}
             className="bg-gradient-to-r from-brand-accent to-brand-accent-dark hover:from-brand-accent-light hover:to-brand-accent text-brand-primary font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:scale-105 shadow-lg shadow-brand-accent/20"
           >
@@ -416,9 +416,9 @@ const Orders = () => {
                 };
 
                 return (
-                  <tr 
-                    key={order.id} 
-                    id={`order-row-${order.id}`} 
+                  <tr
+                    key={order.id}
+                    id={`order-row-${order.id}`}
                     onClick={() => handleOpenModal(order)}
                     className={`hover:bg-brand-primary-lighter/30 transition-colors cursor-pointer ${highlightedRowId === order.id ? 'bg-brand-accent/20' : ''}`}
                   >
@@ -510,7 +510,7 @@ const Orders = () => {
               <h2 className="text-xl font-bold text-white">{editingOrder ? 'Edit Order' : 'Add New Order'}</h2>
               <button onClick={closeModal} className="text-slate-400 hover:text-white transition-colors">✕</button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
               {/* Status Timeline Stepper (only for existing orders) */}
               {editingOrder && (
@@ -536,25 +536,24 @@ const Orders = () => {
                       </div>
                     )
                   ) : (
-                    <div className="relative flex items-center justify-between">
+                    <div className="relative flex items-start justify-between">
                       {/* Stepper Progress Line */}
-                      <div className="absolute left-6 right-6 top-4 -translate-y-1/2 h-0.5 bg-slate-700 pointer-events-none">
-                        <div 
+                      <div className="absolute left-[16px] right-[16px] top-[16px] -translate-y-1/2 h-0.5 bg-slate-700 pointer-events-none">
+                        <div
                           className="h-full bg-brand-accent transition-all duration-500"
                           style={{
-                            width: `${
-                              (STATUSES.filter(s => s !== 'Cancelled').indexOf(formData.status) / (STATUSES.filter(s => s !== 'Cancelled').length - 1)) * 100
-                            }%`
+                            width: `${(STATUSES.filter(s => s !== 'Cancelled').indexOf(formData.status) / (STATUSES.filter(s => s !== 'Cancelled').length - 1)) * 100
+                              }%`
                           }}
                         />
                       </div>
-                      
+
                       {/* Steps */}
                       {STATUSES.filter(s => s !== 'Cancelled').map((status, idx) => {
                         const activeIdx = STATUSES.filter(s => s !== 'Cancelled').indexOf(formData.status);
                         const isCompleted = idx < activeIdx;
                         const isActive = idx === activeIdx;
-                        
+
                         const isAllowed = canSetOrderStatus(user?.role, status);
 
                         return (
@@ -565,24 +564,22 @@ const Orders = () => {
                             className={`relative z-10 flex flex-col items-center group focus:outline-none ${!isAllowed ? 'opacity-50' : ''}`}
                           >
                             <div
-                              className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-xs transition-all duration-300 ${
-                                isActive
+                              className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-xs transition-all duration-300 ${isActive
                                   ? 'bg-brand-accent border-brand-accent text-white shadow-lg shadow-brand-accent/30 scale-110'
                                   : isCompleted
                                     ? 'bg-brand-primary border-brand-accent text-brand-accent'
                                     : 'bg-brand-primary border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300'
-                              }`}
+                                }`}
                             >
                               {isCompleted ? '✓' : idx + 1}
                             </div>
-                            <span 
-                              className={`text-[10px] mt-2 font-medium transition-colors ${
-                                isActive 
-                                  ? 'text-brand-accent font-bold' 
-                                  : isCompleted 
-                                    ? 'text-slate-300' 
+                            <span
+                              className={`text-[10px] leading-tight mt-2 font-medium text-center transition-colors ${isActive
+                                  ? 'text-brand-accent font-bold'
+                                  : isCompleted
+                                    ? 'text-slate-300'
                                     : 'text-slate-500 group-hover:text-slate-400'
-                              }`}
+                                }`}
                             >
                               {status}
                             </span>
@@ -700,68 +697,68 @@ const Orders = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Company Name</label>
-                  <input type="text" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent" />
+                  <input type="text" value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1.5">Contact Phone</label>
-                  <input type="text" placeholder="e.g. 9876543210" value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input type="text" placeholder="e.g. 9876543210" value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1.5">Contact Email</label>
-                  <input type="email" placeholder="e.g. client@prismora.com" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input type="email" placeholder="e.g. client@prismora.com" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
-                                {!(Array.isArray(formData.items) && formData.items.length > 0) && (
-                                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Product</label>
-                  {isCustomProduct ? (
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        required
-                        value={formData.product} 
-                        onChange={e => setFormData({...formData, product: e.target.value})} 
+                {!(Array.isArray(formData.items) && formData.items.length > 0) && (
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Product</label>
+                    {isCustomProduct ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          required
+                          value={formData.product}
+                          onChange={e => setFormData({ ...formData, product: e.target.value })}
+                          className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
+                          placeholder="Type new product name..."
+                          autoFocus
+                        />
+                        <button type="button" onClick={() => { setIsCustomProduct(false); setFormData({ ...formData, product: '' }); }} className="px-3 py-2 bg-brand-primary border border-slate-700/50 rounded-lg hover:bg-white/10 text-slate-400 transition-colors">✕</button>
+                      </div>
+                    ) : (
+                      <select
+                        value={formData.product || ''}
+                        onChange={e => {
+                          if (e.target.value === '__ADD_NEW__') {
+                            setIsCustomProduct(true);
+                            setFormData({ ...formData, product: '' });
+                          } else {
+                            // Rate is product-specific, so switching product
+                            // re-derives the value from the current quantity.
+                            const name = e.target.value;
+                            const rate = getUnitRate(name, formData);
+                            const qty = Number(formData.quantity || 0);
+                            setFormData(prev => ({
+                              ...prev,
+                              product: name,
+                              value: rate > 0 && qty > 0 ? String(Math.round(qty * rate)) : prev.value,
+                            }));
+                          }
+                        }}
                         className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
-                        placeholder="Type new product name..."
-                        autoFocus
-                      />
-                      <button type="button" onClick={() => { setIsCustomProduct(false); setFormData({...formData, product: ''}); }} className="px-3 py-2 bg-brand-primary border border-slate-700/50 rounded-lg hover:bg-white/10 text-slate-400 transition-colors">✕</button>
-                    </div>
-                  ) : (
-                    <select
-                      value={formData.product || ''}
-                      onChange={e => {
-                        if (e.target.value === '__ADD_NEW__') {
-                          setIsCustomProduct(true);
-                          setFormData({...formData, product: ''});
-                        } else {
-                          // Rate is product-specific, so switching product
-                          // re-derives the value from the current quantity.
-                          const name = e.target.value;
-                          const rate = getUnitRate(name, formData);
-                          const qty = Number(formData.quantity || 0);
-                          setFormData(prev => ({
-                            ...prev,
-                            product: name,
-                            value: rate > 0 && qty > 0 ? String(Math.round(qty * rate)) : prev.value,
-                          }));
-                        }
-                      }}
-                      className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
-                    >
-                      <option value="" className="bg-brand-primary text-slate-500">-- Select a product --</option>
-                      {(products || []).map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
-                      <option value="__ADD_NEW__" className="bg-brand-primary text-brand-accent font-bold">+ Add Custom Product</option>
-                    </select>
-                  )}
-                  {formData.product && !isCustomProduct && (() => {
-                    const avail = getAvailableQty(formData.product);
-                    return (
-                      <p className={`mt-1.5 text-xs font-medium ${avail > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {avail > 0 ? `✓ ${avail.toLocaleString('en-IN')} available in stock` : '⚠ Out of stock'}
-                      </p>
-                    );
-                  })()}
-                </div>
+                      >
+                        <option value="" className="bg-brand-primary text-slate-500">-- Select a product --</option>
+                        {(products || []).map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
+                        <option value="__ADD_NEW__" className="bg-brand-primary text-brand-accent font-bold">+ Add Custom Product</option>
+                      </select>
+                    )}
+                    {formData.product && !isCustomProduct && (() => {
+                      const avail = getAvailableQty(formData.product);
+                      return (
+                        <p className={`mt-1.5 text-xs font-medium ${avail > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {avail > 0 ? `✓ ${avail.toLocaleString('en-IN')} available in stock` : '⚠ Out of stock'}
+                        </p>
+                      );
+                    })()}
+                  </div>
                 )}
                 {Array.isArray(formData.items) && formData.items.length > 0 && (
                   <div className="col-span-2">
@@ -825,7 +822,7 @@ const Orders = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Order Value (₹)</label>
-                  <input type="number" required value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input type="number" required value={formData.value} onChange={e => setFormData({ ...formData, value: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                   {getUnitRate(formData.product, formData) > 0 && (
                     <p className="mt-1 text-[11px] text-slate-500">
                       Auto-calculated at ₹{getUnitRate(formData.product, formData).toLocaleString('en-IN')} / unit ({rateLabel(formData)}). Editable if negotiated.
@@ -837,7 +834,7 @@ const Orders = () => {
                   <select
                     required
                     value={formData.state}
-                    onChange={e => setFormData({...formData, state: e.target.value})}
+                    onChange={e => setFormData({ ...formData, state: e.target.value })}
                     className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
                   >
                     <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
@@ -848,13 +845,13 @@ const Orders = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
-                  <input type="text" required value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <input type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
-                
+
                 {!isSalesRole(user?.role) && (
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1.5">Assign To</label>
-                    <select value={formData.assignedTo} onChange={e => setFormData({...formData, assignedTo: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
+                    <select value={formData.assignedTo} onChange={e => setFormData({ ...formData, assignedTo: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
                       <option value="" className="bg-brand-primary">Select Salesperson</option>
                       {getAssignableUsers().map(u => (
                         <option key={u.id} value={u.id} className="bg-brand-primary">{u.name}</option>
@@ -862,7 +859,7 @@ const Orders = () => {
                     </select>
                   </div>
                 )}
-                
+
                 {!(editingOrder && isSalesOnlyRole) && (
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1.5">Status</label>
@@ -876,10 +873,10 @@ const Orders = () => {
                 )}
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Order Date</label>
-                  <input type="date" required value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
+                  <input type="date" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
                 </div>
               </div>
-              
+
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
                 <button type="button" onClick={closeModal} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium">Cancel</button>
                 <button type="submit" className="px-5 py-2 bg-brand-accent text-brand-primary font-bold rounded-lg hover:bg-brand-accent-light hover:shadow-lg hover:shadow-brand-accent/20 transition-all">
@@ -889,7 +886,7 @@ const Orders = () => {
             </form>
           </div>
         </div>
-      , document.body)}
+        , document.body)}
 
       {isPartialModalOpen && editingOrder && createPortal(
         <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
