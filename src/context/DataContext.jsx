@@ -4,6 +4,34 @@ import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 
 const DataContext = createContext();
 
+// Bumping this string clears every cached table in the browser on the next load.
+//
+// The caches are not a passive copy: fetchData() merges anything the server does
+// not have on top of what it returns, and backfillLocalOnly() uploads it. After a
+// deliberate data reset that combination is destructive — every browser still
+// holding the old rows would put them back on screen and then push them into
+// Supabase, quietly undoing the reset. Clearing the caches once, keyed on this
+// version, is what stops that.
+const DATA_VERSION = '2026-09-14-reset';
+
+// Theme and session are user preferences rather than cached tables, so they
+// survive; the version marker itself has to survive or every load would wipe.
+const KEEP_ON_RESET = new Set(['prismora_theme', 'prismora_user', 'prismora_data_version']);
+
+const clearStaleCaches = () => {
+  try {
+    if (localStorage.getItem('prismora_data_version') === DATA_VERSION) return;
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('prismora_') && !KEEP_ON_RESET.has(k))
+      .forEach(k => localStorage.removeItem(k));
+    localStorage.setItem('prismora_data_version', DATA_VERSION);
+    console.info('[Prismora] Local cache cleared to match the reset database.');
+  } catch { /* storage blocked (private mode) — nothing cached to clear */ }
+};
+
+// Runs at module load, before any component reads the cache below.
+clearStaleCaches();
+
 // Synchronously hydrate state from the browser's cached copy so the UI renders
 // instantly on load; fetchData() then refreshes from Supabase in the background.
 const lsInit = (key) => {
