@@ -42,6 +42,111 @@ const persist = async (label, query) => {
   }
 };
 
+/**
+ * The columns that actually exist on `orders`.
+ *
+ * PostgREST aborts an entire INSERT/UPDATE with error 42703 the moment the
+ * payload names one column the table doesn't have — it does not skip the
+ * unknown key and write the rest. The order form always carries `phone` and
+ * `email`, so a single missing column silently rejected every order write:
+ * local state and localStorage showed the change, Supabase never received it,
+ * and the next refresh served the stale row back (partial-delivery progress
+ * resetting to "nothing delivered" is exactly this).
+ *
+ * Filtering the payload through this list keeps a schema that has drifted from
+ * `complete_database_schema.sql` from voiding the whole write — the known
+ * columns still persist. Keep it in step with the orders table.
+ */
+const ORDER_COLUMNS = [
+  'id', 'customerName', 'companyName', 'product', 'quantity', 'value',
+  'state', 'city', 'status', 'assignedTo', 'date', 'createdAt',
+  'phone', 'email',
+  'distributorId', 'dealerId', 'retailerId', 'items',
+  'receivedByDistributor', 'receivedAt',
+  'splitFromOrderId', 'splitIntoOrderId',
+  'deliveredQty', 'fulfilledAt',
+];
+
+// Narrows an order object to just the persistable columns. Form-only fields
+// stay in React state and localStorage; only real columns go over the wire.
+const orderRow = (order) => {
+  const row = {};
+  for (const key of ORDER_COLUMNS) {
+    if (order[key] !== undefined) row[key] = order[key];
+  }
+  return row;
+};
+
+
+/**
+ * Insert a record whose id was generated client-side as `max + 1`.
+ *
+ * Every browser computes that number from the rows it happens to know about, so
+ * two people creating an order in the same moment both land on O47. The first
+ * insert wins; the second fails on the primary key and — because supabase-js
+ * resolves with an `{ error }` rather than throwing — used to be dropped in
+ * silence, leaving that person's order only in their own browser.
+ *
+ * This walks to the next free number and retries, then reports the id that was
+ * actually stored so local state can be written with the right one. Sequential,
+ * human-quotable ids are kept, because staff read them out over the phone.
+ *
+ * Anything that isn't a duplicate-key error (offline, a missing column) keeps
+ * the first id and reports `saved: false`, so offline creation behaves exactly
+ * as it did before.
+ */
+// Highest number currently in use for `prefix` in `table`. Ids are text columns,
+// so the database sorts them lexicographically — "O9" lands after "O47" — which
+// makes ORDER BY useless here. The numeric part has to be parsed instead.
+const maxSequentialId = async (table, prefix) => {
+  try {
+    const { data, error } = await supabase.from(table).select('id');
+    if (error || !data) return 0;
+    return data.reduce((highest, row) => {
+      const id = String(row.id || '');
+      if (!id.startsWith(prefix)) return highest;
+      const num = parseInt(id.slice(prefix.length), 10);
+      return !isNaN(num) && num > highest ? num : highest;
+    }, 0);
+  } catch {
+    return 0;
+  }
+};
+
+const insertWithFreeId = async (label, table, prefix, firstNumber, record, shape = (r) => r, attempts = 8) => {
+  let number = firstNumber;
+  let askedDatabase = false;
+
+  for (let i = 0; i < attempts; i++) {
+    const id = `${prefix}${number}`;
+    try {
+      const { error } = await supabase.from(table).insert([shape({ ...record, id })]);
+      if (!error) return { id, saved: true };
+      if (error.code !== '23505') {
+        console.error(`[Prismora] Could not save ${label} — this change will be lost on refresh:`, error.message || error);
+        return { id, saved: false };
+      }
+
+      // 23505 = that id is already taken. `firstNumber` was worked out from the
+      // rows this browser happens to hold, so when an earlier fetch failed it
+      // can sit far behind the real table — stepping one at a time would burn
+      // every attempt and still land on a taken id. Ask the database where it
+      // has actually reached and jump past that, once.
+      if (!askedDatabase) {
+        askedDatabase = true;
+        const highest = await maxSequentialId(table, prefix);
+        if (highest >= number) { number = highest + 1; continue; }
+      }
+      number += 1;
+    } catch (err) {
+      console.error(`[Prismora] Could not save ${label} (network or unexpected error):`, err?.message || err);
+      return { id, saved: false };
+    }
+  }
+  console.error(`[Prismora] Gave up finding a free id for ${label} after ${attempts} tries.`);
+  return { id: `${prefix}${number}`, saved: false };
+};
+
 export const DataProvider = ({ children }) => {
   // ── Original CRM State (hydrated from cache for instant load) ────────────
   const [leads, setLeads] = useState(() => lsInit('prismora_leads'));
@@ -181,10 +286,15 @@ export const DataProvider = ({ children }) => {
     // ── Original fetches ──────────────────────────────────────────────────
     // Fetch Leads with local merge fallback
     let fetchedLeads = [];
+    // Tracked separately from the row count: a failed read and a genuinely
+    // empty table both leave the array at [], but only the second one should
+    // ever seed the demo rows below.
+    let fetchedLeadsOk = false;
     try {
       const { data, error } = await supabase.from('leads').select('*').order('createdAt', { ascending: false });
       if (error) throw error;
       fetchedLeads = data || [];
+      fetchedLeadsOk = true;
     } catch (err) {
       console.warn("Supabase fetch leads failed, using local fallback.", err);
     }
@@ -194,7 +304,7 @@ export const DataProvider = ({ children }) => {
       const remoteIds = new Set(fetchedLeads.map(l => l.id));
       const localOnly = localLeads.filter(l => !remoteIds.has(l.id));
       fetchedLeads = [...localOnly, ...fetchedLeads];
-    } else if (fetchedLeads.length === 0) {
+    } else if (fetchedLeadsOk && fetchedLeads.length === 0) {
       fetchedLeads = DEFAULT_LEADS;
       localStorage.setItem('prismora_leads', JSON.stringify(fetchedLeads));
     }
@@ -202,10 +312,15 @@ export const DataProvider = ({ children }) => {
 
     // Fetch Orders with local merge fallback
     let fetchedOrders = [];
+    // Tracked separately from the row count: a failed read and a genuinely
+    // empty table both leave the array at [], but only the second one should
+    // ever seed the demo rows below.
+    let fetchedOrdersOk = false;
     try {
       const { data, error } = await supabase.from('orders').select('*').order('createdAt', { ascending: false });
       if (error) throw error;
       fetchedOrders = data || [];
+      fetchedOrdersOk = true;
     } catch (err) {
       console.warn("Supabase fetch orders failed, using local fallback.", err);
     }
@@ -215,7 +330,7 @@ export const DataProvider = ({ children }) => {
       const remoteIds = new Set(fetchedOrders.map(o => o.id));
       const localOnly = localOrders.filter(o => !remoteIds.has(o.id));
       fetchedOrders = [...localOnly, ...fetchedOrders];
-    } else if (fetchedOrders.length === 0) {
+    } else if (fetchedOrdersOk && fetchedOrders.length === 0) {
       fetchedOrders = DEFAULT_ORDERS;
       localStorage.setItem('prismora_orders', JSON.stringify(fetchedOrders));
     }
@@ -235,9 +350,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_product_catalog', JSON.stringify(fetchedCatalog));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_product_catalog');
-      fetchedCatalog = local ? JSON.parse(local) : DEFAULT_CATALOG;
-      if (!local) localStorage.setItem('prismora_product_catalog', JSON.stringify(fetchedCatalog));
+      fetchedCatalog = local ? JSON.parse(local) : [];
     }
     const normalizedCatalog = fetchedCatalog.map((p, idx) => ({
       id: p.id || `P-${idx}-${(p.name || '').replace(/\s+/g, '')}`,
@@ -270,10 +387,12 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_invoices', JSON.stringify(fetchedInvoices));
       }
     } catch (err) {
-      console.warn('Supabase invoices table fetch failed, using localStorage fallback.', err);
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
+      console.warn(`Supabase fetch invoices failed, using local cache.`, err);
       const local = localStorage.getItem('prismora_invoices');
-      fetchedInvoices = local ? JSON.parse(local) : DEFAULT_INVOICES;
-      if (!local) localStorage.setItem('prismora_invoices', JSON.stringify(fetchedInvoices));
+      fetchedInvoices = local ? JSON.parse(local) : [];
     }
     
     // Automatically transition unpaid invoices to overdue if past due date
@@ -329,10 +448,12 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_expenses', JSON.stringify(fetchedExpenses));
       }
     } catch (err) {
-      console.warn('Supabase expenses table fetch failed, using localStorage fallback.', err);
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
+      console.warn(`Supabase fetch expenses failed, using local cache.`, err);
       const local = localStorage.getItem('prismora_expenses');
-      fetchedExpenses = local ? JSON.parse(local) : DEFAULT_EXPENSES;
-      if (!local) localStorage.setItem('prismora_expenses', JSON.stringify(fetchedExpenses));
+      fetchedExpenses = local ? JSON.parse(local) : [];
     }
     setExpenses(fetchedExpenses);
 
@@ -353,9 +474,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_inventory', JSON.stringify(fetchedInventory));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_inventory');
-      fetchedInventory = local ? JSON.parse(local) : DEFAULT_INVENTORY;
-      if (!local) localStorage.setItem('prismora_inventory', JSON.stringify(fetchedInventory));
+      fetchedInventory = local ? JSON.parse(local) : [];
     }
     setInventory(fetchedInventory);
 
@@ -371,9 +494,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_vendors', JSON.stringify(fetchedVendors));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_vendors');
-      fetchedVendors = local ? JSON.parse(local) : [DEFAULT_VENDOR];
-      if (!local) localStorage.setItem('prismora_vendors', JSON.stringify(fetchedVendors));
+      fetchedVendors = local ? JSON.parse(local) : [];
     }
     setVendors(fetchedVendors);
 
@@ -421,9 +546,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_purchase_orders', JSON.stringify(fetchedPOs));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_purchase_orders');
-      fetchedPOs = local ? JSON.parse(local) : DEFAULT_PURCHASE_ORDERS;
-      if (!local) localStorage.setItem('prismora_purchase_orders', JSON.stringify(fetchedPOs));
+      fetchedPOs = local ? JSON.parse(local) : [];
     }
     setPurchaseOrders(fetchedPOs);
 
@@ -439,9 +566,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_grn', JSON.stringify(fetchedGRN));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_grn');
-      fetchedGRN = local ? JSON.parse(local) : DEFAULT_GRN;
-      if (!local) localStorage.setItem('prismora_grn', JSON.stringify(fetchedGRN));
+      fetchedGRN = local ? JSON.parse(local) : [];
     }
     setGrn(fetchedGRN);
 
@@ -457,9 +586,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_distributors', JSON.stringify(fetchedDist));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_distributors');
-      fetchedDist = local ? JSON.parse(local) : DEFAULT_DISTRIBUTORS;
-      if (!local) localStorage.setItem('prismora_distributors', JSON.stringify(fetchedDist));
+      fetchedDist = local ? JSON.parse(local) : [];
     }
     setDistributors(fetchedDist);
 
@@ -475,9 +606,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_dealers', JSON.stringify(fetchedDealers));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_dealers');
-      fetchedDealers = local ? JSON.parse(local) : DEFAULT_DEALERS;
-      if (!local) localStorage.setItem('prismora_dealers', JSON.stringify(fetchedDealers));
+      fetchedDealers = local ? JSON.parse(local) : [];
     }
     setDealers(fetchedDealers);
 
@@ -493,9 +626,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_retailers', JSON.stringify(fetchedRetailers));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_retailers');
-      fetchedRetailers = local ? JSON.parse(local) : DEFAULT_RETAILERS;
-      if (!local) localStorage.setItem('prismora_retailers', JSON.stringify(fetchedRetailers));
+      fetchedRetailers = local ? JSON.parse(local) : [];
     }
     setRetailers(fetchedRetailers);
 
@@ -511,9 +646,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_schemes', JSON.stringify(fetchedSchemes));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_schemes');
-      fetchedSchemes = local ? JSON.parse(local) : DEFAULT_SCHEMES;
-      if (!local) localStorage.setItem('prismora_schemes', JSON.stringify(fetchedSchemes));
+      fetchedSchemes = local ? JSON.parse(local) : [];
     }
     setSchemes(fetchedSchemes);
 
@@ -530,10 +667,11 @@ export const DataProvider = ({ children }) => {
         setComplaints(fetchedComplaints);
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_complaints');
-      const finalComplaints = local ? JSON.parse(local) : DEFAULT_COMPLAINTS;
-      setComplaints(finalComplaints);
-      if (!local) localStorage.setItem('prismora_complaints', JSON.stringify(finalComplaints));
+      setComplaints(local ? JSON.parse(local) : []);
     }
 
     // ── Territories ──
@@ -548,9 +686,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_territories', JSON.stringify(fetchedTerritories));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_territories');
-      fetchedTerritories = local ? JSON.parse(local) : DEFAULT_TERRITORIES;
-      if (!local) localStorage.setItem('prismora_territories', JSON.stringify(fetchedTerritories));
+      fetchedTerritories = local ? JSON.parse(local) : [];
     }
     setTerritories(fetchedTerritories);
 
@@ -566,9 +706,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_beat_plans', JSON.stringify(fetchedBeats));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_beat_plans');
-      fetchedBeats = local ? JSON.parse(local) : DEFAULT_BEAT_PLANS;
-      if (!local) localStorage.setItem('prismora_beat_plans', JSON.stringify(fetchedBeats));
+      fetchedBeats = local ? JSON.parse(local) : [];
     }
     setBeatPlans(fetchedBeats);
 
@@ -584,9 +726,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_attendance', JSON.stringify(fetchedAttendance));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_attendance');
-      fetchedAttendance = local ? JSON.parse(local) : DEFAULT_ATTENDANCE;
-      if (!local) localStorage.setItem('prismora_attendance', JSON.stringify(fetchedAttendance));
+      fetchedAttendance = local ? JSON.parse(local) : [];
     }
     setAttendance(fetchedAttendance);
 
@@ -602,9 +746,11 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_visit_reports', JSON.stringify(fetchedVisits));
       }
     } catch {
+      // A failed read is not an empty table. Falling back to DEFAULT_* here is
+      // what put seeded demo rows on screen in place of real records — and then
+      // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_visit_reports');
-      fetchedVisits = local ? JSON.parse(local) : DEFAULT_VISIT_REPORTS;
-      if (!local) localStorage.setItem('prismora_visit_reports', JSON.stringify(fetchedVisits));
+      fetchedVisits = local ? JSON.parse(local) : [];
     }
     setVisitReports(fetchedVisits);
 
@@ -655,6 +801,93 @@ export const DataProvider = ({ children }) => {
       fetchedIncentives = local ? JSON.parse(local) : [];
     }
     setDistributorIncentives(fetchedIncentives);
+
+    // Rescue anything that only ever reached this browser (see below).
+    await backfillLocalOnly();
+  };
+
+  // ── Recovery: lift browser-only records into Supabase ────────────────────
+  //
+  // While a table was missing or a column had drifted, PostgREST rejected the
+  // whole insert (42703 / PGRST205) and the record survived only in
+  // localStorage. localStorage is a cache, not storage: Safari clears it after
+  // roughly a week without a visit, Chrome and Android evict it under storage
+  // pressure, and any "clear browsing data" wipes it. Everything still stranded
+  // here is one eviction away from being gone for good — which is exactly how
+  // real records vanished while the seeded demo rows reappeared in their place.
+  //
+  // Runs once per load, after the fetches, and is safe to repeat: rows already
+  // upstream are skipped and the write is an upsert on the primary key.
+  const backfillLocalOnly = async () => {
+    const jobs = [
+      ['leads', 'prismora_leads', DEFAULT_LEADS],
+      ['orders', 'prismora_orders', DEFAULT_ORDERS],
+      ['products', 'prismora_product_catalog', DEFAULT_CATALOG],
+      ['inventory', 'prismora_inventory', DEFAULT_INVENTORY],
+      ['invoices', 'prismora_invoices', DEFAULT_INVOICES],
+      ['credit_notes', 'prismora_credit_notes', []],
+      ['expenses', 'prismora_expenses', DEFAULT_EXPENSES],
+      ['vendors', 'prismora_vendors', []],
+      ['purchase_orders', 'prismora_purchase_orders', DEFAULT_PURCHASE_ORDERS],
+      ['grn', 'prismora_grn', DEFAULT_GRN],
+      ['purchase_returns', 'prismora_purchase_returns', []],
+      ['vendor_payments', 'prismora_vendor_payments', []],
+      ['distributors', 'prismora_distributors', DEFAULT_DISTRIBUTORS],
+      ['dealers', 'prismora_dealers', DEFAULT_DEALERS],
+      ['retailers', 'prismora_retailers', DEFAULT_RETAILERS],
+      ['schemes', 'prismora_schemes', DEFAULT_SCHEMES],
+      ['complaints', 'prismora_complaints', DEFAULT_COMPLAINTS],
+      ['territories', 'prismora_territories', DEFAULT_TERRITORIES],
+      ['beat_plans', 'prismora_beat_plans', DEFAULT_BEAT_PLANS],
+      ['attendance', 'prismora_attendance', DEFAULT_ATTENDANCE],
+      ['visit_reports', 'prismora_visit_reports', DEFAULT_VISIT_REPORTS],
+      ['sfa_expenses', 'prismora_sfa_expenses', []],
+      ['distributor_payments', 'prismora_distributor_payments', []],
+      ['scheme_claims', 'prismora_scheme_claims', []],
+      ['distributor_incentives', 'prismora_distributor_incentives', []],
+    ];
+
+    let restored = 0;
+    for (const [table, key, demo] of jobs) {
+      let local;
+      try {
+        local = JSON.parse(localStorage.getItem(key) || '[]');
+      } catch { continue; }
+      if (!Array.isArray(local) || local.length === 0) continue;
+
+      // Only the ids are needed to work out what is missing, and only one row
+      // is needed to learn the column shape — pulling every row of every table
+      // on each load would be far heavier than the check is worth.
+      // A failed read must never be mistaken for an empty table either:
+      // backfilling against a false empty would duplicate every record in it.
+      const { data: remoteIds, error } = await supabase.from(table).select('id');
+      if (error) continue;
+      const { data: sample } = await supabase.from(table).select('*').limit(1);
+
+      const known = new Set((remoteIds || []).map(r => r.id));
+      // Demo rows are seeded locally whenever a table reads back empty. Pushing
+      // them upstream would make the sample data permanent for every user.
+      const demoIds = new Set((demo || []).map(d => d.id));
+      const stranded = local.filter(r => r && r.id && !known.has(r.id) && !demoIds.has(r.id));
+      if (stranded.length === 0) continue;
+
+      // Narrow each record to the columns the table actually has. One unknown
+      // key rejects the entire batch, so without this a single drifted column
+      // would strand every record again.
+      const columns = sample && sample.length > 0 ? Object.keys(sample[0]) : null;
+      const rows = columns
+        ? stranded.map(r => Object.fromEntries(Object.entries(r).filter(([k]) => columns.includes(k))))
+        : stranded;
+
+      const { error: upErr } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
+      if (upErr) {
+        console.warn(`[Prismora] Could not restore ${stranded.length} browser-only ${table} record(s). Run fix_production_schema.sql against this database, then reload.`, upErr.message || upErr);
+      } else {
+        restored += stranded.length;
+        console.info(`[Prismora] Restored ${stranded.length} ${table} record(s) that existed only in this browser.`);
+      }
+    }
+    if (restored > 0) console.info(`[Prismora] ${restored} record(s) recovered into Supabase and are now safe from cache eviction.`);
   };
 
   // ── Audit Log ────────────────────────────────────────────────────────────
@@ -674,12 +907,12 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(l.id.replace('L', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const newId = `L${maxId + 1}`;
-    const newLead = { ...lead, id: newId, createdAt: new Date().toISOString() };
+    const draft = { ...lead, createdAt: new Date().toISOString() };
+    const { id: newId } = await insertWithFreeId('leads insert', 'leads', 'L', maxId + 1, draft);
+    const newLead = { ...draft, id: newId };
     const next = [newLead, ...leads];
     setLeads(next);
     localStorage.setItem('prismora_leads', JSON.stringify(next));
-    await persist('leads insert', supabase.from('leads').insert([newLead]));
     logEvent('lead_new', `New Lead added: ${lead.name}`, lead.assignedTo, newId);
   };
 
@@ -752,7 +985,7 @@ export const DataProvider = ({ children }) => {
           return nextOrders;
         });
         
-        await persist('orders insert', supabase.from('orders').insert([newOrderObj]));
+        await persist('orders insert', supabase.from('orders').insert([orderRow(newOrderObj)]));
         logEvent('order_created', `Auto-order ${newOrderId} created from converted lead`, assignedSp, newOrderId);
       } else if (shouldCancelOrder) {
         const targetOrder = orders.find(o => 
@@ -794,12 +1027,14 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(o.id.replace('O', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const newId = `O${maxId + 1}`;
-    const newOrder = { ...order, id: newId, createdAt: new Date().toISOString() };
+    // The id is settled by the insert, so a clash with another user's order is
+    // resolved before it ever reaches local state.
+    const draft = { ...order, createdAt: new Date().toISOString() };
+    const { id: newId } = await insertWithFreeId('orders insert', 'orders', 'O', maxId + 1, draft, orderRow);
+    const newOrder = { ...draft, id: newId };
     const next = [newOrder, ...orders];
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    await persist('orders insert', supabase.from('orders').insert([newOrder]));
     if (newOrder.distributorId || newOrder.dealerId || newOrder.retailerId) generateIncentivesForOrder(newOrder);
     return newId;
   };
@@ -849,7 +1084,7 @@ export const DataProvider = ({ children }) => {
     const next = orders.map(o => o.id === id ? { ...o, ...updatedData } : o);
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    await persist('orders update', supabase.from('orders').update(updatedData).eq('id', id));
+    await persist('orders update', supabase.from('orders').update(orderRow(updatedData)).eq('id', id));
     if (oldOrder && oldOrder.status !== updatedData.status) {
       if (updatedData.status === 'Processing') {
         logEvent('order_processing', `Order Processing: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
@@ -926,7 +1161,19 @@ export const DataProvider = ({ children }) => {
     const next = orders.map(o => o.id === id ? { ...o, ...updatedData } : o);
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    await persist('partial delivery', supabase.from('orders').update(updatedData).eq('id', id));
+    // `.select()` makes the matched rows come back, so a write that targeted a
+    // row Supabase doesn't have can be detected. Without it an .update() whose
+    // filter matches nothing resolves with error: null — indistinguishable from
+    // a real save. That is how delivery progress could look saved locally while
+    // the database still held deliveredQty = 0, and the order came back showing
+    // the full quantity outstanding on the next load.
+    const { data: updatedRows, error: partialErr } = await supabase
+      .from('orders').update(orderRow(updatedData)).eq('id', id).select('id');
+    if (partialErr) {
+      console.error('[Prismora] Could not save partial delivery — this change will be lost on refresh:', partialErr.message || partialErr);
+    } else if (!updatedRows || updatedRows.length === 0) {
+      console.warn(`[Prismora] Partial delivery for ${id} was not stored: no such order in the database. It exists only in this browser, so the progress will not survive a cache clear or appear on another device.`);
+    }
 
     // Deduct only the units delivered in this instalment (single product)
     await deductInventoryForOrder({ ...order, items: undefined, product: order.product, quantity: actualNow, id });
@@ -1086,8 +1333,8 @@ export const DataProvider = ({ children }) => {
     const next = [splitOrderObj, ...orders.map(o => o.id === id ? { ...o, ...updatedOriginal } : o)];
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    await persist('orders insert', supabase.from('orders').insert([splitOrderObj]));
-    await persist('orders update', supabase.from('orders').update(updatedOriginal).eq('id', id));
+    await persist('orders insert', supabase.from('orders').insert([orderRow(splitOrderObj)]));
+    await persist('orders update', supabase.from('orders').update(orderRow(updatedOriginal)).eq('id', id));
     logEvent('order_split', `Order ${id} split — ${updatedOriginal.quantity} unit(s) proceeding now, ${splitOrderObj.quantity} unit(s) moved to new order ${newOrderId} pending restock`, order.assignedTo, id);
   };
 
@@ -1156,27 +1403,22 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(inv.id.replace('INV-', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const newId = `INV-${maxId + 1}`;
-    const newInvoice = { ...invoiceData, id: newId, createdAt: new Date().toISOString() };
-    setInvoices(prev => [newInvoice, ...prev]);
-    try {
-      const { error } = await supabase.from('invoices').insert([newInvoice]);
-      if (error) {
-        if (error.code === '42703' || (error.message && error.message.includes('assignedTo'))) {
-          const { assignedTo, ...cleanInvoice } = newInvoice;
-          const { error: retryError } = await supabase.from('invoices').insert([cleanInvoice]);
-          if (retryError) throw retryError;
-        } else throw error;
-      }
-      const local = localStorage.getItem('prismora_invoices');
-      const existing = local ? JSON.parse(local) : [];
-      localStorage.setItem('prismora_invoices', JSON.stringify([newInvoice, ...existing]));
-    } catch (err) {
-      console.warn('Failed to insert invoice to Supabase. Saving to localStorage.', err);
-      const local = localStorage.getItem('prismora_invoices');
-      const existing = local ? JSON.parse(local) : [];
-      localStorage.setItem('prismora_invoices', JSON.stringify([newInvoice, ...existing]));
+    const draft = { ...invoiceData, createdAt: new Date().toISOString() };
+    let { id: newId, saved } = await insertWithFreeId('invoices insert', 'invoices', 'INV-', maxId + 1, draft);
+
+    // Older databases are missing the `assignedTo` column, which rejects the
+    // whole row. Retry once without it rather than losing the invoice.
+    if (!saved) {
+      const { assignedTo, ...withoutAssignee } = draft;
+      const retry = await insertWithFreeId('invoices insert (without assignedTo)', 'invoices', 'INV-', maxId + 1, withoutAssignee);
+      newId = retry.id;
     }
+
+    const newInvoice = { ...draft, id: newId };
+    setInvoices(prev => [newInvoice, ...prev]);
+    const local = localStorage.getItem('prismora_invoices');
+    const existing = local ? JSON.parse(local) : [];
+    localStorage.setItem('prismora_invoices', JSON.stringify([newInvoice, ...existing]));
     logEvent('invoice_new', `Invoice generated for ${invoiceData.customerName}: ${newId}`, invoiceData.assignedTo, newId);
   };
 
@@ -1255,11 +1497,10 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(exp.id.replace('EXP-', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const newId = `EXP-${maxId + 1}`;
-    const newExpense = { ...expenseData, id: newId, createdAt: new Date().toISOString() };
+    const draft = { ...expenseData, createdAt: new Date().toISOString() };
+    const { id: newId } = await insertWithFreeId('expenses insert', 'expenses', 'EXP-', maxId + 1, draft);
+    const newExpense = { ...draft, id: newId };
     setExpenses(prev => [newExpense, ...prev]);
-    try { await supabase.from('expenses').insert([newExpense]); }
-    catch (err) { console.warn('Failed to insert expense to Supabase.', err); }
     const local = localStorage.getItem('prismora_expenses');
     const existing = local ? JSON.parse(local) : [];
     localStorage.setItem('prismora_expenses', JSON.stringify([newExpense, ...existing]));
@@ -1398,14 +1639,14 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(po.id.replace('PO-', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const newId = `PO-${maxId + 1}`;
-    const newPO = { ...poData, id: newId, status: 'Draft', createdAt: new Date().toISOString() };
+    const draft = { ...poData, status: 'Draft', createdAt: new Date().toISOString() };
+    const { id: newId } = await insertWithFreeId('purchase_orders insert', 'purchase_orders', 'PO-', maxId + 1, draft);
+    const newPO = { ...draft, id: newId };
     setPurchaseOrders(prev => {
       const next = [newPO, ...prev];
       localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
       return next;
     });
-    await persist('purchase_orders insert', supabase.from('purchase_orders').insert([newPO]));
     logEvent('po_created', `Purchase Order ${newId} created for ${poData.vendorName}`, poData.assignedTo, newId);
   };
 
@@ -1434,17 +1675,17 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(g.id.replace('GRN-', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const newId = `GRN-${maxId + 1}`;
-    const newGRN = { ...grnData, id: newId, createdAt: new Date().toISOString() };
+    const draft = { ...grnData, createdAt: new Date().toISOString() };
+    const { id: newId } = await insertWithFreeId('grn insert', 'grn', 'GRN-', maxId + 1, draft);
+    const newGRN = { ...draft, id: newId };
     setGrn(prev => {
       const next = [newGRN, ...prev];
       localStorage.setItem('prismora_grn', JSON.stringify(next));
       return next;
     });
-    try {
-      await supabase.from('grn').insert([newGRN]);
-      if (grnData.poId) updatePurchaseOrderStatus(grnData.poId, 'GRN Done');
-    } catch { if (grnData.poId) updatePurchaseOrderStatus(grnData.poId, 'GRN Done'); }
+    // The PO is marked received whether or not the GRN reached Supabase, so the
+    // two never disagree in this browser.
+    if (grnData.poId) updatePurchaseOrderStatus(grnData.poId, 'GRN Done');
     logEvent('grn_created', `GRN ${newId} received from ${grnData.vendorName}`, grnData.receivedBy, newId);
 
     // Receiving goods creates money owed to the vendor — bump their outstanding
@@ -1653,14 +1894,14 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(c.id.replace('CMP-', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const newId = `CMP-${maxId + 1}`;
-    const newComplaint = { ...complaintData, id: newId, status: 'Registered', createdAt: new Date().toISOString() };
+    const draft = { ...complaintData, status: 'Registered', createdAt: new Date().toISOString() };
+    const { id: newId } = await insertWithFreeId('complaints insert', 'complaints', 'CMP-', maxId + 1, draft);
+    const newComplaint = { ...draft, id: newId };
     setComplaints(prev => {
       const next = [newComplaint, ...prev];
       localStorage.setItem('prismora_complaints', JSON.stringify(next));
       return next;
     });
-    await persist('complaints insert', supabase.from('complaints').insert([newComplaint]));
     logEvent('complaint_registered', `Complaint ${newId}: ${complaintData.complaintType} by ${complaintData.customerName}`, complaintData.assignedTo, newId);
   };
 
