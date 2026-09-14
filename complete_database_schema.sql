@@ -296,6 +296,22 @@ CREATE TABLE IF NOT EXISTS visit_reports (
 
 -- ── 8. TERRITORY MANAGEMENT (MODULE 13) ─────────────────────────────────────
 
+-- sfa_expenses is written by the SFA expense-claim screen but was never in
+-- complete_database_schema.sql, so the table does not exist and every claim
+-- was rejected and kept only in the submitting browser's localStorage.
+CREATE TABLE IF NOT EXISTS sfa_expenses (
+  id TEXT PRIMARY KEY,
+  "userId" TEXT,
+  date TIMESTAMP WITH TIME ZONE,
+  category TEXT DEFAULT '',
+  amount NUMERIC DEFAULT 0,
+  description TEXT DEFAULT '',
+  "receiptName" TEXT DEFAULT '',
+  "receiptData" TEXT DEFAULT '',
+  status TEXT DEFAULT 'Pending',
+  "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS territories (
   "id" TEXT PRIMARY KEY,
   "name" TEXT NOT NULL UNIQUE,
@@ -367,6 +383,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS "dealerId" TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "retailerId" TEXT;
 
 -- Distributor/dealer/retailer self-service orders can carry multiple line items
+-- Contact details captured on the order form. The form payload always carries
+-- these two keys, and PostgREST rejects the WHOLE insert/update (42703) when a
+-- payload names a column that doesn't exist — so omitting them here silently
+-- voided every order write.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "phone" TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "email" TEXT;
+
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "distributorId" TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "dealerId" TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "retailerId" TEXT;
