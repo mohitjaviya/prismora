@@ -1,10 +1,24 @@
 // Builds a combined, running-balance ledger for a distributor, dealer, or
 // retailer from their invoices (debits) and recorded payments (credits).
-export const buildLedgerEntries = (party, invoices = [], payments = []) => {
+export const buildLedgerEntries = (party, invoices = [], payments = [], orders = []) => {
   if (!party) return [];
 
+  // An invoice belongs to this party when the order it was raised against is
+  // linked to them by id. The previous rule compared `customerName` to the
+  // party's name, which orphaned every past invoice the moment a party was
+  // renamed, and merged the accounts of two parties that shared a name.
+  // `orders` is optional so older callers keep the name-matching behaviour.
+  const orderById = new Map(orders.map(o => [o.id, o]));
+  const belongsToParty = (inv) => {
+    const order = inv.orderId ? orderById.get(inv.orderId) : null;
+    const linkedId = order && (order.distributorId || order.dealerId || order.retailerId);
+    if (linkedId) return linkedId === party.id;
+    // Manually raised invoices carry no order link — fall back to the name.
+    return (inv.customerName || '').trim().toLowerCase() === (party.name || '').trim().toLowerCase();
+  };
+
   const debitRows = invoices
-    .filter(inv => (inv.customerName || '').toLowerCase() === (party.name || '').toLowerCase())
+    .filter(belongsToParty)
     .map(inv => ({
       id: `inv-${inv.id}`,
       date: inv.createdAt,

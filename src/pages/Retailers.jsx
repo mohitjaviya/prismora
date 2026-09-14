@@ -33,7 +33,7 @@ const BLANK_FORM = {
 };
 
 export default function Retailers() {
-  const { retailers, addRetailer, updateRetailer, deleteRetailer, dealers, invoices, distributorPayments, addRetailerPayment } = useData();
+  const { retailers, addRetailer, updateRetailer, deleteRetailer, dealers, invoices, distributorPayments, addRetailerPayment, orders } = useData();
   const { user, users, updateUser, deleteUser, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
@@ -95,7 +95,7 @@ export default function Retailers() {
     deleteRetailer(r.id);
   };
 
-  const ledgerEntries = useMemo(() => viewingRetailer ? buildLedgerEntries(viewingRetailer, invoices, distributorPayments) : [], [viewingRetailer, invoices, distributorPayments]);
+  const ledgerEntries = useMemo(() => viewingRetailer ? buildLedgerEntries(viewingRetailer, invoices, distributorPayments, orders) : [], [viewingRetailer, invoices, distributorPayments, orders]);
 
   const handleRecordPayment = (e) => {
     e.preventDefault();
