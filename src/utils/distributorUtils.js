@@ -1,3 +1,17 @@
+// Every distributor, dealer and retailer as one selectable list, each tagged
+// with the tier it came from.
+//
+// Staff roles have full access to the Ledger and Stock screens but are not
+// themselves a party, so they pick whose figures to look at. The tier matters
+// beyond the label: it decides which id field an order carries
+// (distributorId / dealerId / retailerId), so it has to travel with the record
+// rather than being inferred from the signed-in user's role.
+export const allParties = (distributors = [], dealers = [], retailers = []) => [
+  ...distributors.map(p => ({ ...p, partyType: 'Distributor' })),
+  ...dealers.map(p => ({ ...p, partyType: 'Dealer' })),
+  ...retailers.map(p => ({ ...p, partyType: 'Retailer' })),
+];
+
 // Builds a combined, running-balance ledger for a distributor, dealer, or
 // retailer from their invoices (debits) and recorded payments (credits).
 export const buildLedgerEntries = (party, invoices = [], payments = [], orders = []) => {

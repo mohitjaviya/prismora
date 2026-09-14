@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Wallet, ArrowUpCircle, ArrowDownCircle, CreditCard } from 'lucide-react';
-import { buildLedgerEntries } from '../utils/distributorUtils';
+import { buildLedgerEntries, allParties } from '../utils/distributorUtils';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -14,11 +14,24 @@ export default function Ledger() {
   const { invoices, distributorPayments, distributors, dealers, retailers, orders } = useData();
   const { user } = useAuth();
 
-  const party = useMemo(() => {
+  // A partner sees their own account. Staff have full access to this screen but
+  // are not a party themselves, so they choose whose ledger to read — a running
+  // balance only means anything for one account at a time.
+  const isParty = ['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
+  const [selectedPartyId, setSelectedPartyId] = useState('');
+
+  const ownParty = useMemo(() => {
     if (user?.role === 'Dealer') return dealers?.find(d => d.id === user?.dealerId);
     if (user?.role === 'Retailer') return retailers?.find(r => r.id === user?.retailerId);
-    return distributors?.find(d => d.id === user?.distributorId);
+    if (user?.role === 'Distributor') return distributors?.find(d => d.id === user?.distributorId);
+    return null;
   }, [distributors, dealers, retailers, user]);
+
+  const partyOptions = useMemo(
+    () => (isParty ? [] : allParties(distributors, dealers, retailers)),
+    [isParty, distributors, dealers, retailers]
+  );
+  const party = isParty ? ownParty : partyOptions.find(p => p.id === selectedPartyId);
   const entries = useMemo(() => buildLedgerEntries(party, invoices, distributorPayments, orders), [party, invoices, distributorPayments, orders]);
 
   // `outstandingAmount` is a single number kept on the party record and adjusted
@@ -32,15 +45,50 @@ export default function Ledger() {
   const storedBalance = Number(party?.outstandingAmount || 0);
   const drift = Math.round(ledgerBalance - storedBalance);
 
+  const partyPicker = !isParty && (
+    <div className="glass-panel rounded-2xl p-4 border border-white/5">
+      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Viewing ledger for</label>
+      <select
+        value={selectedPartyId}
+        onChange={e => setSelectedPartyId(e.target.value)}
+        className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white"
+      >
+        <option value="" className="bg-brand-primary">Select a distributor, dealer or retailer…</option>
+        {partyOptions.map(p => (
+          <option key={`${p.partyType}-${p.id}`} value={p.id} className="bg-brand-primary">
+            {p.name} — {p.partyType}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
   if (!party) {
     return (
-      <div className="glass-panel rounded-2xl border border-white/5 p-12 text-center text-slate-500">
-        <Wallet size={32} className="mx-auto mb-3 opacity-20" />
-        <p className="text-slate-400 font-medium">Your account profile could not be found.</p>
-        <p className="text-xs mt-2 max-w-sm mx-auto leading-relaxed">
-          Your login is not linked to a distributor, dealer or retailer record. An administrator can fix this
-          from the Distributors, Dealers or Retailers screen.
-        </p>
+      <div className="space-y-6 animate-fade-in-up">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Wallet size={24} className="text-brand-accent" /> Outstanding Ledger
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">Invoices, payments and running balance with Janki Herbals.</p>
+        </div>
+        {partyPicker}
+        <div className="glass-panel rounded-2xl border border-white/5 p-12 text-center text-slate-500">
+          <Wallet size={32} className="mx-auto mb-3 opacity-20" />
+          {isParty ? (
+            <>
+              <p className="text-slate-400 font-medium">Your account profile could not be found.</p>
+              <p className="text-xs mt-2 max-w-sm mx-auto leading-relaxed">
+                Your login is not linked to a distributor, dealer or retailer record. An administrator can fix this
+                from the Distributors, Dealers or Retailers screen.
+              </p>
+            </>
+          ) : partyOptions.length === 0 ? (
+            <p className="text-slate-400 font-medium">No distributors, dealers or retailers have been added yet.</p>
+          ) : (
+            <p className="text-slate-400 font-medium">Choose a party above to see their ledger.</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -53,8 +101,14 @@ export default function Ledger() {
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
           <Wallet size={24} className="text-brand-accent" /> Outstanding Ledger
         </h1>
-        <p className="text-slate-400 text-sm mt-1">Your invoices, payments, and running balance with Janki Herbals.</p>
+        <p className="text-slate-400 text-sm mt-1">
+          {isParty
+            ? 'Your invoices, payments, and running balance with Janki Herbals.'
+            : `Invoices, payments and running balance for ${party.name}.`}
+        </p>
       </div>
+
+      {partyPicker}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="glass-panel rounded-2xl p-4 border border-white/5">

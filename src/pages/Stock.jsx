@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Boxes, Search, CheckCircle, Clock, Package } from 'lucide-react';
 import { aggregateReceived } from '../utils/stockUtils';
+import { allParties } from '../utils/distributorUtils';
 
 
 export default function Stock() {
@@ -10,14 +11,29 @@ export default function Stock() {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
 
+  // A partner sees their own figures. Staff have full access to this screen but
+  // are not a party themselves, so they choose whose stock to look at — without
+  // this they only ever reached the "profile could not be found" dead end.
+  const isParty = ['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
+  const [selectedPartyId, setSelectedPartyId] = useState('');
+
   const distributor = useMemo(() => distributors?.find(d => d.id === user?.distributorId), [distributors, user]);
   const dealer = useMemo(() => dealers?.find(d => d.id === user?.dealerId), [dealers, user]);
   const retailer = useMemo(() => retailers?.find(r => r.id === user?.retailerId), [retailers, user]);
-  const party = user?.role === 'Distributor' ? distributor : user?.role === 'Dealer' ? dealer : user?.role === 'Retailer' ? retailer : null;
+  const ownParty = user?.role === 'Distributor' ? distributor : user?.role === 'Dealer' ? dealer : user?.role === 'Retailer' ? retailer : null;
+
+  const partyOptions = useMemo(
+    () => (isParty ? [] : allParties(distributors, dealers, retailers)),
+    [isParty, distributors, dealers, retailers]
+  );
+  const chosen = useMemo(() => partyOptions.find(p => p.id === selectedPartyId), [partyOptions, selectedPartyId]);
+
+  const party = isParty ? ownParty : chosen;
+  const partyType = isParty ? user?.role : chosen?.partyType;
 
   const { rows, totalUnits, awaitingUnits, orderCount } = useMemo(() => {
     const { byProduct, totalUnits: total, awaitingUnits: awaiting, orderCount: counted } =
-      aggregateReceived(orders, party, user?.role);
+      aggregateReceived(orders, party, partyType);
 
     const catalogByName = new Map((productCatalog || []).map(p => [p.name, p]));
     const built = Object.entries(byProduct)
@@ -36,17 +52,52 @@ export default function Stock() {
       .sort((a, b) => b.received - a.received || a.name.localeCompare(b.name));
 
     return { rows: built, totalUnits: total, awaitingUnits: awaiting, orderCount: counted };
-  }, [orders, party, user, productCatalog, search]);
+  }, [orders, party, partyType, productCatalog, search]);
+
+  const partyPicker = !isParty && (
+    <div className="glass-panel rounded-2xl p-4 border border-white/5">
+      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Viewing stock held by</label>
+      <select
+        value={selectedPartyId}
+        onChange={e => setSelectedPartyId(e.target.value)}
+        className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white"
+      >
+        <option value="" className="bg-brand-primary">Select a distributor, dealer or retailer…</option>
+        {partyOptions.map(p => (
+          <option key={`${p.partyType}-${p.id}`} value={p.id} className="bg-brand-primary">
+            {p.name} — {p.partyType}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 
   if (!party) {
     return (
-      <div className="glass-panel rounded-2xl border border-white/5 p-12 text-center text-slate-500">
-        <Boxes size={32} className="mx-auto mb-3 opacity-20" />
-        <p className="text-slate-400 font-medium">Your account profile could not be found.</p>
-        <p className="text-xs mt-2 max-w-sm mx-auto leading-relaxed">
-          Your login is not linked to a distributor, dealer or retailer record. An administrator can fix this
-          from the Distributors, Dealers or Retailers screen.
-        </p>
+      <div className="space-y-6 animate-fade-in-up">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Boxes size={24} className="text-brand-accent" /> Stock Availability
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">Goods delivered by Janki Herbals, totalled by product.</p>
+        </div>
+        {partyPicker}
+        <div className="glass-panel rounded-2xl border border-white/5 p-12 text-center text-slate-500">
+          <Boxes size={32} className="mx-auto mb-3 opacity-20" />
+          {isParty ? (
+            <>
+              <p className="text-slate-400 font-medium">Your account profile could not be found.</p>
+              <p className="text-xs mt-2 max-w-sm mx-auto leading-relaxed">
+                Your login is not linked to a distributor, dealer or retailer record. An administrator can fix this
+                from the Distributors, Dealers or Retailers screen.
+              </p>
+            </>
+          ) : partyOptions.length === 0 ? (
+            <p className="text-slate-400 font-medium">No distributors, dealers or retailers have been added yet.</p>
+          ) : (
+            <p className="text-slate-400 font-medium">Choose a party above to see what they hold.</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -58,9 +109,13 @@ export default function Stock() {
           <Boxes size={24} className="text-brand-accent" /> Stock Availability
         </h1>
         <p className="text-slate-400 text-sm mt-1">
-          Goods delivered to you by Janki Herbals, totalled by product.
+          {isParty
+            ? 'Goods delivered to you by Janki Herbals, totalled by product.'
+            : `Goods delivered to ${party.name} by Janki Herbals, totalled by product.`}
         </p>
       </div>
+
+      {partyPicker}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="glass-panel rounded-2xl p-4 border border-white/5">
@@ -125,8 +180,8 @@ export default function Stock() {
       </div>
 
       <p className="text-[11px] text-slate-600 leading-relaxed max-w-3xl">
-        These are cumulative totals of what Janki Herbals has delivered to you. The system does not track your own
-        onward sales, so this figure does not reduce as you sell.
+        These are cumulative totals of what Janki Herbals has delivered{isParty ? ' to you' : ''}. The system does not
+        track {isParty ? 'your' : 'their'} own onward sales, so this figure does not reduce as stock is sold on.
       </p>
     </div>
   );

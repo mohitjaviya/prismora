@@ -39,9 +39,12 @@ export const receivedLines = (order) => {
  * Receipt confirmation does not gate the count — it is the partner's own
  * acknowledgement, not a fact about where the goods are — but unconfirmed
  * quantities are reported separately so the partner can act on them.
+ *
+ * `partyType` is the tier of the party being viewed, which is not always the
+ * viewer's own role: staff can open this screen and select any party.
  */
-export const aggregateReceived = (orders = [], party, role) => {
-  const idField = PARTY_ID_FIELD[role];
+export const aggregateReceived = (orders = [], party, partyType) => {
+  const idField = PARTY_ID_FIELD[partyType];
   const byProduct = {};
   let totalUnits = 0, awaitingUnits = 0, orderCount = 0;
 
