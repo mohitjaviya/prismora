@@ -1,38 +1,39 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import DistributorSignup from './pages/DistributorSignup';
-import DealerSignup from './pages/DealerSignup';
-import RetailerSignup from './pages/RetailerSignup';
-import Dashboard from './pages/Dashboard';
-import Leads from './pages/Leads';
-import Orders from './pages/Orders';
-import Geography from './pages/Geography';
-import Settings from './pages/Settings';
-import Customers from './pages/Customers';
-import Profile from './pages/Profile';
-import Accounting from './pages/Accounting';
-import Inventory from './pages/Inventory';
-import Purchases from './pages/Purchases';
-import Distributors from './pages/Distributors';
-import Dealers from './pages/Dealers';
-import Retailers from './pages/Retailers';
-import Complaints from './pages/Complaints';
-import Schemes from './pages/Schemes';
-import Reports from './pages/Reports';
-import AIInsights from './pages/AIInsights';
-import MLLab from './pages/MLLab';
-import SFA from './pages/SFA';
-import DistributorOrders from './pages/DistributorOrders';
-import DealerOrders from './pages/DealerOrders';
-import RetailerOrders from './pages/RetailerOrders';
-import Ledger from './pages/Ledger';
-import Claims from './pages/Claims';
-import Incentives from './pages/Incentives';
-import Stock from './pages/Stock';
-import PriceList from './pages/PriceList';
+const DistributorSignup = lazy(() => import('./pages/DistributorSignup'));
+const DealerSignup = lazy(() => import('./pages/DealerSignup'));
+const RetailerSignup = lazy(() => import('./pages/RetailerSignup'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Leads = lazy(() => import('./pages/Leads'));
+const Orders = lazy(() => import('./pages/Orders'));
+const Geography = lazy(() => import('./pages/Geography'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Customers = lazy(() => import('./pages/Customers'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Accounting = lazy(() => import('./pages/Accounting'));
+const Inventory = lazy(() => import('./pages/Inventory'));
+const Purchases = lazy(() => import('./pages/Purchases'));
+const Distributors = lazy(() => import('./pages/Distributors'));
+const Dealers = lazy(() => import('./pages/Dealers'));
+const Retailers = lazy(() => import('./pages/Retailers'));
+const Complaints = lazy(() => import('./pages/Complaints'));
+const Schemes = lazy(() => import('./pages/Schemes'));
+const Reports = lazy(() => import('./pages/Reports'));
+const AIInsights = lazy(() => import('./pages/AIInsights'));
+const MLLab = lazy(() => import('./pages/MLLab'));
+const SFA = lazy(() => import('./pages/SFA'));
+const DistributorOrders = lazy(() => import('./pages/DistributorOrders'));
+const DealerOrders = lazy(() => import('./pages/DealerOrders'));
+const RetailerOrders = lazy(() => import('./pages/RetailerOrders'));
+const Ledger = lazy(() => import('./pages/Ledger'));
+const Claims = lazy(() => import('./pages/Claims'));
+const Incentives = lazy(() => import('./pages/Incentives'));
+const Stock = lazy(() => import('./pages/Stock'));
+const PriceList = lazy(() => import('./pages/PriceList'));
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -55,8 +56,13 @@ const PermissionGuard = ({ module, children }) => {
   return children;
 };
 
+const RouteFallback = () => (
+  <div className="flex items-center justify-center p-16 text-slate-500 text-sm">Loading…</div>
+);
+
 function AppRoutes() {
   return (
+    <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register-distributor" element={<DistributorSignup />} />
@@ -89,6 +95,7 @@ function AppRoutes() {
         <Route path="profile" element={<Profile />} />
       </Route>
     </Routes>
+    </Suspense>
   );
 }
 
