@@ -19,7 +19,7 @@ export default function SFA() {
     attendance, addAttendanceRecord, updateAttendanceRecord,
     visitReports, addVisitReport,
     sfaExpenses, addSFAExpense, updateSFAExpense,
-    addOrder, productCatalog, territories, orders
+    addOrder, productCatalog, territories, orders, retailers, dealers
   } = useData();
 
   const [activeTab, setActiveTab] = useState('attendance');
@@ -43,7 +43,7 @@ export default function SFA() {
   // ── Forms ───────────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0];
   const [beatForm, setBeatForm] = useState({ executiveId: '', date: todayStr, territory: '', outlets: '' });
-  const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, pitchedProd: '', pitchedQty: '10', pitchedVal: '1500', nextFollowUp: '', notes: '', outcome: 'Visited', notVisitedReason: '' });
+  const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, orderItems: [], nextFollowUp: '', notes: '', outcome: 'Visited', notVisitedReason: '' });
   const [punchNotes, setPunchNotes] = useState('');
   const [expenseForm, setExpenseForm] = useState({ date: todayStr, category: 'Travel', amount: '', description: '', receiptName: '', receiptData: '' });
   const [selectedAttendanceUser, setSelectedAttendanceUser] = useState('');
@@ -142,9 +142,41 @@ export default function SFA() {
   };
 
   // ── Visit Reports ───────────────────────────────────────────────────────
+  // A field visit sells at retail rates, so that is the price to start from.
+  const outletPrice = (name) => {
+    const p = (productCatalog || []).find(c => c.name === name);
+    return Number(p?.retailerPrice ?? p?.mrp ?? 0);
+  };
+
+  const updateOrderItem = (idx, patch) => setVisitForm(prev => ({
+    ...prev,
+    orderItems: prev.orderItems.map((row, i) => {
+      if (i !== idx) return row;
+      const next = { ...row, ...patch };
+      if (patch.name !== undefined) next.unitPrice = outletPrice(patch.name);
+      return next;
+    }),
+  }));
+
+  const addOrderItem = () => setVisitForm(prev => ({
+    ...prev,
+    orderItems: [...prev.orderItems, { name: '', quantity: '', unitPrice: 0 }],
+  }));
+
+  const removeOrderItem = (idx) => setVisitForm(prev => ({
+    ...prev,
+    orderItems: prev.orderItems.filter((_, i) => i !== idx),
+  }));
+
+  const orderLines = (visitForm.orderItems || [])
+    .map(i => ({ name: i.name, quantity: Number(i.quantity || 0), unitPrice: Number(i.unitPrice || 0), total: Number(i.quantity || 0) * Number(i.unitPrice || 0) }))
+    .filter(i => i.name && i.quantity > 0);
+  const orderUnits = orderLines.reduce((sum, i) => sum + i.quantity, 0);
+  const orderValue = orderLines.reduce((sum, i) => sum + i.total, 0);
+
   const handleOpenVisit = (beat, outlet, outcome = 'Visited') => {
     setSelectedBeatForVisit({ beat, outlet });
-    setVisitForm({ outletName: outlet, outletContact: '', productsShown: [], orderPlaced: false, pitchedProd: productCatalog[0]?.name || '', pitchedQty: '10', pitchedVal: '1500', nextFollowUp: '', notes: '', outcome, notVisitedReason: '' });
+    setVisitForm({ outletName: outlet, outletContact: '', productsShown: [], orderPlaced: false, orderItems: [{ name: productCatalog[0]?.name || '', quantity: '', unitPrice: outletPrice(productCatalog[0]?.name) }], nextFollowUp: '', notes: '', outcome, notVisitedReason: '' });
     setIsVisitModalOpen(true);
   };
   const handleVisitSubmit = async (e) => {
@@ -155,10 +187,35 @@ export default function SFA() {
     // it was attempted rather than leaving it indistinguishable from one that
     // was never reached. No order is raised for it.
     let autoOrderId = null;
-    if (!notVisited && visitForm.orderPlaced && visitForm.pitchedProd) {
+    if (!notVisited && visitForm.orderPlaced && orderLines.length > 0) {
+      // The order used to be filled with placeholders — company "Retail Outlet",
+      // city "Field Beat", and the beat's territory put in the state field —
+      // which meant every field order landed in Orders needing to be corrected
+      // by hand. Everything below is either known or left empty.
+      const territory = territories.find(t => t.name === selectedBeatForVisit?.beat?.territory);
+      const outletKey = visitForm.outletName.trim().toLowerCase();
+      const matchedRetailer = retailers?.find(r => r.name?.trim().toLowerCase() === outletKey);
+      const matchedDealer = !matchedRetailer && dealers?.find(d => d.name?.trim().toLowerCase() === outletKey);
+
       // Use the real id addOrder assigns so the visit report links to an order
       // that actually exists (addOrder overrides any id passed to it).
-      autoOrderId = await addOrder({ customerName: visitForm.outletName, companyName: 'Retail Outlet', product: visitForm.pitchedProd, quantity: Number(visitForm.pitchedQty || 1), value: Number(visitForm.pitchedVal || 0), state: selectedBeatForVisit?.beat.territory || '', city: 'Field Beat', status: 'Pending', assignedTo: user.id, date: new Date().toISOString() });
+      autoOrderId = await addOrder({
+        customerName: visitForm.outletName,
+        companyName: matchedRetailer?.name || matchedDealer?.name || '',
+        product: orderLines.length === 1 ? orderLines[0].name : `${orderLines[0].name} +${orderLines.length - 1} more item${orderLines.length > 2 ? 's' : ''}`,
+        items: orderLines.length > 1 ? orderLines : undefined,
+        quantity: orderUnits,
+        value: orderValue,
+        state: territory?.state || matchedRetailer?.state || matchedDealer?.state || '',
+        city: matchedRetailer?.city || matchedDealer?.city || '',
+        phone: visitForm.outletContact || '',
+        email: matchedRetailer?.email || matchedDealer?.email || '',
+        retailerId: matchedRetailer?.id,
+        dealerId: matchedDealer?.id,
+        status: 'Pending',
+        assignedTo: user.id,
+        date: new Date().toISOString(),
+      });
     }
 
     const visitId = await addVisitReport({
@@ -1308,21 +1365,46 @@ export default function SFA() {
                     <input type="checkbox" checked={visitForm.orderPlaced} onChange={e => setVisitForm({ ...visitForm, orderPlaced: e.target.checked })} className="w-5 h-5 rounded accent-brand-accent" />
                   </div>
                   {visitForm.orderPlaced && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 animate-fade-in-up">
-                      <div className="sm:col-span-3">
-                        <label className={lbl}>Product</label>
-                        <select value={visitForm.pitchedProd} onChange={e => setVisitForm({ ...visitForm, pitchedProd: e.target.value })} className={inp}>
-                          {productCatalog.map(p => <option key={p.id} value={p.name} className="bg-brand-primary">{p.name}</option>)}
-                        </select>
+                    <div className="space-y-2 pt-2 animate-fade-in-up">
+                      <p className="text-[10px] text-slate-500">
+                        Add every product the outlet ordered. The order is raised for the total.
+                      </p>
+                      {visitForm.orderItems.map((row, idx) => (
+                        <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                          <div className="col-span-12 sm:col-span-6">
+                            <label className={lbl}>Product</label>
+                            <select value={row.name} onChange={e => updateOrderItem(idx, { name: e.target.value })} className={inp}>
+                              <option value="" className="bg-brand-primary">Select a product…</option>
+                              {productCatalog.map(p => <option key={p.id} value={p.name} className="bg-brand-primary">{p.name}</option>)}
+                            </select>
+                          </div>
+                          <div className="col-span-5 sm:col-span-2">
+                            <label className={lbl}>Qty</label>
+                            <input type="number" min="0" placeholder="0" value={row.quantity} onChange={e => updateOrderItem(idx, { quantity: e.target.value })} className={inp} />
+                          </div>
+                          <div className="col-span-5 sm:col-span-2">
+                            <label className={lbl}>Rate ₹</label>
+                            <input type="number" min="0" value={row.unitPrice} onChange={e => updateOrderItem(idx, { unitPrice: e.target.value })} className={inp} />
+                          </div>
+                          <div className="col-span-2 flex items-center justify-end gap-1 pb-2">
+                            <span className="text-xs font-bold text-white tabular-nums">
+                              ₹{(Number(row.quantity || 0) * Number(row.unitPrice || 0)).toLocaleString('en-IN')}
+                            </span>
+                            {visitForm.orderItems.length > 1 && (
+                              <button type="button" onClick={() => removeOrderItem(idx)} className="text-slate-500 hover:text-rose-400 p-1"><X size={13} /></button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
+                        <button type="button" onClick={addOrderItem} className="text-xs text-brand-accent hover:underline font-bold">+ Add another product</button>
+                        <span className="text-xs text-slate-400">
+                          {orderUnits.toLocaleString('en-IN')} units · <span className="text-white font-bold">₹{orderValue.toLocaleString('en-IN')}</span>
+                        </span>
                       </div>
-                      <div>
-                        <label className={lbl}>Qty</label>
-                        <input type="number" min="1" value={visitForm.pitchedQty} onChange={e => setVisitForm({ ...visitForm, pitchedQty: e.target.value })} className={inp} />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className={lbl}>Total Value (₹)</label>
-                        <input type="number" min="1" value={visitForm.pitchedVal} onChange={e => setVisitForm({ ...visitForm, pitchedVal: e.target.value })} className={inp} />
-                      </div>
+                      {visitForm.orderPlaced && orderLines.length === 0 && (
+                        <p className="text-[11px] text-amber-400">Enter a quantity against at least one product, or untick "Order Placed".</p>
+                      )}
                     </div>
                   )}
                 </div>
