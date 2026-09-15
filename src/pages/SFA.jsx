@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useData } from '../context/DataContext';
+import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { useAuth } from '../context/AuthContext';
 import { isSalesRole, isManagerRole } from '../context/AuthContext';
 import {
@@ -170,6 +171,17 @@ export default function SFA() {
 
   const visitTerritory = territories.find(t => t.name === selectedBeatForVisit?.beat?.territory);
 
+  // The territory's own districts come first because they are the likely ones,
+  // followed by the rest of that state so a rep is never blocked by a district
+  // nobody configured.
+  const cityOptions = useMemo(() => {
+    const ofTerritory = visitTerritory?.districts || [];
+    const ofState = visitTerritory?.state ? (STATE_DISTRICTS[visitTerritory.state] || []) : [];
+    return [...new Set([...ofTerritory, ...ofState])];
+  }, [visitTerritory]);
+
+  const [cityIsOther, setCityIsOther] = useState(false);
+
   const orderLines = (visitForm.orderItems || [])
     .map(i => ({ name: i.name, quantity: Number(i.quantity || 0), unitPrice: Number(i.unitPrice || 0), total: Number(i.quantity || 0) * Number(i.unitPrice || 0) }))
     .filter(i => i.name && i.quantity > 0);
@@ -207,6 +219,7 @@ export default function SFA() {
       outcome,
       notVisitedReason: '',
     });
+    setCityIsOther(false);
     setIsVisitModalOpen(true);
   };
   const handleVisitSubmit = async (e) => {
@@ -237,6 +250,7 @@ export default function SFA() {
         quantity: orderUnits,
         value: orderValue,
         state: territory?.state || matchedRetailer?.state || matchedDealer?.state || '',
+        territory: selectedBeatForVisit?.beat?.territory || territory?.name || '',
         city: visitForm.outletCity || matchedRetailer?.city || matchedDealer?.city || '',
         phone: visitForm.outletContact || '',
         email: visitForm.outletEmail || matchedRetailer?.email || matchedDealer?.email || '',
@@ -1449,18 +1463,39 @@ export default function SFA() {
                           </div>
                           <div>
                             <label className={lbl}>City *</label>
-                            <input
-                              type="text" required list="visit-city-options"
-                              placeholder={visitTerritory?.districts?.[0] || 'City or town'}
-                              value={visitForm.outletCity}
-                              onChange={e => setVisitForm({ ...visitForm, outletCity: e.target.value })}
-                              className={inp}
-                            />
-                            <datalist id="visit-city-options">
-                              {(visitTerritory?.districts || []).map(d => <option key={d} value={d} />)}
-                            </datalist>
+                            {cityOptions.length > 0 && !cityIsOther ? (
+                              <select
+                                required
+                                value={visitForm.outletCity}
+                                onChange={e => {
+                                  if (e.target.value === '__other__') { setCityIsOther(true); setVisitForm({ ...visitForm, outletCity: '' }); return; }
+                                  setVisitForm({ ...visitForm, outletCity: e.target.value });
+                                }}
+                                className={inp}
+                                style={{ colorScheme: 'dark' }}
+                              >
+                                <option value="" className="bg-brand-primary">Select a city…</option>
+                                {cityOptions.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
+                                <option value="__other__" className="bg-brand-primary">Other — type it in</option>
+                              </select>
+                            ) : (
+                              <div className="flex gap-2">
+                                <input
+                                  type="text" required autoFocus
+                                  placeholder="City or town"
+                                  value={visitForm.outletCity}
+                                  onChange={e => setVisitForm({ ...visitForm, outletCity: e.target.value })}
+                                  className={inp}
+                                />
+                                {cityOptions.length > 0 && (
+                                  <button type="button" onClick={() => { setCityIsOther(false); setVisitForm({ ...visitForm, outletCity: '' }); }} className="px-3 text-xs text-slate-400 hover:text-white whitespace-nowrap">Back to list</button>
+                                )}
+                              </div>
+                            )}
                             <p className="text-[10px] text-slate-500 mt-1">
-                              {visitTerritory?.state ? `State is taken from ${visitTerritory.name} as ${visitTerritory.state}.` : 'No territory matched — the state will be left empty.'}
+                              {visitTerritory?.state
+                                ? `Territory ${visitTerritory.name} — state recorded as ${visitTerritory.state}.`
+                                : 'No territory matched this beat — state and territory will be left empty.'}
                             </p>
                           </div>
                           <div>
@@ -1482,7 +1517,7 @@ export default function SFA() {
                   )}
                 </div>
                 </>)}
-                <div>
+                <div className="sm:col-span-2">
                   <label className={lbl}>Next Follow-up</label>
                   <input type="date" value={visitForm.nextFollowUp} onChange={e => setVisitForm({ ...visitForm, nextFollowUp: e.target.value })} className={inp} />
                 </div>

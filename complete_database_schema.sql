@@ -390,6 +390,10 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS "orderCreated" BOOLEAN DEFAULT false;
 -- find its order by id; matching on the customer name can remove the wrong one.
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "leadId" TEXT;
 
+-- Territory the order belongs to. A beat already knows this; without the column
+-- a field order loses it and coverage has to infer it from the state.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "territory" TEXT;
+
 -- Contact details captured on the order form. The form payload always carries
 -- these two keys, and PostgREST rejects the WHOLE insert/update (42703) when a
 -- payload names a column that doesn't exist — so omitting them here silently
