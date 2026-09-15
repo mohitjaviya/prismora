@@ -394,6 +394,21 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS "leadId" TEXT;
 -- a field order loses it and coverage has to infer it from the state.
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "territory" TEXT;
 
+-- Where a consignment actually goes. The partner's own address is their
+-- registered one; an order often ships somewhere else (a godown, or the shop
+-- an order was taken in).
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "deliveryAddress" TEXT DEFAULT '';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "deliveryPincode" TEXT DEFAULT '';
+
+-- Registered delivery address for each channel partner. Vendors already had
+-- one; the parties we deliver to did not.
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS "address" TEXT DEFAULT '';
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS "pincode" TEXT DEFAULT '';
+ALTER TABLE dealers      ADD COLUMN IF NOT EXISTS "address" TEXT DEFAULT '';
+ALTER TABLE dealers      ADD COLUMN IF NOT EXISTS "pincode" TEXT DEFAULT '';
+ALTER TABLE retailers    ADD COLUMN IF NOT EXISTS "address" TEXT DEFAULT '';
+ALTER TABLE retailers    ADD COLUMN IF NOT EXISTS "pincode" TEXT DEFAULT '';
+
 -- Contact details captured on the order form. The form payload always carries
 -- these two keys, and PostgREST rejects the WHOLE insert/update (42703) when a
 -- payload names a column that doesn't exist — so omitting them here silently

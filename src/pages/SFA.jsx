@@ -44,7 +44,7 @@ export default function SFA() {
   // ── Forms ───────────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0];
   const [beatForm, setBeatForm] = useState({ executiveId: '', date: todayStr, territory: '', outlets: '' });
-  const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, orderItems: [], outletCompany: '', outletCity: '', outletEmail: '', nextFollowUp: '', notes: '', outcome: 'Visited', notVisitedReason: '' });
+  const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, orderItems: [], outletCompany: '', outletCity: '', outletEmail: '', outletAddress: '', outletPincode: '', nextFollowUp: '', notes: '', outcome: 'Visited', notVisitedReason: '' });
   const [punchNotes, setPunchNotes] = useState('');
   const [expenseForm, setExpenseForm] = useState({ date: todayStr, category: 'Travel', amount: '', description: '', receiptName: '', receiptData: '' });
   const [selectedAttendanceUser, setSelectedAttendanceUser] = useState('');
@@ -214,6 +214,8 @@ export default function SFA() {
       outletCompany: known?.name || outlet || '',
       outletCity: known?.city || (territory?.districts?.length === 1 ? territory.districts[0] : ''),
       outletEmail: known?.email || '',
+      outletAddress: known?.address || '',
+      outletPincode: known?.pincode || '',
       nextFollowUp: '',
       notes: '',
       outcome,
@@ -254,6 +256,8 @@ export default function SFA() {
         city: visitForm.outletCity || matchedRetailer?.city || matchedDealer?.city || '',
         phone: visitForm.outletContact || '',
         email: visitForm.outletEmail || matchedRetailer?.email || matchedDealer?.email || '',
+        deliveryAddress: visitForm.outletAddress || matchedRetailer?.address || matchedDealer?.address || '',
+        deliveryPincode: visitForm.outletPincode || matchedRetailer?.pincode || matchedDealer?.pincode || '',
         retailerId: matchedRetailer?.id,
         dealerId: matchedDealer?.id,
         status: 'Pending',
@@ -1505,6 +1509,15 @@ export default function SFA() {
                           <div>
                             <label className={lbl}>Email</label>
                             <input type="email" placeholder="Optional" value={visitForm.outletEmail} onChange={e => setVisitForm({ ...visitForm, outletEmail: e.target.value })} className={inp} />
+                          </div>
+                          <div>
+                            <label className={lbl}>Pincode</label>
+                            <input type="text" inputMode="numeric" maxLength={6} value={visitForm.outletPincode} onChange={e => setVisitForm({ ...visitForm, outletPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className={inp} />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className={lbl}>Delivery address</label>
+                            <textarea rows="2" value={visitForm.outletAddress} onChange={e => setVisitForm({ ...visitForm, outletAddress: e.target.value })} placeholder="Shop number, street, area" className={inp + ' resize-none'} />
+                            <p className="text-[10px] text-slate-500 mt-1">Where this order gets delivered. Dispatch cannot send goods to a city alone.</p>
                           </div>
                         </div>
                         {matchOutlet(visitForm.outletName) && (

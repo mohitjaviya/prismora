@@ -85,7 +85,8 @@ const persist = async (label, query) => {
  */
 const ORDER_COLUMNS = [
   'id', 'customerName', 'companyName', 'product', 'quantity', 'value',
-  'state', 'city', 'territory', 'status', 'assignedTo', 'date', 'createdAt',
+  'state', 'city', 'territory', 'deliveryAddress', 'deliveryPincode',
+  'status', 'assignedTo', 'date', 'createdAt',
   'phone', 'email',
   'distributorId', 'dealerId', 'retailerId', 'items',
   'receivedByDistributor', 'receivedAt',

@@ -243,7 +243,7 @@ const Orders = () => {
 
   const [formData, setFormData] = useState({
     customerName: '', companyName: '', product: '', quantity: '', value: '',
-    state: '', city: '', status: 'Pending',
+    state: '', city: '', deliveryAddress: '', deliveryPincode: '', status: 'Pending',
     assignedTo: isSalesRole(user?.role) ? user.id : '',
     date: '', phone: '', email: ''
   });
@@ -331,6 +331,10 @@ const Orders = () => {
         email: p.email || prev.email || '',
         state: p.state || prev.state || '',
         city: p.city || prev.city || '',
+        // Their registered address is the default, not a lock — a consignment
+        // often goes to a godown rather than the office on file.
+        deliveryAddress: p.address || prev.deliveryAddress || '',
+        deliveryPincode: p.pincode || prev.deliveryPincode || '',
         distributorId: p.partyType === 'Distributor' ? p.id : undefined,
         dealerId: p.partyType === 'Dealer' ? p.id : undefined,
         retailerId: p.partyType === 'Retailer' ? p.id : undefined,
@@ -409,7 +413,7 @@ const Orders = () => {
       setIsCustomProduct(false);
       setFormData({
         customerName: '', companyName: '', product: '', quantity: '', value: '',
-        state: '', city: '', status: 'Pending',
+        state: '', city: '', deliveryAddress: '', deliveryPincode: '', status: 'Pending',
         assignedTo: isSalesRole(user?.role) ? user.id : '',
         date: new Date().toISOString().split('T')[0],
         phone: '', email: ''
@@ -1050,6 +1054,33 @@ const Orders = () => {
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
                   <input type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Pincode</label>
+                  <input type="text" inputMode="numeric" maxLength={6} value={formData.deliveryPincode || ''} onChange={e => setFormData({ ...formData, deliveryPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Delivery Address</label>
+                  <textarea
+                    rows="2"
+                    value={formData.deliveryAddress || ''}
+                    onChange={e => setFormData({ ...formData, deliveryAddress: e.target.value })}
+                    placeholder="Building, street, area — where this consignment should be delivered"
+                    className="w-full glass-input rounded-lg px-4 py-2.5 text-white resize-none"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Dispatch cannot deliver to a city alone. Choosing a channel partner fills in their registered
+                    address; change it here if this consignment goes somewhere else.
+                  </p>
+                  {/* Warned rather than blocked: orders raised before addresses
+                      were recorded have none, and refusing to move them would
+                      strand work that is otherwise fine. */}
+                  {!formData.deliveryAddress?.trim() && ['Ready for Dispatch', 'Shipped', 'Delivered'].includes(formData.status) && (
+                    <p className="mt-2 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                      This order is at the <strong>{formData.status}</strong> stage with no delivery address. Whoever
+                      carries it has only {formData.city || 'a city'}{formData.state ? `, ${formData.state}` : ''} to go on.
+                    </p>
+                  )}
                 </div>
 
                 {!isSalesRole(user?.role) && (
