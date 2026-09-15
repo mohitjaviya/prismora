@@ -32,6 +32,33 @@ clearStaleCaches();
 
 // Synchronously hydrate state from the browser's cached copy so the UI renders
 // instantly on load; fetchData() then refreshes from Supabase in the background.
+const CACHE_KEYS_BY_TABLE = {
+  attendance: 'prismora_attendance',
+  beat_plans: 'prismora_beat_plans',
+  complaints: 'prismora_complaints',
+  credit_notes: 'prismora_credit_notes',
+  dealers: 'prismora_dealers',
+  distributor_incentives: 'prismora_distributor_incentives',
+  distributor_payments: 'prismora_distributor_payments',
+  distributors: 'prismora_distributors',
+  expenses: 'prismora_expenses',
+  grn: 'prismora_grn',
+  inventory: 'prismora_inventory',
+  invoices: 'prismora_invoices',
+  leads: 'prismora_leads',
+  orders: 'prismora_orders',
+  product_catalog: 'prismora_product_catalog',
+  purchase_orders: 'prismora_purchase_orders',
+  purchase_returns: 'prismora_purchase_returns',
+  retailers: 'prismora_retailers',
+  scheme_claims: 'prismora_scheme_claims',
+  schemes: 'prismora_schemes',
+  territories: 'prismora_territories',
+  vendor_payments: 'prismora_vendor_payments',
+  vendors: 'prismora_vendors',
+  visit_reports: 'prismora_visit_reports',
+};
+
 const lsInit = (key) => {
   try {
     const v = localStorage.getItem(key);
@@ -359,6 +386,25 @@ export const DataProvider = ({ children }) => {
   }, []);
 
   const fetchData = async () => {
+    // A load must not undo something the user did while it was still running.
+    // StrictMode runs this effect twice in development, and the walk through
+    // ~20 tables takes many seconds either way — so a pass that began before
+    // the user acted can still be resolving afterwards, and would put the row
+    // it read earlier back on screen. That looks exactly like a save being
+    // rejected, which is how it was reported.
+    //
+    // Every mutation writes its cache key synchronously, so a key that changed
+    // since this pass started marks a table the user has touched: leave it be.
+    const startedWith = {};
+    Object.values(CACHE_KEYS_BY_TABLE).forEach(k => {
+      try { startedWith[k] = localStorage.getItem(k); } catch { startedWith[k] = null; }
+    });
+    const applyFetched = (key, setter, value) => {
+      try {
+        if (localStorage.getItem(key) !== startedWith[key]) return;
+      } catch { /* storage blocked — nothing could have been written either */ }
+      setter(value);
+    };
     // ── Original fetches ──────────────────────────────────────────────────
     // Fetch Leads with local merge fallback
     let fetchedLeads = [];
@@ -384,7 +430,7 @@ export const DataProvider = ({ children }) => {
       fetchedLeads = DEFAULT_LEADS;
       localStorage.setItem('prismora_leads', JSON.stringify(fetchedLeads));
     }
-    setLeads(fetchedLeads);
+    applyFetched('prismora_leads', setLeads, fetchedLeads);
 
     // Fetch Orders with local merge fallback
     let fetchedOrders = [];
@@ -410,7 +456,7 @@ export const DataProvider = ({ children }) => {
       fetchedOrders = DEFAULT_ORDERS;
       localStorage.setItem('prismora_orders', JSON.stringify(fetchedOrders));
     }
-    setOrders(fetchedOrders);
+    applyFetched('prismora_orders', setOrders, fetchedOrders);
 
     const { data: eventsData } = await supabase.from('events').select('*').order('timestamp', { ascending: false });
     if (eventsData) setEventLog(eventsData);
@@ -447,8 +493,8 @@ export const DataProvider = ({ children }) => {
       status: p.status || 'Active',
       createdAt: p.createdAt || new Date().toISOString()
     }));
-    setProductCatalog(normalizedCatalog);
-    setProducts(normalizedCatalog.map(p => p.name));
+    applyFetched('prismora_product_catalog', setProductCatalog, normalizedCatalog);
+    applyFetched('prismora_product_catalog', setProducts, normalizedCatalog.map(p => p.name));
     localStorage.setItem('prismora_product_catalog', JSON.stringify(normalizedCatalog));
 
     // Fetch Invoices with fallback
@@ -485,7 +531,7 @@ export const DataProvider = ({ children }) => {
       return inv;
     });
 
-    setInvoices(processedInvoices);
+    applyFetched('prismora_invoices', setInvoices, processedInvoices);
     localStorage.setItem('prismora_invoices', JSON.stringify(processedInvoices));
 
     // ── Credit Notes ──
@@ -502,7 +548,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_credit_notes');
       fetchedCreditNotes = local ? JSON.parse(local) : [];
     }
-    setCreditNotes(fetchedCreditNotes);
+    applyFetched('prismora_credit_notes', setCreditNotes, fetchedCreditNotes);
 
     // Async update transitioned invoices back to Supabase
     processedInvoices.forEach(async (inv) => {
@@ -531,7 +577,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_expenses');
       fetchedExpenses = local ? JSON.parse(local) : [];
     }
-    setExpenses(fetchedExpenses);
+    applyFetched('prismora_expenses', setExpenses, fetchedExpenses);
 
     // ── Phase 1 fetches — localStorage-backed fallbacks ──────────────────
 
@@ -556,7 +602,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_inventory');
       fetchedInventory = local ? JSON.parse(local) : [];
     }
-    setInventory(fetchedInventory);
+    applyFetched('prismora_inventory', setInventory, fetchedInventory);
 
     // ── Vendors ──
     let fetchedVendors = [];
@@ -576,7 +622,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_vendors');
       fetchedVendors = local ? JSON.parse(local) : [];
     }
-    setVendors(fetchedVendors);
+    applyFetched('prismora_vendors', setVendors, fetchedVendors);
 
     // ── Vendor Payments ──
     let fetchedVendorPayments = [];
@@ -592,7 +638,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_vendor_payments');
       fetchedVendorPayments = local ? JSON.parse(local) : [];
     }
-    setVendorPayments(fetchedVendorPayments);
+    applyFetched('prismora_vendor_payments', setVendorPayments, fetchedVendorPayments);
 
     // ── Purchase Returns ──
     let fetchedReturns = [];
@@ -608,7 +654,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_purchase_returns');
       fetchedReturns = local ? JSON.parse(local) : [];
     }
-    setPurchaseReturns(fetchedReturns);
+    applyFetched('prismora_purchase_returns', setPurchaseReturns, fetchedReturns);
 
     // ── Purchase Orders ──
     let fetchedPOs = [];
@@ -628,7 +674,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_purchase_orders');
       fetchedPOs = local ? JSON.parse(local) : [];
     }
-    setPurchaseOrders(fetchedPOs);
+    applyFetched('prismora_purchase_orders', setPurchaseOrders, fetchedPOs);
 
     // ── GRN ──
     let fetchedGRN = [];
@@ -648,7 +694,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_grn');
       fetchedGRN = local ? JSON.parse(local) : [];
     }
-    setGrn(fetchedGRN);
+    applyFetched('prismora_grn', setGrn, fetchedGRN);
 
     // ── Distributors ──
     let fetchedDist = [];
@@ -668,7 +714,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_distributors');
       fetchedDist = local ? JSON.parse(local) : [];
     }
-    setDistributors(fetchedDist);
+    applyFetched('prismora_distributors', setDistributors, fetchedDist);
 
     // ── Dealers ──
     let fetchedDealers = [];
@@ -688,7 +734,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_dealers');
       fetchedDealers = local ? JSON.parse(local) : [];
     }
-    setDealers(fetchedDealers);
+    applyFetched('prismora_dealers', setDealers, fetchedDealers);
 
     // ── Retailers ──
     let fetchedRetailers = [];
@@ -708,7 +754,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_retailers');
       fetchedRetailers = local ? JSON.parse(local) : [];
     }
-    setRetailers(fetchedRetailers);
+    applyFetched('prismora_retailers', setRetailers, fetchedRetailers);
 
     // ── Schemes ──
     let fetchedSchemes = [];
@@ -728,7 +774,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_schemes');
       fetchedSchemes = local ? JSON.parse(local) : [];
     }
-    setSchemes(fetchedSchemes);
+    applyFetched('prismora_schemes', setSchemes, fetchedSchemes);
 
     try {
       const { data, error } = await supabase.from('complaints').select('*').order('createdAt', { ascending: false });
@@ -737,17 +783,17 @@ export const DataProvider = ({ children }) => {
       if (fetchedComplaints.length === 0) {
         const local = localStorage.getItem('prismora_complaints');
         const finalComplaints = local ? JSON.parse(local) : DEFAULT_COMPLAINTS;
-        setComplaints(finalComplaints);
+        applyFetched('prismora_complaints', setComplaints, finalComplaints);
         localStorage.setItem('prismora_complaints', JSON.stringify(finalComplaints));
       } else {
-        setComplaints(fetchedComplaints);
+        applyFetched('prismora_complaints', setComplaints, fetchedComplaints);
       }
     } catch {
       // A failed read is not an empty table. Falling back to DEFAULT_* here is
       // what put seeded demo rows on screen in place of real records — and then
       // wrote them to localStorage, making the swap look permanent.
       const local = localStorage.getItem('prismora_complaints');
-      setComplaints(local ? JSON.parse(local) : []);
+      applyFetched('prismora_complaints', setComplaints, local ? JSON.parse(local) : []);
     }
 
     // ── Territories ──
@@ -768,7 +814,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_territories');
       fetchedTerritories = local ? JSON.parse(local) : [];
     }
-    setTerritories(fetchedTerritories);
+    applyFetched('prismora_territories', setTerritories, fetchedTerritories);
 
     // ── SFA Beat Plans ──
     let fetchedBeats = [];
@@ -788,7 +834,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_beat_plans');
       fetchedBeats = local ? JSON.parse(local) : [];
     }
-    setBeatPlans(fetchedBeats);
+    applyFetched('prismora_beat_plans', setBeatPlans, fetchedBeats);
 
     // ── SFA Attendance ──
     let fetchedAttendance = [];
@@ -808,7 +854,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_attendance');
       fetchedAttendance = local ? JSON.parse(local) : [];
     }
-    setAttendance(fetchedAttendance);
+    applyFetched('prismora_attendance', setAttendance, fetchedAttendance);
 
     // ── SFA Visit Reports ──
     let fetchedVisits = [];
@@ -828,7 +874,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_visit_reports');
       fetchedVisits = local ? JSON.parse(local) : [];
     }
-    setVisitReports(fetchedVisits);
+    applyFetched('prismora_visit_reports', setVisitReports, fetchedVisits);
 
     // ── Distributor Payments ──
     let fetchedPayments = [];
@@ -844,7 +890,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_distributor_payments');
       fetchedPayments = local ? JSON.parse(local) : [];
     }
-    setDistributorPayments(fetchedPayments);
+    applyFetched('prismora_distributor_payments', setDistributorPayments, fetchedPayments);
 
     // ── Scheme Claims ──
     let fetchedClaims = [];
@@ -860,7 +906,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_scheme_claims');
       fetchedClaims = local ? JSON.parse(local) : [];
     }
-    setSchemeClaims(fetchedClaims);
+    applyFetched('prismora_scheme_claims', setSchemeClaims, fetchedClaims);
 
     // ── Distributor Incentives ──
     let fetchedIncentives = [];
@@ -876,7 +922,7 @@ export const DataProvider = ({ children }) => {
       const local = localStorage.getItem('prismora_distributor_incentives');
       fetchedIncentives = local ? JSON.parse(local) : [];
     }
-    setDistributorIncentives(fetchedIncentives);
+    applyFetched('prismora_distributor_incentives', setDistributorIncentives, fetchedIncentives);
   };
 
   // A backfill used to run here, uploading records that existed only in this
