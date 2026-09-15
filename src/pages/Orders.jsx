@@ -40,7 +40,7 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, distributors, dealers, retailers, productCatalog, territories } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, distributors, dealers, retailers, productCatalog } = useData();
   const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -1050,31 +1050,6 @@ const Orders = () => {
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
                   <input type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Territory</label>
-                  <select
-                    value={formData.territory || ''}
-                    onChange={e => {
-                      // Selecting a territory settles the state too — they are
-                      // recorded together on the territory and disagreeing is
-                      // what makes coverage figures wrong.
-                      const t = territories.find(x => x.name === e.target.value);
-                      setFormData(prev => ({ ...prev, territory: e.target.value, state: t?.state || prev.state }));
-                    }}
-                    className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
-                    style={{ colorScheme: 'dark' }}
-                  >
-                    <option value="" className="bg-brand-primary text-slate-500">-- Not set --</option>
-                    {(territories || []).map(t => (
-                      <option key={t.id} value={t.name} className="bg-brand-primary">{t.name} ({t.state})</option>
-                    ))}
-                  </select>
-                  {formData.state && formData.territory && territories.find(x => x.name === formData.territory)?.state !== formData.state && (
-                    <p className="mt-1 text-[11px] text-amber-400">
-                      This territory sits in {territories.find(x => x.name === formData.territory)?.state}, not {formData.state}.
-                    </p>
-                  )}
                 </div>
 
                 {!isSalesRole(user?.role) && (
