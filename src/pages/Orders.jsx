@@ -248,35 +248,106 @@ const Orders = () => {
     date: '', phone: '', email: ''
   });
 
-  // Every distributor, dealer and retailer in one list, so an order can be bound
-  // to a partner by picking them rather than by typing their name exactly.
-  const partyList = useMemo(() => allParties(distributors, dealers, retailers), [distributors, dealers, retailers]);
+  // Who an order can be for.
+  //
+  // There is no customers table in this system — a customer is just a name on
+  // an order, enriched from leads. So the list has to be assembled from three
+  // places, because a first-time customer who came from a lead is not a channel
+  // partner and exists nowhere else:
+  //   - channel partners, which also bind the order to their portal and pricing
+  //   - leads, which is where a brand-new customer starts
+  //   - names already used on past orders, for repeat business
+  const customerOptions = useMemo(() => {
+    const parties = allParties(distributors, dealers, retailers).map(p => ({
+      key: `party:${p.id}`, group: `${p.partyType}s`, label: p.name, kind: 'party', ref: p,
+    }));
+
+    const taken = new Set(parties.map(p => p.label.trim().toLowerCase()).filter(Boolean));
+
+    const leadOpts = (leads || [])
+      .filter(l => l.name && !taken.has(l.name.trim().toLowerCase()))
+      .map(l => {
+        taken.add(l.name.trim().toLowerCase());
+        return {
+          key: `lead:${l.id}`, group: 'From leads', kind: 'lead', ref: l,
+          label: l.company ? `${l.name} — ${l.company}` : l.name,
+        };
+      });
+
+    const pastOpts = [];
+    (orders || []).forEach(o => {
+      const name = (o.customerName || '').trim();
+      if (!name || taken.has(name.toLowerCase())) return;
+      taken.add(name.toLowerCase());
+      pastOpts.push({ key: `past:${name}`, group: 'Previous customers', label: name, kind: 'past', ref: o });
+    });
+
+    return [...parties, ...leadOpts, ...pastOpts];
+  }, [distributors, dealers, retailers, leads, orders]);
+
+  const [customerChoice, setCustomerChoice] = useState('');
   const boundPartyId = formData.distributorId || formData.dealerId || formData.retailerId || '';
 
-  const selectParty = (id) => {
-    if (!id) {
-      // Back to a one-off customer: drop the link and let the name be typed.
-      setFormData(prev => ({ ...prev, distributorId: undefined, dealerId: undefined, retailerId: undefined }));
+  const selectCustomer = (key) => {
+    setCustomerChoice(key);
+    const clearLinks = { distributorId: undefined, dealerId: undefined, retailerId: undefined };
+
+    if (!key) { setFormData(prev => ({ ...prev, ...clearLinks })); return; }
+    const opt = customerOptions.find(o => o.key === key);
+    if (!opt) return;
+
+    if (opt.kind === 'party') {
+      const p = opt.ref;
+      setFormData(prev => ({
+        ...prev,
+        customerName: p.name,
+        companyName: p.name,
+        phone: p.phone || prev.phone || '',
+        email: p.email || prev.email || '',
+        state: p.state || prev.state || '',
+        city: p.city || prev.city || '',
+        distributorId: p.partyType === 'Distributor' ? p.id : undefined,
+        dealerId: p.partyType === 'Dealer' ? p.id : undefined,
+        retailerId: p.partyType === 'Retailer' ? p.id : undefined,
+      }));
       return;
     }
-    const p = partyList.find(x => x.id === id);
-    if (!p) return;
+
+    if (opt.kind === 'lead') {
+      const l = opt.ref;
+      const interest = Array.isArray(l.productInterest) ? l.productInterest[0] : (l.productInterest || '');
+      setFormData(prev => ({
+        ...prev,
+        ...clearLinks,
+        customerName: l.name,
+        companyName: l.company || '',
+        phone: l.phone || '',
+        email: l.email || '',
+        state: l.state || prev.state || '',
+        city: l.city || prev.city || '',
+        product: prev.product || interest || '',
+        value: prev.value || l.dealValue || '',
+      }));
+      return;
+    }
+
+    // A previous customer: carry forward what the last order recorded about them.
+    const o = opt.ref;
     setFormData(prev => ({
       ...prev,
-      customerName: p.name,
-      companyName: p.name,
-      phone: p.phone || prev.phone || '',
-      email: p.email || prev.email || '',
-      state: p.state || prev.state || '',
-      city: p.city || prev.city || '',
-      distributorId: p.partyType === 'Distributor' ? p.id : undefined,
-      dealerId: p.partyType === 'Dealer' ? p.id : undefined,
-      retailerId: p.partyType === 'Retailer' ? p.id : undefined,
+      ...clearLinks,
+      customerName: o.customerName || '',
+      companyName: o.companyName || '',
+      phone: o.phone || '',
+      email: o.email || '',
+      state: o.state || prev.state || '',
+      city: o.city || prev.city || '',
     }));
   };
 
   const handleOpenModal = (order = null) => {
     setStatusError('');
+    setCustomerChoice('');
     if (order) {
       setEditingOrder(order);
       setFormData({
@@ -659,26 +730,27 @@ const Orders = () => {
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Customer</label>
                 <select
-                  value={boundPartyId}
-                  onChange={e => selectParty(e.target.value)}
+                  value={boundPartyId ? `party:${boundPartyId}` : customerChoice}
+                  onChange={e => selectCustomer(e.target.value)}
                   className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent"
                   style={{ colorScheme: 'dark' }}
                 >
-                  <option value="" className="bg-brand-primary">One-off customer — type the name below</option>
-                  {['Distributor', 'Dealer', 'Retailer'].map(tier => {
-                    const inTier = partyList.filter(p => p.partyType === tier);
-                    if (inTier.length === 0) return null;
+                  <option value="" className="bg-brand-primary">New customer — type the name below</option>
+                  {['Distributors', 'Dealers', 'Retailers', 'From leads', 'Previous customers'].map(group => {
+                    const inGroup = customerOptions.filter(o => o.group === group);
+                    if (inGroup.length === 0) return null;
                     return (
-                      <optgroup key={tier} label={`${tier}s`}>
-                        {inTier.map(p => (
-                          <option key={p.id} value={p.id} className="bg-brand-primary">{p.name}</option>
+                      <optgroup key={group} label={group}>
+                        {inGroup.map(o => (
+                          <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>
                         ))}
                       </optgroup>
                     );
                   })}
                 </select>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  Pick an existing partner so the order reaches their portal, ledger and stock. Leave as one-off for anyone else.
+                  Channel partners bind the order to their portal, ledger and tier pricing. Leads and previous
+                  customers just fill in their details. Choose "New customer" for anyone not listed.
                 </p>
               </div>
 
