@@ -43,7 +43,7 @@ export default function SFA() {
   // ── Forms ───────────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0];
   const [beatForm, setBeatForm] = useState({ executiveId: '', date: todayStr, territory: '', outlets: '' });
-  const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, orderItems: [], nextFollowUp: '', notes: '', outcome: 'Visited', notVisitedReason: '' });
+  const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, orderItems: [], outletCompany: '', outletCity: '', outletEmail: '', nextFollowUp: '', notes: '', outcome: 'Visited', notVisitedReason: '' });
   const [punchNotes, setPunchNotes] = useState('');
   const [expenseForm, setExpenseForm] = useState({ date: todayStr, category: 'Travel', amount: '', description: '', receiptName: '', receiptData: '' });
   const [selectedAttendanceUser, setSelectedAttendanceUser] = useState('');
@@ -168,15 +168,45 @@ export default function SFA() {
     orderItems: prev.orderItems.filter((_, i) => i !== idx),
   }));
 
+  const visitTerritory = territories.find(t => t.name === selectedBeatForVisit?.beat?.territory);
+
   const orderLines = (visitForm.orderItems || [])
     .map(i => ({ name: i.name, quantity: Number(i.quantity || 0), unitPrice: Number(i.unitPrice || 0), total: Number(i.quantity || 0) * Number(i.unitPrice || 0) }))
     .filter(i => i.name && i.quantity > 0);
   const orderUnits = orderLines.reduce((sum, i) => sum + i.quantity, 0);
   const orderValue = orderLines.reduce((sum, i) => sum + i.total, 0);
 
+  // An outlet on a beat is only a name, so nothing is known about it unless it
+  // happens to be a registered retailer or dealer. Where it is, use their
+  // record; where it is not, the rep fills the gaps in the form.
+  const matchOutlet = (name) => {
+    const key = (name || '').trim().toLowerCase();
+    if (!key) return null;
+    return (retailers || []).find(r => r.name?.trim().toLowerCase() === key)
+        || (dealers || []).find(d => d.name?.trim().toLowerCase() === key)
+        || null;
+  };
+
   const handleOpenVisit = (beat, outlet, outcome = 'Visited') => {
     setSelectedBeatForVisit({ beat, outlet });
-    setVisitForm({ outletName: outlet, outletContact: '', productsShown: [], orderPlaced: false, orderItems: [{ name: productCatalog[0]?.name || '', quantity: '', unitPrice: outletPrice(productCatalog[0]?.name) }], nextFollowUp: '', notes: '', outcome, notVisitedReason: '' });
+    const known = matchOutlet(outlet);
+    const territory = territories.find(t => t.name === beat?.territory);
+    setVisitForm({
+      outletName: outlet,
+      outletContact: known?.phone || '',
+      productsShown: [],
+      orderPlaced: false,
+      orderItems: [{ name: productCatalog[0]?.name || '', quantity: '', unitPrice: outletPrice(productCatalog[0]?.name) }],
+      // Defaults to the shop's own name, which is what a retail outlet trades
+      // as — true, unlike the "Retail Outlet" that used to be stamped on all.
+      outletCompany: known?.name || outlet || '',
+      outletCity: known?.city || (territory?.districts?.length === 1 ? territory.districts[0] : ''),
+      outletEmail: known?.email || '',
+      nextFollowUp: '',
+      notes: '',
+      outcome,
+      notVisitedReason: '',
+    });
     setIsVisitModalOpen(true);
   };
   const handleVisitSubmit = async (e) => {
@@ -201,15 +231,15 @@ export default function SFA() {
       // that actually exists (addOrder overrides any id passed to it).
       autoOrderId = await addOrder({
         customerName: visitForm.outletName,
-        companyName: matchedRetailer?.name || matchedDealer?.name || '',
+        companyName: visitForm.outletCompany || matchedRetailer?.name || matchedDealer?.name || '',
         product: orderLines.length === 1 ? orderLines[0].name : `${orderLines[0].name} +${orderLines.length - 1} more item${orderLines.length > 2 ? 's' : ''}`,
         items: orderLines.length > 1 ? orderLines : undefined,
         quantity: orderUnits,
         value: orderValue,
         state: territory?.state || matchedRetailer?.state || matchedDealer?.state || '',
-        city: matchedRetailer?.city || matchedDealer?.city || '',
+        city: visitForm.outletCity || matchedRetailer?.city || matchedDealer?.city || '',
         phone: visitForm.outletContact || '',
-        email: matchedRetailer?.email || matchedDealer?.email || '',
+        email: visitForm.outletEmail || matchedRetailer?.email || matchedDealer?.email || '',
         retailerId: matchedRetailer?.id,
         dealerId: matchedDealer?.id,
         status: 'Pending',
@@ -1405,6 +1435,49 @@ export default function SFA() {
                       {visitForm.orderPlaced && orderLines.length === 0 && (
                         <p className="text-[11px] text-amber-400">Enter a quantity against at least one product, or untick "Order Placed".</p>
                       )}
+
+                      {/* An outlet on a beat is just a name, so the order has no
+                          address or contact to inherit. Rather than stamping
+                          placeholders on it, ask once — here, while the rep is
+                          standing in the shop and knows the answers. */}
+                      <div className="pt-3 mt-1 border-t border-white/5 space-y-3">
+                        <p className="text-[10px] font-bold text-brand-accent uppercase tracking-wider">Outlet details for this order</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className={lbl}>Shop / Company name</label>
+                            <input type="text" value={visitForm.outletCompany} onChange={e => setVisitForm({ ...visitForm, outletCompany: e.target.value })} className={inp} />
+                          </div>
+                          <div>
+                            <label className={lbl}>City *</label>
+                            <input
+                              type="text" required list="visit-city-options"
+                              placeholder={visitTerritory?.districts?.[0] || 'City or town'}
+                              value={visitForm.outletCity}
+                              onChange={e => setVisitForm({ ...visitForm, outletCity: e.target.value })}
+                              className={inp}
+                            />
+                            <datalist id="visit-city-options">
+                              {(visitTerritory?.districts || []).map(d => <option key={d} value={d} />)}
+                            </datalist>
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              {visitTerritory?.state ? `State is taken from ${visitTerritory.name} as ${visitTerritory.state}.` : 'No territory matched — the state will be left empty.'}
+                            </p>
+                          </div>
+                          <div>
+                            <label className={lbl}>Store contact</label>
+                            <input type="tel" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
+                          </div>
+                          <div>
+                            <label className={lbl}>Email</label>
+                            <input type="email" placeholder="Optional" value={visitForm.outletEmail} onChange={e => setVisitForm({ ...visitForm, outletEmail: e.target.value })} className={inp} />
+                          </div>
+                        </div>
+                        {matchOutlet(visitForm.outletName) && (
+                          <p className="text-[11px] text-emerald-400">
+                            This outlet is a registered {(retailers || []).some(r => r.name?.trim().toLowerCase() === visitForm.outletName.trim().toLowerCase()) ? 'retailer' : 'dealer'} — the order will appear on their portal and ledger.
+                          </p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
