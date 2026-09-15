@@ -286,6 +286,9 @@ const Orders = () => {
   }, [distributors, dealers, retailers, leads, orders]);
 
   const [customerChoice, setCustomerChoice] = useState('');
+  // Most orders are for someone new, so the list stays out of the way until it
+  // is asked for. Ticking this reveals it.
+  const [useExistingCustomer, setUseExistingCustomer] = useState(false);
   const boundPartyId = formData.distributorId || formData.dealerId || formData.retailerId || '';
 
   // An order can carry a partner's name without carrying their id — anything
@@ -299,6 +302,16 @@ const Orders = () => {
     if (!name) return null;
     return customerOptions.find(o => o.kind === 'party' && o.label.trim().toLowerCase() === name) || null;
   })();
+
+  const toggleExistingCustomer = (checked) => {
+    setUseExistingCustomer(checked);
+    if (!checked) {
+      // Hiding the list must also release the order, or it would stay bound to
+      // a partner the form no longer shows.
+      setCustomerChoice('');
+      setFormData(prev => ({ ...prev, distributorId: undefined, dealerId: undefined, retailerId: undefined }));
+    }
+  };
 
   const selectCustomer = (key) => {
     setCustomerChoice(key);
@@ -374,7 +387,9 @@ const Orders = () => {
 
   const handleOpenModal = (order = null) => {
     setStatusError('');
-    setCustomerChoice(customerChoiceFor(order));
+    const choice = customerChoiceFor(order);
+    setCustomerChoice(choice);
+    setUseExistingCustomer(Boolean(choice));
     if (order) {
       setEditingOrder(order);
       setFormData({
@@ -755,14 +770,30 @@ const Orders = () => {
               )}
 
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Customer</label>
+                <label className="flex items-center gap-2 cursor-pointer w-fit mb-2">
+                  <input
+                    type="checkbox"
+                    checked={useExistingCustomer}
+                    onChange={e => toggleExistingCustomer(e.target.checked)}
+                    className="w-4 h-4 rounded accent-brand-accent cursor-pointer"
+                  />
+                  <span className="text-xs font-medium text-slate-300 uppercase tracking-wider">Existing customer</span>
+                </label>
+
+                {!useExistingCustomer && (
+                  <p className="text-[11px] text-slate-500">
+                    Type the customer's name below. Tick the box to pick someone you have dealt with before.
+                  </p>
+                )}
+
+                {useExistingCustomer && (
                 <select
                   value={boundPartyId ? `party:${boundPartyId}` : customerChoice}
                   onChange={e => selectCustomer(e.target.value)}
                   className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent"
                   style={{ colorScheme: 'dark' }}
                 >
-                  <option value="" className="bg-brand-primary">New customer — type the name below</option>
+                  <option value="" className="bg-brand-primary">Select a customer…</option>
                   {['Distributors', 'Dealers', 'Retailers', 'From leads', 'Previous customers'].map(group => {
                     const inGroup = customerOptions.filter(o => o.group === group);
                     if (inGroup.length === 0) return null;
@@ -775,10 +806,13 @@ const Orders = () => {
                     );
                   })}
                 </select>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Channel partners bind the order to their portal, ledger and tier pricing. Leads and previous
-                  customers just fill in their details. Choose "New customer" for anyone not listed.
-                </p>
+                )}
+                {useExistingCustomer && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Channel partners bind the order to their portal, ledger and tier pricing. Leads and previous
+                    customers just fill in their details.
+                  </p>
+                )}
                 {suggestedParty && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
                     <span className="text-[11px] text-amber-300 leading-snug">
