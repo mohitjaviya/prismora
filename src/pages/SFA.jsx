@@ -15,7 +15,7 @@ const EXPENSE_CATEGORIES = ['Travel', 'Food & Meals', 'Accommodation', 'Client E
 export default function SFA() {
   const { user, users: allUsers, isAdmin, isManager, isSales } = useAuth();
   const {
-    beatPlans, addBeatPlan, updateBeatPlanStatus,
+    beatPlans, addBeatPlan, recordOutletOutcome,
     attendance, addAttendanceRecord, updateAttendanceRecord,
     visitReports, addVisitReport,
     sfaExpenses, addSFAExpense, updateSFAExpense,
@@ -43,13 +43,28 @@ export default function SFA() {
   // ── Forms ───────────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0];
   const [beatForm, setBeatForm] = useState({ executiveId: '', date: todayStr, territory: '', outlets: '' });
-  const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, pitchedProd: '', pitchedQty: '10', pitchedVal: '1500', nextFollowUp: '', notes: '' });
+  const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, pitchedProd: '', pitchedQty: '10', pitchedVal: '1500', nextFollowUp: '', notes: '', outcome: 'Visited', notVisitedReason: '' });
   const [punchNotes, setPunchNotes] = useState('');
   const [expenseForm, setExpenseForm] = useState({ date: todayStr, category: 'Travel', amount: '', description: '', receiptName: '', receiptData: '' });
   const [selectedAttendanceUser, setSelectedAttendanceUser] = useState('');
   const [isPunchingIn, setIsPunchingIn] = useState(false);
 
   // ── Derived Data ────────────────────────────────────────────────────────
+  // The planner used to bucket beats by weekday name alone, with no dates and no
+  // week boundary — so a beat for next Monday landed in the same cell as one
+  // from three weeks ago, and a beat scheduled beyond this week looked missing.
+  // It now shows one real week at a time, and says how many beats sit outside it.
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const weekDays = useMemo(() => {
+    const now = new Date();
+    const mondayIndex = (now.getDay() + 6) % 7;   // JS weeks start on Sunday
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayIndex + weekOffset * 7);
+    return Array.from({ length: 7 }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i));
+  }, [weekOffset]);
+
   const salesReps = useMemo(() => allUsers.filter(u => isSalesRole(u.role) || u.role === 'Sales Executive'), [allUsers]);
   const myAttendanceToday = useMemo(() => attendance.find(a => a.userId === user?.id && a.date === todayStr), [attendance, user, todayStr]);
   const filteredBeats = useMemo(() => isSREP ? beatPlans.filter(b => b.executiveId === user?.id) : beatPlans, [beatPlans, isSREP, user]);
@@ -127,23 +142,51 @@ export default function SFA() {
   };
 
   // ── Visit Reports ───────────────────────────────────────────────────────
-  const handleOpenVisit = (beat, outlet) => {
+  const handleOpenVisit = (beat, outlet, outcome = 'Visited') => {
     setSelectedBeatForVisit({ beat, outlet });
-    setVisitForm({ outletName: outlet, outletContact: '', productsShown: [], orderPlaced: false, pitchedProd: productCatalog[0]?.name || '', pitchedQty: '10', pitchedVal: '1500', nextFollowUp: '', notes: '' });
+    setVisitForm({ outletName: outlet, outletContact: '', productsShown: [], orderPlaced: false, pitchedProd: productCatalog[0]?.name || '', pitchedQty: '10', pitchedVal: '1500', nextFollowUp: '', notes: '', outcome, notVisitedReason: '' });
     setIsVisitModalOpen(true);
   };
   const handleVisitSubmit = async (e) => {
     e.preventDefault();
+    const notVisited = visitForm.outcome === 'Not Visited';
+
+    // An outlet that could not be worked still gets a report, so coverage shows
+    // it was attempted rather than leaving it indistinguishable from one that
+    // was never reached. No order is raised for it.
     let autoOrderId = null;
-    if (visitForm.orderPlaced && visitForm.pitchedProd) {
+    if (!notVisited && visitForm.orderPlaced && visitForm.pitchedProd) {
       // Use the real id addOrder assigns so the visit report links to an order
       // that actually exists (addOrder overrides any id passed to it).
       autoOrderId = await addOrder({ customerName: visitForm.outletName, companyName: 'Retail Outlet', product: visitForm.pitchedProd, quantity: Number(visitForm.pitchedQty || 1), value: Number(visitForm.pitchedVal || 0), state: selectedBeatForVisit?.beat.territory || '', city: 'Field Beat', status: 'Pending', assignedTo: user.id, date: new Date().toISOString() });
     }
-    addVisitReport({ executiveId: user.id, outletName: visitForm.outletName, outletContact: visitForm.outletContact, visitDate: todayStr, productsShown: visitForm.productsShown, orderPlaced: visitForm.orderPlaced, orderId: autoOrderId, nextFollowUp: visitForm.nextFollowUp || null, notes: visitForm.notes });
-    if (selectedBeatForVisit) updateBeatPlanStatus(selectedBeatForVisit.beat.id, 'Visited');
+
+    const visitId = await addVisitReport({
+      executiveId: user.id,
+      beatId: selectedBeatForVisit?.beat?.id || null,
+      outletName: visitForm.outletName,
+      outletContact: visitForm.outletContact,
+      visitDate: todayStr,
+      outcome: visitForm.outcome,
+      notVisitedReason: notVisited ? visitForm.notVisitedReason : '',
+      productsShown: notVisited ? [] : visitForm.productsShown,
+      orderPlaced: notVisited ? false : visitForm.orderPlaced,
+      orderId: autoOrderId,
+      nextFollowUp: visitForm.nextFollowUp || null,
+      notes: visitForm.notes,
+    });
+
+    // The outcome is recorded against this outlet, not the whole route, so the
+    // rest of the beat stays workable.
+    if (selectedBeatForVisit) {
+      await recordOutletOutcome(selectedBeatForVisit.beat.id, selectedBeatForVisit.outlet, visitForm.outcome, {
+        visitId: visitId || null,
+        reason: notVisited ? visitForm.notVisitedReason : undefined,
+      });
+    }
     setIsVisitModalOpen(false);
   };
+
   const toggleProduct = (name) => setVisitForm(prev => ({ ...prev, productsShown: prev.productsShown.includes(name) ? prev.productsShown.filter(n => n !== name) : [...prev.productsShown, name] }));
 
   // ── Expenses ────────────────────────────────────────────────────────────
@@ -619,21 +662,46 @@ export default function SFA() {
                     <td className="p-4 text-xs font-mono font-bold text-slate-400">{beat.date}</td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1">
-                        {Array.isArray(beat.outlets) && beat.outlets.map((outlet, idx) => (
-                          <div key={idx} className="flex items-center gap-1 text-[10px] bg-white/5 border border-white/5 px-2 py-0.5 rounded text-slate-300">
-                            {outlet}
-                            {isSREP && beat.status !== 'Visited' && (
-                              <button onClick={() => handleOpenVisit(beat, outlet)} className="ml-1 text-brand-accent hover:underline font-bold">[Check-In]</button>
-                            )}
-                          </div>
-                        ))}
+                        {Array.isArray(beat.outlets) && beat.outlets.map((outlet, idx) => {
+                          // Each outlet carries its own outcome, so working one
+                          // no longer closes the rest of the route.
+                          const record = (beat.outletVisits || {})[outlet];
+                          const done = Boolean(record);
+                          const skipped = record?.outcome === 'Not Visited';
+                          return (
+                            <div
+                              key={idx}
+                              title={skipped && record?.reason ? `Not visited — ${record.reason}` : undefined}
+                              className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border ${
+                                !done ? 'bg-white/5 border-white/5 text-slate-300'
+                                  : skipped ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                              }`}
+                            >
+                              {outlet}
+                              {done && <span className="font-bold">{skipped ? '✕' : '✓'}</span>}
+                              {!done && isSREP && (
+                                <>
+                                  <button onClick={() => handleOpenVisit(beat, outlet, 'Visited')} className="ml-1 text-brand-accent hover:underline font-bold">Check in</button>
+                                  <button onClick={() => handleOpenVisit(beat, outlet, 'Not Visited')} className="ml-1 text-slate-400 hover:text-rose-400 hover:underline">Not visited</button>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </td>
                     <td className="p-4 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${beat.status === 'Visited' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>{beat.status}</span>
                     </td>
                     <td className="p-4 text-right">
-                      {isSREP && beat.status !== 'Visited' ? <span className="text-xs text-brand-accent font-semibold animate-pulse">Pending Visit</span> : <span className="text-xs text-slate-500 italic">—</span>}
+                      {(() => {
+                        const outlets = Array.isArray(beat.outlets) ? beat.outlets : [];
+                        const doneCount = outlets.filter(o => (beat.outletVisits || {})[o]).length;
+                        if (outlets.length === 0) return <span className="text-xs text-slate-500 italic">—</span>;
+                        if (doneCount === outlets.length) return <span className="text-xs text-emerald-400 font-semibold">{doneCount}/{outlets.length} done</span>;
+                        return <span className="text-xs text-brand-accent font-semibold">{doneCount}/{outlets.length} done</span>;
+                      })()}
                     </td>
                   </tr>
                 )) : <tr><td colSpan="6" className="p-8 text-center text-slate-500">No beat plans found.</td></tr>}
@@ -890,19 +958,48 @@ export default function SFA() {
         <div className="space-y-6">
           {/* Weekly Calendar */}
           <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-            <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex items-center gap-2">
+            <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex flex-wrap items-center gap-3">
               <Route size={15} className="text-brand-accent" />
-              <span className="text-sm font-bold text-white uppercase tracking-wider">Weekly Beat Route Planner</span>
+              <span className="text-sm font-bold text-white uppercase tracking-wider">Beat Route Planner</span>
+              <span className="text-xs text-slate-400">
+                {weekDays[0].toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                {' – '}
+                {weekDays[6].toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {weekOffset === 0 && <span className="ml-2 text-brand-accent font-semibold">This week</span>}
+              </span>
+              <div className="ml-auto flex items-center gap-1">
+                <button type="button" onClick={() => setWeekOffset(w => w - 1)} className="px-2.5 py-1 text-xs rounded-lg bg-white/5 text-slate-300 hover:bg-white/10 transition-colors">‹ Previous</button>
+                <button type="button" onClick={() => setWeekOffset(0)} className="px-2.5 py-1 text-xs rounded-lg bg-white/5 text-slate-300 hover:bg-white/10 transition-colors">Today</button>
+                <button type="button" onClick={() => setWeekOffset(w => w + 1)} className="px-2.5 py-1 text-xs rounded-lg bg-white/5 text-slate-300 hover:bg-white/10 transition-colors">Next ›</button>
+              </div>
             </div>
+            {(() => {
+              const shown = new Set(weekDays.map(dayKey));
+              const elsewhere = filteredBeats.filter(b => !shown.has(String(b.date).slice(0, 10))).length;
+              if (elsewhere === 0) return null;
+              return (
+                <p className="px-4 py-2 text-[11px] text-amber-300 bg-amber-500/10 border-b border-amber-500/20">
+                  {elsewhere} beat{elsewhere > 1 ? 's are' : ' is'} scheduled outside this week — use Previous and Next to reach {elsewhere > 1 ? 'them' : 'it'}, or see the full list on the Beat Plans tab.
+                </p>
+              );
+            })()}
             <div className="overflow-x-auto custom-scrollbar">
               <div className="grid grid-cols-7 min-w-[700px]">
-                {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day => {
-                  const dayBeats = filteredBeats.filter(b => {
-                    try { return new Date(b.date).toLocaleDateString('en-US', { weekday: 'short' }) === day; } catch { return false; }
-                  });
+                {weekDays.map(date => {
+                  const key = dayKey(date);
+                  // Matched on the actual date, not the weekday name.
+                  const dayBeats = filteredBeats.filter(b => String(b.date).slice(0, 10) === key);
+                  const isToday = key === dayKey(new Date());
                   return (
-                    <div key={day} className="border-r border-white/5 last:border-0">
-                      <div className="bg-brand-primary-light/30 p-3 text-center text-xs font-bold text-brand-accent uppercase tracking-wider border-b border-white/5">{day}</div>
+                    <div key={key} className="border-r border-white/5 last:border-0">
+                      <div className={`p-3 text-center border-b border-white/5 ${isToday ? 'bg-brand-accent/15' : 'bg-brand-primary-light/30'}`}>
+                        <div className={`text-xs font-bold uppercase tracking-wider ${isToday ? 'text-brand-accent' : 'text-slate-400'}`}>
+                          {date.toLocaleDateString('en-IN', { weekday: 'short' })}
+                        </div>
+                        <div className={`text-[10px] mt-0.5 ${isToday ? 'text-brand-accent' : 'text-slate-500'}`}>
+                          {date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </div>
+                      </div>
                       <div className="p-2 min-h-[200px] space-y-1.5">
                         {dayBeats.length > 0 ? dayBeats.map(beat => (
                           <div key={beat.id} className="bg-brand-accent/10 border border-brand-accent/20 rounded-lg p-2 space-y-1">
@@ -1136,19 +1233,62 @@ export default function SFA() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsVisitModalOpen(false)} />
           <div className="relative glass-panel bg-brand-primary w-full max-w-xl max-h-[90vh] rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 flex flex-col overflow-hidden">
             <div className="flex justify-between items-center p-6 border-b border-white/5 flex-shrink-0">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2"><Clipboard className="text-brand-accent" size={20} />Log Field Visit</h3>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2"><Clipboard className="text-brand-accent" size={20} />{visitForm.outcome === 'Not Visited' ? 'Record a missed outlet' : 'Log Field Visit'}</h3>
               <button onClick={() => setIsVisitModalOpen(false)} className="p-1 text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
             <form onSubmit={handleVisitSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+              <div>
+                <label className={lbl}>What happened at this outlet?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: 'Visited', text: 'I visited', hint: 'Pitched products, took an order or left a follow-up' },
+                    { key: 'Not Visited', text: 'Could not visit', hint: 'Shop closed, owner away, ran out of time' },
+                  ].map(opt => (
+                    <button
+                      type="button"
+                      key={opt.key}
+                      onClick={() => setVisitForm({ ...visitForm, outcome: opt.key })}
+                      className={`p-3 rounded-xl border text-left transition-colors ${
+                        visitForm.outcome === opt.key
+                          ? 'bg-brand-accent/10 border-brand-accent text-white'
+                          : 'bg-brand-primary border-white/5 text-slate-400 hover:border-white/20'
+                      }`}
+                    >
+                      <span className="block text-sm font-bold">{opt.text}</span>
+                      <span className="block text-[10px] mt-0.5 leading-snug opacity-70">{opt.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {visitForm.outcome === 'Not Visited' && (
+                <div>
+                  <label className={lbl}>Why not? *</label>
+                  <input
+                    type="text" required
+                    placeholder="e.g. Shop closed for the day"
+                    value={visitForm.notVisitedReason}
+                    onChange={e => setVisitForm({ ...visitForm, notVisitedReason: e.target.value })}
+                    className={inp}
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Recorded against the outlet so coverage shows it was attempted, not skipped silently.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={lbl}>Outlet Name</label>
                   <input type="text" readOnly value={visitForm.outletName} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-slate-400 cursor-not-allowed" />
                 </div>
+                {visitForm.outcome === 'Visited' && (
                 <div>
                   <label className={lbl}>Store Contact *</label>
                   <input type="tel" required placeholder="9876543210" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
                 </div>
+                )}
+                {visitForm.outcome === 'Visited' && (<>
                 <div className="sm:col-span-2">
                   <label className={lbl}>Products Pitched</label>
                   <div className="grid grid-cols-2 gap-2 bg-brand-primary-dark/50 p-3 rounded-xl border border-white/5">
@@ -1186,6 +1326,7 @@ export default function SFA() {
                     </div>
                   )}
                 </div>
+                </>)}
                 <div>
                   <label className={lbl}>Next Follow-up</label>
                   <input type="date" value={visitForm.nextFollowUp} onChange={e => setVisitForm({ ...visitForm, nextFollowUp: e.target.value })} className={inp} />

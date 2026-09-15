@@ -1939,6 +1939,38 @@ export const DataProvider = ({ children }) => {
     logEvent('beat_plan_created', `Beat Plan assigned for date ${beatData.date}`, beatData.executiveId, newId);
   };
 
+  /**
+   * Record what happened at one outlet on a beat.
+   *
+   * A beat used to carry a single status, so checking in at the first outlet
+   * marked the whole route done and every other outlet lost its check-in
+   * button. Outcomes belong to outlets, and the beat's own status is derived
+   * from them: untouched while nothing has been recorded, in progress while
+   * some outlets remain, and Visited once every outlet has an outcome —
+   * whether that outcome was a visit or a documented no-show.
+   */
+  const recordOutletOutcome = async (beatId, outletName, outcome, extra = {}) => {
+    const beat = beatPlans.find(b => b.id === beatId);
+    if (!beat || !outletName) return;
+
+    const outletVisits = {
+      ...(beat.outletVisits || {}),
+      [outletName]: { outcome, at: new Date().toISOString(), ...extra },
+    };
+
+    const outlets = Array.isArray(beat.outlets) ? beat.outlets : [];
+    const done = outlets.filter(o => outletVisits[o]).length;
+    const status = done === 0 ? 'Planned' : done < outlets.length ? 'In Progress' : 'Visited';
+
+    setBeatPlans(prev => {
+      const next = prev.map(b => b.id === beatId ? { ...b, outletVisits, status } : b);
+      localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
+      return next;
+    });
+    await persist('beat_plans update', supabase.from('beat_plans').update({ outletVisits, status }).eq('id', beatId));
+    logEvent('outlet_outcome', `${outletName} on beat ${beatId}: ${outcome}${extra.reason ? ` — ${extra.reason}` : ''}`, beat.executiveId, beatId);
+  };
+
   const updateBeatPlanStatus = async (id, status) => {
     setBeatPlans(prev => {
       const next = prev.map(b => b.id === id ? { ...b, status } : b);
@@ -1981,6 +2013,7 @@ export const DataProvider = ({ children }) => {
     });
     await persist('visit_reports insert', supabase.from('visit_reports').insert([newReport]));
     logEvent('visit_submitted', `Visit report logged for outlet: ${visitData.outletName}`, visitData.executiveId, newId);
+    return newId;
   };
 
   // ── SFA Expense Claims ─────────────────────────────────────────────────────
@@ -2160,7 +2193,7 @@ export const DataProvider = ({ children }) => {
       addComplaint, updateComplaintStatus, deleteComplaint,
       // Phase 2 Enterprise
       territories, addTerritory, updateTerritory, deleteTerritory,
-      beatPlans, addBeatPlan, updateBeatPlanStatus,
+      beatPlans, addBeatPlan, updateBeatPlanStatus, recordOutletOutcome,
       attendance, addAttendanceRecord, updateAttendanceRecord,
       visitReports, addVisitReport,
       sfaExpenses, addSFAExpense, updateSFAExpense,
