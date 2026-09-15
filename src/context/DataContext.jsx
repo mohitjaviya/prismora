@@ -54,11 +54,30 @@ const lsInit = (key) => {
  * Returns true on success so callers can branch on it; existing callers that
  * ignore the result still get the console error.
  */
+// Schema drift is the failure this app keeps hitting: PostgREST rejects an
+// entire statement when the payload names a column the table lacks, the
+// optimistic UI shows the change anyway, and it quietly reverts on the next
+// load. Left in the console it reads as "the app is broken" rather than "a
+// migration has not been run", so it gets reported as a bug and costs a round
+// trip every time. This carries it to the screen instead.
+let reportSchemaError = () => {};
+const setSchemaErrorReporter = (fn) => { reportSchemaError = fn; };
+
+const schemaComplaint = (err) => {
+  const code = err?.code;
+  const message = err?.message || '';
+  if (code === '42703' || code === 'PGRST204') return message;
+  if (/column .* does not exist|Could not find the '.*' column/i.test(message)) return message;
+  return null;
+};
+
 const persist = async (label, query) => {
   try {
     const { error } = await query;
     if (error) {
       console.error(`[Prismora] Could not save ${label} — this change will be lost on refresh:`, error.message || error);
+      const complaint = schemaComplaint(error);
+      if (complaint) reportSchemaError({ label, detail: complaint });
       return false;
     }
     return true;
@@ -152,6 +171,8 @@ const insertWithFreeId = async (label, table, prefix, firstNumber, record, shape
       if (!error) return { id, saved: true };
       if (error.code !== '23505') {
         console.error(`[Prismora] Could not save ${label} — this change will be lost on refresh:`, error.message || error);
+        const complaint = schemaComplaint(error);
+        if (complaint) reportSchemaError({ label, detail: complaint });
         return { id, saved: false };
       }
 
@@ -200,6 +221,10 @@ const leadRow = (lead) => {
 
 export const DataProvider = ({ children }) => {
   // ── Original CRM State (hydrated from cache for instant load) ────────────
+  // Surfaced by the app shell so a rejected write is visible, not just logged.
+  const [schemaError, setSchemaError] = useState(null);
+  useEffect(() => { setSchemaErrorReporter(setSchemaError); }, []);
+
   const [leads, setLeads] = useState(() => lsInit('prismora_leads'));
   const [orders, setOrders] = useState(() => lsInit('prismora_orders'));
   const [eventLog, setEventLog] = useState([]);
@@ -2173,6 +2198,7 @@ export const DataProvider = ({ children }) => {
     <DataContext.Provider value={{
       // Original CRM
       leads, orders, eventLog, products, productCatalog, invoices, expenses,
+      schemaError, dismissSchemaError: () => setSchemaError(null),
       addLead, updateLead, deleteLead, convertLeadToOrder,
       addOrder, updateOrder, deleteOrder, confirmOrderReceipt, splitOrder, deliverPartial,
       addProduct, updateProduct, deleteProduct,

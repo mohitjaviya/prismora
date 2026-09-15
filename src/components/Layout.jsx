@@ -10,7 +10,7 @@ import { Bell, X, CalendarClock, Sparkles, ShieldX } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const Layout = () => {
-  const { leads } = useData();
+  const { leads, schemaError, dismissSchemaError } = useData();
   const { user, canAccessData, isAdmin, isSales } = useAuth();
   const [searchParams] = useSearchParams();
   const accessDenied = searchParams.get('denied') === '1';
@@ -79,6 +79,27 @@ const Layout = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* A write the database refused. Shown rather than logged, because the
+          optimistic UI has already drawn the change and will silently drop it
+          on the next load — which looks like the feature is broken. */}
+      {schemaError && createPortal(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] w-[min(92vw,640px)] animate-fade-in-up">
+          <div className="glass-panel bg-brand-primary/95 border border-amber-500/40 rounded-xl p-4 shadow-2xl flex items-start gap-3">
+            <div className="p-2 bg-amber-500/10 rounded-lg text-amber-400 flex-shrink-0"><ShieldX size={20} /></div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-white font-bold text-sm mb-1">That change was not saved</h4>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                The database rejected the write while saving <strong className="text-slate-300">{schemaError.label}</strong>,
+                so it will disappear when this page reloads. A pending database migration is the usual cause.
+              </p>
+              <p className="text-[11px] text-amber-300/90 font-mono mt-2 break-words">{schemaError.detail}</p>
+            </div>
+            <button onClick={dismissSchemaError} className="text-slate-500 hover:text-white transition-colors p-1 flex-shrink-0"><X size={16} /></button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Access Denied toast — fires when PermissionGuard redirects here */}
       {showAccessDenied && createPortal(
