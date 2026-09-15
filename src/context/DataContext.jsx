@@ -10,7 +10,7 @@ const DataContext = createContext();
 // not return on top of what it does. After a deliberate data reset, a browser
 // still holding the old rows puts them back on screen as though nothing had been
 // deleted. Clearing the caches once, keyed on this version, is what stops that.
-const DATA_VERSION = '2026-09-14-reset';
+const DATA_VERSION = '2026-09-16-no-demo-seed';
 
 // Theme and session are user preferences rather than cached tables, so they
 // survive; the version marker itself has to survive or every load would wipe.
@@ -284,102 +284,22 @@ export const DataProvider = ({ children }) => {
   const [schemeClaims, setSchemeClaims] = useState(() => lsInit('prismora_scheme_claims'));
   const [distributorIncentives, setDistributorIncentives] = useState(() => lsInit('prismora_distributor_incentives'));
 
-  const DEFAULT_CATALOG = [
-    { id: 'P1', name: 'Herbal Hair Oil 100ml', category: 'Hair Care', hsnCode: '30049011', gstPct: 12, mrp: 250, distributorPrice: 150, dealerPrice: 180, retailerPrice: 200, uom: 'BOTTLE', createdAt: new Date().toISOString() },
-    { id: 'P2', name: 'Aloevera Skin Gel 150g', category: 'Skin Care', hsnCode: '30049012', gstPct: 12, mrp: 180, distributorPrice: 100, dealerPrice: 125, retailerPrice: 140, uom: 'TUBE', createdAt: new Date().toISOString() },
-    { id: 'P3', name: 'Tulsi Cough Syrup 100ml', category: 'Wellness', hsnCode: '30049013', gstPct: 5, mrp: 120, distributorPrice: 70, dealerPrice: 85, retailerPrice: 95, uom: 'BOTTLE', createdAt: new Date().toISOString() },
-    { id: 'P4', name: 'Neem Face Wash 100ml', category: 'Skin Care', hsnCode: '30049014', gstPct: 18, mrp: 150, distributorPrice: 90, dealerPrice: 105, retailerPrice: 120, uom: 'BOTTLE', createdAt: new Date().toISOString() },
-    { id: 'P5', name: 'Triphala Capsules 60s', category: 'Wellness', hsnCode: '30049015', gstPct: 12, mrp: 300, distributorPrice: 180, dealerPrice: 210, retailerPrice: 240, uom: 'BOTTLE', createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_INVENTORY = [
-    { id: 'INV-1', product: 'Herbal Hair Oil 100ml', batchNumber: 'HHO-2026-01', expiryDate: '2028-06-01T12:00:00.000Z', quantity: 500, reserved: 50, transit: 0, damaged: 5, reorderLevel: 100, warehouse: 'Main Warehouse', unitCost: 85, createdAt: new Date().toISOString() },
-    { id: 'INV-2', product: 'Aloevera Skin Gel 150g', batchNumber: 'ASG-2026-02', expiryDate: '2028-03-01T12:00:00.000Z', quantity: 45, reserved: 10, transit: 30, damaged: 0, reorderLevel: 100, warehouse: 'Main Warehouse', unitCost: 60, createdAt: new Date().toISOString() },
-    { id: 'INV-3', product: 'Tulsi Cough Syrup 100ml', batchNumber: 'TCS-2026-03', expiryDate: '2026-09-01T12:00:00.000Z', quantity: 200, reserved: 0, transit: 0, damaged: 2, reorderLevel: 100, warehouse: 'Main Warehouse', unitCost: 40, createdAt: new Date().toISOString() },
-    { id: 'INV-4', product: 'Neem Face Wash 100ml', batchNumber: 'NFW-2026-04', expiryDate: '2027-08-15T12:00:00.000Z', quantity: 0, reserved: 0, transit: 0, damaged: 0, reorderLevel: 50, warehouse: 'Main Warehouse', unitCost: 50, createdAt: new Date().toISOString() },
-    { id: 'INV-5', product: 'Triphala Capsules 60s', batchNumber: 'TRP-2026-05', expiryDate: '2028-12-01T12:00:00.000Z', quantity: 350, reserved: 0, transit: 50, damaged: 0, reorderLevel: 75, warehouse: 'Main Warehouse', unitCost: 110, createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_DISTRIBUTORS = [
-    { id: 'DIST-1', name: 'Gujarat Super Stockist', gstin: '24AABCG1234D1Z3', state: 'Gujarat', city: 'Ahmedabad', territory: 'Gujarat North Hub', phone: '9876501234', email: 'info@gujstockist.com', contactPerson: 'Nilesh Patel', outstandingAmount: 45000, creditLimit: 200000, status: 'Active', createdAt: new Date().toISOString() },
-    { id: 'DIST-2', name: 'Maharashtra Prime Dist.', gstin: '27AABCM9876F1Z1', state: 'Maharashtra', city: 'Mumbai', territory: 'Mumbai Central', phone: '9876502345', email: 'ops@mahaprime.com', contactPerson: 'Rahul Mehta', outstandingAmount: 120000, creditLimit: 500000, status: 'Active', createdAt: new Date().toISOString() },
-    { id: 'DIST-3', name: 'Karnataka Wellness Dist.', gstin: '29AABCK5432H1Z7', state: 'Karnataka', city: 'Bangalore', territory: 'Bangalore Zone', phone: '9876503456', email: 'orders@karndist.com', contactPerson: 'Priya Nair', outstandingAmount: 0, creditLimit: 300000, status: 'Active', createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_DEALERS = [
-    { id: 'DEAL-1', name: 'Mohan Dealers', gstin: '24AABCM5678D1Z2', parentDistributorId: 'DIST-1', state: 'Gujarat', city: 'Vadodara', territory: 'Gujarat North Hub', phone: '9876504567', email: 'mohan@dealers.com', contactPerson: 'Mohan Patel', outstandingAmount: 0, creditLimit: 100000, status: 'Active', createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_RETAILERS = [
-    { id: 'RET-1', name: 'Geeta Retailers', gstin: '24AABCG9012D1Z8', parentDealerId: 'DEAL-1', state: 'Gujarat', city: 'Vadodara', territory: 'Gujarat North Hub', phone: '9876505678', email: 'geeta@retailers.com', contactPerson: 'Geeta Shah', outstandingAmount: 0, creditLimit: 50000, status: 'Active', createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_SCHEMES = [
-    { id: 'SCH-1', name: 'Monsoon Ayurvedic Special', type: 'Flat Discount', discountPct: 10, minOrderValue: 50000, applicableTo: 'Distributor', applicableProducts: [], validFrom: '2026-06-01', validTo: '2026-08-31', status: 'Active', description: '10% flat discount on Ayurvedic packages above ₹50,000 during monsoon season', createdAt: new Date().toISOString() },
-    { id: 'SCH-2', name: 'Festive Herbal Booster Offer', type: 'Cash Discount', discountPct: 5, minOrderValue: 10000, applicableTo: 'Retailer', applicableProducts: [], validFrom: '2026-10-01', validTo: '2026-11-15', status: 'Active', description: '5% cash discount for herbal retailers during Diwali season', createdAt: new Date().toISOString() },
-    { id: 'SCH-3', name: 'Dealer Growth Incentive', type: 'Flat Discount', discountPct: 7, minOrderValue: 20000, applicableTo: 'Dealer', applicableProducts: [], validFrom: '2026-01-01', validTo: '2026-12-31', status: 'Active', description: '7% incentive for dealers on orders above ₹20,000', createdAt: new Date().toISOString() },
-    { id: 'SCH-4', name: 'Retailer Loyalty Bonus', type: 'Flat Discount', discountPct: 4, minOrderValue: 5000, applicableTo: 'Retailer', applicableProducts: [], validFrom: '2026-01-01', validTo: '2026-12-31', status: 'Active', description: '4% incentive for retailers on orders above ₹5,000', createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_COMPLAINTS = [
-    { id: 'CMP-1', customerName: 'Apex Distributors', customerPhone: '9876500111', product: 'Herbal Hair Oil 100ml', batchNumber: 'HHO-2026-01', complaintType: 'Damaged Batch packaging', description: 'Outer cardboard casing of 5 bottles found crushed on delivery.', status: 'Registered', resolution: '', assignedTo: 'U-sales-1', createdAt: new Date().toISOString() },
-    { id: 'CMP-2', customerName: 'Arogya Medical Store', customerPhone: '9876500222', product: 'Tulsi Cough Syrup 100ml', batchNumber: 'TCS-2026-03', complaintType: 'Quantity mismatch', description: 'Shorthand receipt of 3 bottles in box. Invoiced 20.', status: 'Resolved', resolution: 'Credited value of 3 bottles to distributor account.', assignedTo: 'U-sales-2', createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_TERRITORIES = [
-    { id: 'T-1', name: 'Gujarat North Hub', state: 'Gujarat', districts: ['Anand', 'Vadodara', 'Ahmedabad'], executiveId: 'U-sales-1', createdAt: new Date().toISOString() },
-    { id: 'T-2', name: 'Delhi Hub', state: 'Delhi', districts: ['New Delhi', 'North Delhi', 'West Delhi'], executiveId: 'U-sales-2', createdAt: new Date().toISOString() },
-    { id: 'T-3', name: 'Mumbai Central', state: 'Maharashtra', districts: ['Mumbai City', 'Mumbai Suburban'], executiveId: 'U-sales-3', createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_BEAT_PLANS = [
-    { id: 'B-1', executiveId: 'U-sales-1', date: new Date().toISOString().split('T')[0], territory: 'Gujarat North Hub', outlets: ['Radhe Ayurvedic', 'Vrindavan Wellness', 'Janki Retailers'], status: 'Planned', createdAt: new Date().toISOString() },
-    { id: 'B-2', executiveId: 'U-sales-2', date: new Date().toISOString().split('T')[0], territory: 'Delhi Hub', outlets: ['Delhi Herbal Emporium', 'Capital Wellness'], status: 'Visited', createdAt: new Date().toISOString() },
-    { id: 'B-3', executiveId: 'U-sales-3', date: new Date(Date.now() - 24*60*60*1000).toISOString().split('T')[0], territory: 'Mumbai Central', outlets: ['Bombay Herbals', 'Metro Retailers'], status: 'Visited', createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_ATTENDANCE = [
-    { id: 'ATT-1', userId: 'U-sales-1', date: new Date().toISOString().split('T')[0], status: 'Present', checkInTime: '09:15 AM', checkOutTime: null, notes: 'Started beat visits at Anand' },
-    { id: 'ATT-2', userId: 'U-sales-2', date: new Date().toISOString().split('T')[0], status: 'Present', checkInTime: '09:30 AM', checkOutTime: '05:30 PM', notes: 'Completed visits at Delhi Hub' },
-    { id: 'ATT-3', userId: 'U-sales-3', date: new Date(Date.now() - 24*60*60*1000).toISOString().split('T')[0], status: 'Present', checkInTime: '09:10 AM', checkOutTime: '06:00 PM', notes: 'Mumbai sales beats completed' }
-  ];
 
-  const DEFAULT_VISIT_REPORTS = [
-    { id: 'VR-1', executiveId: 'U-sales-1', outletName: 'Radhe Ayurvedic', outletContact: '9876543210', visitDate: new Date().toISOString().split('T')[0], productsShown: ['Herbal Hair Oil 100ml', 'Triphala Capsules 60s'], orderPlaced: true, orderId: 'O-1001', nextFollowUp: '2026-07-15', notes: 'Owner placed order for hair oil, interested in face washes next check.' },
-    { id: 'VR-2', executiveId: 'U-sales-2', outletName: 'Delhi Herbal Emporium', outletContact: '9876543220', visitDate: new Date().toISOString().split('T')[0], productsShown: ['Tulsi Cough Syrup 100ml'], orderPlaced: false, orderId: null, nextFollowUp: null, notes: 'Sufficient stocks present. Revisit in next cycle.' }
-  ];
 
-  const DEFAULT_LEADS = [
-    { id: 'L1', name: 'Ayush Pharmacy', company: 'Ayush Wellness', phone: '9876543210', email: 'contact@ayush.com', productInterest: ['Herbal Hair Oil 100ml'], leadSource: 'Web Directory', assignedTo: 'U-sales-1', status: 'Contacted', followUpDate: new Date().toISOString(), notes: 'Very interested in stocking hair oil. Asked for distributor price catalog.', dealValue: 25000, createdAt: new Date(Date.now() - 3*24*60*60*1000).toISOString() },
-    { id: 'L2', name: 'Natures Cure Store', company: 'Natures Cure Retail', phone: '9876543220', email: 'sales@naturescure.com', productInterest: ['Triphala Capsules 60s', 'Tulsi Cough Syrup 100ml'], leadSource: 'Trade Show', assignedTo: 'U-sales-2', status: 'Qualified', followUpDate: new Date(Date.now() + 2*24*60*60*1000).toISOString(), notes: 'Interested in wellness combo packs. Bulk pricing terms sent.', dealValue: 48000, createdAt: new Date(Date.now() - 5*24*60*60*1000).toISOString() }
-  ];
 
-  const DEFAULT_ORDERS = [
-    { id: 'O1', customerName: 'Gujarat Super Stockist', companyName: 'Gujarat Stockist Group', product: 'Herbal Hair Oil 100ml', quantity: 200, value: 30000, state: 'Gujarat', city: 'Ahmedabad', status: 'Delivered', assignedTo: 'U-sales-1', date: new Date(Date.now() - 2*24*60*60*1000).toISOString(), createdAt: new Date(Date.now() - 2*24*60*60*1000).toISOString() },
-    { id: 'O2', customerName: 'Maharashtra Prime Dist.', companyName: 'Prime Distributors Ltd.', product: 'Triphala Capsules 60s', quantity: 150, value: 27000, state: 'Maharashtra', city: 'Mumbai', status: 'Processing', assignedTo: 'U-sales-3', date: new Date().toISOString(), createdAt: new Date().toISOString() },
-    { id: 'O3', customerName: 'Karnataka Wellness Dist.', companyName: 'Wellness Dist. Corp', product: 'Tulsi Cough Syrup 100ml', quantity: 100, value: 7000, state: 'Karnataka', city: 'Bangalore', status: 'Pending', assignedTo: 'U-sales-4', date: new Date().toISOString(), createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_PURCHASE_ORDERS = [
-    { id: 'PO-1', vendorId: 'V1', vendorName: 'Janki Herbals', items: [{ name: 'Herbal Hair Oil 100ml', quantity: 500, unitCost: 85, total: 42500 }, { name: 'Aloevera Skin Gel 150g', quantity: 300, unitCost: 60, total: 18000 }], total: 60500, status: 'Completed', expectedDate: new Date(Date.now() - 4*24*60*60*1000).toISOString(), notes: 'Initial raw shipment purchase', assignedTo: 'U-admin', createdAt: new Date(Date.now() - 7*24*60*60*1000).toISOString() },
-    { id: 'PO-2', vendorId: 'V1', vendorName: 'Janki Herbals', items: [{ name: 'Tulsi Cough Syrup 100ml', quantity: 200, unitCost: 40, total: 8000 }], total: 8000, status: 'Ordered', expectedDate: new Date(Date.now() + 3*24*60*60*1000).toISOString(), notes: 'Replenishment for winter cough syrup stocks', assignedTo: 'U-admin', createdAt: new Date(Date.now() - 1*24*60*60*1000).toISOString() }
-  ];
 
-  const DEFAULT_GRN = [
-    { id: 'GRN-1', poId: 'PO-1', vendorName: 'Janki Herbals', items: [{ name: 'Herbal Hair Oil 100ml', quantity: 500, unitCost: 85, total: 42500 }, { name: 'Aloevera Skin Gel 150g', quantity: 300, unitCost: 60, total: 18000 }], receivedDate: new Date(Date.now() - 4*24*60*60*1000).toISOString(), notes: 'All packaging clean and intact. Accepted.', receivedBy: 'U-admin', createdAt: new Date(Date.now() - 4*24*60*60*1000).toISOString() }
-  ];
 
-  const DEFAULT_INVOICES = [
-    { id: 'INV-1001', orderId: 'O1', customerName: 'Gujarat Super Stockist', amount: 30000, tax: 3600, status: 'Paid', dueDate: new Date(Date.now() + 10*24*60*60*1000).toISOString(), assignedTo: 'U-sales-1', createdAt: new Date(Date.now() - 2*24*60*60*1000).toISOString() },
-    { id: 'INV-1002', orderId: 'O2', customerName: 'Maharashtra Prime Dist.', amount: 27000, tax: 3240, status: 'Unpaid', dueDate: new Date(Date.now() - 18*24*60*60*1000).toISOString(), assignedTo: 'U-sales-3', createdAt: new Date(Date.now() - 18*24*60*60*1000).toISOString() },
-    { id: 'INV-1003', orderId: 'O3', customerName: 'Karnataka Wellness Dist.', amount: 7000, tax: 350, status: 'Unpaid', dueDate: new Date(Date.now() + 14*24*60*60*1000).toISOString(), assignedTo: 'U-sales-4', createdAt: new Date().toISOString() }
-  ];
 
-  const DEFAULT_EXPENSES = [
-    { id: 'EXP-1', category: 'Raw Materials', amount: 60500, description: 'PO-1 Shipment fulfillment pay to Janki Herbals', date: new Date(Date.now() - 4*24*60*60*1000).toISOString(), assignedTo: 'U-admin', createdAt: new Date(Date.now() - 4*24*60*60*1000).toISOString() },
-    { id: 'EXP-2', category: 'Logistics', amount: 4500, description: 'Delivery truck fuel for Gujarat stockist shipment', date: new Date(Date.now() - 2*24*60*60*1000).toISOString(), assignedTo: 'U-sales-1', createdAt: new Date(Date.now() - 2*24*60*60*1000).toISOString() },
-    { id: 'EXP-3', category: 'Marketing', amount: 15000, description: 'Ayurvedic wellness social media promo campaign', date: new Date(Date.now() - 10*24*60*60*1000).toISOString(), assignedTo: 'U-admin', createdAt: new Date(Date.now() - 10*24*60*60*1000).toISOString() }
-  ];
 
   useEffect(() => {
     fetchData();
@@ -426,9 +346,6 @@ export const DataProvider = ({ children }) => {
       const remoteIds = new Set(fetchedLeads.map(l => l.id));
       const localOnly = localLeads.filter(l => !remoteIds.has(l.id));
       fetchedLeads = [...localOnly, ...fetchedLeads];
-    } else if (fetchedLeadsOk && fetchedLeads.length === 0) {
-      fetchedLeads = DEFAULT_LEADS;
-      localStorage.setItem('prismora_leads', JSON.stringify(fetchedLeads));
     }
     applyFetched('prismora_leads', setLeads, fetchedLeads);
 
@@ -452,9 +369,6 @@ export const DataProvider = ({ children }) => {
       const remoteIds = new Set(fetchedOrders.map(o => o.id));
       const localOnly = localOrders.filter(o => !remoteIds.has(o.id));
       fetchedOrders = [...localOnly, ...fetchedOrders];
-    } else if (fetchedOrdersOk && fetchedOrders.length === 0) {
-      fetchedOrders = DEFAULT_ORDERS;
-      localStorage.setItem('prismora_orders', JSON.stringify(fetchedOrders));
     }
     applyFetched('prismora_orders', setOrders, fetchedOrders);
 
@@ -468,13 +382,13 @@ export const DataProvider = ({ children }) => {
       fetchedCatalog = data || [];
       if (fetchedCatalog.length === 0) {
         const local = localStorage.getItem('prismora_product_catalog');
-        fetchedCatalog = local ? JSON.parse(local) : DEFAULT_CATALOG;
+        fetchedCatalog = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_product_catalog', JSON.stringify(fetchedCatalog));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_product_catalog');
       fetchedCatalog = local ? JSON.parse(local) : [];
     }
@@ -505,13 +419,13 @@ export const DataProvider = ({ children }) => {
       fetchedInvoices = data || [];
       if (fetchedInvoices.length === 0) {
         const local = localStorage.getItem('prismora_invoices');
-        fetchedInvoices = local ? JSON.parse(local) : DEFAULT_INVOICES;
+        fetchedInvoices = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_invoices', JSON.stringify(fetchedInvoices));
       }
     } catch (err) {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       console.warn(`Supabase fetch invoices failed, using local cache.`, err);
       const local = localStorage.getItem('prismora_invoices');
       fetchedInvoices = local ? JSON.parse(local) : [];
@@ -566,13 +480,13 @@ export const DataProvider = ({ children }) => {
       fetchedExpenses = data || [];
       if (fetchedExpenses.length === 0) {
         const local = localStorage.getItem('prismora_expenses');
-        fetchedExpenses = local ? JSON.parse(local) : DEFAULT_EXPENSES;
+        fetchedExpenses = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_expenses', JSON.stringify(fetchedExpenses));
       }
     } catch (err) {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       console.warn(`Supabase fetch expenses failed, using local cache.`, err);
       const local = localStorage.getItem('prismora_expenses');
       fetchedExpenses = local ? JSON.parse(local) : [];
@@ -582,7 +496,6 @@ export const DataProvider = ({ children }) => {
     // ── Phase 1 fetches — localStorage-backed fallbacks ──────────────────
 
     // Default seed data for when tables don't exist yet
-    const DEFAULT_VENDOR = { id: 'V1', name: 'Janki Herbals', gstin: '24AAACJ1234M1Z5', phone: '9876543200', email: 'orders@jankiherbals.com', address: '112, GIDC Industrial Estate, Anand, Gujarat - 388001', contactPerson: 'Janki Shah', outstandingAmount: 0, status: 'Active', createdAt: new Date().toISOString() };
 
     // ── Inventory ──
     let fetchedInventory = [];
@@ -592,13 +505,13 @@ export const DataProvider = ({ children }) => {
       fetchedInventory = data || [];
       if (fetchedInventory.length === 0) {
         const local = localStorage.getItem('prismora_inventory');
-        fetchedInventory = local ? JSON.parse(local) : DEFAULT_INVENTORY;
+        fetchedInventory = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_inventory', JSON.stringify(fetchedInventory));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_inventory');
       fetchedInventory = local ? JSON.parse(local) : [];
     }
@@ -612,13 +525,13 @@ export const DataProvider = ({ children }) => {
       fetchedVendors = data || [];
       if (fetchedVendors.length === 0) {
         const local = localStorage.getItem('prismora_vendors');
-        fetchedVendors = local ? JSON.parse(local) : [DEFAULT_VENDOR];
+        fetchedVendors = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_vendors', JSON.stringify(fetchedVendors));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_vendors');
       fetchedVendors = local ? JSON.parse(local) : [];
     }
@@ -664,13 +577,13 @@ export const DataProvider = ({ children }) => {
       fetchedPOs = data || [];
       if (fetchedPOs.length === 0) {
         const local = localStorage.getItem('prismora_purchase_orders');
-        fetchedPOs = local ? JSON.parse(local) : DEFAULT_PURCHASE_ORDERS;
+        fetchedPOs = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_purchase_orders', JSON.stringify(fetchedPOs));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_purchase_orders');
       fetchedPOs = local ? JSON.parse(local) : [];
     }
@@ -684,13 +597,13 @@ export const DataProvider = ({ children }) => {
       fetchedGRN = data || [];
       if (fetchedGRN.length === 0) {
         const local = localStorage.getItem('prismora_grn');
-        fetchedGRN = local ? JSON.parse(local) : DEFAULT_GRN;
+        fetchedGRN = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_grn', JSON.stringify(fetchedGRN));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_grn');
       fetchedGRN = local ? JSON.parse(local) : [];
     }
@@ -704,13 +617,13 @@ export const DataProvider = ({ children }) => {
       fetchedDist = data || [];
       if (fetchedDist.length === 0) {
         const local = localStorage.getItem('prismora_distributors');
-        fetchedDist = local ? JSON.parse(local) : DEFAULT_DISTRIBUTORS;
+        fetchedDist = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_distributors', JSON.stringify(fetchedDist));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_distributors');
       fetchedDist = local ? JSON.parse(local) : [];
     }
@@ -724,13 +637,13 @@ export const DataProvider = ({ children }) => {
       fetchedDealers = data || [];
       if (fetchedDealers.length === 0) {
         const local = localStorage.getItem('prismora_dealers');
-        fetchedDealers = local ? JSON.parse(local) : DEFAULT_DEALERS;
+        fetchedDealers = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_dealers', JSON.stringify(fetchedDealers));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_dealers');
       fetchedDealers = local ? JSON.parse(local) : [];
     }
@@ -744,13 +657,13 @@ export const DataProvider = ({ children }) => {
       fetchedRetailers = data || [];
       if (fetchedRetailers.length === 0) {
         const local = localStorage.getItem('prismora_retailers');
-        fetchedRetailers = local ? JSON.parse(local) : DEFAULT_RETAILERS;
+        fetchedRetailers = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_retailers', JSON.stringify(fetchedRetailers));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_retailers');
       fetchedRetailers = local ? JSON.parse(local) : [];
     }
@@ -764,13 +677,13 @@ export const DataProvider = ({ children }) => {
       fetchedSchemes = data || [];
       if (fetchedSchemes.length === 0) {
         const local = localStorage.getItem('prismora_schemes');
-        fetchedSchemes = local ? JSON.parse(local) : DEFAULT_SCHEMES;
+        fetchedSchemes = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_schemes', JSON.stringify(fetchedSchemes));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_schemes');
       fetchedSchemes = local ? JSON.parse(local) : [];
     }
@@ -782,16 +695,16 @@ export const DataProvider = ({ children }) => {
       const fetchedComplaints = data || [];
       if (fetchedComplaints.length === 0) {
         const local = localStorage.getItem('prismora_complaints');
-        const finalComplaints = local ? JSON.parse(local) : DEFAULT_COMPLAINTS;
+        const finalComplaints = local ? JSON.parse(local) : [];
         applyFetched('prismora_complaints', setComplaints, finalComplaints);
         localStorage.setItem('prismora_complaints', JSON.stringify(finalComplaints));
       } else {
         applyFetched('prismora_complaints', setComplaints, fetchedComplaints);
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_complaints');
       applyFetched('prismora_complaints', setComplaints, local ? JSON.parse(local) : []);
     }
@@ -804,13 +717,13 @@ export const DataProvider = ({ children }) => {
       fetchedTerritories = data || [];
       if (fetchedTerritories.length === 0) {
         const local = localStorage.getItem('prismora_territories');
-        fetchedTerritories = local ? JSON.parse(local) : DEFAULT_TERRITORIES;
+        fetchedTerritories = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_territories', JSON.stringify(fetchedTerritories));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_territories');
       fetchedTerritories = local ? JSON.parse(local) : [];
     }
@@ -824,13 +737,13 @@ export const DataProvider = ({ children }) => {
       fetchedBeats = data || [];
       if (fetchedBeats.length === 0) {
         const local = localStorage.getItem('prismora_beat_plans');
-        fetchedBeats = local ? JSON.parse(local) : DEFAULT_BEAT_PLANS;
+        fetchedBeats = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_beat_plans', JSON.stringify(fetchedBeats));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_beat_plans');
       fetchedBeats = local ? JSON.parse(local) : [];
     }
@@ -844,13 +757,13 @@ export const DataProvider = ({ children }) => {
       fetchedAttendance = data || [];
       if (fetchedAttendance.length === 0) {
         const local = localStorage.getItem('prismora_attendance');
-        fetchedAttendance = local ? JSON.parse(local) : DEFAULT_ATTENDANCE;
+        fetchedAttendance = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_attendance', JSON.stringify(fetchedAttendance));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_attendance');
       fetchedAttendance = local ? JSON.parse(local) : [];
     }
@@ -864,13 +777,13 @@ export const DataProvider = ({ children }) => {
       fetchedVisits = data || [];
       if (fetchedVisits.length === 0) {
         const local = localStorage.getItem('prismora_visit_reports');
-        fetchedVisits = local ? JSON.parse(local) : DEFAULT_VISIT_REPORTS;
+        fetchedVisits = local ? JSON.parse(local) : [];
         localStorage.setItem('prismora_visit_reports', JSON.stringify(fetchedVisits));
       }
     } catch {
-      // A failed read is not an empty table. Falling back to DEFAULT_* here is
-      // what put seeded demo rows on screen in place of real records — and then
-      // wrote them to localStorage, making the swap look permanent.
+      // A failed read is not an empty table — fall back to what this browser
+      // cached, and to nothing else. Sample rows used to be seeded here, which
+      // put invented records on screen as though they were real.
       const local = localStorage.getItem('prismora_visit_reports');
       fetchedVisits = local ? JSON.parse(local) : [];
     }
