@@ -288,6 +288,18 @@ const Orders = () => {
   const [customerChoice, setCustomerChoice] = useState('');
   const boundPartyId = formData.distributorId || formData.dealerId || formData.retailerId || '';
 
+  // An order can carry a partner's name without carrying their id — anything
+  // raised before the picker existed, or converted from a lead. The name alone
+  // does nothing: the order still will not reach their portal, ledger or stock.
+  // Offer the link rather than making it silently, since it changes where the
+  // order shows up and which price tier applies.
+  const suggestedParty = (() => {
+    if (boundPartyId) return null;
+    const name = (formData.customerName || '').trim().toLowerCase();
+    if (!name) return null;
+    return customerOptions.find(o => o.kind === 'party' && o.label.trim().toLowerCase() === name) || null;
+  })();
+
   const selectCustomer = (key) => {
     setCustomerChoice(key);
     const clearLinks = { distributorId: undefined, dealerId: undefined, retailerId: undefined };
@@ -345,9 +357,24 @@ const Orders = () => {
     }));
   };
 
+  // Which entry in the Customer list an existing order corresponds to. Without
+  // this an order always reopened showing "New customer", even when it was
+  // plainly for a known distributor — which reads as though the link had been
+  // lost.
+  const customerChoiceFor = (order) => {
+    if (!order) return '';
+    const partyId = order.distributorId || order.dealerId || order.retailerId;
+    if (partyId) return `party:${partyId}`;
+    const name = (order.customerName || '').trim();
+    if (!name) return '';
+    const lead = (leads || []).find(l => (l.name || '').trim().toLowerCase() === name.toLowerCase());
+    if (lead) return `lead:${lead.id}`;
+    return `past:${name}`;
+  };
+
   const handleOpenModal = (order = null) => {
     setStatusError('');
-    setCustomerChoice('');
+    setCustomerChoice(customerChoiceFor(order));
     if (order) {
       setEditingOrder(order);
       setFormData({
@@ -752,6 +779,21 @@ const Orders = () => {
                   Channel partners bind the order to their portal, ledger and tier pricing. Leads and previous
                   customers just fill in their details. Choose "New customer" for anyone not listed.
                 </p>
+                {suggestedParty && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                    <span className="text-[11px] text-amber-300 leading-snug">
+                      This order names <strong>{suggestedParty.label}</strong>, who is a {suggestedParty.ref.partyType.toLowerCase()},
+                      but it is not linked to their record — so it will not appear on their portal or ledger.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => selectCustomer(suggestedParty.key)}
+                      className="ml-auto px-3 py-1 text-[11px] font-bold rounded-lg bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 transition-colors whitespace-nowrap"
+                    >
+                      Link to {suggestedParty.ref.partyType.toLowerCase()}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-5">
