@@ -389,10 +389,10 @@ export default function Distributors() {
                   </select>
                 </div>
                 <div><label className={labelCls}>City</label><input type="text" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Pincode</label><input type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /></div>
+                <div><label className={labelCls}>Pincode *</label><input required type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /></div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Delivery Address</label>
-                  <textarea rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} />
+                  <label className={labelCls}>Delivery Address *</label>
+                  <textarea required rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} />
                   <p className="text-[10px] text-slate-500 mt-1">Used as the default delivery address on their orders. Dispatch cannot send goods to a city alone.</p>
                 </div>
                 <div><label className={labelCls}>Territory / Zone</label><input type="text" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} placeholder="e.g. Gujarat North" className={inputCls} /></div>

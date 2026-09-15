@@ -1511,12 +1511,12 @@ export default function SFA() {
                             <input type="email" placeholder="Optional" value={visitForm.outletEmail} onChange={e => setVisitForm({ ...visitForm, outletEmail: e.target.value })} className={inp} />
                           </div>
                           <div>
-                            <label className={lbl}>Pincode</label>
-                            <input type="text" inputMode="numeric" maxLength={6} value={visitForm.outletPincode} onChange={e => setVisitForm({ ...visitForm, outletPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className={inp} />
+                            <label className={lbl}>Pincode *</label>
+                            <input required type="text" inputMode="numeric" maxLength={6} value={visitForm.outletPincode} onChange={e => setVisitForm({ ...visitForm, outletPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className={inp} />
                           </div>
                           <div className="sm:col-span-2">
-                            <label className={lbl}>Delivery address</label>
-                            <textarea rows="2" value={visitForm.outletAddress} onChange={e => setVisitForm({ ...visitForm, outletAddress: e.target.value })} placeholder="Shop number, street, area" className={inp + ' resize-none'} />
+                            <label className={lbl}>Delivery address *</label>
+                            <textarea required rows="2" value={visitForm.outletAddress} onChange={e => setVisitForm({ ...visitForm, outletAddress: e.target.value })} placeholder="Shop number, street, area" className={inp + ' resize-none'} />
                             <p className="text-[10px] text-slate-500 mt-1">Where this order gets delivered. Dispatch cannot send goods to a city alone.</p>
                           </div>
                         </div>

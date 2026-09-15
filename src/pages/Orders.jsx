@@ -106,6 +106,18 @@ const Orders = () => {
       .filter(li => li.name && li.available < li.quantity);
   };
 
+  // An order cannot leave Pending until there is somewhere to send it. Both
+  // parts are needed: a pincode without a street cannot be delivered to, and a
+  // street without a pincode will not route. Cancelled is exempt — an order
+  // being abandoned never ships.
+  const missingDeliveryFor = (target) => {
+    if (target === 'Pending' || target === 'Cancelled') return null;
+    const missing = [];
+    if (!String(formData.deliveryAddress || '').trim()) missing.push('a delivery address');
+    if (!String(formData.deliveryPincode || '').trim()) missing.push('a pincode');
+    return missing.length ? missing.join(' and ') : null;
+  };
+
   const attemptSetStatus = (targetStatus) => {
     if (!canSetOrderStatus(user?.role, targetStatus)) {
       const owners = STATUS_STAGE_OWNERS[targetStatus];
@@ -117,6 +129,11 @@ const Orders = () => {
     // straight to Delivered — deducting stock and billing for a void order.
     if (formData.status === 'Cancelled' && targetStatus !== 'Cancelled') {
       setStatusError('This order was cancelled. Create a new order instead of reviving it.');
+      return;
+    }
+    const missingDelivery = missingDeliveryFor(targetStatus);
+    if (missingDelivery) {
+      setStatusError(`This order needs ${missingDelivery} before it can leave Pending. Fill it in below — dispatch cannot deliver to a city alone.`);
       return;
     }
     // Block ALL forward fulfillment stages when stock is short — you can't
@@ -435,6 +452,12 @@ const Orders = () => {
     // above what's in stock. The status guard only runs on a status *change*,
     // so without re-checking here the order would sit at "Ready for Dispatch"
     // promising units that don't exist.
+    const missingDelivery = missingDeliveryFor(formData.status);
+    if (missingDelivery) {
+      setStatusError(`This order needs ${missingDelivery} before it can leave Pending.`);
+      return;
+    }
+
     if (editingOrder && ['Ready for Dispatch', 'Shipped', 'Delivered'].includes(formData.status)) {
       const shortfalls = getStockShortfalls(formData);
       if (shortfalls.length > 0) {
@@ -1056,11 +1079,11 @@ const Orders = () => {
                   <input type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Pincode</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Pincode *</label>
                   <input type="text" inputMode="numeric" maxLength={6} value={formData.deliveryPincode || ''} onChange={e => setFormData({ ...formData, deliveryPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Delivery Address</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Delivery Address *</label>
                   <textarea
                     rows="2"
                     value={formData.deliveryAddress || ''}
@@ -1072,13 +1095,10 @@ const Orders = () => {
                     Dispatch cannot deliver to a city alone. Choosing a channel partner fills in their registered
                     address; change it here if this consignment goes somewhere else.
                   </p>
-                  {/* Warned rather than blocked: orders raised before addresses
-                      were recorded have none, and refusing to move them would
-                      strand work that is otherwise fine. */}
-                  {!formData.deliveryAddress?.trim() && ['Ready for Dispatch', 'Shipped', 'Delivered'].includes(formData.status) && (
+                  {(!String(formData.deliveryAddress || '').trim() || !String(formData.deliveryPincode || '').trim()) && (
                     <p className="mt-2 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                      This order is at the <strong>{formData.status}</strong> stage with no delivery address. Whoever
-                      carries it has only {formData.city || 'a city'}{formData.state ? `, ${formData.state}` : ''} to go on.
+                      Required before this order can leave <strong>Pending</strong>. Whoever carries it would otherwise
+                      have only {formData.city || 'a city'}{formData.state ? `, ${formData.state}` : ''} to go on.
                     </p>
                   )}
                 </div>
