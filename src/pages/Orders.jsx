@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { Plus, Edit2, Trash2, Download, Package, CheckCircle } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { downloadCSV } from '../utils/exportUtils';
+import { allParties } from '../utils/distributorUtils';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 
@@ -60,6 +61,33 @@ const Orders = () => {
   // Warehouse Manager / Dispatch Team fulfill orders across every sales rep,
   // so they aren't restricted to the row-level "my own orders" visibility
   // that applies to Sales roles.
+  // Every distributor, dealer and retailer in one list, so an order can be bound
+  // to a partner by picking them rather than by typing their name exactly.
+  const partyList = useMemo(() => allParties(distributors, dealers, retailers), [distributors, dealers, retailers]);
+  const boundPartyId = formData.distributorId || formData.dealerId || formData.retailerId || '';
+
+  const selectParty = (id) => {
+    if (!id) {
+      // Back to a one-off customer: drop the link and let the name be typed.
+      setFormData(prev => ({ ...prev, distributorId: undefined, dealerId: undefined, retailerId: undefined }));
+      return;
+    }
+    const p = partyList.find(x => x.id === id);
+    if (!p) return;
+    setFormData(prev => ({
+      ...prev,
+      customerName: p.name,
+      companyName: p.name,
+      phone: p.phone || prev.phone || '',
+      email: p.email || prev.email || '',
+      state: p.state || prev.state || '',
+      city: p.city || prev.city || '',
+      distributorId: p.partyType === 'Distributor' ? p.id : undefined,
+      dealerId: p.partyType === 'Dealer' ? p.id : undefined,
+      retailerId: p.partyType === 'Retailer' ? p.id : undefined,
+    }));
+  };
+
   const isFulfillmentRole = user?.role === 'Warehouse Manager' || user?.role === 'Dispatch Team';
   const baseVisibleOrders = orders.filter(o => isFulfillmentRole || canAccessData(o.assignedTo));
 
@@ -628,12 +656,39 @@ const Orders = () => {
                 </div>
               )}
 
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Customer</label>
+                <select
+                  value={boundPartyId}
+                  onChange={e => selectParty(e.target.value)}
+                  className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent"
+                  style={{ colorScheme: 'dark' }}
+                >
+                  <option value="" className="bg-brand-primary">One-off customer — type the name below</option>
+                  {['Distributor', 'Dealer', 'Retailer'].map(tier => {
+                    const inTier = partyList.filter(p => p.partyType === tier);
+                    if (inTier.length === 0) return null;
+                    return (
+                      <optgroup key={tier} label={`${tier}s`}>
+                        {inTier.map(p => (
+                          <option key={p.id} value={p.id} className="bg-brand-primary">{p.name}</option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Pick an existing partner so the order reaches their portal, ledger and stock. Leave as one-off for anyone else.
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Customer Name *</label>
                   <input
                     required
                     type="text"
+                    disabled={Boolean(boundPartyId)}
                     value={formData.customerName}
                     onChange={e => {
                       const val = e.target.value;
@@ -692,6 +747,7 @@ const Orders = () => {
                     <p className="mt-1 text-[11px] text-emerald-400 flex items-center gap-1">
                       <CheckCircle size={11} />
                       Linked to {formData.distributorId ? 'distributor' : formData.dealerId ? 'dealer' : 'retailer'} record — will appear on their portal.
+                      Switch the Customer field to "one-off" to type a different name.
                     </p>
                   )}
                 </div>
