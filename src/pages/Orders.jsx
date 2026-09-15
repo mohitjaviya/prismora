@@ -61,33 +61,6 @@ const Orders = () => {
   // Warehouse Manager / Dispatch Team fulfill orders across every sales rep,
   // so they aren't restricted to the row-level "my own orders" visibility
   // that applies to Sales roles.
-  // Every distributor, dealer and retailer in one list, so an order can be bound
-  // to a partner by picking them rather than by typing their name exactly.
-  const partyList = useMemo(() => allParties(distributors, dealers, retailers), [distributors, dealers, retailers]);
-  const boundPartyId = formData.distributorId || formData.dealerId || formData.retailerId || '';
-
-  const selectParty = (id) => {
-    if (!id) {
-      // Back to a one-off customer: drop the link and let the name be typed.
-      setFormData(prev => ({ ...prev, distributorId: undefined, dealerId: undefined, retailerId: undefined }));
-      return;
-    }
-    const p = partyList.find(x => x.id === id);
-    if (!p) return;
-    setFormData(prev => ({
-      ...prev,
-      customerName: p.name,
-      companyName: p.name,
-      phone: p.phone || prev.phone || '',
-      email: p.email || prev.email || '',
-      state: p.state || prev.state || '',
-      city: p.city || prev.city || '',
-      distributorId: p.partyType === 'Distributor' ? p.id : undefined,
-      dealerId: p.partyType === 'Dealer' ? p.id : undefined,
-      retailerId: p.partyType === 'Retailer' ? p.id : undefined,
-    }));
-  };
-
   const isFulfillmentRole = user?.role === 'Warehouse Manager' || user?.role === 'Dispatch Team';
   const baseVisibleOrders = orders.filter(o => isFulfillmentRole || canAccessData(o.assignedTo));
 
@@ -274,6 +247,33 @@ const Orders = () => {
     assignedTo: isSalesRole(user?.role) ? user.id : '',
     date: '', phone: '', email: ''
   });
+
+  // Every distributor, dealer and retailer in one list, so an order can be bound
+  // to a partner by picking them rather than by typing their name exactly.
+  const partyList = useMemo(() => allParties(distributors, dealers, retailers), [distributors, dealers, retailers]);
+  const boundPartyId = formData.distributorId || formData.dealerId || formData.retailerId || '';
+
+  const selectParty = (id) => {
+    if (!id) {
+      // Back to a one-off customer: drop the link and let the name be typed.
+      setFormData(prev => ({ ...prev, distributorId: undefined, dealerId: undefined, retailerId: undefined }));
+      return;
+    }
+    const p = partyList.find(x => x.id === id);
+    if (!p) return;
+    setFormData(prev => ({
+      ...prev,
+      customerName: p.name,
+      companyName: p.name,
+      phone: p.phone || prev.phone || '',
+      email: p.email || prev.email || '',
+      state: p.state || prev.state || '',
+      city: p.city || prev.city || '',
+      distributorId: p.partyType === 'Distributor' ? p.id : undefined,
+      dealerId: p.partyType === 'Dealer' ? p.id : undefined,
+      retailerId: p.partyType === 'Retailer' ? p.id : undefined,
+    }));
+  };
 
   const handleOpenModal = (order = null) => {
     setStatusError('');

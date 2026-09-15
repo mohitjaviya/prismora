@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { Component, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
@@ -56,12 +56,56 @@ const PermissionGuard = ({ module, children }) => {
   return children;
 };
 
+/**
+ * Keeps one broken screen from taking the whole application down.
+ *
+ * Without this, an error thrown while rendering any page propagates to the
+ * root, React unmounts everything, and the user is left on a blank white page
+ * with no way back — including no way to navigate away from the route that
+ * caused it, because reloading lands on it again.
+ */
+class RouteErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[Prismora] A screen failed to render:', error, info?.componentStack);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="p-10 max-w-xl mx-auto text-center">
+        <h1 className="text-xl font-bold text-white mb-2">This screen could not be opened</h1>
+        <p className="text-sm text-slate-400 leading-relaxed mb-5">
+          Something went wrong while loading this page. The rest of the app is unaffected — go back to the
+          dashboard and try again. If it keeps happening, the details are in the browser console.
+        </p>
+        <p className="text-[11px] text-slate-600 font-mono break-words mb-5">{String(this.state.error?.message || this.state.error)}</p>
+        <button
+          onClick={() => { this.setState({ error: null }); window.location.assign('/'); }}
+          className="px-5 py-2 bg-brand-accent text-white font-bold rounded-lg hover:bg-brand-accent-light transition-colors"
+        >
+          Back to dashboard
+        </button>
+      </div>
+    );
+  }
+}
+
 const RouteFallback = () => (
   <div className="flex items-center justify-center p-16 text-slate-500 text-sm">Loading…</div>
 );
 
 function AppRoutes() {
   return (
+    <RouteErrorBoundary>
     <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -96,6 +140,7 @@ function AppRoutes() {
       </Route>
     </Routes>
     </Suspense>
+    </RouteErrorBoundary>
   );
 }
 

@@ -7,11 +7,9 @@ const DataContext = createContext();
 // Bumping this string clears every cached table in the browser on the next load.
 //
 // The caches are not a passive copy: fetchData() merges anything the server does
-// not have on top of what it returns, and backfillLocalOnly() uploads it. After a
-// deliberate data reset that combination is destructive — every browser still
-// holding the old rows would put them back on screen and then push them into
-// Supabase, quietly undoing the reset. Clearing the caches once, keyed on this
-// version, is what stops that.
+// not return on top of what it does. After a deliberate data reset, a browser
+// still holding the old rows puts them back on screen as though nothing had been
+// deleted. Clearing the caches once, keyed on this version, is what stops that.
 const DATA_VERSION = '2026-09-14-reset';
 
 // Theme and session are user preferences rather than cached tables, so they
@@ -853,94 +851,15 @@ export const DataProvider = ({ children }) => {
       fetchedIncentives = local ? JSON.parse(local) : [];
     }
     setDistributorIncentives(fetchedIncentives);
-
-    // Rescue anything that only ever reached this browser (see below).
-    await backfillLocalOnly();
   };
 
-  // ── Recovery: lift browser-only records into Supabase ────────────────────
-  //
-  // While a table was missing or a column had drifted, PostgREST rejected the
-  // whole insert (42703 / PGRST205) and the record survived only in
-  // localStorage. localStorage is a cache, not storage: Safari clears it after
-  // roughly a week without a visit, Chrome and Android evict it under storage
-  // pressure, and any "clear browsing data" wipes it. Everything still stranded
-  // here is one eviction away from being gone for good — which is exactly how
-  // real records vanished while the seeded demo rows reappeared in their place.
-  //
-  // Runs once per load, after the fetches, and is safe to repeat: rows already
-  // upstream are skipped and the write is an upsert on the primary key.
-  const backfillLocalOnly = async () => {
-    const jobs = [
-      ['leads', 'prismora_leads', DEFAULT_LEADS],
-      ['orders', 'prismora_orders', DEFAULT_ORDERS],
-      ['products', 'prismora_product_catalog', DEFAULT_CATALOG],
-      ['inventory', 'prismora_inventory', DEFAULT_INVENTORY],
-      ['invoices', 'prismora_invoices', DEFAULT_INVOICES],
-      ['credit_notes', 'prismora_credit_notes', []],
-      ['expenses', 'prismora_expenses', DEFAULT_EXPENSES],
-      ['vendors', 'prismora_vendors', []],
-      ['purchase_orders', 'prismora_purchase_orders', DEFAULT_PURCHASE_ORDERS],
-      ['grn', 'prismora_grn', DEFAULT_GRN],
-      ['purchase_returns', 'prismora_purchase_returns', []],
-      ['vendor_payments', 'prismora_vendor_payments', []],
-      ['distributors', 'prismora_distributors', DEFAULT_DISTRIBUTORS],
-      ['dealers', 'prismora_dealers', DEFAULT_DEALERS],
-      ['retailers', 'prismora_retailers', DEFAULT_RETAILERS],
-      ['schemes', 'prismora_schemes', DEFAULT_SCHEMES],
-      ['complaints', 'prismora_complaints', DEFAULT_COMPLAINTS],
-      ['territories', 'prismora_territories', DEFAULT_TERRITORIES],
-      ['beat_plans', 'prismora_beat_plans', DEFAULT_BEAT_PLANS],
-      ['attendance', 'prismora_attendance', DEFAULT_ATTENDANCE],
-      ['visit_reports', 'prismora_visit_reports', DEFAULT_VISIT_REPORTS],
-      ['sfa_expenses', 'prismora_sfa_expenses', []],
-      ['distributor_payments', 'prismora_distributor_payments', []],
-      ['scheme_claims', 'prismora_scheme_claims', []],
-      ['distributor_incentives', 'prismora_distributor_incentives', []],
-    ];
-
-    let restored = 0;
-    for (const [table, key, demo] of jobs) {
-      let local;
-      try {
-        local = JSON.parse(localStorage.getItem(key) || '[]');
-      } catch { continue; }
-      if (!Array.isArray(local) || local.length === 0) continue;
-
-      // Only the ids are needed to work out what is missing, and only one row
-      // is needed to learn the column shape — pulling every row of every table
-      // on each load would be far heavier than the check is worth.
-      // A failed read must never be mistaken for an empty table either:
-      // backfilling against a false empty would duplicate every record in it.
-      const { data: remoteIds, error } = await supabase.from(table).select('id');
-      if (error) continue;
-      const { data: sample } = await supabase.from(table).select('*').limit(1);
-
-      const known = new Set((remoteIds || []).map(r => r.id));
-      // Demo rows are seeded locally whenever a table reads back empty. Pushing
-      // them upstream would make the sample data permanent for every user.
-      const demoIds = new Set((demo || []).map(d => d.id));
-      const stranded = local.filter(r => r && r.id && !known.has(r.id) && !demoIds.has(r.id));
-      if (stranded.length === 0) continue;
-
-      // Narrow each record to the columns the table actually has. One unknown
-      // key rejects the entire batch, so without this a single drifted column
-      // would strand every record again.
-      const columns = sample && sample.length > 0 ? Object.keys(sample[0]) : null;
-      const rows = columns
-        ? stranded.map(r => Object.fromEntries(Object.entries(r).filter(([k]) => columns.includes(k))))
-        : stranded;
-
-      const { error: upErr } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
-      if (upErr) {
-        console.warn(`[Prismora] Could not restore ${stranded.length} browser-only ${table} record(s). Run fix_production_schema.sql against this database, then reload.`, upErr.message || upErr);
-      } else {
-        restored += stranded.length;
-        console.info(`[Prismora] Restored ${stranded.length} ${table} record(s) that existed only in this browser.`);
-      }
-    }
-    if (restored > 0) console.info(`[Prismora] ${restored} record(s) recovered into Supabase and are now safe from cache eviction.`);
-  };
+  // A backfill used to run here, uploading records that existed only in this
+  // browser. It was written for a specific situation: the database was missing
+  // tables and columns, so writes were being rejected and records were stranded
+  // in localStorage. That schema is repaired and writes now succeed, so the
+  // rescue has no job left — and it actively caused harm, because a browser
+  // holding stale rows would re-upload records that had been deliberately
+  // deleted, quietly undoing a data reset. localStorage is a cache again.
 
   // ── Audit Log ────────────────────────────────────────────────────────────
   const logEvent = async (type, message, assignedTo, dataId) => {
