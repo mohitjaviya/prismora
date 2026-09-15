@@ -14,6 +14,12 @@ const STATUSES = [
   'Negotiation', 'Distributor Approved', 'First Order', 'Active', 'Lost'
 ];
 
+// Moving a lead into any of these means the customer has committed, which is
+// when an order is raised. Kept in one place because the drag handler and the
+// edit form both have to recognise it.
+const CONVERSION_STATUSES = ['Converted', 'First Order', 'Active'];
+const isConversion = (status) => CONVERSION_STATUSES.includes(status);
+
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
   'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
@@ -25,7 +31,7 @@ const INDIAN_STATES = [
 ];
 
 const Leads = () => {
-  const { leads, addLead, updateLead, deleteLead, products, addProduct } = useData();
+  const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog } = useData();
   const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -112,6 +118,60 @@ const Leads = () => {
     setIsCustomProduct(false);
   };
 
+  // ── Converting a lead into an order ──────────────────────────────────────
+  // A lead records which products interest a customer, never how many. The
+  // order used to be raised automatically from that, which meant guessing: one
+  // unit of the first product, priced at the whole deal value. This asks.
+  const [convertingLead, setConvertingLead] = useState(null);
+  const [convertStatus, setConvertStatus] = useState('First Order');
+  const [convertItems, setConvertItems] = useState([]);
+  const [convertError, setConvertError] = useState('');
+  const [isConverting, setIsConverting] = useState(false);
+
+  const priceFor = (name) => {
+    const p = (productCatalog || []).find(c => c.name === name);
+    return Number(p?.distributorPrice ?? p?.mrp ?? 0);
+  };
+
+  const beginConversion = (lead, targetStatus) => {
+    const interest = Array.isArray(lead.productInterest)
+      ? lead.productInterest
+      : (lead.productInterest ? [lead.productInterest] : []);
+    const rows = interest.filter(Boolean).map(name => ({ name, quantity: '', unitPrice: priceFor(name) }));
+    setConvertItems(rows.length > 0 ? rows : [{ name: '', quantity: '', unitPrice: 0 }]);
+    setConvertStatus(targetStatus);
+    setConvertError('');
+    setConvertingLead(lead);
+  };
+
+  const updateConvertItem = (idx, patch) => {
+    setConvertItems(prev => prev.map((row, i) => {
+      if (i !== idx) return row;
+      const nextRow = { ...row, ...patch };
+      // Picking a different product refreshes the price, unless it was edited.
+      if (patch.name !== undefined) nextRow.unitPrice = priceFor(patch.name);
+      return nextRow;
+    }));
+  };
+
+  const convertTotal = convertItems.reduce(
+    (sum, i) => sum + (Number(i.quantity || 0) * Number(i.unitPrice || 0)), 0
+  );
+  const convertUnits = convertItems.reduce((sum, i) => sum + Number(i.quantity || 0), 0);
+
+  const confirmConversion = async () => {
+    if (!convertingLead || isConverting) return;
+    setIsConverting(true);
+    setConvertError('');
+    try {
+      const result = await convertLeadToOrder(convertingLead, convertItems, convertStatus);
+      if (result && !result.ok) { setConvertError(result.error || 'Could not raise the order.'); return; }
+      setConvertingLead(null);
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -131,12 +191,21 @@ const Leads = () => {
       dealValue: Number(formData.dealValue)
     };
 
+    // A status change into conversion is confirmed separately, so save the rest
+    // of the edits against the current status and let the confirm step move it.
+    const wantsConversion = editingLead
+      && isConversion(formData.status)
+      && !isConversion(editingLead.status)
+      && !editingLead.orderCreated;
+
     if (editingLead) {
-      updateLead(editingLead.id, dataToSave);
+      updateLead(editingLead.id, wantsConversion ? { ...dataToSave, status: editingLead.status } : dataToSave);
     } else {
       addLead(dataToSave);
     }
+    const target = formData.status;
     closeModal();
+    if (wantsConversion) beginConversion({ ...editingLead, ...dataToSave, status: editingLead.status }, target);
   };
 
   const handleExport = () => {
@@ -153,12 +222,14 @@ const Leads = () => {
     if (!destination) return;
     if (destination.droppableId === source.droppableId) return;
 
-    if (destination.droppableId === 'First Order' || destination.droppableId === 'Active') {
+    if (isConversion(destination.droppableId)) {
       const targetLead = leads.find(l => l.id === draggableId);
       if (!targetLead || !targetLead.state || !targetLead.state.trim() || !targetLead.city || !targetLead.city.trim()) {
         alert("⚠️ Cannot convert lead: Please edit the lead and set both State and City before converting.");
         return;
       }
+      // Confirm the quantities before any order exists.
+      if (!targetLead.orderCreated) { beginConversion(targetLead, destination.droppableId); return; }
     }
 
     // The droppableId is the status string
@@ -869,6 +940,114 @@ const Leads = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+        , document.body)}
+
+      {/* Confirm the order before it exists — the lead has no quantities. */}
+      {convertingLead && createPortal(
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={() => !isConverting && setConvertingLead(null)}>
+          <div className="glass-panel bg-brand-primary rounded-2xl w-full max-w-2xl border border-white/10 max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-white/5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">Confirm the order</h2>
+                <p className="text-sm text-slate-400 mt-1">
+                  {convertingLead.name}{convertingLead.company ? ` · ${convertingLead.company}` : ''} — moving to {convertStatus}
+                </p>
+              </div>
+              <button onClick={() => !isConverting && setConvertingLead(null)} className="text-slate-400 hover:text-white transition-colors p-1"><X size={20} /></button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500 leading-relaxed">
+                The lead records which products interest this customer, but not how many. Enter the quantities being
+                ordered — these set the stock that leaves the warehouse on delivery.
+              </p>
+
+              <div className="space-y-3">
+                {convertItems.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-12 sm:col-span-6">
+                      <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Product</label>
+                      <select
+                        value={row.name}
+                        onChange={e => updateConvertItem(idx, { name: e.target.value })}
+                        className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
+                        style={{ colorScheme: 'dark' }}
+                      >
+                        <option value="" className="bg-brand-primary">Select a product…</option>
+                        {(productCatalog || []).map(p => (
+                          <option key={p.id} value={p.name} className="bg-brand-primary">{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-5 sm:col-span-2">
+                      <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Quantity</label>
+                      <input
+                        type="number" min="0" value={row.quantity}
+                        onChange={e => updateConvertItem(idx, { quantity: e.target.value })}
+                        placeholder="0"
+                        className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
+                      />
+                    </div>
+                    <div className="col-span-5 sm:col-span-2">
+                      <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Unit ₹</label>
+                      <input
+                        type="number" min="0" value={row.unitPrice}
+                        onChange={e => updateConvertItem(idx, { unitPrice: e.target.value })}
+                        className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
+                      />
+                    </div>
+                    <div className="col-span-2 sm:col-span-2 flex items-center justify-end gap-1">
+                      <span className="text-sm font-medium text-white tabular-nums">
+                        ₹{(Number(row.quantity || 0) * Number(row.unitPrice || 0)).toLocaleString('en-IN')}
+                      </span>
+                      {convertItems.length > 1 && (
+                        <button type="button" onClick={() => setConvertItems(prev => prev.filter((_, i) => i !== idx))} className="text-slate-500 hover:text-red-400 p-1"><X size={14} /></button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setConvertItems(prev => [...prev, { name: '', quantity: '', unitPrice: 0 }])}
+                className="text-xs text-brand-accent hover:underline font-medium"
+              >
+                + Add another product
+              </button>
+
+              <div className="pt-4 border-t border-white/5 flex flex-wrap gap-4 justify-between items-end">
+                <div className="text-xs text-slate-500">
+                  Deal value recorded on the lead: <span className="text-slate-300 font-medium">₹{Number(convertingLead.dealValue || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wide">Order total · {convertUnits.toLocaleString('en-IN')} units</p>
+                  <p className="text-2xl font-extrabold text-white tabular-nums">₹{convertTotal.toLocaleString('en-IN')}</p>
+                </div>
+              </div>
+
+              {convertTotal > 0 && Number(convertingLead.dealValue || 0) > 0 && convertTotal !== Number(convertingLead.dealValue) && (
+                <p className="text-[11px] text-amber-400">
+                  This differs from the deal value on the lead. The order will be raised for ₹{convertTotal.toLocaleString('en-IN')}.
+                </p>
+              )}
+
+              {convertError && <p className="text-red-400 text-sm font-medium">{convertError}</p>}
+            </div>
+
+            <div className="p-6 border-t border-white/5 flex justify-end gap-3">
+              <button type="button" onClick={() => setConvertingLead(null)} disabled={isConverting} className="px-5 py-2 text-sm text-slate-400 hover:text-white transition-colors disabled:opacity-50">Cancel</button>
+              <button
+                type="button"
+                onClick={confirmConversion}
+                disabled={isConverting || convertUnits <= 0}
+                className="px-5 py-2 bg-brand-accent text-white font-bold rounded-lg hover:bg-brand-accent-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isConverting ? 'Creating…' : 'Create order'}
+              </button>
+            </div>
           </div>
         </div>
         , document.body)}

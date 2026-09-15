@@ -383,6 +383,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS "dealerId" TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "retailerId" TEXT;
 
 -- Distributor/dealer/retailer self-service orders can carry multiple line items
+-- Set when a lead has been converted, so a second order cannot be raised for it.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS "orderCreated" BOOLEAN DEFAULT false;
+
+-- Which lead an order came from. Rolling a lead back out of conversion needs to
+-- find its order by id; matching on the customer name can remove the wrong one.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "leadId" TEXT;
+
 -- Contact details captured on the order form. The form payload always carries
 -- these two keys, and PostgREST rejects the WHOLE insert/update (42703) when a
 -- payload names a column that doesn't exist — so omitting them here silently

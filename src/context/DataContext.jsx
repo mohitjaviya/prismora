@@ -93,6 +93,7 @@ const ORDER_COLUMNS = [
   'receivedByDistributor', 'receivedAt',
   'splitFromOrderId', 'splitIntoOrderId',
   'deliveredQty', 'fulfilledAt',
+  'leadId',
 ];
 
 // Narrows an order object to just the persistable columns. Form-only fields
@@ -173,6 +174,29 @@ const insertWithFreeId = async (label, table, prefix, firstNumber, record, shape
   }
   console.error(`[Prismora] Gave up finding a free id for ${label} after ${attempts} tries.`);
   return { id: `${prefix}${number}`, saved: false };
+};
+
+/**
+ * The columns that exist on `leads`.
+ *
+ * Same hazard as ORDER_COLUMNS: PostgREST rejects an entire UPDATE when the
+ * payload names a column the table lacks. `orderCreated` was being written
+ * without existing, so every lead conversion failed to save its new status
+ * while still creating the order — and the next conversion of the same lead
+ * raised a duplicate.
+ */
+const LEAD_COLUMNS = [
+  'id', 'name', 'company', 'phone', 'email', 'productInterest', 'dealValue',
+  'state', 'city', 'status', 'assignedTo', 'followUpDate', 'notes',
+  'orderCreated', 'createdAt',
+];
+
+const leadRow = (lead) => {
+  const row = {};
+  for (const key of LEAD_COLUMNS) {
+    if (lead[key] !== undefined) row[key] = lead[key];
+  }
+  return row;
 };
 
 export const DataProvider = ({ children }) => {
@@ -947,20 +971,21 @@ export const DataProvider = ({ children }) => {
   const updateLead = async (id, updatedData) => {
     const oldLead = leads.find(l => l.id === id);
     let next = leads.map(l => l.id === id ? { ...l, ...updatedData } : l);
-    
-    let shouldCreateOrder = false;
+
     let shouldCancelOrder = false;
-    
+
     if (oldLead && oldLead.status !== updatedData.status) {
       const isConversionStatus = (s) => ['Converted', 'First Order', 'Active'].includes(s);
       const wasConverted = isConversionStatus(oldLead.status);
       const isConvertedNow = isConversionStatus(updatedData.status);
-      
-      if (isConvertedNow && !wasConverted && !oldLead.orderCreated) {
-        shouldCreateOrder = true;
-        updatedData.orderCreated = true;
-        next = leads.map(l => l.id === id ? { ...l, ...updatedData } : l);
-      } else if (!isConvertedNow && wasConverted) {
+
+      // Converting no longer raises the order from here. A lead records which
+      // products a customer is interested in, not how many of each, so this
+      // used to invent the order: one unit of the first product, priced at the
+      // whole deal value, with any other products silently dropped. Stock then
+      // fell by one unit on delivery instead of the real amount. Leads.jsx now
+      // confirms the line items first and calls convertLeadToOrder().
+      if (!isConvertedNow && wasConverted) {
         shouldCancelOrder = true;
         updatedData.orderCreated = false;
         next = leads.map(l => l.id === id ? { ...l, ...updatedData } : l);
@@ -969,77 +994,76 @@ export const DataProvider = ({ children }) => {
 
     setLeads(next);
     localStorage.setItem('prismora_leads', JSON.stringify(next));
-    await persist('leads update', supabase.from('leads').update(updatedData).eq('id', id));
-    
+    await persist('leads update', supabase.from('leads').update(leadRow(updatedData)).eq('id', id));
+
     if (oldLead && oldLead.status !== updatedData.status) {
-      if (shouldCreateOrder) {
-        logEvent('lead_converted', `Lead Converted: ${updatedData.name || oldLead.name}`, updatedData.assignedTo || oldLead.assignedTo, id);
-        
-        // ── Auto-create corresponding Order ──────────────────────────────────
-        const finalLead = { ...oldLead, ...updatedData };
-        const assignedSp = finalLead.assignedTo || 'U-sales-1';
-
-        const productInterest = Array.isArray(finalLead.productInterest) 
-          ? finalLead.productInterest 
-          : (finalLead.productInterest ? [finalLead.productInterest] : []);
-        const targetProduct = productInterest[0] || 'Herbal Hair Oil 100ml';
-
-        const newOrder = {
-          customerName: finalLead.name,
-          companyName: finalLead.company || '',
-          product: targetProduct,
-          quantity: 1,
-          value: Number(finalLead.dealValue || 0),
-          state: finalLead.state || 'Gujarat',
-          city: finalLead.city || 'Ahmedabad',
-          status: 'Pending',
-          assignedTo: assignedSp,
-          date: new Date().toISOString(),
-          phone: finalLead.phone || '',
-          email: finalLead.email || ''
-        };
-
-        // Reuse the exact addOrder logic inline to prevent duplicate maxId logic issues
-        const maxId = orders.reduce((max, o) => {
-          const num = parseInt(o.id.replace('O', ''), 10);
-          return !isNaN(num) && num > max ? num : max;
-        }, 0);
-        const newOrderId = `O${maxId + 1}`;
-        const newOrderObj = { ...newOrder, id: newOrderId, createdAt: new Date().toISOString() };
-        
-        setOrders(prev => {
-          const nextOrders = [newOrderObj, ...prev];
-          localStorage.setItem('prismora_orders', JSON.stringify(nextOrders));
-          return nextOrders;
-        });
-        
-        await persist('orders insert', supabase.from('orders').insert([orderRow(newOrderObj)]));
-        logEvent('order_created', `Auto-order ${newOrderId} created from converted lead`, assignedSp, newOrderId);
-      } else if (shouldCancelOrder) {
-        const targetOrder = orders.find(o => 
-          o.customerName === oldLead.name && 
-          o.companyName === (oldLead.company || '') && 
-          o.status === 'Pending'
-        );
+      if (shouldCancelOrder) {
+        // Found by the lead it was raised from. The previous rule matched on
+        // customer name and company, which could remove an unrelated pending
+        // order for the same customer.
+        const targetOrder = orders.find(o => o.leadId === id && o.status === 'Pending');
         if (targetOrder) {
-          logEvent('lead_rollback', `Lead rolled back from conversion: ${oldLead.name}. Auto-created pending order ${targetOrder.id} removed.`, updatedData.assignedTo || oldLead.assignedTo, id);
-          
+          logEvent('lead_rollback', `Lead rolled back from conversion: ${oldLead.name}. Pending order ${targetOrder.id} removed.`, updatedData.assignedTo || oldLead.assignedTo, id);
           setOrders(prev => {
             const nextOrders = prev.filter(o => o.id !== targetOrder.id);
             localStorage.setItem('prismora_orders', JSON.stringify(nextOrders));
             return nextOrders;
           });
-          
-          try {
-            await supabase.from('orders').delete().eq('id', targetOrder.id);
-          } catch (err) {
-            console.error("Failed to delete rolled back order from Supabase:", err);
-          }
+          await persist('orders delete', supabase.from('orders').delete().eq('id', targetOrder.id));
         }
       } else if (updatedData.status === 'Lost') {
         logEvent('lead_lost', `Lead Lost: ${updatedData.name || oldLead.name}`, updatedData.assignedTo || oldLead.assignedTo, id);
       }
     }
+  };
+
+  /**
+   * Raise the order for a lead the salesperson has just confirmed.
+   *
+   * Takes the line items rather than deriving them, because the lead genuinely
+   * does not hold quantities — asking is the only honest way to get them. Also
+   * records `leadId` on the order so a rollback can find it again.
+   */
+  const convertLeadToOrder = async (lead, lineItems, newStatus = 'First Order') => {
+    if (!lead) return { ok: false, error: 'Lead not found.' };
+    if (lead.orderCreated) return { ok: false, error: 'An order has already been raised for this lead.' };
+
+    const items = (lineItems || [])
+      .map(i => ({
+        name: i.name,
+        quantity: Number(i.quantity || 0),
+        unitPrice: Number(i.unitPrice || 0),
+        total: Number(i.quantity || 0) * Number(i.unitPrice || 0),
+      }))
+      .filter(i => i.name && i.quantity > 0);
+
+    if (items.length === 0) return { ok: false, error: 'Enter a quantity for at least one product.' };
+
+    const totalUnits = items.reduce((sum, i) => sum + i.quantity, 0);
+    const totalValue = items.reduce((sum, i) => sum + i.total, 0);
+
+    const newOrderId = await addOrder({
+      customerName: lead.name,
+      companyName: lead.company || '',
+      // A single-product order leaves `items` unset: partial delivery is only
+      // tracked for those, and setting items would opt it out.
+      product: items.length === 1 ? items[0].name : `${items[0].name} +${items.length - 1} more item${items.length > 2 ? 's' : ''}`,
+      items: items.length > 1 ? items : undefined,
+      quantity: totalUnits,
+      value: totalValue || Number(lead.dealValue || 0),
+      state: lead.state || '',
+      city: lead.city || '',
+      status: 'Pending',
+      assignedTo: lead.assignedTo || '',
+      leadId: lead.id,
+      phone: lead.phone || '',
+      email: lead.email || '',
+      date: new Date().toISOString(),
+    });
+
+    await updateLead(lead.id, { status: newStatus, orderCreated: true });
+    logEvent('lead_converted', `Lead ${lead.id} converted — order ${newOrderId} raised for ${totalUnits} unit(s)`, lead.assignedTo, newOrderId);
+    return { ok: true, orderId: newOrderId };
   };
 
   const deleteLead = async (id) => {
@@ -2196,7 +2220,7 @@ export const DataProvider = ({ children }) => {
     <DataContext.Provider value={{
       // Original CRM
       leads, orders, eventLog, products, productCatalog, invoices, expenses,
-      addLead, updateLead, deleteLead,
+      addLead, updateLead, deleteLead, convertLeadToOrder,
       addOrder, updateOrder, deleteOrder, confirmOrderReceipt, splitOrder, deliverPartial,
       addProduct, updateProduct, deleteProduct,
       addInvoice, updateInvoiceStatus, deleteInvoice,
