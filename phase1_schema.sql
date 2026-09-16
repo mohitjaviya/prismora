@@ -1,3 +1,5 @@
+-- NEUTRALISED: see SECURE_RLS_POLICIES.sql. Running this would switch row-level
+-- security back off, and the anon key ships in the deployed bundle.
 -- ============================================================
 -- PRISMORA Phase 1 Enterprise Schema Extension
 -- Run this in your Supabase SQL editor (Dashboard > SQL Editor)
@@ -109,13 +111,13 @@ CREATE TABLE IF NOT EXISTS complaints (
 );
 
 -- ── Disable Row Level Security (matches all PRISMORA tables) ───
-ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;
-ALTER TABLE vendors DISABLE ROW LEVEL SECURITY;
-ALTER TABLE purchase_orders DISABLE ROW LEVEL SECURITY;
-ALTER TABLE grn DISABLE ROW LEVEL SECURITY;
-ALTER TABLE distributors DISABLE ROW LEVEL SECURITY;
-ALTER TABLE schemes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE complaints DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE vendors DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE purchase_orders DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE grn DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE distributors DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE schemes DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE complaints DISABLE ROW LEVEL SECURITY;
 
 -- ── Seed: Default Vendor (Janki Herbals) ───────────────────────
 INSERT INTO vendors (id, name, gstin, phone, email, address, "contactPerson", status)

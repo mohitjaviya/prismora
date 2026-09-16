@@ -1,3 +1,5 @@
+-- NEUTRALISED: see SECURE_RLS_POLICIES.sql. Running this would switch row-level
+-- security back off, and the anon key ships in the deployed bundle.
 -- Accounting Schema Addition for PRISMORA
 
 -- Invoices Table
@@ -25,6 +27,6 @@ CREATE TABLE IF NOT EXISTS expenses (
 );
 
 -- Disable Row Level Security to match other PRISMORA tables
-ALTER TABLE invoices DISABLE ROW LEVEL SECURITY;
-ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE invoices DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
 
