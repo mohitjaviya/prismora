@@ -339,6 +339,14 @@ export const DataProvider = ({ children }) => {
         if (localStorage.getItem(key) !== startedWith[key]) return;
       } catch { /* storage blocked — nothing could have been written either */ }
       setter(value);
+      // The cache has to be brought in line with what the server returned, or a
+      // row the server does not have is re-hydrated on the very next load,
+      // shown for a few seconds, and replaced again — forever. That is what a
+      // rejected write leaves behind: a ghost that reappears on every refresh
+      // because state was corrected and the cache it came from never was.
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch { /* storage full or blocked — state is still correct */ }
     };
     // ── Original fetches ──────────────────────────────────────────────────
     // Fetch Leads with local merge fallback
@@ -422,8 +430,13 @@ export const DataProvider = ({ children }) => {
       status: p.status || 'Active',
       createdAt: p.createdAt || new Date().toISOString()
     }));
-    applyFetched('prismora_product_catalog', setProductCatalog, normalizedCatalog);
-    applyFetched('prismora_product_catalog', setProducts, normalizedCatalog.map(p => p.name));
+    // Both come from the one cache key, so they are applied together: two calls
+    // would write the name list over the catalogue, and the second would then
+    // see its own write and skip itself.
+    applyFetched('prismora_product_catalog', (rows) => {
+      setProductCatalog(rows);
+      setProducts(rows.map(p => p.name));
+    }, normalizedCatalog);
     localStorage.setItem('prismora_product_catalog', JSON.stringify(normalizedCatalog));
 
     // Fetch Invoices with fallback
