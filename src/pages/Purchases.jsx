@@ -146,9 +146,12 @@ export default function Purchases() {
     setIsGRNModalOpen(true);
   };
 
-  const handleSubmitGRN = (e) => {
+  const handleSubmitGRN = async (e) => {
     e.preventDefault();
-    addGRN({
+    // Awaited, because the stock increase below used to run whether or not the
+    // receipt saved — so a refused GRN still raised inventory, and there was no
+    // receipt left to say where the units came from.
+    const grnId = await addGRN({
       poId: grnTargetPO?.id || null,
       vendorName: grnTargetPO?.vendorName || '',
       items: grnForm.items.map(i => ({ ...i, quantity: Number(i.receivedQty) })),
@@ -156,6 +159,7 @@ export default function Purchases() {
       notes: grnForm.notes,
       receivedBy: user.id
     });
+    if (!grnId) return;
 
     // ── Auto-update Inventory stock for each received item ─────────────────
     grnForm.items.forEach(item => {

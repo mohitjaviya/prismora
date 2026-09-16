@@ -297,6 +297,45 @@ const attendanceRow = (record) => {
   return row;
 };
 
+/**
+ * Build a shaper for a table's columns.
+ *
+ * Same job as leadRow and attendanceRow above, which were each written out by
+ * hand before there were enough of them to be worth a factory. The purchase
+ * side needs four more and they are all identical, so they share this.
+ */
+const shapeFor = (columns) => (record) => {
+  const row = {};
+  for (const key of columns) {
+    if (record[key] !== undefined) row[key] = record[key];
+  }
+  return row;
+};
+
+// The purchase tables. None of these had a shaper: they happen to match their
+// forms today, so nothing is broken by it yet — but this is the fault that
+// silently destroyed every lead and every check-in, and it only takes one new
+// field on a form to repeat it here, where the records are money owed.
+const purchaseOrderRow = shapeFor([
+  'id', 'vendorId', 'vendorName', 'items', 'total', 'status',
+  'expectedDate', 'notes', 'assignedTo', 'createdAt',
+]);
+
+const grnRow = shapeFor([
+  'id', 'poId', 'vendorName', 'items', 'receivedDate', 'notes',
+  'receivedBy', 'createdAt',
+]);
+
+const vendorPaymentRow = shapeFor([
+  'id', 'vendorId', 'amount', 'method', 'reference', 'date', 'notes',
+  'recordedBy', 'createdAt',
+]);
+
+const purchaseReturnRow = shapeFor([
+  'id', 'vendorId', 'vendorName', 'reason', 'items', 'value', 'notes',
+  'date', 'recordedBy', 'createdAt',
+]);
+
 export const DataProvider = ({ children }) => {
   // ── Original CRM State (hydrated from cache for instant load) ────────────
   // Surfaced by the app shell so a rejected write is visible, not just logged.
@@ -1674,14 +1713,16 @@ export const DataProvider = ({ children }) => {
       return !isNaN(num) && num > max ? num : max;
     }, 0);
     const draft = { ...poData, status: 'Draft', createdAt: new Date().toISOString() };
-    const { id: newId } = await insertWithFreeId('purchase_orders insert', 'purchase_orders', 'PO-', maxId + 1, draft);
-    const newPO = { ...draft, id: newId };
+    const { id: newId, saved } = await insertWithFreeId('purchase_orders insert', 'purchase_orders', 'PO-', maxId + 1, draft, purchaseOrderRow);
+    if (!saved) return null;
+    const newPO = { ...purchaseOrderRow(draft), id: newId };
     setPurchaseOrders(prev => {
       const next = [newPO, ...prev];
       localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
       return next;
     });
     logEvent('po_created', `Purchase Order ${newId} created for ${poData.vendorName}`, poData.assignedTo, newId);
+    return newId;
   };
 
   const updatePurchaseOrderStatus = async (id, status) => {
@@ -1710,15 +1751,16 @@ export const DataProvider = ({ children }) => {
       return !isNaN(num) && num > max ? num : max;
     }, 0);
     const draft = { ...grnData, createdAt: new Date().toISOString() };
-    const { id: newId } = await insertWithFreeId('grn insert', 'grn', 'GRN-', maxId + 1, draft);
-    const newGRN = { ...draft, id: newId };
+    const { id: newId, saved } = await insertWithFreeId('grn insert', 'grn', 'GRN-', maxId + 1, draft, grnRow);
+    // A receipt that was refused must not go on to close the PO or bill the
+    // vendor for goods with no record behind them.
+    if (!saved) return null;
+    const newGRN = { ...grnRow(draft), id: newId };
     setGrn(prev => {
       const next = [newGRN, ...prev];
       localStorage.setItem('prismora_grn', JSON.stringify(next));
       return next;
     });
-    // The PO is marked received whether or not the GRN reached Supabase, so the
-    // two never disagree in this browser.
     if (grnData.poId) updatePurchaseOrderStatus(grnData.poId, 'GRN Done');
     logEvent('grn_created', `GRN ${newId} received from ${grnData.vendorName}`, grnData.receivedBy, newId);
 
@@ -1736,18 +1778,32 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
       await persist('vendors update', supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id));
     }
+    // Returned so the caller can hold back the stock increase if this failed.
+    return newId;
   };
 
   // ── Vendor Payments ───────────────────────────────────────────────────────
   const addVendorPayment = async (paymentData) => {
     const newId = `VPAY-${Date.now()}`;
-    const newPayment = { ...paymentData, id: newId, createdAt: new Date().toISOString() };
+    const newPayment = vendorPaymentRow({ ...paymentData, id: newId, createdAt: new Date().toISOString() });
     setVendorPayments(prev => {
       const next = [newPayment, ...prev];
       localStorage.setItem('prismora_vendor_payments', JSON.stringify(next));
       return next;
     });
-    await persist('vendor_payments insert', supabase.from('vendor_payments').insert([newPayment]));
+    const saved = await persist('vendor_payments insert', supabase.from('vendor_payments').insert([newPayment]));
+    if (!saved) {
+      // The balance write below is a separate statement and would go through on
+      // its own, so a refused payment used to still reduce what the vendor is
+      // owed — money moving off the back of a record that does not exist, and
+      // no payment left to explain it. Take the row back and change nothing.
+      setVendorPayments(prev => {
+        const next = prev.filter(p => p.id !== newId);
+        localStorage.setItem('prismora_vendor_payments', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
 
     const vendor = vendors.find(v => v.id === paymentData.vendorId);
     if (vendor) {
@@ -1766,13 +1822,24 @@ export const DataProvider = ({ children }) => {
   const addPurchaseReturn = async (returnData) => {
     const newId = `PR-${Date.now()}`;
     const returnValue = (returnData.items || []).reduce((s, i) => s + (Number(i.quantity || 0) * Number(i.unitCost || 0)), 0);
-    const newReturn = { ...returnData, id: newId, value: returnValue, createdAt: new Date().toISOString() };
+    const newReturn = purchaseReturnRow({ ...returnData, id: newId, value: returnValue, createdAt: new Date().toISOString() });
     setPurchaseReturns(prev => {
       const next = [newReturn, ...prev];
       localStorage.setItem('prismora_purchase_returns', JSON.stringify(next));
       return next;
     });
-    await persist('purchase_returns insert', supabase.from('purchase_returns').insert([newReturn]));
+    const saved = await persist('purchase_returns insert', supabase.from('purchase_returns').insert([newReturn]));
+    if (!saved) {
+      // Worse than the payment case: this one also takes the units out of
+      // inventory. A refused return used to credit the vendor and drop the
+      // stock anyway, leaving both wrong with nothing on record to reverse.
+      setPurchaseReturns(prev => {
+        const next = prev.filter(r => r.id !== newId);
+        localStorage.setItem('prismora_purchase_returns', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
 
     // Credit the vendor payable (we owe them less now)
     const vendor = vendors.find(v => v.id === returnData.vendorId);
@@ -1793,6 +1860,7 @@ export const DataProvider = ({ children }) => {
     });
 
     logEvent('purchase_return', `Return ${newId} to ${vendor?.name || returnData.vendorName} — ₹${returnValue}`, returnData.recordedBy, newId);
+    return newId;
   };
 
   // ── Distributors ──────────────────────────────────────────────────────────
