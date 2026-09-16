@@ -1016,6 +1016,24 @@ const Accounting = () => {
                   />
                 </div>
 
+                {/* Billing something that has not shipped is legitimate — an
+                    advance, a proforma — but it should never be silent. The
+                    list offers every order without an invoice, whatever its
+                    status, and this is the only place that says so. */}
+                {(() => {
+                  const selected = selectedOrderId ? orders.find(o => o.id === selectedOrderId) : null;
+                  if (!selected || selected.status === 'Delivered') return null;
+                  return (
+                    <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3">
+                      <p className="text-[11px] text-amber-400 leading-relaxed">
+                        <span className="font-semibold">{selected.id} has not been delivered — it is {selected.status}.</span>{' '}
+                        Billing now raises the invoice before the goods have gone out. The order will not be
+                        invoiced again when it is delivered, so this is the bill the customer receives.
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 {/* With or without GST */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Bill with GST?</label>

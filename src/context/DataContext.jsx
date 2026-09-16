@@ -1297,7 +1297,41 @@ export const DataProvider = ({ children }) => {
   // Generates an invoice for a delivered order and, where the order is linked
   // to a partner record, adds its value to that party's Outstanding balance —
   // without this, orders never show up as money owed anywhere in the app.
+  /**
+   * The invoice already raised for an order, if there is one.
+   *
+   * Asked of the database rather than local state, which a concurrent delivery
+   * can leave stale. A failed read falls back to what this browser holds — on
+   * a network blip the safe answer is "possibly already invoiced", because a
+   * duplicate bill is worse than a missing one that can be raised by hand.
+   */
+  const findInvoiceForOrder = async (orderId) => {
+    const { data, error } = await supabase
+      .from('invoices').select('id').eq('orderId', orderId).limit(1);
+    if (error) return invoices.find(i => i.orderId === orderId)?.id || null;
+    return data && data.length > 0 ? data[0].id : null;
+  };
+
   const billPartyForOrder = async (order) => {
+    // An order can already have been invoiced by hand from the Accounting
+    // screen — nothing there stops you billing an order that has not shipped
+    // yet. Delivery then raised a second invoice for the same order, so the
+    // customer was billed twice and a linked partner's balance went up twice.
+    // Asked of the database rather than local state, which a concurrent
+    // delivery can leave stale.
+    const existingId = await findInvoiceForOrder(order.id);
+    if (existingId) {
+      logEvent('invoice_skipped', `Order ${order.id} delivered — already invoiced as ${existingId}, no second bill raised`, order.assignedTo, existingId);
+      return existingId;
+    }
+
+    // react-hooks/purity flags Date.now() as unsafe to call while rendering.
+    // This runs from a delivery handler, never during render, and the clock is
+    // the point: the id and the dates are when the invoice was actually
+    // raised. Twenty-odd other Date.now() calls in this file are identical and
+    // unflagged — the rule only reaches this one now that the early return
+    // above made the function analysable.
+    /* eslint-disable react-hooks/purity */
     const newInvoiceId = `INV-${Date.now()}`;
     const newInvoice = {
       id: newInvoiceId,
@@ -1314,6 +1348,7 @@ export const DataProvider = ({ children }) => {
       assignedTo: order.assignedTo,
       createdAt: new Date().toISOString()
     };
+    /* eslint-enable react-hooks/purity */
     // Persist from the functional update, not the closed-over `invoices` — two
     // deliveries billing back-to-back both read the same stale array and the
     // second write would drop the first invoice from the cache entirely.
@@ -1336,6 +1371,20 @@ export const DataProvider = ({ children }) => {
     }
     logEvent('invoice_new', `Invoice generated for ${order.customerName}: ${newInvoiceId}`, order.assignedTo, newInvoiceId);
 
+    await chargePartyForOrder(order);
+    return newInvoiceId;
+  };
+
+  /**
+   * Add an order's value to whichever partner it belongs to.
+   *
+   * Split out of billPartyForOrder so an invoice raised by hand does the same
+   * thing. It did not: a manual invoice for a linked distributor produced a
+   * bill that never became a receivable on their account, so the Accounting
+   * screen and the partner's outstanding balance disagreed.
+   */
+  const chargePartyForOrder = async (order) => {
+    if (!order) return;
     if (order.distributorId) {
       const dist = distributors.find(d => d.id === order.distributorId);
       if (dist) {
@@ -1541,6 +1590,15 @@ export const DataProvider = ({ children }) => {
     const existing = local ? JSON.parse(local) : [];
     localStorage.setItem('prismora_invoices', JSON.stringify([newInvoice, ...existing]));
     logEvent('invoice_new', `Invoice generated for ${invoiceData.customerName}: ${newId}`, invoiceData.assignedTo, newId);
+
+    // Billing by hand now moves the partner's balance, exactly as billing on
+    // delivery does. Without this a manual invoice for a linked distributor
+    // was a bill that never became money owed, so Accounting and the
+    // partner's outstanding figure told two different stories.
+    if (invoiceData.orderId) {
+      await chargePartyForOrder(orders.find(o => o.id === invoiceData.orderId));
+    }
+    return newId;
   };
 
   const updateInvoiceStatus = async (id, status) => {
