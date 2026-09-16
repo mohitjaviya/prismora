@@ -1944,8 +1944,17 @@ export const DataProvider = ({ children }) => {
     };
 
     const outlets = Array.isArray(beat.outlets) ? beat.outlets : [];
+    // The status has to say what happened, not merely that the route was worked
+    // through. Marking every outlet "could not visit" and calling the beat
+    // Visited overstates coverage and reads as plainly wrong to the rep who
+    // just recorded three closed shops.
     const done = outlets.filter(o => outletVisits[o]).length;
-    const status = done === 0 ? 'Planned' : done < outlets.length ? 'In Progress' : 'Visited';
+    const anyVisited = outlets.some(o => outletVisits[o]?.outcome === 'Visited');
+    const status =
+      done === 0 ? 'Planned'
+        : done < outlets.length ? 'In Progress'
+          : anyVisited ? 'Completed'
+            : 'Not Visited';
 
     setBeatPlans(prev => {
       const next = prev.map(b => b.id === beatId ? { ...b, outletVisits, status } : b);

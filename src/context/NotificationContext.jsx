@@ -7,7 +7,7 @@ const NotificationContext = createContext();
 
 export const NotificationProvider = ({ children }) => {
   const { user } = useAuth();
-  const { inventory, invoices, complaints, leads, distributors, dealers, retailers, orders, schemes } = useData();
+  const { inventory, invoices, complaints, leads, distributors, dealers, retailers, orders, schemes, visitReports } = useData();
   const [notifications, setNotifications] = useState([]);
 
   // Load user-specific notifications from localStorage
@@ -162,6 +162,31 @@ export const NotificationProvider = ({ children }) => {
       }
     });
 
+    // Trigger 4b: Outlet follow-ups a rep promised on a visit.
+    // The date was being collected and then shown nowhere, so nobody could act
+    // on it. Overdue ones are called out separately — a follow-up missed by a
+    // week is a different problem from one due this morning.
+    (visitReports || []).forEach(vr => {
+      if (vr.executiveId !== user.id || !vr.nextFollowUp) return;
+      const due = new Date(vr.nextFollowUp);
+      if (isNaN(due)) return;
+      const startOfToday = new Date(new Date().toDateString());
+      const days = Math.round((new Date(due.toDateString()) - startOfToday) / 86400000);
+      if (days > 0) return;   // still in the future
+
+      newSystemNotifications.push({
+        id: `sys-visit-followup-${vr.id}`,
+        type: 'lead_assigned',
+        title: days === 0 ? 'Outlet Follow-up Due Today' : 'Outlet Follow-up Overdue',
+        message: days === 0
+          ? `You said you would follow up with ${vr.outletName} today.`
+          : `Follow-up with ${vr.outletName} was due ${Math.abs(days)} day${Math.abs(days) > 1 ? 's' : ''} ago.`,
+        link: '/sfa',
+        isRead: false,
+        timestamp: new Date().toISOString()
+      });
+    });
+
     // Trigger 5: Pending channel-partner registrations awaiting approval (Admin/Manager)
     if (isAdminRole(user.role) || isManagerRole(user.role)) {
       [
@@ -267,7 +292,7 @@ export const NotificationProvider = ({ children }) => {
       return all;
     });
 
-  }, [inventory, invoices, complaints, leads, distributors, dealers, retailers, orders, schemes, user]);
+  }, [inventory, invoices, complaints, leads, distributors, dealers, retailers, orders, schemes, visitReports, user]);
 
   // Special markRead wrapper to remember read status of system alerts
   const markSystemRead = (id) => {

@@ -66,6 +66,18 @@ export default function SFA() {
     return Array.from({ length: 7 }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i));
   }, [weekOffset]);
 
+  // A beat is finished once every outlet has an outcome; whether that counts as
+  // coverage depends on the outcomes themselves. "Not Visited" means the route
+  // was worked and nothing was reached — finished, but not covered.
+  const BEAT_FINISHED = ['Completed', 'Not Visited', 'Visited'];
+  const beatCovered = (b) => b.status === 'Completed' || b.status === 'Visited';
+  const beatTone = (status) => (
+    status === 'Completed' || status === 'Visited' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+      : status === 'Not Visited' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+        : status === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+          : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+  );
+
   const salesReps = useMemo(() => allUsers.filter(u => isSalesRole(u.role) || u.role === 'Sales Executive'), [allUsers]);
   const myAttendanceToday = useMemo(() => attendance.find(a => a.userId === user?.id && a.date === todayStr), [attendance, user, todayStr]);
   const filteredBeats = useMemo(() => isSREP ? beatPlans.filter(b => b.executiveId === user?.id) : beatPlans, [beatPlans, isSREP, user]);
@@ -389,7 +401,7 @@ export default function SFA() {
     const visits = visitReports.filter(v => v.executiveId === repId);
     const ordersPlaced = visits.filter(v => v.orderPlaced).length;
     const myBeats = beatPlans.filter(b => b.executiveId === repId);
-    const visitedBeats = myBeats.filter(b => b.status === 'Visited').length;
+    const visitedBeats = myBeats.filter(beatCovered).length;
     const days = attendance.filter(a => a.userId === repId).length;
     const conversionRate = visits.length > 0 ? Math.round((ordersPlaced / visits.length) * 100) : 0;
     const beatCompletion = myBeats.length > 0 ? Math.round((visitedBeats / myBeats.length) * 100) : 0;
@@ -797,7 +809,7 @@ export default function SFA() {
                       </div>
                     </td>
                     <td className="p-4 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${beat.status === 'Visited' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>{beat.status}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${beatTone(beat.status)}`}>{beat.status}</span>
                     </td>
                     <td className="p-4 text-right">
                       {(() => {
@@ -954,7 +966,8 @@ export default function SFA() {
               <thead>
                 <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
                   <th className="p-4">Outlet</th><th className="p-4">Representative</th><th className="p-4">Date</th>
-                  <th className="p-4">Products Pitched</th><th className="p-4 text-center">Order</th><th className="p-4">Notes</th>
+                  <th className="p-4 text-center">Outcome</th><th className="p-4">Products Pitched</th>
+                  <th className="p-4 text-center">Order</th><th className="p-4">Next follow-up</th><th className="p-4">Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-300">
@@ -963,6 +976,14 @@ export default function SFA() {
                     <td className="p-4"><div className="font-semibold text-white">{vr.outletName}</div><div className="text-[10px] text-slate-500 mt-0.5">{vr.outletContact || 'No contact'}</div></td>
                     <td className="p-4 text-sm text-slate-300">{getRepName(vr.executiveId)}</td>
                     <td className="p-4 text-xs font-mono text-slate-400">{vr.visitDate}</td>
+                    <td className="p-4 text-center">
+                      {vr.outcome === 'Not Visited'
+                        ? <span className="inline-flex items-center gap-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[10px] font-bold" title={vr.notVisitedReason || ''}>Not visited</span>
+                        : <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold">Visited</span>}
+                      {vr.outcome === 'Not Visited' && vr.notVisitedReason && (
+                        <div className="text-[10px] text-slate-500 mt-1 max-w-[9rem] truncate mx-auto" title={vr.notVisitedReason}>{vr.notVisitedReason}</div>
+                      )}
+                    </td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1">
                         {Array.isArray(vr.productsShown) && vr.productsShown.length > 0 ? vr.productsShown.map((p, i) => (
@@ -975,9 +996,24 @@ export default function SFA() {
                         ? <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold"><ShoppingCart size={10} />Order Placed</span>
                         : <span className="text-[10px] text-slate-500 italic">Pitched Only</span>}
                     </td>
+                    <td className="p-4">
+                      {(() => {
+                        if (!vr.nextFollowUp) return <span className="text-[11px] text-slate-600 italic">None set</span>;
+                        const due = new Date(vr.nextFollowUp);
+                        const days = Math.ceil((due - new Date(new Date().toDateString())) / 86400000);
+                        const tone = days < 0 ? 'text-rose-400' : days === 0 ? 'text-amber-400' : 'text-slate-300';
+                        const when = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Today' : `in ${days}d`;
+                        return (
+                          <div>
+                            <div className={`text-xs font-mono font-bold ${tone}`}>{vr.nextFollowUp}</div>
+                            <div className={`text-[10px] ${tone}`}>{when}</div>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="p-4 text-xs text-slate-400 italic max-w-xs truncate" title={vr.notes}>{vr.notes || '—'}</td>
                   </tr>
-                )) : <tr><td colSpan="6" className="p-8 text-center text-slate-500">No visit reports yet.</td></tr>}
+                )) : <tr><td colSpan="8" className="p-8 text-center text-slate-500">No visit reports yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1111,7 +1147,7 @@ export default function SFA() {
                             <p className="text-[9px] font-bold text-brand-accent uppercase truncate">{beat.territory}</p>
                             {!isSREP && <p className="text-[9px] text-slate-400 truncate">{getRepName(beat.executiveId)}</p>}
                             <p className="text-[10px] text-slate-300">{Array.isArray(beat.outlets) ? beat.outlets.length : 0} outlets</p>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${beat.status === 'Visited' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{beat.status}</span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold border ${beatTone(beat.status)}`}>{beat.status}</span>
                           </div>
                         )) : <p className="text-xs text-slate-700 text-center pt-6 italic">No beats</p>}
                       </div>
@@ -1130,7 +1166,7 @@ export default function SFA() {
             <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {territories.length > 0 ? territories.map(territory => {
                 const tBeats = filteredBeats.filter(b => b.territory === territory.name);
-                const visited = tBeats.filter(b => b.status === 'Visited').length;
+                const visited = tBeats.filter(beatCovered).length;
                 const totalOutlets = tBeats.reduce((sum, b) => sum + (Array.isArray(b.outlets) ? b.outlets.length : 0), 0);
                 const pct = tBeats.length > 0 ? Math.round((visited / tBeats.length) * 100) : 0;
                 return (
@@ -1194,10 +1230,10 @@ export default function SFA() {
                           <div key={beat.id} className="space-y-1.5">
                             <div className="flex justify-between text-xs">
                               <span className="text-slate-300 font-medium">{beat.territory} <span className="text-slate-600 font-normal">— {beat.date}</span></span>
-                              <span className={`font-bold ${beat.status === 'Visited' ? 'text-emerald-400' : 'text-yellow-400'}`}>{beat.status}</span>
+                              <span className={`font-bold ${beatCovered(beat) ? 'text-emerald-400' : beat.status === 'Not Visited' ? 'text-rose-400' : 'text-yellow-400'}`}>{beat.status}</span>
                             </div>
                             <div className="w-full bg-brand-primary rounded-full h-1.5">
-                              <div className={`h-1.5 rounded-full transition-all duration-700 ${beat.status === 'Visited' ? 'w-full bg-emerald-400' : 'w-2/5 bg-yellow-400'}`}></div>
+                              <div className={`h-1.5 rounded-full transition-all duration-700 ${BEAT_FINISHED.includes(beat.status) ? 'w-full' : 'w-2/5'} ${beatCovered(beat) ? 'bg-emerald-400' : beat.status === 'Not Visited' ? 'bg-rose-400' : 'bg-yellow-400'}`}></div>
                             </div>
                           </div>
                         ))}
@@ -1216,7 +1252,7 @@ export default function SFA() {
                   { label: 'Total Field Visits', value: visitReports.length, icon: MapPin },
                   { label: 'Orders from Field', value: visitReports.filter(v => v.orderPlaced).length, icon: ShoppingCart },
                   { label: 'Active Today', value: attendance.filter(a => a.date === todayStr).length, icon: User },
-                  { label: 'Beats Completed', value: beatPlans.filter(b => b.status === 'Visited').length, icon: CheckCircle2 },
+                  { label: 'Beats Completed', value: beatPlans.filter(b => BEAT_FINISHED.includes(b.status)).length, icon: CheckCircle2 },
                 ].map((s, i) => {
                   const Icon = s.icon;
                   return (
