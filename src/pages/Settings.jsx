@@ -62,8 +62,22 @@ export default function Settings() {
       return;
     }
     const payload = { ...userForm, managedUsers: isManagerRole(userForm.role) ? userForm.managedUsers : [] };
-    if (editingUser) updateUser(editingUser.id, payload);
-    else addUser(payload);
+    if (editingUser) {
+      // An administrator cannot set someone else's password — Supabase Auth
+      // only lets an account change its own. Editing a colleague here updates
+      // their profile; their password is theirs to change, or yours to reset
+      // from the Supabase dashboard.
+      const { password, ...profileOnly } = payload;
+      updateUser(editingUser.id, editingUser.id === user?.id ? payload : profileOnly);
+      if (password && editingUser.id !== user?.id) {
+        alert('Profile saved. A password can only be changed by its own account holder, or reset from the Supabase dashboard.');
+      }
+    } else {
+      // createAuthAccount: false — signing up here would replace this admin's
+      // own session with the new user's. Create their login in the dashboard.
+      addUser({ ...payload, createAuthAccount: false });
+      alert(`Profile created for ${payload.email}. Now add the same email in Supabase → Authentication → Users so they can sign in.`);
+    }
     setIsUserModalOpen(false);
   };
 
