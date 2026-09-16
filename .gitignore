@@ -27,3 +27,11 @@ dist-ssr
 # Python cache
 __pycache__/
 *.pyc
+
+# Reference screenshots of other systems — notes, not part of the app,
+# and 4.8MB the repository does not need to carry.
+Masters/
+
+# Data backups. These hold real customer, order and staff records, and this
+# repository is public — a backup committed once stays in the history.
+backup-*.json
