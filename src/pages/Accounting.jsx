@@ -25,10 +25,6 @@ const Accounting = () => {
     grn, vendors, purchaseReturns
   } = useData();
 
-  // Route Guard: Anyone logged in can access, view is filtered dynamically
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
 
   // Filter orders, invoices, and expenses based on user role (RBAC)
   const orders = useMemo(() => {
@@ -63,6 +59,9 @@ const Accounting = () => {
   const [customCustomerName, setCustomCustomerName] = useState('');
   const [customAmount, setCustomAmount] = useState('');
   const [invoiceDueDate, setInvoiceDueDate] = useState('');
+  // Some bills go out with GST and some without — a sample, a replacement, or a
+  // buyer outside GST. The choice belongs on the invoice, not in the code.
+  const [invoiceWithTax, setInvoiceWithTax] = useState(true);
 
   const [expenseCategory, setExpenseCategory] = useState('Raw Materials');
   const [expenseAmount, setExpenseAmount] = useState('');
@@ -121,6 +120,18 @@ const Accounting = () => {
     }
     return 0.18; // default 18% custom invoice
   }, [selectedOrderId, orders, productCatalog]);
+
+  // Route Guard: anyone logged in can access, the view is filtered dynamically.
+  //
+  // It sits below every hook rather than above them. React requires the same
+  // hooks to run in the same order on every render, and this guard used to
+  // return before all twenty of them — so the moment `user` went from set to
+  // null (a sign-out, an expired session) the hook count changed and React
+  // threw instead of redirecting. canAccess and canAccessData both return
+  // false without a user, so the hooks above are safe to run first.
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   // Helper for formatting Currency
   const formatCurrency = (val) => {
@@ -234,7 +245,7 @@ const Accounting = () => {
       return;
     }
 
-    const calculatedTax = Math.round(amount * previewTaxRate);
+    const calculatedTax = invoiceWithTax ? Math.round(amount * previewTaxRate) : 0;
 
     addInvoice({
       orderId,
@@ -251,6 +262,7 @@ const Accounting = () => {
     setCustomCustomerName('');
     setCustomAmount('');
     setInvoiceDueDate('');
+    setInvoiceWithTax(true);
     setIsInvoiceModalOpen(false);
   };
 
@@ -1004,22 +1016,65 @@ const Accounting = () => {
                   />
                 </div>
 
-                 {customAmount && (
-                  <div className="bg-brand-primary-lighter/40 rounded-xl p-3 border border-white/5 text-xs text-slate-400 space-y-1">
-                    <div className="flex justify-between">
-                      <span>Base Amount:</span>
-                      <span className="font-semibold text-slate-200">{formatCurrency(Number(customAmount))}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>GST ({previewTaxRate * 100}%):</span>
-                      <span className="font-semibold text-slate-200">{formatCurrency(Number(customAmount) * previewTaxRate)}</span>
-                    </div>
-                    <div className="border-t border-white/5 pt-1.5 flex justify-between font-bold text-white text-sm">
-                      <span>Total Invoiced Value:</span>
-                      <span className="text-brand-accent">{formatCurrency(Number(customAmount) * (1 + previewTaxRate))}</span>
-                    </div>
+                {/* With or without GST */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Bill with GST?</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceWithTax(true)}
+                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
+                        invoiceWithTax
+                          ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/30'
+                          : 'bg-brand-primary-lighter/40 text-slate-400 border-white/5 hover:text-white'
+                      }`}
+                    >
+                      With GST ({Math.round(previewTaxRate * 100)}%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceWithTax(false)}
+                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
+                        !invoiceWithTax
+                          ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/30'
+                          : 'bg-brand-primary-lighter/40 text-slate-400 border-white/5 hover:text-white'
+                      }`}
+                    >
+                      Without GST
+                    </button>
                   </div>
-                )}
+                  {!invoiceWithTax && (
+                    <p className="text-[10px] text-amber-400 mt-1.5">
+                      No tax will be charged on this bill. Use this only where GST genuinely does not apply.
+                    </p>
+                  )}
+                </div>
+
+                {/* The preview used to appear only when an amount was typed by
+                    hand, so choosing an order showed no tax at all before the
+                    invoice was raised. It now covers both. */}
+                {(() => {
+                  const selected = selectedOrderId ? orders.find(o => o.id === selectedOrderId) : null;
+                  const base = selected ? Number(selected.value || 0) : Number(customAmount || 0);
+                  if (!base) return null;
+                  const tax = invoiceWithTax ? Math.round(base * previewTaxRate) : 0;
+                  return (
+                    <div className="bg-brand-primary-lighter/40 rounded-xl p-3 border border-white/5 text-xs text-slate-400 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Base Amount:</span>
+                        <span className="font-semibold text-slate-200">{formatCurrency(base)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>GST ({invoiceWithTax ? `${Math.round(previewTaxRate * 100)}%` : 'not charged'}):</span>
+                        <span className="font-semibold text-slate-200">{formatCurrency(tax)}</span>
+                      </div>
+                      <div className="border-t border-white/5 pt-1.5 flex justify-between font-bold text-white text-sm">
+                        <span>Total Invoiced Value:</span>
+                        <span className="text-brand-accent">{formatCurrency(base + tax)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Sticky Footer */}

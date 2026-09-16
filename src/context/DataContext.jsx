@@ -1193,7 +1193,12 @@ export const DataProvider = ({ children }) => {
           ? { ...finalOrder, quantity: Number(finalOrder.quantity || 0) - alreadyDelivered }
           : finalOrder;
         await deductInventoryForOrder(deductionOrder);
-        if (finalOrder.distributorId || finalOrder.dealerId || finalOrder.retailerId) await billPartyForOrder(finalOrder);
+        // Billed whether or not the order is linked to a partner record. The
+        // link used to be the condition, so an order raised from a field visit
+        // — where the shop has no retailer record yet — was delivered and then
+        // never invoiced at all. It simply vanished from the accounts. Only the
+        // balance update below needs a party; the invoice does not.
+        await billPartyForOrder(finalOrder);
         await markOrderFulfilled(id);
       }
     }
@@ -1260,17 +1265,38 @@ export const DataProvider = ({ children }) => {
     await deductInventoryForOrder({ ...order, items: undefined, product: order.product, quantity: actualNow, id });
     logEvent('order_partial_delivery', `Order ${id}: delivered ${actualNow} of ${totalQty} (${newDelivered}/${totalQty} cumulative)`, order.assignedTo, id);
 
-    // Bill only once fully delivered (avoids partial-invoice complexity)
-    if (fullyDone && (order.distributorId || order.dealerId || order.retailerId)) {
+    // Bill only once fully delivered (avoids partial-invoice complexity), and
+    // regardless of whether a partner record is linked — see billPartyForOrder.
+    if (fullyDone) {
       await billPartyForOrder({ ...order, ...updatedData });
     }
     if (fullyDone) await markOrderFulfilled(id);
     return { ok: true };
   };
 
-  // Generates an invoice for a delivered distributor/dealer order and adds its
-  // value to that party's Outstanding balance — without this, orders never
-  // show up as money owed anywhere in the app.
+  /**
+   * GST on an order, taken from the rate held against each product.
+   *
+   * A multi-item order is taxed line by line, because the rates differ — the
+   * catalogue carries 5%, 12% and 18%. A single-product order is taxed on its
+   * whole value. A product that is not in the catalogue contributes no tax
+   * rather than a guessed rate.
+   */
+  const gstForOrder = (order) => {
+    const rateFor = (name) => {
+      const p = (productCatalog || []).find(x => x.name === name);
+      return p ? Number(p.gstPct || 0) / 100 : 0;
+    };
+    if (Array.isArray(order.items) && order.items.length > 0) {
+      return Math.round(order.items.reduce((sum, i) =>
+        sum + (Number(i.total ?? (Number(i.quantity || 0) * Number(i.unitPrice || 0))) * rateFor(i.name)), 0));
+    }
+    return Math.round(Number(order.value || 0) * rateFor(order.product));
+  };
+
+  // Generates an invoice for a delivered order and, where the order is linked
+  // to a partner record, adds its value to that party's Outstanding balance —
+  // without this, orders never show up as money owed anywhere in the app.
   const billPartyForOrder = async (order) => {
     const newInvoiceId = `INV-${Date.now()}`;
     const newInvoice = {
@@ -1278,7 +1304,11 @@ export const DataProvider = ({ children }) => {
       orderId: order.id,
       customerName: order.customerName,
       amount: Number(order.value || 0),
-      tax: 0,
+      // GST was hardcoded to zero here, so every invoice raised automatically
+      // on delivery went out tax-free while the ones typed in by hand on the
+      // Accounting screen carried it. The rate lives on the product, exactly
+      // as the manual path reads it.
+      tax: gstForOrder(order),
       status: 'Unpaid',
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       assignedTo: order.assignedTo,
@@ -1292,8 +1322,18 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_invoices', JSON.stringify(next));
       return next;
     });
-    const { error: invoiceError } = await supabase.from('invoices').insert([newInvoice]);
-    if (invoiceError) console.error(`Failed to save invoice ${newInvoiceId} to the database — it will be lost on next refresh:`, invoiceError);
+    // Reported on the banner like every other write. This one only reached the
+    // browser console, so an invoice the database refused looked identical to
+    // one that saved — until it disappeared on the next load.
+    const invoiceSaved = await persist('invoices insert', supabase.from('invoices').insert([newInvoice]));
+    if (!invoiceSaved) {
+      setInvoices(prev => {
+        const next = prev.filter(i => i.id !== newInvoiceId);
+        localStorage.setItem('prismora_invoices', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
     logEvent('invoice_new', `Invoice generated for ${order.customerName}: ${newInvoiceId}`, order.assignedTo, newInvoiceId);
 
     if (order.distributorId) {
