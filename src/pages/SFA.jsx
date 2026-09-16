@@ -49,6 +49,11 @@ export default function SFA() {
   const [expenseForm, setExpenseForm] = useState({ date: todayStr, category: 'Travel', amount: '', description: '', receiptName: '', receiptData: '' });
   const [selectedAttendanceUser, setSelectedAttendanceUser] = useState('');
   const [isPunchingIn, setIsPunchingIn] = useState(false);
+  // Filing a visit takes a moment — it writes a report, an outcome, and
+  // sometimes an order. Without a guard the button stays live throughout, and
+  // an impatient second click files the whole lot again: three reports for the
+  // same outlet were recorded seconds apart.
+  const [isSubmittingVisit, setIsSubmittingVisit] = useState(false);
 
   // ── Derived Data ────────────────────────────────────────────────────────
   // The planner used to bucket beats by weekday name alone, with no dates and no
@@ -238,6 +243,9 @@ export default function SFA() {
   };
   const handleVisitSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmittingVisit) return;
+    setIsSubmittingVisit(true);
+    try {
     const notVisited = visitForm.outcome === 'Not Visited';
 
     // An outlet that could not be worked still gets a report, so coverage shows
@@ -302,6 +310,9 @@ export default function SFA() {
       });
     }
     setIsVisitModalOpen(false);
+    } finally {
+      setIsSubmittingVisit(false);
+    }
   };
 
   const toggleProduct = (name) => setVisitForm(prev => ({ ...prev, productsShown: prev.productsShown.includes(name) ? prev.productsShown.filter(n => n !== name) : [...prev.productsShown, name] }));
@@ -1587,7 +1598,7 @@ export default function SFA() {
               </div>
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsVisitModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Submit Visit Report</button>
+                <button type="submit" disabled={isSubmittingVisit} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60 disabled:cursor-wait">{isSubmittingVisit ? 'Saving…' : 'Submit Visit Report'}</button>
               </div>
             </form>
           </div>

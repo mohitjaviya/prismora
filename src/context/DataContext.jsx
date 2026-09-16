@@ -90,12 +90,27 @@ const lsInit = (key) => {
 let reportSchemaError = () => {};
 const setSchemaErrorReporter = (fn) => { reportSchemaError = fn; };
 
-const schemaComplaint = (err) => {
+// Anything the database refuses is worth showing. It was limited to missing
+// columns, which missed the case that actually bit: a foreign key violation —
+// a beat assigned to a user id that no longer exists — is rejected just as
+// hard, is just as invisible, and leaves exactly the same ghost row that
+// disappears on the next load.
+const writeComplaint = (err) => {
   const code = err?.code;
   const message = err?.message || '';
-  if (code === '42703' || code === 'PGRST204') return message;
-  if (/column .* does not exist|Could not find the '.*' column/i.test(message)) return message;
-  return null;
+  const detail = err?.details ? ` ${err.details}` : '';
+  if (!code && !message) return null;
+
+  if (code === '42703' || code === 'PGRST204' || /column .* does not exist|Could not find the '.*' column/i.test(message)) {
+    return { text: message, cause: 'A pending database migration is the usual cause.' };
+  }
+  if (code === '23503') {
+    return { text: message + detail, cause: 'It refers to a record that no longer exists — often a user who has been removed.' };
+  }
+  if (code === '23505') {
+    return { text: message + detail, cause: 'Something with that id already exists.' };
+  }
+  return { text: message + detail, cause: '' };
 };
 
 const persist = async (label, query) => {
@@ -103,8 +118,8 @@ const persist = async (label, query) => {
     const { error } = await query;
     if (error) {
       console.error(`[Prismora] Could not save ${label} — this change will be lost on refresh:`, error.message || error);
-      const complaint = schemaComplaint(error);
-      if (complaint) reportSchemaError({ label, detail: complaint });
+      const complaint = writeComplaint(error);
+      if (complaint) reportSchemaError({ label, detail: complaint.text, cause: complaint.cause });
       return false;
     }
     return true;
@@ -198,8 +213,8 @@ const insertWithFreeId = async (label, table, prefix, firstNumber, record, shape
       if (!error) return { id, saved: true };
       if (error.code !== '23505') {
         console.error(`[Prismora] Could not save ${label} — this change will be lost on refresh:`, error.message || error);
-        const complaint = schemaComplaint(error);
-        if (complaint) reportSchemaError({ label, detail: complaint });
+        const complaint = writeComplaint(error);
+        if (complaint) reportSchemaError({ label, detail: complaint.text, cause: complaint.cause });
         return { id, saved: false };
       }
 
@@ -1920,8 +1935,20 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
       return next;
     });
-    await persist('beat_plans insert', supabase.from('beat_plans').insert([newBeat]));
+    const saved = await persist('beat_plans insert', supabase.from('beat_plans').insert([newBeat]));
+    if (!saved) {
+      // Keeping a row the database refused is what made a new beat appear for a
+      // few seconds and then vanish on the next load. Take it back now, while
+      // the person is still looking at the screen and the banner explains why.
+      setBeatPlans(prev => {
+        const next = prev.filter(b => b.id !== newId);
+        localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
     logEvent('beat_plan_created', `Beat Plan assigned for date ${beatData.date}`, beatData.executiveId, newId);
+    return newId;
   };
 
   /**

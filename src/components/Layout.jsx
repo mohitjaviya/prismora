@@ -91,7 +91,7 @@ const Layout = () => {
               <h4 className="text-white font-bold text-sm mb-1">That change was not saved</h4>
               <p className="text-slate-400 text-xs leading-relaxed">
                 The database rejected the write while saving <strong className="text-slate-300">{schemaError.label}</strong>,
-                so it will disappear when this page reloads. A pending database migration is the usual cause.
+                so it has been undone. {schemaError.cause}
               </p>
               <p className="text-[11px] text-amber-300/90 font-mono mt-2 break-words">{schemaError.detail}</p>
             </div>
