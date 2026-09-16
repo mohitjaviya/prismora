@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { 
   Wallet, TrendingUp, Plus, Trash2, Calendar, FileText, 
   CheckCircle, Clock, AlertCircle, ShoppingCart, ArrowUpRight, 
-  ArrowDownRight, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare
+  ArrowDownRight, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -21,7 +21,8 @@ const Accounting = () => {
    const {
     orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, leads, productCatalog, distributors,
     addInvoice, updateInvoiceStatus, deleteInvoice,
-    addExpense, deleteExpense, creditNotes, addCreditNote
+    addExpense, deleteExpense, creditNotes, addCreditNote,
+    grn, vendors, purchaseReturns
   } = useData();
 
   // Route Guard: Anyone logged in can access, view is filtered dynamically
@@ -82,7 +83,29 @@ const Accounting = () => {
   const totalExpensesValue = expenses
     .reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
 
-  const netProfit = totalRevenue - totalExpensesValue;
+  // ── Cost of the goods themselves ────────────────────────────────────────
+  // Nothing from the purchase side reached this screen: net profit was income
+  // minus operating expenses, with the entire cost of buying stock left out. A
+  // business that had bought Rs.2,75,000 of goods and sold none of it still
+  // showed a profit. Goods received is the point the cost is incurred — a PO is
+  // only an intention, so Draft and Cancelled orders are rightly not counted.
+  // Plain reductions rather than useMemo: this component returns early when
+  // there is no user, so every hook after that point is a conditional hook —
+  // the count would change between renders and React would throw. These are
+  // sums over a handful of rows and cost nothing to redo.
+  const goodsReceivedValue = (grn || []).reduce((sum, g) =>
+    sum + (g.items || []).reduce((s, i) => s + (Number(i.quantity || 0) * Number(i.unitCost || 0)), 0), 0);
+
+  // Goods sent back are a cost we no longer carry.
+  const purchaseReturnsValue = (purchaseReturns || []).reduce((sum, r) => sum + Number(r.value || 0), 0);
+
+  const purchaseCost = Math.max(0, goodsReceivedValue - purchaseReturnsValue);
+
+  // What is still owed to vendors — the mirror of outstanding receivables,
+  // which this screen already showed on its own.
+  const vendorPayables = (vendors || []).reduce((sum, v) => sum + Number(v.outstandingAmount || 0), 0);
+
+  const netProfit = totalRevenue - totalExpensesValue - purchaseCost;
   const profitMargin = totalRevenue ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
 
   const unpaidInvoices = invoices.filter(inv => inv.status === 'Unpaid' || inv.status === 'Overdue');
@@ -390,6 +413,35 @@ const Accounting = () => {
               <p className="mt-2 text-xs text-slate-500">All logged operating expenditures</p>
             </div>
 
+            {/* Cost of goods purchased — previously missing from this screen */}
+            <div className="glass-panel relative overflow-hidden rounded-2xl p-6 hover:-translate-y-1 transition-all duration-300 group border border-white/5 bg-gradient-to-br from-brand-primary-light/80 to-brand-primary/50">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl"></div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-400">Cost of Goods Purchased</h3>
+                <div className="p-3 bg-brand-primary/80 rounded-xl text-amber-400"><ShoppingBag size={20} /></div>
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight break-all">
+                {formatCurrency(purchaseCost)}
+              </p>
+              <div className="mt-2 text-xs text-slate-500 flex flex-wrap items-center gap-1">
+                <span>Received: {formatCurrency(goodsReceivedValue)}</span>
+                {purchaseReturnsValue > 0 && (<><span>•</span><span>Returned: {formatCurrency(purchaseReturnsValue)}</span></>)}
+              </div>
+            </div>
+
+            {/* Vendor payables — the mirror of receivables below */}
+            <div className="glass-panel relative overflow-hidden rounded-2xl p-6 hover:-translate-y-1 transition-all duration-300 group border border-white/5 bg-gradient-to-br from-brand-primary-light/80 to-brand-primary/50">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 rounded-full blur-3xl"></div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-400">Vendor Payables</h3>
+                <div className="p-3 bg-brand-primary/80 rounded-xl text-rose-400"><CreditCard size={20} /></div>
+              </div>
+              <p className="text-2xl sm:text-3xl font-extrabold text-rose-400 tracking-tight break-all">
+                {formatCurrency(vendorPayables)}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">What Janki Herbals still owes its vendors</p>
+            </div>
+
             {/* Net Profit */}
             <div className="glass-panel relative overflow-hidden rounded-2xl p-6 hover:-translate-y-1 transition-all duration-300 group border border-white/5 bg-gradient-to-br from-brand-primary-light/80 to-brand-primary/50">
               <div className={`absolute top-0 right-0 w-32 h-32 ${netProfit >= 0 ? 'bg-emerald-500/5' : 'bg-rose-500/5'} rounded-full blur-3xl`}></div>
@@ -406,6 +458,11 @@ const Accounting = () => {
                 <span className={`font-semibold ${netProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{profitMargin}% margin</span>
                 <span>relative to earnings</span>
               </div>
+              {/* Spelled out, because this number changed when the cost of
+                  goods was brought in and it should be obvious why. */}
+              <p className="mt-1.5 text-[10px] text-slate-600 leading-relaxed">
+                Income {formatCurrency(totalRevenue)} − expenses {formatCurrency(totalExpensesValue)} − goods {formatCurrency(purchaseCost)}
+              </p>
             </div>
 
             {/* Outstanding Receivables */}

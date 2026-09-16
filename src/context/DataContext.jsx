@@ -336,6 +336,14 @@ const purchaseReturnRow = shapeFor([
   'date', 'recordedBy', 'createdAt',
 ]);
 
+const inventoryRow = shapeFor([
+  'id', 'product', 'batchNumber', 'expiryDate', 'quantity', 'unitCost',
+  'warehouse', 'reorderLevel', 'reserved', 'transit', 'damaged', 'createdAt',
+]);
+
+// Batch numbers are typed, so they are compared without case or stray spaces.
+const sameBatch = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+
 export const DataProvider = ({ children }) => {
   // ── Original CRM State (hydrated from cache for instant load) ────────────
   // Surfaced by the app shell so a rejected write is visible, not just logged.
@@ -1648,6 +1656,80 @@ export const DataProvider = ({ children }) => {
     logEvent('stock_adjusted', `Stock ${adjustment > 0 ? '+' : ''}${adjustment} for ${item.product}: ${reason}`, null, id);
   };
 
+  /**
+   * Take delivered goods into stock, as their own batch.
+   *
+   * Receiving used to call adjustStock on `inventory.find(by product name)` —
+   * the first row for that product, whichever that happened to be. So 1000
+   * bottles of hair oil were added to batch rbh100 and inherited its expiry of
+   * 2027-10-10, a date belonging to different stock entirely. For a medicine
+   * that is not a cosmetic detail. And when no row matched, `if (invItem)` meant
+   * the goods were simply never taken into stock at all.
+   *
+   * A delivery is its own batch with its own expiry, so it gets its own row —
+   * merged only into a row that is genuinely the same product AND batch.
+   */
+  const receiveStock = async ({ product, batchNumber, expiryDate, unitCost, quantity, warehouse, reason }) => {
+    const qty = Number(quantity || 0);
+    if (!product || qty <= 0) return null;
+
+    const existing = inventory.find(i => i.product?.trim().toLowerCase() === product.trim().toLowerCase()
+      && sameBatch(i.batchNumber, batchNumber));
+
+    if (existing) {
+      const newQty = Number(existing.quantity || 0) + qty;
+      const patch = { quantity: newQty };
+      // Fill in what the batch was missing rather than overwriting what it has.
+      if (expiryDate && !existing.expiryDate) patch.expiryDate = expiryDate;
+      if (unitCost && !existing.unitCost) patch.unitCost = Number(unitCost);
+      setInventory(prev => {
+        const next = prev.map(i => i.id === existing.id ? { ...i, ...patch } : i);
+        localStorage.setItem('prismora_inventory', JSON.stringify(next));
+        return next;
+      });
+      const ok = await persist('inventory update', supabase.from('inventory').update(patch).eq('id', existing.id));
+      if (!ok) {
+        setInventory(prev => {
+          const next = prev.map(i => i.id === existing.id ? existing : i);
+          localStorage.setItem('prismora_inventory', JSON.stringify(next));
+          return next;
+        });
+        return null;
+      }
+      logEvent('stock_adjusted', `Stock +${qty} for ${product} (batch ${existing.batchNumber || 'unbatched'}): ${reason}`, null, existing.id);
+      return existing.id;
+    }
+
+    const newId = `INV-ITEM-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newItem = inventoryRow({
+      id: newId,
+      product,
+      batchNumber: batchNumber || '',
+      expiryDate: expiryDate || null,
+      quantity: qty,
+      unitCost: Number(unitCost || 0),
+      warehouse: warehouse || 'Main Warehouse',
+      reorderLevel: 0, reserved: 0, transit: 0, damaged: 0,
+      createdAt: new Date().toISOString(),
+    });
+    setInventory(prev => {
+      const next = [newItem, ...prev];
+      localStorage.setItem('prismora_inventory', JSON.stringify(next));
+      return next;
+    });
+    const ok = await persist('inventory insert', supabase.from('inventory').insert([newItem]));
+    if (!ok) {
+      setInventory(prev => {
+        const next = prev.filter(i => i.id !== newId);
+        localStorage.setItem('prismora_inventory', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
+    logEvent('inventory_added', `Received ${qty} ${product} — batch ${batchNumber || 'none'}, expiry ${expiryDate ? String(expiryDate).slice(0, 10) : 'not given'}`, null, newId);
+    return newId;
+  };
+
   // Moves stock of a batch from its current warehouse to another. Reduces the
   // source batch and merges into a matching batch at the destination (same
   // product + batch number), creating a new destination batch if none exists.
@@ -1733,6 +1815,39 @@ export const DataProvider = ({ children }) => {
     });
     await persist('purchase_orders update', supabase.from('purchase_orders').update({ status }).eq('id', id));
     logEvent('po_status_update', `Purchase Order ${id} → ${status}`, null, id);
+  };
+
+  /**
+   * Cancel a PO, keeping it on file.
+   *
+   * 'Cancelled' was a defined status with a filter chip and no way to reach it,
+   * so the only way out of a wrong order was Delete — which loses that it was
+   * ever raised, and why. The reason goes into `notes` because the table has no
+   * column for it, and inventing one would mean another migration before this
+   * worked at all.
+   */
+  const cancelPurchaseOrder = async (id, reason) => {
+    const before = purchaseOrders.find(po => po.id === id);
+    if (!before) return null;
+    const stamped = `Cancelled on ${new Date().toISOString().slice(0, 10)}: ${reason || 'no reason given'}`;
+    const notes = before.notes ? `${before.notes}\n${stamped}` : stamped;
+
+    setPurchaseOrders(prev => {
+      const next = prev.map(po => po.id === id ? { ...po, status: 'Cancelled', notes } : po);
+      localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
+      return next;
+    });
+    const ok = await persist('purchase_orders cancel', supabase.from('purchase_orders').update({ status: 'Cancelled', notes }).eq('id', id));
+    if (!ok) {
+      setPurchaseOrders(prev => {
+        const next = prev.map(po => po.id === id ? before : po);
+        localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
+    logEvent('po_cancelled', `Purchase Order ${id} cancelled — ${reason || 'no reason given'}`, null, id);
+    return id;
   };
 
   const deletePurchaseOrder = async (id) => {
@@ -2354,11 +2469,11 @@ export const DataProvider = ({ children }) => {
       addExpense, deleteExpense,
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
-      addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock,
+      addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, receiveStock,
       addVendor, updateVendor, deleteVendor,
       vendorPayments, addVendorPayment,
       purchaseReturns, addPurchaseReturn,
-      addPurchaseOrder, updatePurchaseOrderStatus, deletePurchaseOrder,
+      addPurchaseOrder, updatePurchaseOrderStatus, cancelPurchaseOrder, deletePurchaseOrder,
       addGRN,
       addDistributor, updateDistributor, deleteDistributor,
       addDealer, updateDealer, deleteDealer,

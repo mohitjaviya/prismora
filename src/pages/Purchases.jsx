@@ -31,9 +31,9 @@ const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tr
 const BLANK_LINE = { product: '', quantity: '', unitCost: '', batchNumber: '', expiryDate: '' };
 
 export default function Purchases() {
-  const { purchaseOrders, vendors, grn, products, inventory, vendorPayments, purchaseReturns,
-    addPurchaseOrder, updatePurchaseOrderStatus, deletePurchaseOrder,
-    addVendor, updateVendor, deleteVendor, addGRN, adjustStock, addVendorPayment, addPurchaseReturn } = useData();
+  const { purchaseOrders, vendors, grn, products, vendorPayments, purchaseReturns,
+    addPurchaseOrder, updatePurchaseOrderStatus, cancelPurchaseOrder, deletePurchaseOrder,
+    addVendor, updateVendor, deleteVendor, addGRN, receiveStock, addVendorPayment, addPurchaseReturn } = useData();
   const { user, canAccess } = useAuth();
 
   const [activeTab, setActiveTab] = useState('orders');
@@ -49,6 +49,11 @@ export default function Purchases() {
   const [grnTargetPO, setGrnTargetPO] = useState(null);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnForm, setReturnForm] = useState({ vendorId: '', reason: 'Damaged goods', product: '', quantity: '', unitCost: '', notes: '' });
+  // A PO could be created but never opened again — the list showed "1 items"
+  // and there was no way to see which item, at what cost, or in which batch.
+  const [viewingPO, setViewingPO] = useState(null);
+  const [cancellingPO, setCancellingPO] = useState(null);
+  const [cancelReason, setCancelReason] = useState('Ordered by mistake');
 
   const [poForm, setPOForm] = useState({ vendorId: '', vendorName: '', expectedDate: '', notes: '', items: [{ ...BLANK_LINE }] });
   const [grnForm, setGRNForm] = useState({ receivedDate: new Date().toISOString().split('T')[0], notes: '', items: [] });
@@ -141,7 +146,15 @@ export default function Purchases() {
     setGRNForm({
       receivedDate: new Date().toISOString().split('T')[0],
       notes: '',
-      items: (po.items || []).map(i => ({ ...i, receivedQty: i.quantity }))
+      // Batch and expiry belong to what actually turned up, so they are asked
+      // for here rather than carried from the PO. The PO's batch is offered as
+      // a starting point because it is usually what was ordered.
+      items: (po.items || []).map(i => ({
+        ...i,
+        receivedQty: i.quantity,
+        batchNumber: i.batchNumber || '',
+        expiryDate: i.expiryDate || '',
+      }))
     });
     setIsGRNModalOpen(true);
   };
@@ -154,25 +167,31 @@ export default function Purchases() {
     const grnId = await addGRN({
       poId: grnTargetPO?.id || null,
       vendorName: grnTargetPO?.vendorName || '',
-      items: grnForm.items.map(i => ({ ...i, quantity: Number(i.receivedQty) })),
+      items: grnForm.items.map(i => ({
+        ...i,
+        quantity: Number(i.receivedQty),
+        batchNumber: i.batchNumber || '',
+        expiryDate: i.expiryDate ? new Date(i.expiryDate).toISOString() : null,
+      })),
       receivedDate: new Date(grnForm.receivedDate).toISOString(),
       notes: grnForm.notes,
       receivedBy: user.id
     });
     if (!grnId) return;
 
-    // ── Auto-update Inventory stock for each received item ─────────────────
-    grnForm.items.forEach(item => {
+    // ── Take the delivery into stock as its own batch ──────────────────────
+    for (const item of grnForm.items) {
       const receivedQty = Number(item.receivedQty);
-      if (!receivedQty || receivedQty <= 0) return;
-      // Match inventory item by product name (case-insensitive)
-      const invItem = inventory.find(inv =>
-        inv.product?.toLowerCase() === item.product?.toLowerCase()
-      );
-      if (invItem) {
-        adjustStock(invItem.id, receivedQty, `GRN received from ${grnTargetPO?.vendorName || 'vendor'}`);
-      }
-    });
+      if (!receivedQty || receivedQty <= 0) continue;
+      await receiveStock({
+        product: item.product,
+        batchNumber: item.batchNumber || '',
+        expiryDate: item.expiryDate ? new Date(item.expiryDate).toISOString() : null,
+        unitCost: Number(item.unitCost || 0),
+        quantity: receivedQty,
+        reason: `GRN ${grnId} from ${grnTargetPO?.vendorName || 'vendor'}`,
+      });
+    }
 
     setIsGRNModalOpen(false);
   };
@@ -282,7 +301,7 @@ export default function Purchases() {
                 {filteredOrders.length > 0 ? filteredOrders.map(po => {
                   const st = statusConfig[po.status] || statusConfig['Draft'];
                   return (
-                    <tr key={po.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
+                    <tr key={po.id} onClick={() => setViewingPO(po)} className="hover:bg-brand-primary-lighter/20 transition-colors cursor-pointer">
                       <td className="p-4 font-bold text-white font-mono text-xs">{po.id}</td>
                       <td className="p-4"><div className="font-medium text-white">{po.vendorName}</div></td>
                       <td className="p-4 text-center">{(po.items || []).length} items</td>
@@ -300,7 +319,7 @@ export default function Purchases() {
                         })()}
                       </td>
                       {canManage && (
-                        <td className="p-4 text-center">
+                        <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
                             {po.status === 'Draft' && (
                               <button onClick={() => updatePurchaseOrderStatus(po.id, 'Confirmed')} className="px-2 py-1 text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-colors">Confirm</button>
@@ -311,7 +330,13 @@ export default function Purchases() {
                             {po.status === 'GRN Done' && (
                               <button onClick={() => updatePurchaseOrderStatus(po.id, 'Closed')} className="px-2 py-1 text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-lg hover:bg-purple-500/20 transition-colors">Close</button>
                             )}
-                            <button onClick={() => { if (confirm('Delete this PO?')) deletePurchaseOrder(po.id); }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"><Trash2 size={13} /></button>
+                            {/* Cancelled was a defined status with no way to
+                                reach it, so the only way out of a PO was to
+                                delete it and lose that it ever existed. */}
+                            {(po.status === 'Draft' || po.status === 'Confirmed') && (
+                              <button onClick={() => { setCancellingPO(po); setCancelReason('Ordered by mistake'); }} className="px-2 py-1 text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-colors">Cancel</button>
+                            )}
+                            <button onClick={() => { if (confirm('Delete this PO? Cancelling keeps the record — deleting removes it for good.')) deletePurchaseOrder(po.id); }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"><Trash2 size={13} /></button>
                           </div>
                         </td>
                       )}
@@ -597,12 +622,43 @@ export default function Purchases() {
               </div>
               <div>
                 <label className={labelCls}>Items Received</label>
-                {grnForm.items.map((item, idx) => (
-                  <div key={idx} className="flex gap-2 items-center mb-2">
-                    <span className="text-xs text-white flex-1 truncate">{item.product}</span>
-                    <input type="number" min="0" value={item.receivedQty} onChange={e => setGRNForm(f => ({ ...f, items: f.items.map((gi, i) => i === idx ? { ...gi, receivedQty: e.target.value } : gi) }))} className="w-24 glass-input rounded-lg px-3 py-2 text-xs text-white" placeholder="Qty" />
-                  </div>
-                ))}
+                <p className="text-[10px] text-slate-500 mb-2">
+                  Batch and expiry are taken from the goods in front of you. Without them the stock joins
+                  another batch and inherits its expiry date.
+                </p>
+                {grnForm.items.map((item, idx) => {
+                  const patch = (field, value) => setGRNForm(f => ({
+                    ...f, items: f.items.map((gi, i) => i === idx ? { ...gi, [field]: value } : gi)
+                  }));
+                  return (
+                    <div key={idx} className="bg-brand-primary-lighter/20 rounded-xl p-3 mb-2 border border-white/5">
+                      <p className="text-xs font-semibold text-white mb-2 truncate">{item.product}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-1">Qty received</label>
+                          <input type="number" min="0" value={item.receivedQty}
+                            onChange={e => patch('receivedQty', e.target.value)}
+                            className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" placeholder="Qty" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-1">Batch #</label>
+                          <input type="text" value={item.batchNumber || ''}
+                            onChange={e => patch('batchNumber', e.target.value)}
+                            className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" placeholder="Batch" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-1">Expiry</label>
+                          <input type="date" value={item.expiryDate ? String(item.expiryDate).slice(0, 10) : ''}
+                            onChange={e => patch('expiryDate', e.target.value)}
+                            className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" />
+                        </div>
+                      </div>
+                      {Number(item.receivedQty) > 0 && !item.expiryDate && (
+                        <p className="text-[10px] text-amber-400 mt-1.5">No expiry date — this batch will have none on record.</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div>
                 <label className={labelCls}>Notes</label>
@@ -738,6 +794,142 @@ export default function Purchases() {
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsVendorModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
                 <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingVendor ? 'Save Changes' : 'Add Vendor'}</button>
+              </div>
+            </form>
+          </div>
+        </div>, document.body
+      )}
+
+      {/* ── PO detail ─────────────────────────────────────────────────────── */}
+      {viewingPO && createPortal(
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setViewingPO(null)} />
+          <div className="relative glass-panel bg-brand-primary w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl border border-brand-accent/30 z-10 flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-white/5 flex-shrink-0">
+              <div>
+                <h3 className="text-lg font-bold text-white font-mono">{viewingPO.id}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{viewingPO.vendorName}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${(statusConfig[viewingPO.status] || statusConfig['Draft']).cls}`}>
+                  {(statusConfig[viewingPO.status] || statusConfig['Draft']).icon}{viewingPO.status}
+                </span>
+                <button onClick={() => setViewingPO(null)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={18} /></button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-5">
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                <div className="bg-brand-primary-lighter/30 rounded-xl p-3">
+                  <p className="text-slate-500 text-[10px] uppercase tracking-wide">Total</p>
+                  <p className="text-brand-accent font-bold mt-0.5">{formatCurrency(viewingPO.total)}</p>
+                </div>
+                <div className="bg-brand-primary-lighter/30 rounded-xl p-3">
+                  <p className="text-slate-500 text-[10px] uppercase tracking-wide">Expected</p>
+                  <p className="text-white font-semibold mt-0.5">{formatDate(viewingPO.expectedDate)}</p>
+                </div>
+                <div className="bg-brand-primary-lighter/30 rounded-xl p-3">
+                  <p className="text-slate-500 text-[10px] uppercase tracking-wide">Created</p>
+                  <p className="text-white font-semibold mt-0.5">{formatDate(viewingPO.createdAt)}</p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-white mb-2">Items ordered</h4>
+                <div className="space-y-1.5">
+                  {(viewingPO.items || []).map((it, i) => (
+                    <div key={i} className="flex items-center justify-between bg-brand-primary-lighter/30 rounded-lg px-3 py-2 text-xs">
+                      <div className="min-w-0">
+                        <p className="text-white font-medium truncate">{it.product || 'Unnamed'}</p>
+                        <p className="text-[10px] text-slate-500">
+                          {Number(it.quantity || 0)} × {formatCurrency(it.unitCost)}
+                          {it.batchNumber ? ` · batch ${it.batchNumber}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-brand-accent font-bold flex-shrink-0 ml-3">
+                        {formatCurrency(Number(it.quantity || 0) * Number(it.unitCost || 0))}
+                      </span>
+                    </div>
+                  ))}
+                  {(viewingPO.items || []).length === 0 && (
+                    <p className="text-xs italic text-slate-500 py-3">No line items on this PO.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* What was actually received against it. */}
+              <div>
+                <h4 className="text-sm font-bold text-white mb-2">Goods received</h4>
+                {(() => {
+                  const linked = grn.filter(g => g.poId === viewingPO.id);
+                  if (linked.length === 0) {
+                    return <p className="text-xs italic text-slate-500 py-2">Nothing received against this PO yet.</p>;
+                  }
+                  return (
+                    <div className="space-y-1.5">
+                      {linked.map(g => (
+                        <div key={g.id} className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-3 py-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-white font-mono">{g.id}</span>
+                            <span className="text-slate-400">{formatDate(g.receivedDate)}</span>
+                          </div>
+                          {(g.items || []).map((it, i) => (
+                            <p key={i} className="text-[10px] text-slate-400 mt-1">
+                              {it.product} — {Number(it.quantity || 0)} received
+                              {it.batchNumber ? ` · batch ${it.batchNumber}` : ' · no batch'}
+                              {it.expiryDate ? ` · expires ${formatDate(it.expiryDate)}` : ' · no expiry'}
+                            </p>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {viewingPO.notes && (
+                <div>
+                  <h4 className="text-sm font-bold text-white mb-2">Notes</h4>
+                  <p className="text-xs text-slate-300 whitespace-pre-line bg-brand-primary-lighter/30 rounded-lg p-3">{viewingPO.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end p-6 pt-4 border-t border-white/5 flex-shrink-0">
+              {canManage && (viewingPO.status === 'Draft' || viewingPO.status === 'Confirmed') && (
+                <button onClick={() => { setCancellingPO(viewingPO); setCancelReason('Ordered by mistake'); setViewingPO(null); }} className="px-4 py-2 text-sm bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-xl">Cancel PO</button>
+              )}
+              <button onClick={() => setViewingPO(null)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Close</button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
+
+      {/* ── Cancel a PO, with a reason ────────────────────────────────────── */}
+      {cancellingPO && createPortal(
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setCancellingPO(null)} />
+          <div className="relative glass-panel bg-brand-primary w-full max-w-md rounded-2xl shadow-2xl border border-rose-500/30 z-10 overflow-hidden">
+            <div className="p-6 border-b border-white/5">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <AlertCircle size={18} className="text-rose-400" /> Cancel {cancellingPO.id}?
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                The order stays on file as Cancelled with your reason. Nothing is deleted and no stock moves.
+              </p>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); cancelPurchaseOrder(cancellingPO.id, cancelReason); setCancellingPO(null); }} className="p-6 space-y-4">
+              <div>
+                <label className={labelCls}>Reason *</label>
+                <select required value={cancelReason} onChange={e => setCancelReason(e.target.value)} className={inputCls}>
+                  {['Ordered by mistake', 'Vendor cannot supply', 'Price changed', 'No longer needed', 'Duplicate order', 'Other'].map(r => (
+                    <option key={r} value={r} className="bg-brand-primary">{r}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
+                <button type="button" onClick={() => setCancellingPO(null)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Keep it</button>
+                <button type="submit" className="px-4 py-2 text-sm bg-rose-500 text-white font-semibold rounded-xl hover:bg-rose-600 transition-colors">Cancel PO</button>
               </div>
             </form>
           </div>
