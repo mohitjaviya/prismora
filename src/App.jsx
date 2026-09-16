@@ -36,7 +36,12 @@ const Stock = lazy(() => import('./pages/Stock'));
 const PriceList = lazy(() => import('./pages/PriceList'));
 
 const ProtectedRoute = ({ children }) => {
-  const { user } = useAuth();
+  const { user, authReady } = useAuth();
+  // "No user yet" and "no user" are different answers. Reading the Supabase
+  // session takes a moment, and redirecting during that moment sent a signed-in
+  // person to the login page on every refresh — the slower the connection, the
+  // more reliably it happened.
+  if (!user && !authReady) return <RouteFallback />;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 };

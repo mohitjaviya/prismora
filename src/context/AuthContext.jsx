@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 
 export const USER_ROLES = [
@@ -161,12 +161,22 @@ export const AuthProvider = ({ children }) => {
     return withoutPassword(data);
   };
 
+  // Set the moment a sign-in succeeds. The session check below starts when the
+  // page loads and can still be in flight when someone signs in — it would then
+  // come back "no session", because it asked before they did, and clear the
+  // session they just created. On a fast connection it resolves before anyone
+  // can click; on a slower one the dashboard opened and was immediately thrown
+  // back to the login page.
+  const signedIn = useRef(false);
+
   const applySession = (profile) => {
+    signedIn.current = true;
     setUser(profile);
     try { localStorage.setItem('prismora_user', JSON.stringify(profile)); } catch { /* storage blocked */ }
   };
 
   const clearSession = () => {
+    signedIn.current = false;
     setUser(null);
     try { localStorage.removeItem('prismora_user'); } catch { /* storage blocked */ }
   };
@@ -179,10 +189,27 @@ export const AuthProvider = ({ children }) => {
     let cancelled = false;
 
     (async () => {
-      const { data } = await supabase.auth.getSession();
+      // Bounded. getSession usually answers from local storage in a moment,
+      // but it refreshes an expired token over the network first, and a request
+      // that never comes back would leave authReady false and the whole app
+      // sitting on "Loading…" for ever — the exact failure this guard exists to
+      // prevent. Past the deadline we treat it as "no session" and let the
+      // login page do its job.
+      const { data } = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise(resolve => setTimeout(() => resolve({ data: null }), 8000)),
+      ]);
       if (cancelled) return;
       const email = data?.session?.user?.email;
-      if (!email) { clearSession(); setAuthReady(true); return; }
+      if (!email) {
+        // Only clear if nobody has signed in while this was in flight. This
+        // answer describes the moment the page loaded, and signing in since
+        // then makes it stale — acting on it logged the person straight back
+        // out of the dashboard they had just reached.
+        if (!signedIn.current) clearSession();
+        setAuthReady(true);
+        return;
+      }
       const profile = await loadProfile(email);
       if (cancelled) return;
       if (profile) applySession(profile); else clearSession();
