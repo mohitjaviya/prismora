@@ -7,7 +7,7 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { login, missingEnvVars } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -19,6 +19,19 @@ const Login = () => {
       setError('Your account is awaiting admin approval. Please check back soon.');
     } else if (result === 'rejected') {
       setError('Your registration was not approved. Please contact support.');
+    } else if (result === 'unconfigured') {
+      setError(
+        'This site was built without its database keys (' + (missingEnvVars || []).join(', ') +
+        '). Nothing can sign in until they are set and the site is redeployed. This is not your password.'
+      );
+    } else if (result === 'unconfirmed') {
+      setError('This account exists but its email has not been confirmed. An administrator can confirm it in Supabase → Authentication → Users.');
+    } else if (result === 'no-profile') {
+      setError('Your sign-in worked, but this email has no profile in the system, so it has no role. An administrator needs to add it.');
+    } else if (typeof result === 'string' && result.startsWith('error:')) {
+      // The real message, rather than blaming the password for a problem that
+      // has nothing to do with it.
+      setError('Could not sign in: ' + result.slice(6));
     } else {
       setError('Invalid email address or password. Please check your credentials.');
     }
@@ -46,6 +59,19 @@ const Login = () => {
         {/* Login Card */}
         <div className="glass-panel p-6 rounded-3xl animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
           <h2 className="text-xl md:text-2xl font-semibold text-white mb-4">Welcome back</h2>
+
+          {/* Said before anyone types, rather than after — a build with no keys
+              cannot sign anybody in, and that is not a password problem. */}
+          {missingEnvVars && missingEnvVars.length > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+              <p className="text-[11px] text-amber-300 leading-relaxed">
+                <span className="font-bold">This site is missing its database keys.</span>{' '}
+                {missingEnvVars.join(' and ')} {missingEnvVars.length > 1 ? 'were' : 'was'} not set when it was built,
+                so no account can sign in. They are set in the hosting project's environment variables, and the site
+                must be redeployed afterwards.
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>

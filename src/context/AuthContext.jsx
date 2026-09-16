@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, isConfigured, missingEnvVars } from '../supabaseClient';
 
 export const USER_ROLES = [
   'Super Admin',
@@ -266,11 +266,26 @@ export const AuthProvider = ({ children }) => {
       // `.eq('password', password)` against the users table — a table the
       // browser's own key can read, so every password in the company was
       // readable by anyone who opened the deployed site and pressed F12.
+      if (!isConfigured) return 'unconfigured';
+
       const { data: auth, error: authError } = await supabase.auth.signInWithPassword({
         email: String(email || '').trim(),
         password,
       });
-      if (authError || !auth?.user) return false;
+
+      // Only a genuine credential rejection may be reported as a wrong
+      // password. Everything else — an unreachable project, a bad key, a
+      // confirmation still pending — used to come back as `false` and be shown
+      // as "invalid email or password", which sent people hunting for a typo
+      // in a password that was correct all along.
+      if (authError) {
+        const msg = String(authError.message || authError);
+        if (/invalid login credentials/i.test(msg)) return false;
+        if (/email not confirmed/i.test(msg)) return 'unconfirmed';
+        console.error('[Prismora] Sign-in failed:', msg);
+        return 'error:' + msg;
+      }
+      if (!auth?.user) return false;
 
       const profile = await loadProfile(auth.user.email);
       if (!profile) {
@@ -290,7 +305,7 @@ export const AuthProvider = ({ children }) => {
       // No offline fallback: a browser that cannot reach Supabase cannot verify
       // a password, and guessing is how the demo-account hole worked.
       console.error('[Prismora] Sign-in failed — could not reach the account service.', err?.message || err);
-      return false;
+      return 'error:' + (err?.message || 'could not reach the account service');
     }
   };
 
@@ -428,7 +443,7 @@ export const AuthProvider = ({ children }) => {
   const isSales = user ? isSalesRole(user.role) : false;
 
   return (
-    <AuthContext.Provider value={{ user, users, authReady, login, logout, addUser, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, isAdmin, isManager, isSales }}>
+    <AuthContext.Provider value={{ user, users, authReady, isConfigured, missingEnvVars, login, logout, addUser, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, isAdmin, isManager, isSales }}>
       {children}
     </AuthContext.Provider>
   );
