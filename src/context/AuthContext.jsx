@@ -138,10 +138,6 @@ export const AuthProvider = ({ children }) => {
   // to the login page before the session comes back.
   const [authReady, setAuthReady] = useState(false);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
   /**
    * The profile row behind a signed-in email.
    *
@@ -154,11 +150,35 @@ export const AuthProvider = ({ children }) => {
    * users table holds whatever was typed.
    */
   const loadProfile = async (email) => {
-    if (!email) return null;
+    if (!email) return { profile: null, failed: true };
     const { data, error } = await supabase
       .from('users').select('*').ilike('email', email).maybeSingle();
-    if (error || !data) return null;
-    return withoutPassword(data);
+    // "The read failed" and "there is genuinely no such person" have to be told
+    // apart. Row-level security answers an unauthenticated read with zero rows
+    // rather than an error, so a query that goes out a moment before the new
+    // token is attached looks exactly like an account that does not exist.
+    if (error) return { profile: null, failed: true };
+    return { profile: data ? withoutPassword(data) : null, failed: false };
+  };
+
+  /**
+   * The profile, given a session that has only just been created.
+   *
+   * signInWithPassword resolves before the client has necessarily attached the
+   * new token to outgoing requests. The very next query can therefore go out
+   * unauthenticated, and against an RLS-protected table that comes back empty —
+   * indistinguishable from having no account. That is what made the first
+   * sign-in attempt report a wrong password and the second, with the identical
+   * password, succeed: the first was signed straight back out again.
+   */
+  const loadProfileAfterSignIn = async (email) => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { profile, failed } = await loadProfile(email);
+      if (profile) return profile;
+      if (!failed && attempt >= 2) return null;   // twice empty, no error: really absent
+      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+    return null;
   };
 
   // Set the moment a sign-in succeeds. The session check below starts when the
@@ -210,9 +230,13 @@ export const AuthProvider = ({ children }) => {
         setAuthReady(true);
         return;
       }
-      const profile = await loadProfile(email);
+      const { profile, failed } = await loadProfile(email);
       if (cancelled) return;
-      if (profile) applySession(profile); else clearSession();
+      // A read that failed says nothing about whether the account exists, so it
+      // must not end a session Supabase considers valid. Keeping the cached
+      // profile is the safe answer; the next load corrects it.
+      if (profile) applySession(profile);
+      else if (!failed) clearSession();
       setAuthReady(true);
     })();
 
@@ -221,9 +245,11 @@ export const AuthProvider = ({ children }) => {
       if (event === 'SIGNED_OUT') { clearSession(); return; }
       const email = session?.user?.email;
       if (!email) return;
-      const profile = await loadProfile(email);
+      // Runs immediately after sign-in too, so it needs the same patience: the
+      // token may not be attached to outgoing requests for another moment.
+      const profile = await loadProfileAfterSignIn(email);
       if (cancelled) return;
-      if (profile) applySession(profile); else clearSession();
+      if (profile) applySession(profile);
     });
 
     return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
@@ -259,6 +285,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Declared after fetchUsers deliberately. An effect runs after the component
+  // body, so calling it from above worked — but it read as using a value before
+  // it exists, and the linter was right to say so.
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
   // Returns true (success) | false (invalid credentials) | 'pending' | 'rejected'
   const login = async (email, password) => {
     try {
@@ -287,11 +320,11 @@ export const AuthProvider = ({ children }) => {
       }
       if (!auth?.user) return false;
 
-      const profile = await loadProfile(auth.user.email);
+      const profile = await loadProfileAfterSignIn(auth.user.email);
       if (!profile) {
         // Authenticated, but no row in `users` — so no role and no permissions.
-        // Signing them out is the safe end: a session with no profile would be
-        // a logged-in user the app cannot place.
+        // Only reached after the retries above, so this really is a missing
+        // profile rather than a read that raced the new session.
         await supabase.auth.signOut();
         console.error('[Prismora] Signed in, but no matching profile in `users` for', auth.user.email);
         return 'no-profile';
