@@ -7,6 +7,7 @@ import {
   Clock, AlertTriangle, Search, Filter, Download, Users, Percent, Gift, Calendar, BarChart3
 } from 'lucide-react';
 import { downloadCSV } from '../utils/exportUtils';
+import { schemeLiveState } from '../utils/schemeUtils';
 
 const SCHEME_TYPES = ['Flat Discount', 'Cash Discount', 'Free Goods', 'Slab Discount', 'Seasonal Offer', 'Buy X Get Y'];
 const APPLICABLE_TO = ['All', 'Distributor', 'Dealer', 'Retailer'];
@@ -78,17 +79,27 @@ export default function Schemes() {
   }, [schemes, schemeStats]);
 
   const kpis = useMemo(() => {
-    const active = schemes.filter(s => s.status === 'Active');
+    // Genuinely running today — not merely flagged Active. See schemeLiveState.
+    const active = schemes.filter(s => schemeLiveState(s) === 'Active');
+    const scheduled = schemes.filter(s => schemeLiveState(s) === 'Scheduled');
     const expiringSoon = active.filter(s => {
       const d = getDaysLeft(s.validTo);
       return d !== null && d <= 7 && d >= 0;
     });
-    return { total: schemes.length, active: active.length, expiringSoon: expiringSoon.length };
+    return { total: schemes.length, active: active.length, scheduled: scheduled.length, expiringSoon: expiringSoon.length };
   }, [schemes]);
 
   const filtered = useMemo(() => schemes.filter(s => {
     const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filter === 'All' ? true : filter === 'Active' ? s.status === 'Active' : filter === 'Expired' ? (getDaysLeft(s.validTo) !== null && getDaysLeft(s.validTo) < 0) || s.status === 'Inactive' : true;
+    const live = schemeLiveState(s);
+    // "Active" now means running today, so the chip and the count agree. A
+    // scheme waiting to start is neither Active nor Expired, so it needs its
+    // own chip or it disappears from every filter but All.
+    const matchStatus = filter === 'All' ? true
+      : filter === 'Active' ? live === 'Active'
+      : filter === 'Scheduled' ? live === 'Scheduled'
+      : filter === 'Expired' ? (live === 'Expired' || live === 'Inactive')
+      : true;
     const matchApplicable = !applicableFilter || s.applicableTo === applicableFilter || s.applicableTo === 'All';
     return matchSearch && matchStatus && matchApplicable;
   }), [schemes, search, filter, applicableFilter]);
@@ -166,13 +177,19 @@ export default function Schemes() {
       <div className={`grid gap-4 ${canManage ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'}`}>
         {[
           { label: 'Total Schemes', value: kpis.total, color: 'text-blue-400' },
-          { label: 'Active Now', value: kpis.active, color: 'text-emerald-400' },
+          {
+            label: 'Active Now', value: kpis.active, color: 'text-emerald-400',
+            // A zero here with schemes on the screen looks broken, so it says
+            // where the others have gone.
+            note: kpis.scheduled > 0 ? `${kpis.scheduled} waiting to start` : null,
+          },
           { label: 'Expiring in 7 Days', value: kpis.expiringSoon, color: kpis.expiringSoon > 0 ? 'text-orange-400' : 'text-slate-400' },
           ...(canManage ? [{ label: 'Top Scheme', value: topScheme ? `${topScheme.name} (${topScheme.uses})` : '—', color: 'text-brand-accent', small: true }] : []),
         ].map((k, i) => (
           <div key={i} className="glass-panel rounded-2xl p-4 border border-white/5">
             <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{k.label}</p>
             <p className={`${k.small ? 'text-sm' : 'text-2xl'} font-extrabold mt-1 ${k.color} truncate`} title={k.small ? k.value : undefined}>{k.value}</p>
+            {k.note && <p className="text-[10px] text-amber-400 mt-0.5">{k.note}</p>}
           </div>
         ))}
       </div>
@@ -184,7 +201,7 @@ export default function Schemes() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search schemes..." className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-white" />
         </div>
         <div className="flex gap-2">
-          {['Active', 'All', 'Expired'].map(f => (
+          {['Active', 'Scheduled', 'All', 'Expired'].map(f => (
             <button key={f} onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${filter === f ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'border-white/5 text-slate-400 hover:text-white bg-brand-primary-lighter/40'}`}>{f}</button>
           ))}
@@ -202,19 +219,29 @@ export default function Schemes() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(s => {
             const daysLeft = getDaysLeft(s.validTo);
-            const isExpired = daysLeft !== null && daysLeft < 0;
-            const isExpiringSoon = daysLeft !== null && daysLeft <= 7 && daysLeft >= 0;
+            const live = schemeLiveState(s);
+            const isExpired = live === 'Expired';
+            const isExpiringSoon = live === 'Active' && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0;
+            const isLive = live === 'Active';
+            const startsIn = s.validFrom ? Math.ceil((new Date(s.validFrom) - new Date()) / 86400000) : null;
             return (
-              <div key={s.id} className={`glass-panel rounded-2xl border p-5 transition-all hover:-translate-y-1 hover:shadow-xl ${s.status === 'Active' && !isExpired ? 'border-white/10 hover:border-brand-accent/30 hover:shadow-brand-accent/5' : 'border-white/5 opacity-60'}`}>
+              <div key={s.id} className={`glass-panel rounded-2xl border p-5 transition-all hover:-translate-y-1 hover:shadow-xl ${isLive ? 'border-white/10 hover:border-brand-accent/30 hover:shadow-brand-accent/5' : 'border-white/5 opacity-60'}`}>
                 <div className="flex justify-between items-start mb-3">
-                  <div className={`p-2 rounded-xl ${s.status === 'Active' && !isExpired ? 'bg-brand-accent/10 text-brand-accent' : 'bg-slate-500/10 text-slate-400'}`}>
+                  <div className={`p-2 rounded-xl ${isLive ? 'bg-brand-accent/10 text-brand-accent' : 'bg-slate-500/10 text-slate-400'}`}>
                     {typeIcon(s.type)}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${applicableColors[s.applicableTo] || applicableColors['All']}`}>{s.applicableTo}</span>
-                    {isExpired ? (
+                    {/* Four states, not three. A scheme that has not started yet
+                        used to wear the green Active badge, because nothing
+                        here looked at validFrom. */}
+                    {live === 'Expired' ? (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-rose-500/10 text-rose-400 border-rose-500/20">Expired</span>
-                    ) : s.status === 'Active' ? (
+                    ) : live === 'Scheduled' ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                        Starts in {startsIn}d
+                      </span>
+                    ) : live === 'Active' ? (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Active</span>
                     ) : (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-500/10 text-slate-400 border-slate-500/20">Inactive</span>

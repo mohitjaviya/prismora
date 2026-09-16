@@ -12,6 +12,28 @@ export const getSchemeMatchValue = (scheme, order) => {
     .reduce((s, i) => s + Number(i.total || (i.quantity * i.unitPrice) || 0), 0);
 };
 
+/**
+ * Where a scheme stands today: 'Active', 'Scheduled', 'Expired' or 'Inactive'.
+ *
+ * The Schemes screen counted "Active Now" as `status === 'Active'` and looked
+ * at no dates at all, so a scheme that ended in August and one that does not
+ * begin until October were both reported as running — two live schemes on a
+ * day when nothing was live. The cards were half-right: they greyed out a
+ * scheme past its validTo but had no idea about validFrom, so one that had not
+ * started yet still wore a green Active badge.
+ *
+ * isSchemeEligible below already applied all three rules, which is why a claim
+ * against those schemes would have been refused while the screen insisted they
+ * were on. This is that same test, so the screen and the claim agree.
+ */
+export const schemeLiveState = (scheme, now = new Date()) => {
+  if (!scheme) return 'Inactive';
+  if (scheme.status !== 'Active') return 'Inactive';
+  if (scheme.validFrom && new Date(scheme.validFrom) > now) return 'Scheduled';
+  if (scheme.validTo && new Date(scheme.validTo) < now) return 'Expired';
+  return 'Active';
+};
+
 export const isSchemeEligible = (scheme, order, now = new Date()) => {
   if (scheme.status !== 'Active') return false;
   if (scheme.validFrom && new Date(scheme.validFrom) > now) return false;
