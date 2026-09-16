@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
+import { INDIA_STATE_PATHS, INDIA_VIEWBOX } from '../utils/indiaMap';
 import { useAuth, isSalesRole } from '../context/AuthContext';
 import { 
   ArrowUpDown, Plus, Edit2, Trash2, MapPin, Users, Globe, ChevronRight, X, Compass, Check
@@ -216,62 +217,32 @@ export default function Geography() {
                 <div className="flex items-center gap-3 text-[10px] text-slate-400">
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block"/><span>High</span></span>
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-900 inline-block"/><span>Low</span></span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-slate-700 inline-block"/><span>None</span></span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-slate-400/25 border border-slate-400/40 inline-block"/><span>None</span></span>
                 </div>
               </div>
               <div className="relative w-full overflow-hidden rounded-xl bg-brand-primary-dark/50 border border-white/5">
-                <svg viewBox="0 0 550 600" className="w-full" style={{ maxHeight: '420px' }}>
-                  {/* Simplified India state paths — approximated polygons */}
-                  {[
-                    { name: 'Rajasthan', d: 'M 120 130 L 220 110 L 250 150 L 240 230 L 160 250 L 110 210 Z' },
-                    { name: 'Gujarat', d: 'M 60 200 L 120 180 L 160 250 L 130 310 L 80 290 L 50 250 Z' },
-                    { name: 'Maharashtra', d: 'M 130 310 L 240 260 L 290 310 L 270 380 L 180 400 L 130 360 Z' },
-                    { name: 'Madhya Pradesh', d: 'M 160 250 L 260 225 L 310 260 L 290 310 L 180 320 Z' },
-                    { name: 'Uttar Pradesh', d: 'M 220 110 L 340 95 L 370 140 L 340 185 L 260 200 L 240 160 Z' },
-                    { name: 'Punjab', d: 'M 185 60 L 235 50 L 240 90 L 200 100 L 180 85 Z' },
-                    { name: 'Haryana', d: 'M 200 100 L 240 90 L 250 120 L 220 130 L 195 118 Z' },
-                    { name: 'Delhi', d: 'M 220 115 L 235 110 L 238 125 L 224 128 Z' },
-                    { name: 'Himachal Pradesh', d: 'M 200 40 L 255 30 L 265 65 L 235 75 L 205 65 Z' },
-                    { name: 'Bihar', d: 'M 340 145 L 400 135 L 415 175 L 380 195 L 340 185 Z' },
-                    { name: 'West Bengal', d: 'M 400 150 L 440 140 L 450 210 L 420 240 L 390 210 L 400 175 Z' },
-                    { name: 'Odisha', d: 'M 370 200 L 420 210 L 410 280 L 365 285 L 340 250 L 360 220 Z' },
-                    { name: 'Jharkhand', d: 'M 360 175 L 410 170 L 415 205 L 370 210 L 355 195 Z' },
-                    { name: 'Chhattisgarh', d: 'M 290 230 L 360 220 L 365 285 L 310 295 L 285 275 Z' },
-                    { name: 'Telangana', d: 'M 250 305 L 320 295 L 330 355 L 280 365 L 240 345 Z' },
-                    { name: 'Andhra Pradesh', d: 'M 250 360 L 330 355 L 340 420 L 290 450 L 245 420 Z' },
-                    { name: 'Karnataka', d: 'M 175 375 L 250 360 L 250 440 L 205 470 L 165 440 L 155 400 Z' },
-                    { name: 'Kerala', d: 'M 185 460 L 215 450 L 220 530 L 195 540 L 175 505 Z' },
-                    { name: 'Tamil Nadu', d: 'M 215 450 L 290 450 L 295 520 L 250 545 L 220 525 Z' },
-                    { name: 'Goa', d: 'M 148 408 L 168 400 L 172 418 L 152 424 Z' },
-                    { name: 'Assam', d: 'M 450 120 L 500 115 L 505 145 L 455 150 Z' },
-                  ].map(state => (
-                    <g key={state.name}>
-                      <path
-                        d={state.d}
-                        fill={getStateColor(state.name)}
-                        fillOpacity={getStateOpacity(state.name)}
-                        stroke="#334155"
-                        strokeWidth="1.5"
-                        className="transition-all duration-300 hover:brightness-125 cursor-pointer"
-                      />
-                      {stateRevenue[state.name] > 0 && (
-                        <title>{state.name}: ₹{stateRevenue[state.name].toLocaleString('en-IN')}</title>
-                      )}
-                    </g>
-                  ))}
-                  {/* State name labels for active states */}
-                  {Object.entries(stateRevenue).filter(([, rev]) => rev > 0).map(([state, rev]) => {
-                    const labelMap = {
-                      'Gujarat': [100, 245], 'Maharashtra': [205, 345], 'Rajasthan': [175, 185],
-                      'Karnataka': [200, 420], 'Uttar Pradesh': [290, 150], 'Tamil Nadu': [250, 490],
-                      'Andhra Pradesh': [285, 400], 'West Bengal': [420, 190], 'Madhya Pradesh': [230, 280],
-                    };
-                    const pos = labelMap[state];
-                    if (!pos) return null;
+                <svg viewBox={INDIA_VIEWBOX} className="w-full" style={{ maxHeight: '460px' }}>
+                  {/* Real state outlines rather than the hand-drawn polygons that
+                      were here before — those were five-point blobs that did not
+                      resemble the states they stood for, and covered only 21 of
+                      them. All 36 states and union territories are present now,
+                      so the hard-coded label coordinates that went with the old
+                      drawing are gone; the name is on hover instead. */}
+                  {Object.entries(INDIA_STATE_PATHS).map(([name, d]) => {
+                    const rev = stateRevenue[name] || 0;
                     return (
-                      <text key={state} x={pos[0]} y={pos[1]} textAnchor="middle" fontSize="9" fill="#d1fae5" fontWeight="600" className="pointer-events-none">
-                        {state.split(' ')[0]}
-                      </text>
+                      <path
+                        key={name}
+                        d={d}
+                        fill={rev > 0 ? getStateColor(name) : '#94a3b8'}
+                        fillOpacity={rev > 0 ? 0.9 : 0.22}
+                        stroke="#64748b"
+                        strokeWidth="0.8"
+                        strokeOpacity={0.5}
+                        className="transition-all duration-300 hover:brightness-125 cursor-pointer"
+                      >
+                        <title>{rev > 0 ? `${name}: ₹${rev.toLocaleString('en-IN')}` : `${name}: no orders`}</title>
+                      </path>
                     );
                   })}
                 </svg>
