@@ -241,22 +241,58 @@ const insertWithFreeId = async (label, table, prefix, firstNumber, record, shape
 /**
  * The columns that exist on `leads`.
  *
- * Same hazard as ORDER_COLUMNS: PostgREST rejects an entire UPDATE when the
- * payload names a column the table lacks. `orderCreated` was being written
- * without existing, so every lead conversion failed to save its new status
- * while still creating the order — and the next conversion of the same lead
- * raised a duplicate.
+ * Same hazard as ORDER_COLUMNS: PostgREST rejects an entire INSERT or UPDATE
+ * when the payload names a column the table lacks. `orderCreated` was being
+ * written without existing, so every lead conversion failed to save its new
+ * status while still creating the order — and the next conversion of the same
+ * lead raised a duplicate.
+ *
+ * The list has to match the table exactly, in both directions:
+ *
+ *   · `leadSource` was missing from here while existing on the table, so the
+ *     answer to "where did this lead come from" was dropped on every write.
+ *   · `state` and `city` were listed here while missing from the table, which
+ *     is worse — naming them was enough to have the whole statement refused.
+ *     FIX_LEADS_NOW.sql adds those two plus district, territory and leadType.
+ *
+ * `attachments` is deliberately absent. The form offers a file picker with no
+ * file storage behind it, so it only ever holds an empty array; listing it
+ * would refuse every write for the sake of nothing.
  */
 const LEAD_COLUMNS = [
   'id', 'name', 'company', 'phone', 'email', 'productInterest', 'dealValue',
-  'state', 'city', 'status', 'assignedTo', 'followUpDate', 'notes',
-  'orderCreated', 'createdAt',
+  'leadSource', 'state', 'city', 'district', 'territory', 'leadType',
+  'status', 'assignedTo', 'followUpDate', 'notes', 'orderCreated', 'createdAt',
 ];
 
 const leadRow = (lead) => {
   const row = {};
   for (const key of LEAD_COLUMNS) {
     if (lead[key] !== undefined) row[key] = lead[key];
+  }
+  return row;
+};
+
+/**
+ * The columns that exist on `attendance`.
+ *
+ * Checking in sends the GPS fix that proves the salesperson was at the outlet,
+ * and approving sends who approved it. None of those columns existed, so the
+ * database refused every check-in and every approval this app has ever made —
+ * silently, because the record was put on screen either way.
+ * FIX_LEADS_AND_ATTENDANCE.sql adds them.
+ */
+const ATTENDANCE_COLUMNS = [
+  'id', 'userId', 'date', 'status', 'checkInTime', 'checkOutTime', 'notes',
+  'punchInLat', 'punchInLng', 'punchInAccuracy',
+  'punchOutLat', 'punchOutLng', 'punchOutAccuracy',
+  'approved', 'approvedBy', 'createdAt',
+];
+
+const attendanceRow = (record) => {
+  const row = {};
+  for (const key of ATTENDANCE_COLUMNS) {
+    if (record[key] !== undefined) row[key] = record[key];
   }
   return row;
 };
@@ -892,12 +928,26 @@ export const DataProvider = ({ children }) => {
       return !isNaN(num) && num > max ? num : max;
     }, 0);
     const draft = { ...lead, createdAt: new Date().toISOString() };
-    const { id: newId } = await insertWithFreeId('leads insert', 'leads', 'L', maxId + 1, draft);
-    const newLead = { ...draft, id: newId };
+    // Shaped by leadRow, the way orders are shaped by orderRow. This was the
+    // one add function that sent the raw form straight to the database, and
+    // the form carries five fields no column matched — so PostgREST refused
+    // every statement and not one lead was ever stored.
+    const { id: newId, saved } = await insertWithFreeId('leads insert', 'leads', 'L', maxId + 1, draft, leadRow);
+    if (!saved) {
+      // insertWithFreeId has already raised the banner explaining why. Putting
+      // the lead on screen regardless is what hid this for so long: it looked
+      // saved, it survived in this one browser, it was invisible to everybody
+      // else, and it vanished for good the next time the cache was cleared.
+      return null;
+    }
+    // Held in the same shape the table holds it, so nothing on screen changes
+    // under the user when the next fetch replaces this row with the server's.
+    const newLead = { ...leadRow(draft), id: newId };
     const next = [newLead, ...leads];
     setLeads(next);
     localStorage.setItem('prismora_leads', JSON.stringify(next));
     logEvent('lead_new', `New Lead added: ${lead.name}`, lead.assignedTo, newId);
+    return newId;
   };
 
   const updateLead = async (id, updatedData) => {
@@ -2017,23 +2067,44 @@ export const DataProvider = ({ children }) => {
   // ── SFA Attendance ────────────────────────────────────────────────────────
   const addAttendanceRecord = async (attendanceData) => {
     const newId = `ATT-${Date.now()}`;
-    const newRecord = { ...attendanceData, id: newId, createdAt: new Date().toISOString() };
+    // Shaped, so one field the table does not have cannot void the whole punch.
+    const newRecord = attendanceRow({ ...attendanceData, id: newId, createdAt: new Date().toISOString() });
     setAttendance(prev => {
       const next = [newRecord, ...prev];
       localStorage.setItem('prismora_attendance', JSON.stringify(next));
       return next;
     });
-    await persist('attendance insert', supabase.from('attendance').insert([newRecord]));
+    const saved = await persist('attendance insert', supabase.from('attendance').insert([newRecord]));
+    if (!saved) {
+      // A punch nobody recorded is worse than a punch that visibly failed: the
+      // salesperson believes they are marked present for the day. Take it back
+      // while they are still on the screen, with the banner saying why.
+      setAttendance(prev => {
+        const next = prev.filter(a => a.id !== newId);
+        localStorage.setItem('prismora_attendance', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
     logEvent('attendance_checkin', `User checked in: ${attendanceData.status}`, attendanceData.userId, newId);
+    return newId;
   };
 
   const updateAttendanceRecord = async (id, updatedData) => {
+    const before = attendance.find(a => a.id === id);
     setAttendance(prev => {
       const next = prev.map(a => a.id === id ? { ...a, ...updatedData } : a);
       localStorage.setItem('prismora_attendance', JSON.stringify(next));
       return next;
     });
-    await persist('attendance update', supabase.from('attendance').update(updatedData).eq('id', id));
+    const saved = await persist('attendance update', supabase.from('attendance').update(attendanceRow(updatedData)).eq('id', id));
+    if (!saved && before) {
+      setAttendance(prev => {
+        const next = prev.map(a => a.id === id ? before : a);
+        localStorage.setItem('prismora_attendance', JSON.stringify(next));
+        return next;
+      });
+    }
   };
 
   // ── SFA Visit Reports ──────────────────────────────────────────────────────
