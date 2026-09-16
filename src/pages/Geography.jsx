@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useData } from '../context/DataContext';
 import { INDIA_STATE_PATHS, INDIA_VIEWBOX } from '../utils/indiaMap';
 import { useAuth, isSalesRole } from '../context/AuthContext';
@@ -59,6 +59,39 @@ export default function Geography() {
 
     return data;
   }, [visibleOrders, sortConfig]);
+
+  // The breakdown repeated the state on every row, so a business selling into
+  // twenty cities across four states read as twenty near-identical lines with
+  // no sense of which state mattered. Rolling the cities up under their state
+  // puts the answer first and keeps the detail one click away.
+  const byState = useMemo(() => {
+    const grouped = {};
+    geoData.forEach(row => {
+      const key = row.state || 'Unknown';
+      if (!grouped[key]) grouped[key] = { state: key, cities: [], orders: 0, revenue: 0, units: 0 };
+      grouped[key].cities.push(row);
+      grouped[key].orders += row.orders;
+      grouped[key].revenue += row.revenue;
+      grouped[key].units += row.units;
+    });
+
+    const list = Object.values(grouped);
+    list.forEach(g => g.cities.sort((a, b) => b.revenue - a.revenue));
+    list.sort((a, b) => {
+      const dir = sortConfig.direction === 'asc' ? 1 : -1;
+      if (sortConfig.key === 'state') return a.state.localeCompare(b.state) * dir;
+      if (sortConfig.key === 'city') return (b.cities.length - a.cities.length) * dir;
+      return ((a[sortConfig.key] || 0) - (b[sortConfig.key] || 0)) * dir;
+    });
+    return list;
+  }, [geoData, sortConfig]);
+
+  const grandRevenue = useMemo(() => byState.reduce((sum, g) => sum + g.revenue, 0), [byState]);
+
+  // One state open at a time, shared with the map beside it: opening a row
+  // highlights that state on the map, and clicking the map opens its row.
+  const [openState, setOpenState] = useState(null);
+  const toggleState = (name) => setOpenState(prev => (prev === name ? null : name));
 
   // Active Territory for sidebar visual mapping
   const activeTerritoryDetail = useMemo(() => {
@@ -228,17 +261,21 @@ export default function Geography() {
                       them. All 36 states and union territories are present now,
                       so the hard-coded label coordinates that went with the old
                       drawing are gone; the name is on hover instead. */}
+                  {/* The map and the table below it show the same numbers, so
+                      they behave as one control: clicking either opens that
+                      state in the other. */}
                   {Object.entries(INDIA_STATE_PATHS).map(([name, d]) => {
                     const rev = stateRevenue[name] || 0;
                     return (
                       <path
                         key={name}
                         d={d}
+                        onClick={() => toggleState(name)}
                         fill={rev > 0 ? getStateColor(name) : '#94a3b8'}
                         fillOpacity={rev > 0 ? 0.9 : 0.22}
-                        stroke="#64748b"
-                        strokeWidth="0.8"
-                        strokeOpacity={0.5}
+                        stroke={openState === name ? '#D4186C' : '#64748b'}
+                        strokeWidth={openState === name ? 2.5 : 0.8}
+                        strokeOpacity={openState === name ? 1 : 0.5}
                         className="transition-all duration-300 hover:brightness-125 cursor-pointer"
                       >
                         <title>{rev > 0 ? `${name}: ₹${rev.toLocaleString('en-IN')}` : `${name}: no orders`}</title>
@@ -260,7 +297,10 @@ export default function Geography() {
             {/* Revenue Table */}
             <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
               <div className="p-4 border-b border-white/5 bg-brand-primary-light/20">
-                <span className="text-sm font-bold text-white uppercase tracking-wider">City-Level Breakdown</span>
+                <div>
+                  <span className="text-sm font-bold text-white uppercase tracking-wider">Revenue by State</span>
+                  <p className="text-[10px] text-slate-500 mt-0.5 normal-case font-normal">Click a state — here or on the map — to see its cities</p>
+                </div>
               </div>
               <div className="overflow-x-auto custom-scrollbar">
                 <table className="w-full text-left text-sm border-collapse">
@@ -270,7 +310,7 @@ export default function Geography() {
                         <div className="flex items-center gap-1">State <ArrowUpDown size={14} /></div>
                       </th>
                       <th className="p-4 cursor-pointer hover:text-white" onClick={() => requestSort('city')}>
-                        <div className="flex items-center gap-1">City <ArrowUpDown size={14} /></div>
+                        <div className="flex items-center gap-1">Cities <ArrowUpDown size={14} /></div>
                       </th>
                       <th className="p-4 text-center cursor-pointer hover:text-white" onClick={() => requestSort('orders')}>
                         <div className="flex items-center gap-1 justify-center">Orders <ArrowUpDown size={14} /></div>
@@ -281,22 +321,56 @@ export default function Geography() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-slate-300">
-                    {geoData.length > 0 ? geoData.map((row, idx) => {
-                      const pct = maxRev > 0 ? Math.round((row.revenue / maxRev) * 100) : 0;
+                    {byState.length > 0 ? byState.map(group => {
+                      const isOpen = openState === group.state;
+                      const share = grandRevenue > 0 ? Math.round((group.revenue / grandRevenue) * 100) : 0;
                       return (
-                        <tr key={idx} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                          <td className="p-4 font-semibold text-white">{row.state}</td>
-                          <td className="p-4 text-slate-400">{row.city}</td>
-                          <td className="p-4 text-center font-mono">{row.orders}</td>
-                          <td className="p-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="w-16 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                                <div className="h-full bg-brand-accent rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        <Fragment key={group.state}>
+                          <tr
+                            onClick={() => toggleState(group.state)}
+                            className={`cursor-pointer transition-colors ${isOpen ? 'bg-brand-accent/5' : 'hover:bg-brand-primary-lighter/20'}`}
+                          >
+                            <td className="p-4 font-semibold text-white">
+                              <div className="flex items-center gap-1.5">
+                                <ChevronRight size={14} className={`text-brand-accent transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                                {group.state}
                               </div>
-                              <span className="font-bold text-brand-accent text-xs">₹{row.revenue.toLocaleString('en-IN')}</span>
-                            </div>
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="p-4 text-slate-400 text-xs">
+                              {group.cities.length} {group.cities.length === 1 ? 'city' : 'cities'}
+                            </td>
+                            <td className="p-4 text-center font-mono">{group.orders}</td>
+                            <td className="p-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="text-[10px] text-slate-500 tabular-nums w-8 text-right">{share}%</span>
+                                <div className="w-16 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                  <div className="h-full bg-brand-accent rounded-full transition-all" style={{ width: `${share}%` }} />
+                                </div>
+                                <span className="font-bold text-brand-accent text-xs tabular-nums">₹{group.revenue.toLocaleString('en-IN')}</span>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {isOpen && group.cities.map(city => {
+                            const cityShare = group.revenue > 0 ? Math.round((city.revenue / group.revenue) * 100) : 0;
+                            return (
+                              <tr key={`${group.state}-${city.city}`} className="bg-brand-primary-lighter/10">
+                                <td className="py-2.5 pl-10 pr-4 text-slate-500 text-xs">↳</td>
+                                <td className="py-2.5 px-4 text-slate-300">{city.city}</td>
+                                <td className="py-2.5 px-4 text-center font-mono text-slate-400">{city.orders}</td>
+                                <td className="py-2.5 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <span className="text-[10px] text-slate-600 tabular-nums w-8 text-right">{cityShare}%</span>
+                                    <div className="w-16 h-1 bg-white/5 rounded-full overflow-hidden">
+                                      <div className="h-full bg-brand-accent/50 rounded-full" style={{ width: `${cityShare}%` }} />
+                                    </div>
+                                    <span className="text-slate-300 text-xs tabular-nums">₹{city.revenue.toLocaleString('en-IN')}</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </Fragment>
                       );
                     }) : (
                       <tr>
