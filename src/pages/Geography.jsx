@@ -38,6 +38,8 @@ export default function Geography() {
   // Districts saved by the old free-text box that match no real district, so
   // the modal can say what it is about to drop instead of doing it quietly.
   const [droppedDistricts, setDroppedDistricts] = useState([]);
+  // Which zone's district list is opened out in the matrix, one at a time.
+  const [expandedDistricts, setExpandedDistricts] = useState(null);
 
   // Filter Sales Executives
   const salesExecutives = useMemo(() => allUsers.filter(u => isSalesRole(u.role)), [allUsers]);
@@ -496,9 +498,14 @@ export default function Geography() {
                             if (list.length === 0) {
                               return <span className="text-xs italic text-amber-500">No districts set</span>;
                             }
+                            // The rest used to be a hover tooltip, which says
+                            // nothing on a phone and reads as "these districts
+                            // are not viewable". Tapping the chip opens them.
+                            const isOpen = expandedDistricts === t.id;
+                            const shown = isOpen ? list : list.slice(0, 3);
                             return (
                               <div className="flex flex-wrap gap-1 justify-center">
-                                {list.slice(0, 3).map(d => (
+                                {shown.map(d => (
                                   <span
                                     key={d}
                                     className="bg-brand-accent/10 border border-brand-accent/25 text-brand-accent text-[11px] px-2 py-0.5 rounded-full font-semibold"
@@ -507,12 +514,18 @@ export default function Geography() {
                                   </span>
                                 ))}
                                 {list.length > 3 && (
-                                  <span
-                                    title={list.slice(3).join(', ')}
-                                    className="bg-white/5 border border-white/10 text-slate-400 text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                                  <button
+                                    type="button"
+                                    // The row itself selects the zone; this
+                                    // only opens the list, so it stops there.
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedDistricts(isOpen ? null : t.id);
+                                    }}
+                                    className="bg-white/5 border border-white/10 text-slate-400 hover:text-brand-accent hover:border-brand-accent/25 text-[11px] px-2 py-0.5 rounded-full font-semibold transition-colors cursor-pointer"
                                   >
-                                    +{list.length - 3} more
-                                  </span>
+                                    {isOpen ? 'Show less' : `+${list.length - 3} more`}
+                                  </button>
                                 )}
                               </div>
                             );
@@ -612,6 +625,23 @@ export default function Geography() {
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-400">Territory ID:</span>
                       <span className="font-mono text-slate-300">{activeTerritoryDetail.id}</span>
+                    </div>
+                    {/* The districts used to appear here only while the zone
+                        had no orders, so the moment it started selling there
+                        was nowhere left to read what ground it covers. */}
+                    <div className="text-xs">
+                      <span className="text-slate-400">Covers:</span>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {(Array.isArray(activeTerritoryDetail.districts) ? activeTerritoryDetail.districts : []).length > 0 ? (
+                          activeTerritoryDetail.districts.map(d => (
+                            <span key={d} className="bg-brand-accent/10 border border-brand-accent/25 text-brand-accent text-[11px] px-2 py-0.5 rounded-full font-semibold">
+                              {d}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] italic text-amber-500">No districts set</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
