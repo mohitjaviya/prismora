@@ -1,6 +1,7 @@
 import { useState, useMemo, Fragment } from 'react';
 import { useData } from '../context/DataContext';
 import { INDIA_STATE_PATHS, INDIA_VIEWBOX } from '../utils/indiaMap';
+import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { useAuth, isSalesRole } from '../context/AuthContext';
 import { 
   ArrowUpDown, Plus, Edit2, Trash2, MapPin, Users, Globe, ChevronRight, X, Compass, Check
@@ -14,7 +15,13 @@ const INDIAN_STATES = [
   'Tamil Nadu', 'Telangana', 'Uttar Pradesh', 'West Bengal', 'Delhi'
 ];
 
-const BLANK_TERRITORY_FORM = { name: '', state: 'Gujarat', districts: '', executiveId: '' };
+const BLANK_TERRITORY_FORM = { name: '', state: 'Gujarat', districts: [], executiveId: '' };
+
+// Territory names, district names and the city recorded on an order are all
+// typed by hand at some point, so they are compared loosely. "Gujrat North Hub"
+// and "Gujarat North Hub" are still two different zones — this only forgives
+// stray spaces and capitals, not spelling.
+const norm = (s) => String(s || '').trim().toLowerCase();
 
 export default function Geography() {
   const { orders, territories, addTerritory, updateTerritory, deleteTerritory } = useData();
@@ -28,6 +35,9 @@ export default function Geography() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTerritory, setEditingTerritory] = useState(null);
   const [formData, setFormData] = useState(BLANK_TERRITORY_FORM);
+  // Districts saved by the old free-text box that match no real district, so
+  // the modal can say what it is about to drop instead of doing it quietly.
+  const [droppedDistricts, setDroppedDistricts] = useState([]);
 
   // Filter Sales Executives
   const salesExecutives = useMemo(() => allUsers.filter(u => isSalesRole(u.role)), [allUsers]);
@@ -101,18 +111,42 @@ export default function Geography() {
     return territories[0] || null;
   }, [selectedTerritoryId, territories]);
 
-  // Revenue per state from ALL visible orders — used by both tabs
-  const stateOrderStats = useMemo(() => {
-    const map = {};
-    visibleOrders.forEach(o => {
-      const s = o.state || 'Unknown';
-      if (!map[s]) map[s] = { revenue: 0, count: 0, orders: [] };
-      map[s].revenue += Number(o.value || 0);
-      map[s].count += 1;
-      map[s].orders.push(o);
-    });
-    return map;
-  }, [visibleOrders]);
+  /**
+   * What this zone has actually sold — its districts, not its whole state.
+   *
+   * The panel used to read stateOrderStats[territory.state], so a zone covering
+   * Ahmedabad, Vadodara and Anand reported every order in Gujarat as its own:
+   * Amreli sits 300km outside it and still counted. A territory is defined by
+   * the districts it covers, so that is what it is measured on.
+   *
+   * An order records a city rather than a district — so the city is matched
+   * against the covered districts, which is exact for the district towns the
+   * team actually sells into (Amreli, Anand, Vadodara) and misses an order
+   * booked to a smaller town inside one of those districts. `outsideZone`
+   * exists to make that visible instead of silently dropping it.
+   */
+  const territoryStats = useMemo(() => {
+    if (!activeTerritoryDetail) return null;
+    const t = activeTerritoryDetail;
+    const covered = new Set((Array.isArray(t.districts) ? t.districts : []).map(norm));
+    const sum = list => list.reduce((s, o) => s + Number(o.value || 0), 0);
+
+    const inState = visibleOrders.filter(o => norm(o.state) === norm(t.state));
+    const inZone = inState.filter(o => covered.has(norm(o.city)));
+
+    // Booked against this zone by name, but sitting in a district it does not
+    // cover. This is the case worth surfacing: the order is being credited to
+    // a supervisor who is not responsible for that ground.
+    const outsideZone = visibleOrders.filter(
+      o => norm(o.territory) === norm(t.name) && !covered.has(norm(o.city))
+    );
+
+    return {
+      revenue: sum(inZone), count: inZone.length, orders: inZone,
+      stateRevenue: sum(inState), stateCount: inState.length,
+      outsideZone,
+    };
+  }, [activeTerritoryDetail, visibleOrders]);
 
   // Handlers
   const requestSort = (key) => {
@@ -127,29 +161,50 @@ export default function Geography() {
     setFormData({
       name: '',
       state: 'Gujarat',
-      districts: '',
+      districts: [],
       executiveId: salesExecutives[0]?.id || ''
     });
+    setDroppedDistricts([]);
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (t) => {
+    // Everything saved before the picker existed was typed by hand, so it
+    // arrives in whatever case and spelling the person used — this zone holds
+    // "anand", "vadodar", "ahmedabad". Match each one back to the real district
+    // ignoring case, so the boxes it should tick are actually ticked; anything
+    // that matches nothing ("vadodar") is set aside and named in the modal.
+    const stateName = t.state || 'Gujarat';
+    const saved = Array.isArray(t.districts)
+      ? t.districts
+      : String(t.districts || '').split(',').map(d => d.trim()).filter(Boolean);
+    const byNorm = new Map((STATE_DISTRICTS[stateName] || []).map(d => [norm(d), d]));
+    const matched = [];
+    const unknown = [];
+    saved.forEach(d => {
+      const official = byNorm.get(norm(d));
+      if (!official) unknown.push(d);
+      else if (!matched.includes(official)) matched.push(official);
+    });
+
     setEditingTerritory(t);
     setFormData({
       name: t.name,
-      state: t.state || 'Gujarat',
-      districts: Array.isArray(t.districts) ? t.districts.join(', ') : t.districts || '',
+      state: stateName,
+      districts: matched,
       executiveId: t.executiveId || ''
     });
+    setDroppedDistricts(unknown);
     setIsModalOpen(true);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const districtList = formData.districts
-      .split(',')
-      .map(d => d.trim())
-      .filter(d => d.length > 0);
+    const districtList = formData.districts;
+    // The picker replaced a `required` textarea, so the browser no longer
+    // enforces this. A zone covering nothing matches no order and reports zero
+    // for ever, which reads as a broken screen rather than an empty zone.
+    if (districtList.length === 0) return;
 
     const payload = {
       name: formData.name,
@@ -430,10 +485,38 @@ export default function Geography() {
                             <span className="font-medium text-slate-300">{getExecutiveName(t.executiveId)}</span>
                           </div>
                         </td>
-                        <td className="p-4 text-center">
-                          <span className="bg-slate-800 border border-slate-700 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">
-                            {Array.isArray(t.districts) ? t.districts.length : 0} Districts
-                          </span>
+                        {/* A count told nobody which ground this zone actually
+                            covers, and the dark pill it sat in was unreadable
+                            on the light theme. The names are the useful part. */}
+                        <td className="p-4">
+                          {(() => {
+                            const list = Array.isArray(t.districts)
+                              ? t.districts
+                              : String(t.districts || '').split(',').map(d => d.trim()).filter(Boolean);
+                            if (list.length === 0) {
+                              return <span className="text-xs italic text-amber-500">No districts set</span>;
+                            }
+                            return (
+                              <div className="flex flex-wrap gap-1 justify-center">
+                                {list.slice(0, 3).map(d => (
+                                  <span
+                                    key={d}
+                                    className="bg-brand-accent/10 border border-brand-accent/25 text-brand-accent text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                                  >
+                                    {d}
+                                  </span>
+                                ))}
+                                {list.length > 3 && (
+                                  <span
+                                    title={list.slice(3).join(', ')}
+                                    className="bg-white/5 border border-white/10 text-slate-400 text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                                  >
+                                    +{list.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
                           {isAdmin ? (
@@ -470,8 +553,8 @@ export default function Geography() {
           {/* Territory Sidebar — live order data per state */}
           <div className="lg:col-span-4 space-y-4">
             {activeTerritoryDetail ? (() => {
-              const stateStats = stateOrderStats[activeTerritoryDetail.state] || { revenue: 0, count: 0, orders: [] };
-              const recentOrders = [...stateStats.orders].sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).slice(0, 4);
+              const zone = territoryStats;
+              const recentOrders = [...zone.orders].sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).slice(0, 4);
               return (
                 <div className="glass-panel rounded-2xl p-5 border border-brand-accent/20 bg-brand-primary-light/10 space-y-4">
                   <div className="flex items-start justify-between">
@@ -483,17 +566,43 @@ export default function Geography() {
                     <Compass className="text-brand-accent animate-spin-slow shrink-0" size={28} />
                   </div>
 
-                  {/* Live order stats for this territory's state */}
+                  {/* The zone's own districts — not its whole state. */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-brand-accent/10 border border-brand-accent/20 rounded-xl p-3 text-center">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">State Revenue</p>
-                      <p className="text-base font-extrabold text-brand-accent mt-0.5">₹{stateStats.revenue.toLocaleString('en-IN')}</p>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">Zone Revenue</p>
+                      <p className="text-base font-extrabold text-brand-accent mt-0.5">₹{zone.revenue.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">Orders in State</p>
-                      <p className="text-base font-extrabold text-white mt-0.5">{stateStats.count}</p>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">Orders in Zone</p>
+                      <p className="text-base font-extrabold text-white mt-0.5">{zone.count}</p>
                     </div>
                   </div>
+
+                  {/* State kept as context, clearly separated from the zone's
+                      own numbers — this pair used to be labelled as the zone. */}
+                  <p className="text-[10px] text-slate-500 text-center -mt-1">
+                    All of {activeTerritoryDetail.state}: ₹{zone.stateRevenue.toLocaleString('en-IN')} across {zone.stateCount} order{zone.stateCount === 1 ? '' : 's'}
+                  </p>
+
+                  {zone.outsideZone.length > 0 && (
+                    <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3">
+                      <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5">
+                        {zone.outsideZone.length} order{zone.outsideZone.length === 1 ? '' : 's'} booked here, outside its districts
+                      </p>
+                      <div className="space-y-1">
+                        {zone.outsideZone.slice(0, 3).map(o => (
+                          <p key={o.id} className="text-[11px] text-slate-300">
+                            <span className="font-medium">{o.id}</span> — {o.customerName}
+                            <span className="text-amber-400/80"> in {o.city || 'no city'}</span>
+                          </p>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                        These count towards {getExecutiveName(activeTerritoryDetail.executiveId)} but sit on ground this
+                        zone does not cover. Either add the district above, or move the order to the right zone.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="border-t border-white/5 pt-3 space-y-2">
                     <div className="flex justify-between items-center text-xs">
@@ -510,7 +619,7 @@ export default function Geography() {
                   <div className="bg-brand-primary-dark/80 rounded-xl p-3 border border-white/5">
                     <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] rounded-xl pointer-events-none" />
                     <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      {stateStats.count > 0 ? `Recent Orders from ${activeTerritoryDetail.state}` : 'Districts Network'}
+                      {zone.count > 0 ? `Recent orders in ${activeTerritoryDetail.name}` : 'Districts covered'}
                     </p>
                     {recentOrders.length > 0 ? (
                       <div className="space-y-2">
@@ -523,8 +632,8 @@ export default function Geography() {
                             <span className="text-brand-accent font-bold">₹{(o.value || 0).toLocaleString('en-IN')}</span>
                           </div>
                         ))}
-                        {stateStats.count > 4 && (
-                          <p className="text-[10px] text-slate-600 text-center">+{stateStats.count - 4} more orders in {activeTerritoryDetail.state}</p>
+                        {zone.count > 4 && (
+                          <p className="text-[10px] text-slate-600 text-center">+{zone.count - 4} more orders in this zone</p>
                         )}
                       </div>
                     ) : (
@@ -537,7 +646,7 @@ export default function Geography() {
                             </div>
                           ))
                         ) : (
-                          <div className="text-xs italic text-slate-500 py-2">No districts assigned. Add an order from {activeTerritoryDetail.state} to see live data here.</div>
+                          <div className="text-xs italic text-slate-500 py-2">No districts assigned to this zone yet — edit it to pick the districts it covers.</div>
                         )}
                       </div>
                     )}
@@ -592,7 +701,9 @@ export default function Geography() {
                 <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">State Coverage *</label>
                 <select
                   value={formData.state}
-                  onChange={e => setFormData({ ...formData, state: e.target.value })}
+                  // Districts belong to the state, so changing it clears them
+                  // rather than leaving Anand ticked under Maharashtra.
+                  onChange={e => setFormData({ ...formData, state: e.target.value, districts: [] })}
                   className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white"
                 >
                   {INDIAN_STATES.map(st => (
@@ -605,15 +716,76 @@ export default function Geography() {
                 <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">
                   Districts Covered *
                 </label>
-                <p className="text-[10px] text-slate-500 mb-1.5">Enter districts separated by commas (e.g. Anand, Nadiad, Vadodara).</p>
-                <textarea 
-                  required
-                  rows="3"
-                  placeholder="Anand, Vadodara, Ahmedabad"
-                  value={formData.districts}
-                  onChange={e => setFormData({ ...formData, districts: e.target.value })}
-                  className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none"
-                />
+                {/* Typed districts were never going to line up with the city on
+                    an order, and a zone is measured by matching those two. The
+                    list is the real district list for the chosen state. */}
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[10px] text-slate-500">
+                    Tick every district this zone covers in {formData.state}.
+                  </p>
+                  {formData.districts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, districts: [] })}
+                      className="text-[10px] font-semibold text-slate-400 hover:text-brand-accent transition-colors"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+
+                {droppedDistricts.length > 0 && (
+                  <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-2.5 mb-2">
+                    <p className="text-[11px] text-amber-400 leading-relaxed">
+                      <span className="font-semibold">{droppedDistricts.join(', ')}</span>
+                      {droppedDistricts.length === 1 ? ' does not match any' : ' do not match any'} district in {formData.state},
+                      so it was never going to match an order. Tick the right one below — saving will drop it.
+                    </p>
+                  </div>
+                )}
+
+                <div className="glass-input rounded-xl p-2 max-h-52 overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-1">
+                    {(STATE_DISTRICTS[formData.state] || []).map(dist => {
+                      const picked = formData.districts.includes(dist);
+                      return (
+                        <button
+                          type="button"
+                          key={dist}
+                          onClick={() => setFormData({
+                            ...formData,
+                            districts: picked
+                              ? formData.districts.filter(d => d !== dist)
+                              : [...formData.districts, dist],
+                          })}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors ${
+                            picked
+                              ? 'bg-brand-accent/15 text-brand-accent font-semibold'
+                              : 'text-slate-300 hover:bg-white/5'
+                          }`}
+                        >
+                          <span className={`w-3.5 h-3.5 rounded flex items-center justify-center shrink-0 border ${
+                            picked ? 'bg-brand-accent border-brand-accent' : 'border-slate-500'
+                          }`}>
+                            {picked && <Check size={10} className="text-white" strokeWidth={3} />}
+                          </span>
+                          <span className="truncate">{dist}</span>
+                        </button>
+                      );
+                    })}
+                    {(STATE_DISTRICTS[formData.state] || []).length === 0 && (
+                      <p className="col-span-2 text-xs italic text-slate-500 py-3 text-center">
+                        No district list for {formData.state} yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <p className={`text-[10px] mt-1.5 ${formData.districts.length ? 'text-brand-accent' : 'text-amber-400'}`}>
+                  {formData.districts.length
+                    ? `${formData.districts.length} district${formData.districts.length > 1 ? 's' : ''} selected`
+                    : 'Pick at least one district — a zone with none can never match an order.'}
+                </p>
               </div>
 
               <div>
