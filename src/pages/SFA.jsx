@@ -1311,10 +1311,20 @@ export default function SFA() {
               </div>
               <div>
                 <label className={lbl}>Territory Zone *</label>
-                <select required value={beatForm.territory} onChange={e => setBeatForm({ ...beatForm, territory: e.target.value })} className={inp}>
-                  <option value="" className="bg-brand-primary">Select Territory</option>
+                <select required value={beatForm.territory} onChange={e => setBeatForm({ ...beatForm, territory: e.target.value })} className={inp} disabled={territories.length === 0}>
+                  <option value="" className="bg-brand-primary">{territories.length === 0 ? 'No territories set up yet' : 'Select Territory'}</option>
                   {territories.map(t => <option key={t.id} value={t.name} className="bg-brand-primary">{t.name} ({t.state})</option>)}
                 </select>
+                {/* An empty dropdown reads as a broken control. Say what is
+                    missing and where it is created, rather than leaving the
+                    person guessing why there is nothing to pick. */}
+                {territories.length === 0 && (
+                  <p className="mt-1.5 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    No territories have been created yet, so there is nothing to assign a beat to. An administrator
+                    adds them under <strong>Geography → Territories</strong> — a name, its state, and the districts it
+                    covers. The districts become the city options when a visit is logged.
+                  </p>
+                )}
               </div>
               <div>
                 <label className={lbl}>Outlets to Visit *</label>
