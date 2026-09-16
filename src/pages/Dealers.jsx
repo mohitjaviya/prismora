@@ -33,7 +33,7 @@ const BLANK_FORM = {
 };
 
 export default function Dealers() {
-  const { dealers, addDealer, updateDealer, deleteDealer, distributors, invoices, distributorPayments, addDealerPayment, orders } = useData();
+  const { dealers, addDealer, updateDealer, deleteDealer, distributors, invoices, distributorPayments, addDealerPayment, orders, territories } = useData();
   const { user, users, updateUser, deleteUser, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
@@ -410,7 +410,26 @@ export default function Dealers() {
                   <textarea required rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} />
                   <p className="text-[10px] text-slate-500 mt-1">Used as the default delivery address on their orders. Dispatch cannot send goods to a city alone.</p>
                 </div>
-                <div><label className={labelCls}>Territory / Zone</label><input type="text" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} placeholder="e.g. Gujarat North" className={inputCls} /></div>
+                <div>
+                  <label className={labelCls}>Territory / Zone</label>
+                  {/* Chosen, not typed. Free text produced four spellings of the
+                      same area across beats, partners and orders, none of which
+                      matched a territory record — so a partner order could not be
+                      routed to the rep who owns that area. */}
+                  <select value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} className={inputCls} style={{ colorScheme: 'dark' }}>
+                    <option value="" className="bg-brand-primary">{territories.length === 0 ? 'No territories set up yet' : 'Select a territory…'}</option>
+                    {territories.map(t => (
+                      <option key={t.id} value={t.name} className="bg-brand-primary">{t.name} ({t.state})</option>
+                    ))}
+                  </select>
+                  {territories.length === 0 ? (
+                    <p className="text-[10px] text-amber-400 mt-1">Create territories under Geography → Territories first — orders from this partner cannot be routed to a rep without one.</p>
+                  ) : form.territory && !territories.some(t => t.name === form.territory) ? (
+                    <p className="text-[10px] text-amber-400 mt-1">
+                      "{form.territory}" is not one of your territories, so it matches nothing. Pick one from the list.
+                    </p>
+                  ) : null}
+                </div>
                 <div><label className={labelCls}>Credit Limit (₹)</label><input type="number" min="0" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /></div>
                 <div>
                   <label className={labelCls}>Status</label>

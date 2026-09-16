@@ -72,7 +72,11 @@ export default function DistributorOrders() {
 
   const handleSubmitOrder = () => {
     if (!distributor || cart.length === 0) return;
-    const territory = territories.find(t => t.state === distributor.state);
+    // Routed by the partner's own territory, so a state can hold more than
+    // one. Matching on state alone gave whichever territory happened to be
+    // found first, and a second territory in the same state was unreachable.
+    const territory = territories.find(t => t.name === distributor.territory)
+      || territories.find(t => t.state === distributor.state);
     addOrder({
       customerName: distributor.name,
       companyName: distributor.name,
@@ -84,6 +88,9 @@ export default function DistributorOrders() {
       city: distributor.city,
       status: 'Pending',
       assignedTo: territory?.executiveId || '',
+      territory: territory?.name || distributor.territory || '',
+      deliveryAddress: distributor.address || '',
+      deliveryPincode: distributor.pincode || '',
       distributorId: distributor.id,
       phone: distributor.phone,
       email: distributor.email,
