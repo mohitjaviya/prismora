@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
-import { FileCheck2, Plus, X, Search, CheckCircle, XCircle, Clock, Wallet } from 'lucide-react';
+import { FileCheck2, Plus, X, CheckCircle, XCircle, Clock, Wallet } from 'lucide-react';
+import { PageHeader, DataTable, Button, Badge, StatCard, Card, SearchInput } from '../components/ui';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -110,101 +111,95 @@ export default function Claims() {
     return { name: 'Unknown', type: '' };
   };
 
+  const claimColumns = [
+    ...(isParty ? [] : [{
+      key: 'party', header: 'Party', sort: c => partyName(c).name,
+      render: c => (
+        <>
+          <div className="font-semibold text-white">{partyName(c).name}</div>
+          {partyName(c).type && <span className="text-[10px] text-slate-500 uppercase tracking-wide">{partyName(c).type}</span>}
+        </>
+      ),
+    }]),
+    {
+      key: 'scheme', header: 'Scheme', sort: c => c.schemeName || '',
+      render: c => (
+        <>
+          <div className="text-white">{c.schemeName}</div>
+          {c.orderId && <div className="text-[11px] text-slate-500">Ref: {c.orderId}</div>}
+        </>
+      ),
+    },
+    {
+      key: 'amount', header: 'Amount', align: 'right', sort: c => Number(c.amount) || 0,
+      render: c => <span className="font-semibold text-white">{formatCurrency(c.amount)}</span>,
+    },
+    {
+      key: 'date', header: 'Date', hideBelow: 'sm',
+      sort: c => (c.createdAt ? new Date(c.createdAt).getTime() : null),
+      render: c => <span className="text-slate-500">{formatDate(c.createdAt)}</span>,
+    },
+    {
+      key: 'status', header: 'Status', align: 'center', sort: c => c.status || '',
+      render: c => <Badge>{statusConfig[c.status]?.icon}{c.status}</Badge>,
+    },
+    ...(canReview ? [{
+      key: 'actions', header: '', align: 'center', width: 'w-24',
+      render: c => <Button size="sm" onClick={() => openReview(c)}>Review</Button>,
+    }] : []),
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <FileCheck2 size={24} className="text-brand-accent" /> {isParty ? 'My Scheme Claims' : 'Scheme Claims'}
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">
-            {isParty ? 'Submit and track claims against active schemes you qualify for.' : 'Review and settle distributor/dealer scheme claims.'}
-          </p>
-        </div>
-        {isParty && (
-          <button onClick={openAdd} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-            <Plus size={16} /> Submit Claim
-          </button>
-        )}
+      <PageHeader
+        icon={FileCheck2}
+        title={isParty ? 'My Scheme Claims' : 'Scheme Claims'}
+        subtitle={isParty
+          ? 'Submit and track claims against active schemes you qualify for.'
+          : 'Review and settle distributor, dealer and retailer scheme claims.'}
+        actions={isParty ? <Button variant="primary" icon={Plus} onClick={openAdd}>Submit Claim</Button> : undefined}
+      />
+
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <StatCard label="Pending Review" value={kpis.pending} icon={Clock} tone={kpis.pending > 0 ? 'warning' : 'accent'} />
+        <StatCard label="Approved, awaiting settlement" value={kpis.approved} icon={CheckCircle} tone="info" />
+        <StatCard label="Settled Value" value={formatCurrency(kpis.settledValue)} icon={Wallet} tone="success" />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Pending Review', value: kpis.pending, color: kpis.pending > 0 ? 'text-amber-400' : 'text-slate-400' },
-          { label: 'Approved (awaiting settlement)', value: kpis.approved, color: 'text-blue-400' },
-          { label: 'Settled Value', value: formatCurrency(kpis.settledValue), color: 'text-emerald-400' },
-        ].map((k, i) => (
-          <div key={i} className="glass-panel rounded-2xl p-4 border border-white/5">
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{k.label}</p>
-            <p className={`text-xl font-extrabold mt-1 ${k.color}`}>{k.value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="glass-panel rounded-2xl p-4 border border-white/5 flex flex-col md:flex-row gap-3 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by scheme or claim ID..." className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-white" />
-        </div>
-        <div className="flex gap-2">
-          {['All', 'Pending', 'Approved', 'Settled', 'Rejected'].map(s => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${statusFilter === s ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'border-white/5 text-slate-400 hover:text-white bg-brand-primary-lighter/40'}`}>
-              {s}
+      <Card padding="p-4" className="flex flex-col md:flex-row gap-3 md:items-center">
+        <SearchInput
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by scheme or claim ID"
+        />
+        <div className="flex gap-1.5 flex-wrap">
+          {['All', 'Pending', 'Approved', 'Settled', 'Rejected'].map(st => (
+            <button key={st} type="button" onClick={() => setStatusFilter(st)}
+              className={`h-10 px-3 rounded-xl text-xs font-semibold border transition-colors ${
+                statusFilter === st
+                  ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
+                  : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+              }`}>
+              {st}
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                {!isParty && <th className="p-4">Party</th>}
-                <th className="p-4">Scheme</th>
-                <th className="p-4 text-right">Amount</th>
-                <th className="p-4">Date</th>
-                <th className="p-4 text-center">Status</th>
-                {canReview && <th className="p-4 text-center">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-slate-300">
-              {visibleClaims.length > 0 ? visibleClaims.map(c => (
-                <tr key={c.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                  {!isParty && (
-                    <td className="p-4">
-                      <div className="font-medium text-white">{partyName(c).name}</div>
-                      {partyName(c).type && <span className="text-[10px] text-slate-500 uppercase">{partyName(c).type}</span>}
-                    </td>
-                  )}
-                  <td className="p-4">
-                    <div className="text-white">{c.schemeName}</div>
-                    {c.orderId && <div className="text-xs text-slate-500">Ref: {c.orderId}</div>}
-                  </td>
-                  <td className="p-4 text-right font-semibold text-white">{formatCurrency(c.amount)}</td>
-                  <td className="p-4 text-xs text-slate-500">{formatDate(c.createdAt)}</td>
-                  <td className="p-4 text-center">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusConfig[c.status]?.cls}`}>
-                      {statusConfig[c.status]?.icon}{c.status}
-                    </span>
-                  </td>
-                  {canReview && (
-                    <td className="p-4 text-center">
-                      <button onClick={() => openReview(c)} className="text-xs font-semibold text-brand-accent hover:underline">Review</button>
-                    </td>
-                  )}
-                </tr>
-              )) : (
-                <tr><td colSpan={isParty ? 4 : 6} className="p-12 text-center text-slate-500">
-                  <FileCheck2 size={32} className="mx-auto mb-3 opacity-20" />
-                  <p>No claims found.</p>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        title="Claims"
+        columns={claimColumns}
+        rows={visibleClaims}
+        rowKey={c => c.id}
+        empty={{
+          icon: FileCheck2,
+          title: 'No claims yet',
+          hint: isParty
+            ? 'A claim is how you ask for what a scheme owes you. Submit one against a scheme you qualify for and its progress shows here.'
+            : 'Nothing has been claimed against a scheme yet. Claims submitted by distributors, dealers and retailers arrive here for review.',
+          action: isParty ? <Button variant="primary" icon={Plus} onClick={openAdd}>Submit Claim</Button> : undefined,
+        }}
+      />
 
       {/* Submit Claim Modal */}
       {isModalOpen && createPortal(

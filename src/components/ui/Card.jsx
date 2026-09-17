@@ -70,8 +70,15 @@ export function StatCard({ label, value, icon: Icon, trend, hint, tone = 'accent
           </span>
         )}
       </div>
-      <div className="flex items-baseline gap-2 mt-2 flex-wrap">
-        <p className="text-2xl font-extrabold text-white leading-none">{value}</p>
+      <div className="flex items-baseline gap-2 mt-2">
+        {/* Truncated rather than wrapped: a long value in one card used to make
+            it taller than the rest of the row, which reads as a layout fault. */}
+        <p
+          className="text-2xl font-extrabold text-white leading-none truncate min-w-0"
+          title={typeof value === 'string' ? value : undefined}
+        >
+          {value}
+        </p>
         {Number(trend) !== 0 && Number.isFinite(Number(trend)) && (
           <span className={`text-[11px] font-bold ${up ? 'text-emerald-400' : 'text-rose-400'}`}>
             {up ? '↑' : '↓'} {Math.abs(Number(trend))}%

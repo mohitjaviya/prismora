@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Gift, Search, CheckCircle, Clock, Percent, Package } from 'lucide-react';
+import { Gift, CheckCircle, Clock, Percent, Package, Wallet } from 'lucide-react';
+import { PageHeader, DataTable, Button, Badge, StatCard, Card, SearchInput } from '../components/ui';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -57,101 +58,106 @@ export default function Incentives() {
     return { name: 'Unknown', type: '' };
   };
 
+  const incentiveColumns = [
+    ...(isParty ? [] : [{
+      key: 'party', header: 'Party', sort: i => partyName(i).name,
+      render: i => (
+        <>
+          <div className="font-semibold text-white">{partyName(i).name}</div>
+          {partyName(i).type && <span className="text-[10px] text-slate-500 uppercase tracking-wide">{partyName(i).type}</span>}
+        </>
+      ),
+    }]),
+    {
+      key: 'scheme', header: 'Scheme', sort: i => i.schemeName || '',
+      render: i => (
+        <>
+          <div className="text-white">{i.schemeName}</div>
+          <div className="text-[11px] text-slate-500">{formatDate(i.createdAt)}</div>
+        </>
+      ),
+    },
+    {
+      key: 'order', header: 'Order', hideBelow: 'sm', sort: i => i.orderId || '',
+      render: i => <span className="text-slate-400 font-mono text-[11px]">{i.orderId || '—'}</span>,
+    },
+    {
+      key: 'incentive', header: 'Incentive', align: 'right',
+      // Free goods are counted in units and everything else in rupees, so they
+      // cannot share a sort. Units sort among themselves below any cash value.
+      sort: i => (i.incentiveType === 'Free Goods' ? -1 : Number(i.incentiveValue) || 0),
+      render: i => (
+        <span className="inline-flex items-center gap-1 font-semibold text-white">
+          {i.incentiveType === 'Free Goods'
+            ? <Package size={12} className="text-purple-400" />
+            : <Percent size={12} className="text-brand-accent" />}
+          {i.incentiveType === 'Free Goods' ? `${i.incentiveValue} units` : formatCurrency(i.incentiveValue)}
+        </span>
+      ),
+    },
+    {
+      key: 'status', header: 'Status', align: 'center', sort: i => i.status || '',
+      render: i => (
+        <Badge tone={i.status === 'Paid' ? 'success' : 'warning'}>
+          {i.status === 'Paid' ? <CheckCircle size={10} /> : <Clock size={10} />}{i.status}
+        </Badge>
+      ),
+    },
+    ...(canManage ? [{
+      key: 'actions', header: '', align: 'center', width: 'w-28',
+      render: i => (i.status === 'Earned'
+        ? <Button size="sm" onClick={() => markIncentivePaid(i.id)}>Mark Paid</Button>
+        : null),
+    }] : []),
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Gift size={24} className="text-brand-accent" /> {isParty ? 'My Incentives' : 'Distributor, Dealer & Retailer Incentives'}
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">
-          {isParty ? 'Auto-calculated incentives earned from qualifying scheme orders.' : 'Incentives auto-generated across distributors/dealers/retailers from active schemes.'}
-        </p>
+      <PageHeader
+        icon={Gift}
+        title={isParty ? 'My Incentives' : 'Distributor, Dealer & Retailer Incentives'}
+        subtitle={isParty
+          ? 'Auto-calculated incentives earned from qualifying scheme orders.'
+          : 'Incentives auto-generated across distributors, dealers and retailers from active schemes.'}
+      />
+
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <StatCard label="Awaiting Payout" value={formatCurrency(kpis.earned)} icon={Clock} tone="warning" />
+        <StatCard label="Paid Out" value={formatCurrency(kpis.paid)} icon={CheckCircle} tone="success" />
+        <StatCard label="Total Incentives" value={kpis.count} icon={Wallet} tone="info" />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Awaiting Payout', value: formatCurrency(kpis.earned), color: 'text-amber-400' },
-          { label: 'Paid Out', value: formatCurrency(kpis.paid), color: 'text-emerald-400' },
-          { label: 'Total Incentives', value: kpis.count, color: 'text-blue-400' },
-        ].map((k, i) => (
-          <div key={i} className="glass-panel rounded-2xl p-4 border border-white/5">
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{k.label}</p>
-            <p className={`text-xl font-extrabold mt-1 ${k.color}`}>{k.value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="glass-panel rounded-2xl p-4 border border-white/5 flex flex-col md:flex-row gap-3 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by scheme or order ID..." className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-white" />
-        </div>
-        <div className="flex gap-2">
-          {['All', 'Earned', 'Paid'].map(s => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${statusFilter === s ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'border-white/5 text-slate-400 hover:text-white bg-brand-primary-lighter/40'}`}>
-              {s}
+      <Card padding="p-4" className="flex flex-col md:flex-row gap-3 md:items-center">
+        <SearchInput
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by scheme or order ID"
+        />
+        <div className="flex gap-1.5">
+          {['All', 'Earned', 'Paid'].map(st => (
+            <button key={st} type="button" onClick={() => setStatusFilter(st)}
+              className={`h-10 px-3 rounded-xl text-xs font-semibold border transition-colors ${
+                statusFilter === st
+                  ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
+                  : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+              }`}>
+              {st}
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                {!isParty && <th className="p-4">Party</th>}
-                <th className="p-4">Scheme</th>
-                <th className="p-4">Order</th>
-                <th className="p-4 text-right">Incentive</th>
-                <th className="p-4 text-center">Status</th>
-                {canManage && <th className="p-4 text-center">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-slate-300">
-              {visible.length > 0 ? visible.map(i => (
-                <tr key={i.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                  {!isParty && (
-                    <td className="p-4">
-                      <div className="font-medium text-white">{partyName(i).name}</div>
-                      {partyName(i).type && <span className="text-[10px] text-slate-500 uppercase">{partyName(i).type}</span>}
-                    </td>
-                  )}
-                  <td className="p-4">
-                    <div className="text-white">{i.schemeName}</div>
-                    <div className="text-xs text-slate-500">{formatDate(i.createdAt)}</div>
-                  </td>
-                  <td className="p-4 text-xs text-slate-400">{i.orderId || '—'}</td>
-                  <td className="p-4 text-right font-semibold text-white">
-                    <span className="inline-flex items-center gap-1">
-                      {i.incentiveType === 'Free Goods' ? <Package size={12} className="text-purple-400" /> : <Percent size={12} className="text-brand-accent" />}
-                      {i.incentiveType === 'Free Goods' ? `${i.incentiveValue} units` : formatCurrency(i.incentiveValue)}
-                    </span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${i.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
-                      {i.status === 'Paid' ? <CheckCircle size={12} /> : <Clock size={12} />}{i.status}
-                    </span>
-                  </td>
-                  {canManage && (
-                    <td className="p-4 text-center">
-                      {i.status === 'Earned' && (
-                        <button onClick={() => markIncentivePaid(i.id)} className="text-xs font-semibold text-brand-accent hover:underline">Mark Paid</button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              )) : (
-                <tr><td colSpan={isParty ? 4 : 6} className="p-12 text-center text-slate-500">
-                  <Gift size={32} className="mx-auto mb-3 opacity-20" />
-                  <p>No incentives yet. Place orders against active schemes to start earning.</p>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        title="Incentives"
+        columns={incentiveColumns}
+        rows={visible}
+        rowKey={i => i.id}
+        empty={{
+          icon: Gift,
+          title: 'No incentives yet',
+          hint: 'Incentives are worked out automatically when an order qualifies for an active scheme. Raise one against a running scheme and it appears here.',
+        }}
+      />
     </div>
   );
 }

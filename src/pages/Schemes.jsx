@@ -2,10 +2,8 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
-import {
-  Tag, Plus, Trash2, X, Edit2, CheckCircle,
-  Clock, AlertTriangle, Search, Filter, Download, Users, Percent, Gift, Calendar, BarChart3
-} from 'lucide-react';
+import { Tag, Plus, Trash2, X, Edit2, CheckCircle, Clock, Download, Percent, Gift, Calendar, BarChart3, Zap, Trophy } from 'lucide-react';
+import { PageHeader, Button, StatCard, Card, SearchInput } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { schemeLiveState } from '../utils/schemeUtils';
 import { optionsFor } from '../utils/masterLists';
@@ -154,67 +152,77 @@ export default function Schemes() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Tag size={24} className="text-brand-accent" /> {canManage ? 'Scheme & Incentive Management' : 'Active Schemes'}
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">{canManage ? 'Create and manage promotional schemes for distributors, dealers, and retailers.' : 'Promotional schemes you currently qualify for.'}</p>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={() => downloadCSV(filtered.map(s => ({ ID: s.id, Name: s.name, Type: s.type, Discount: s.discountPct, FreeGoods: s.freeGoodsQty, MinOrder: s.minOrderValue, ApplicableTo: s.applicableTo, ApplicableProducts: Array.isArray(s.applicableProducts) && s.applicableProducts.length > 0 ? s.applicableProducts.join('; ') : 'All Products', ValidFrom: formatDate(s.validFrom), ValidTo: formatDate(s.validTo), Status: s.status })), 'PRISMORA_Schemes')}
-            className="glass-panel hover:bg-brand-primary-lighter/80 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5">
-            <Download size={16} className="text-brand-accent" /><span className="hidden sm:inline text-sm font-medium">Export</span>
-          </button>
-          {canManage && (
-            <button onClick={openAdd} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-              <Plus size={16} /> Create Scheme
-            </button>
-          )}
-        </div>
+      <PageHeader
+        icon={Tag}
+        title={canManage ? 'Scheme & Incentive Management' : 'Active Schemes'}
+        subtitle={canManage
+          ? 'Create and manage promotional schemes for distributors, dealers and retailers.'
+          : 'Promotional schemes you currently qualify for.'}
+        actions={
+          <>
+            <Button icon={Download} onClick={() => downloadCSV(filtered.map(sc => ({ ID: sc.id, Name: sc.name, Type: sc.type, Discount: sc.discountPct, FreeGoods: sc.freeGoodsQty, MinOrder: sc.minOrderValue, ApplicableTo: sc.applicableTo, ApplicableProducts: Array.isArray(sc.applicableProducts) && sc.applicableProducts.length > 0 ? sc.applicableProducts.join('; ') : 'All Products', ValidFrom: formatDate(sc.validFrom), ValidTo: formatDate(sc.validTo), Status: sc.status })), 'PRISMORA_Schemes')}>
+              Export
+            </Button>
+            {canManage && <Button variant="primary" icon={Plus} onClick={openAdd}>Create Scheme</Button>}
+          </>
+        }
+      />
+
+      <div className={`grid gap-3 sm:gap-4 ${canManage ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'}`}>
+        <StatCard label="Total Schemes" value={kpis.total} icon={Tag} tone="info" />
+        <StatCard
+          label="Active Now"
+          value={kpis.active}
+          icon={Zap}
+          tone="success"
+          // A zero here with schemes on the screen looks broken, so it says
+          // where the others have gone.
+          hint={kpis.scheduled > 0 ? `${kpis.scheduled} waiting to start` : undefined}
+        />
+        <StatCard
+          label="Expiring in 7 Days"
+          value={kpis.expiringSoon}
+          icon={Clock}
+          tone={kpis.expiringSoon > 0 ? 'warning' : 'accent'}
+        />
+        {canManage && (
+          <StatCard
+            label="Top Scheme"
+            value={topScheme ? topScheme.name : 'None yet'}
+            icon={Trophy}
+            tone="accent"
+            hint={topScheme ? `${topScheme.uses} ${topScheme.uses === 1 ? 'order has' : 'orders have'} used it` : 'No scheme has been used on an order yet'}
+          />
+        )}
       </div>
 
-      {/* KPIs */}
-      <div className={`grid gap-4 ${canManage ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'}`}>
-        {[
-          { label: 'Total Schemes', value: kpis.total, color: 'text-blue-400' },
-          {
-            label: 'Active Now', value: kpis.active, color: 'text-emerald-400',
-            // A zero here with schemes on the screen looks broken, so it says
-            // where the others have gone.
-            note: kpis.scheduled > 0 ? `${kpis.scheduled} waiting to start` : null,
-          },
-          { label: 'Expiring in 7 Days', value: kpis.expiringSoon, color: kpis.expiringSoon > 0 ? 'text-orange-400' : 'text-slate-400' },
-          ...(canManage ? [{ label: 'Top Scheme', value: topScheme ? `${topScheme.name} (${topScheme.uses})` : '—', color: 'text-brand-accent', small: true }] : []),
-        ].map((k, i) => (
-          <div key={i} className="glass-panel rounded-2xl p-4 border border-white/5">
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{k.label}</p>
-            <p className={`${k.small ? 'text-sm' : 'text-2xl'} font-extrabold mt-1 ${k.color} truncate`} title={k.small ? k.value : undefined}>{k.value}</p>
-            {k.note && <p className="text-[10px] text-amber-400 mt-0.5">{k.note}</p>}
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="glass-panel rounded-2xl p-4 border border-white/5 flex flex-col md:flex-row gap-3 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search schemes..." className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-white" />
-        </div>
-        <div className="flex gap-2">
+      <Card padding="p-4" className="flex flex-col lg:flex-row gap-3 lg:items-center">
+        <SearchInput
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search schemes"
+        />
+        <div className="flex gap-1.5 flex-wrap">
           {['Active', 'Scheduled', 'All', 'Expired'].map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${filter === f ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'border-white/5 text-slate-400 hover:text-white bg-brand-primary-lighter/40'}`}>{f}</button>
+            <button key={f} type="button" onClick={() => setFilter(f)}
+              className={`h-10 px-3 rounded-xl text-xs font-semibold border transition-colors ${
+                filter === f
+                  ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
+                  : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+              }`}>{f}</button>
           ))}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 flex-wrap">
           {['', ...APPLICABLE_TO].map(a => (
-            <button key={a || 'all-ch'} onClick={() => setApplicableFilter(a)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${applicableFilter === a ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'border-white/5 text-slate-400 hover:text-white bg-brand-primary-lighter/40'}`}>{a || 'All Channels'}</button>
+            <button key={a || 'all-channels'} type="button" onClick={() => setApplicableFilter(a)}
+              className={`h-10 px-3 rounded-xl text-xs font-semibold border transition-colors ${
+                applicableFilter === a
+                  ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
+                  : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+              }`}>{a || 'All Channels'}</button>
           ))}
         </div>
-      </div>
+      </Card>
 
       {/* Cards Grid */}
       {filtered.length > 0 ? (

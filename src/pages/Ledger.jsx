@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Wallet, ArrowUpCircle, ArrowDownCircle, CreditCard } from 'lucide-react';
+import { PageHeader, DataTable, Card, StatCard, EmptyState } from '../components/ui';
 import { buildLedgerEntries, allParties } from '../utils/distributorUtils';
 
 const formatCurrency = (val) =>
@@ -66,113 +67,113 @@ export default function Ledger() {
   if (!party) {
     return (
       <div className="space-y-6 animate-fade-in-up">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Wallet size={24} className="text-brand-accent" /> Outstanding Ledger
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Invoices, payments and running balance with Janki Herbals.</p>
-        </div>
+        <PageHeader
+          icon={Wallet}
+          title="Outstanding Ledger"
+          subtitle="Invoices, payments and running balance with Janki Herbals."
+        />
         {partyPicker}
-        <div className="glass-panel rounded-2xl border border-white/5 p-12 text-center text-slate-500">
-          <Wallet size={32} className="mx-auto mb-3 opacity-20" />
-          {isParty ? (
-            <>
-              <p className="text-slate-400 font-medium">Your account profile could not be found.</p>
-              <p className="text-xs mt-2 max-w-sm mx-auto leading-relaxed">
-                Your login is not linked to a distributor, dealer or retailer record. An administrator can fix this
-                from the Distributors, Dealers or Retailers screen.
-              </p>
-            </>
-          ) : partyOptions.length === 0 ? (
-            <p className="text-slate-400 font-medium">No distributors, dealers or retailers have been added yet.</p>
-          ) : (
-            <p className="text-slate-400 font-medium">Choose a party above to see their ledger.</p>
-          )}
-        </div>
+        <Card padding="p-0">
+          <EmptyState
+            icon={Wallet}
+            title={isParty
+              ? 'Your account profile could not be found'
+              : partyOptions.length === 0
+                ? 'No distributors, dealers or retailers yet'
+                : 'Choose a party above'}
+            hint={isParty
+              ? 'This login is not linked to a distributor, dealer or retailer record. An administrator can link it from the Distributors, Dealers or Retailers screen.'
+              : partyOptions.length === 0
+                ? 'A ledger belongs to a party, so add one first and its invoices and payments will collect here.'
+                : 'Pick whose invoices, payments and running balance to look at.'}
+          />
+        </Card>
       </div>
     );
   }
 
   const utilizationPct = party.creditLimit ? Math.min(100, Math.round((ledgerBalance / party.creditLimit) * 100)) : 0;
 
+  // Deliberately none of these is sortable. The balance column is a running
+  // total in date order, so re-ordering the rows by amount or description would
+  // leave a balance column that no longer adds up to anything.
+  const ledgerColumns = [
+    {
+      key: 'date', header: 'Date',
+      render: r => <span className="text-slate-500">{formatDate(r.date)}</span>,
+    },
+    {
+      key: 'description', header: 'Description',
+      render: r => (
+        <span className="inline-flex items-center gap-2">
+          {r.debit > 0
+            ? <ArrowUpCircle size={13} className="text-rose-400 flex-shrink-0" />
+            : <ArrowDownCircle size={13} className="text-emerald-400 flex-shrink-0" />}
+          {r.description}
+        </span>
+      ),
+    },
+    {
+      key: 'debit', header: 'Debit', align: 'right',
+      render: r => <span className="text-rose-400 font-medium">{r.debit > 0 ? formatCurrency(r.debit) : '—'}</span>,
+    },
+    {
+      key: 'credit', header: 'Credit', align: 'right',
+      render: r => <span className="text-emerald-400 font-medium">{r.credit > 0 ? formatCurrency(r.credit) : '—'}</span>,
+    },
+    {
+      key: 'balance', header: 'Balance', align: 'right',
+      render: r => <span className="font-bold text-white">{formatCurrency(r.balance)}</span>,
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Wallet size={24} className="text-brand-accent" /> Outstanding Ledger
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">
-          {isParty
-            ? 'Your invoices, payments, and running balance with Janki Herbals.'
-            : `Invoices, payments and running balance for ${party.name}.`}
-        </p>
-      </div>
+      <PageHeader
+        icon={Wallet}
+        title="Outstanding Ledger"
+        subtitle={isParty
+          ? 'Your invoices, payments and running balance with Janki Herbals.'
+          : `Invoices, payments and running balance for ${party.name}.`}
+      />
 
       {partyPicker}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="glass-panel rounded-2xl p-4 border border-white/5">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Current Outstanding</p>
-          <p className={`text-2xl font-extrabold mt-1 ${ledgerBalance > (party.creditLimit || 0) ? 'text-rose-400' : 'text-white'}`}>{formatCurrency(ledgerBalance)}</p>
-          {drift !== 0 && (
-            <p className="text-[10px] text-amber-400 mt-1 leading-snug">
-              Account record shows {formatCurrency(storedBalance)}. The figure above is calculated from the entries below.
-            </p>
-          )}
-        </div>
-        <div className="glass-panel rounded-2xl p-4 border border-white/5">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Credit Limit</p>
-          <p className="text-2xl font-extrabold mt-1 text-emerald-400">{formatCurrency(party.creditLimit)}</p>
-        </div>
-        <div className="glass-panel rounded-2xl p-4 border border-white/5">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5"><CreditCard size={12} />Utilization</p>
-          <div className="mt-2 h-2 bg-brand-primary-lighter rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${utilizationPct > 90 ? 'bg-rose-500' : utilizationPct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${utilizationPct}%` }} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <StatCard
+          label="Current Outstanding"
+          value={formatCurrency(ledgerBalance)}
+          icon={Wallet}
+          tone={ledgerBalance > (party.creditLimit || 0) ? 'danger' : 'accent'}
+          hint={drift !== 0
+            ? `Account record shows ${formatCurrency(storedBalance)}. The figure above is calculated from the entries below.`
+            : undefined}
+        />
+        <StatCard label="Credit Limit" value={formatCurrency(party.creditLimit)} icon={CreditCard} tone="success" />
+        <Card padding="p-4 sm:p-5">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Utilisation</p>
+          <p className="text-2xl font-extrabold text-white leading-none mt-2">{utilizationPct}%</p>
+          <div className="mt-3 h-2 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${utilizationPct > 90 ? 'bg-rose-500' : utilizationPct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+              style={{ width: `${utilizationPct}%` }}
+            />
           </div>
-          <p className="text-xs text-slate-500 mt-1">{utilizationPct}% used</p>
-        </div>
+          <p className="text-[10px] text-slate-500 mt-1.5">of the credit limit above</p>
+        </Card>
       </div>
 
-      <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                <th className="p-4">Date</th>
-                <th className="p-4">Description</th>
-                <th className="p-4 text-right">Debit</th>
-                <th className="p-4 text-right">Credit</th>
-                <th className="p-4 text-right">Balance</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-slate-300">
-              {entries.length > 0 ? entries.map(row => (
-                <tr key={row.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                  <td className="p-4 text-xs text-slate-500">{formatDate(row.date)}</td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      {row.debit > 0 ? <ArrowUpCircle size={14} className="text-rose-400 flex-shrink-0" /> : <ArrowDownCircle size={14} className="text-emerald-400 flex-shrink-0" />}
-                      {row.description}
-                    </div>
-                  </td>
-                  <td className="p-4 text-right text-rose-400 font-medium">{row.debit > 0 ? formatCurrency(row.debit) : '—'}</td>
-                  <td className="p-4 text-right text-emerald-400 font-medium">{row.credit > 0 ? formatCurrency(row.credit) : '—'}</td>
-                  <td className="p-4 text-right font-bold text-white">{formatCurrency(row.balance)}</td>
-                </tr>
-              )) : (
-                <tr><td colSpan="5" className="p-12 text-center text-slate-500">
-                  <Wallet size={32} className="mx-auto mb-3 opacity-20" />
-                  <p className="text-slate-400 font-medium">No ledger activity yet.</p>
-                  <p className="text-xs mt-2 max-w-md mx-auto leading-relaxed">
-                    Entries appear here once an order is marked <span className="text-slate-300">Delivered</span> — that is the point an
-                    invoice is raised against your account. Payments you make are recorded here as credits.
-                  </p>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        title="Entries"
+        columns={ledgerColumns}
+        rows={entries}
+        rowKey={r => r.id}
+        empty={{
+          icon: Wallet,
+          title: 'No ledger activity yet',
+          hint: 'Entries appear here once an order is marked Delivered \u2014 that is the point an invoice is raised against the account. Payments are recorded here as credits.',
+        }}
+      />
     </div>
   );
 }

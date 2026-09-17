@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Boxes, Search, CheckCircle, Clock, Package } from 'lucide-react';
+import { Boxes, CheckCircle, Clock, Package, Truck } from 'lucide-react';
+import { PageHeader, Card, StatCard, Badge, EmptyState, SearchInput } from '../components/ui';
 import { aggregateReceived } from '../utils/stockUtils';
 import { allParties } from '../utils/distributorUtils';
 
@@ -75,109 +76,111 @@ export default function Stock() {
   if (!party) {
     return (
       <div className="space-y-6 animate-fade-in-up">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Boxes size={24} className="text-brand-accent" /> Stock Availability
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Goods delivered by Janki Herbals, totalled by product.</p>
-        </div>
+        <PageHeader
+          icon={Boxes}
+          title="Stock Availability"
+          subtitle="Goods delivered by Janki Herbals, totalled by product."
+        />
         {partyPicker}
-        <div className="glass-panel rounded-2xl border border-white/5 p-12 text-center text-slate-500">
-          <Boxes size={32} className="mx-auto mb-3 opacity-20" />
-          {isParty ? (
-            <>
-              <p className="text-slate-400 font-medium">Your account profile could not be found.</p>
-              <p className="text-xs mt-2 max-w-sm mx-auto leading-relaxed">
-                Your login is not linked to a distributor, dealer or retailer record. An administrator can fix this
-                from the Distributors, Dealers or Retailers screen.
-              </p>
-            </>
-          ) : partyOptions.length === 0 ? (
-            <p className="text-slate-400 font-medium">No distributors, dealers or retailers have been added yet.</p>
-          ) : (
-            <p className="text-slate-400 font-medium">Choose a party above to see what they hold.</p>
-          )}
-        </div>
+        <Card padding="p-0">
+          <EmptyState
+            icon={Boxes}
+            title={isParty
+              ? 'Your account profile could not be found'
+              : partyOptions.length === 0
+                ? 'No distributors, dealers or retailers yet'
+                : 'Choose a party above'}
+            hint={isParty
+              ? 'This login is not linked to a distributor, dealer or retailer record. An administrator can link it from the Distributors, Dealers or Retailers screen.'
+              : partyOptions.length === 0
+                ? 'Stock is counted against a party, so add one first and what has been delivered to them collects here.'
+                : 'Pick whose delivered stock to look at.'}
+          />
+        </Card>
       </div>
     );
   }
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Boxes size={24} className="text-brand-accent" /> Stock Availability
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">
-          {isParty
-            ? 'Goods delivered to you by Janki Herbals, totalled by product.'
-            : `Goods delivered to ${party.name} by Janki Herbals, totalled by product.`}
-        </p>
-      </div>
+      <PageHeader
+        icon={Boxes}
+        title="Stock Availability"
+        subtitle={isParty
+          ? 'Goods delivered to you by Janki Herbals, totalled by product.'
+          : `Goods delivered to ${party.name} by Janki Herbals, totalled by product.`}
+      />
 
       {partyPicker}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="glass-panel rounded-2xl p-4 border border-white/5">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5"><Package size={12} />Received to date</p>
-          <p className="text-2xl font-extrabold mt-1 text-white">{totalUnits.toLocaleString('en-IN')} <span className="text-xs font-medium text-slate-500">units</span></p>
-        </div>
-        <div className="glass-panel rounded-2xl p-4 border border-white/5">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5"><Clock size={12} />Awaiting your confirmation</p>
-          <p className={`text-2xl font-extrabold mt-1 ${awaitingUnits > 0 ? 'text-amber-400' : 'text-white'}`}>{awaitingUnits.toLocaleString('en-IN')} <span className="text-xs font-medium text-slate-500">units</span></p>
-        </div>
-        <div className="glass-panel rounded-2xl p-4 border border-white/5">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Deliveries counted</p>
-          <p className="text-2xl font-extrabold mt-1 text-white">{orderCount.toLocaleString('en-IN')} <span className="text-xs font-medium text-slate-500">orders</span></p>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <StatCard
+          label="Received to date"
+          value={`${totalUnits.toLocaleString('en-IN')} units`}
+          icon={Package}
+          tone="accent"
+        />
+        <StatCard
+          label="Awaiting confirmation"
+          value={`${awaitingUnits.toLocaleString('en-IN')} units`}
+          icon={Clock}
+          tone={awaitingUnits > 0 ? 'warning' : 'accent'}
+        />
+        <StatCard
+          label="Deliveries counted"
+          value={`${orderCount.toLocaleString('en-IN')} orders`}
+          icon={Truck}
+          tone="info"
+        />
       </div>
 
-      <div className="glass-panel rounded-2xl p-4 border border-white/5">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search products..." className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-white" />
-        </div>
-      </div>
+      <Card padding="p-4">
+        <SearchInput
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search products"
+        />
+      </Card>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {rows.length > 0 ? rows.map(p => (
-          <div key={p.id} className="glass-panel rounded-2xl border border-white/5 p-5">
-            <div className="flex justify-between items-start mb-2 gap-2">
-              <div className="min-w-0">
-                <h3 className="font-bold text-white text-sm">{p.name}</h3>
-                <p className="text-xs text-slate-500">{p.category}</p>
+      {rows.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {rows.map(pr => (
+            <Card key={pr.id}>
+              <div className="flex justify-between items-start mb-3 gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-white text-sm truncate">{pr.name}</h3>
+                  <p className="text-[11px] text-slate-500">{pr.category}</p>
+                </div>
+                <Badge tone={pr.unconfirmed > 0 ? 'warning' : 'success'} className="flex-shrink-0">
+                  {pr.unconfirmed > 0 ? <><Clock size={10} />Unconfirmed</> : <><CheckCircle size={10} />Confirmed</>}
+                </Badge>
               </div>
-              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border flex-shrink-0 ${
-                p.unconfirmed > 0
-                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-              }`}>
-                {p.unconfirmed > 0 ? <><Clock size={12} />Unconfirmed</> : <><CheckCircle size={12} />Confirmed</>}
-              </span>
-            </div>
-            <div className="mt-3 pt-3 border-t border-white/5">
-              <p className="text-2xl font-extrabold text-white">{p.received.toLocaleString('en-IN')} <span className="text-xs font-medium text-slate-500">{p.uom}</span></p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">Received to date</p>
-              {p.unconfirmed > 0 && (
-                <p className="text-[11px] text-amber-400 mt-2">
-                  {p.unconfirmed.toLocaleString('en-IN')} {p.uom} not yet confirmed by you — confirm in My Orders.
+              <div className="pt-3 border-t border-white/5">
+                <p className="text-2xl font-extrabold text-white leading-none">
+                  {pr.received.toLocaleString('en-IN')}
+                  <span className="text-xs font-medium text-slate-500 ml-1">{pr.uom}</span>
                 </p>
-              )}
-            </div>
-          </div>
-        )) : (
-          <div className="col-span-full glass-panel rounded-2xl border border-white/5 p-16 text-center text-slate-500">
-            <Boxes size={32} className="mx-auto mb-3 opacity-20" />
-            <p className="text-slate-400 font-medium">{search ? 'No products match your search.' : 'Nothing delivered to you yet.'}</p>
-            {!search && (
-              <p className="text-xs mt-2 max-w-md mx-auto leading-relaxed">
-                Products appear here once an order of yours is marked <span className="text-slate-300">Delivered</span> by the
-                dispatch team. Orders still being processed or shipped are not counted.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wide mt-1.5">Received to date</p>
+                {pr.unconfirmed > 0 && (
+                  <p className="text-[11px] text-amber-400 mt-2 leading-snug">
+                    {pr.unconfirmed.toLocaleString('en-IN')} {pr.uom} not yet confirmed — confirm in My Orders.
+                  </p>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card padding="p-0">
+          <EmptyState
+            icon={Boxes}
+            title={search ? 'No products match that search' : 'Nothing delivered yet'}
+            hint={search
+              ? 'Try a shorter search, or clear it to see everything received.'
+              : 'Products appear here once an order is marked Delivered by the dispatch team. Orders still being processed or shipped are not counted.'}
+          />
+        </Card>
+      )}
 
       <p className="text-[11px] text-slate-600 leading-relaxed max-w-3xl">
         These are cumulative totals of what Janki Herbals has delivered{isParty ? ' to you' : ''}. The system does not
@@ -185,4 +188,5 @@ export default function Stock() {
       </p>
     </div>
   );
+
 }
