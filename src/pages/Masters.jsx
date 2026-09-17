@@ -2,20 +2,11 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { Layers, Plus, Trash2, Lock, Check, X, ChevronUp, ChevronDown, AlertTriangle, Search, Palette, Users, Package } from 'lucide-react';
+import { Layers, Plus, Trash2, Lock, Check, X, ChevronUp, ChevronDown, AlertTriangle, Search, Palette } from 'lucide-react';
 import { MASTER_LISTS, optionsFor, badgeStyle } from '../utils/masterLists';
-import TeamMembers from './masters/TeamMembers';
-import ProductCatalog from './masters/ProductCatalog';
 
 // Offered as swatches so a colour can be picked without knowing hex. The free
 // text box stays, for a brand colour that is not on this list.
-// The two record sets that belong with the reference data rather than under
-// Settings — the people who sign in, and the things that are sold.
-const RECORD_SECTIONS = [
-  { id: 'team', name: 'Team Members', icon: Users },
-  { id: 'products', name: 'Product Catalogue', icon: Package },
-];
-
 const PRESET_COLOURS = [
   ['Slate', '#64748b'], ['Blue', '#3b82f6'], ['Cyan', '#06b6d4'], ['Emerald', '#10b981'],
   ['Green', '#22c55e'], ['Amber', '#f59e0b'], ['Orange', '#f97316'], ['Rose', '#f43f5e'],
@@ -113,28 +104,6 @@ export default function Masters() {
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
         {/* What to work on */}
         <div className="glass-panel rounded-2xl border border-white/5 p-2 h-fit">
-          <p className="px-3 pt-1.5 pb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Records</p>
-          {RECORD_SECTIONS.map(r => {
-            const Icon = r.icon;
-            return (
-              <button
-                key={r.id}
-                onClick={() => { setActiveList(r.id); setEditingId(null); setDetailId(null); setError(''); setSearch(''); }}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors mb-0.5 ${
-                  activeList === r.id
-                    ? 'bg-brand-accent/15 text-brand-accent font-semibold'
-                    : 'text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <Icon size={13} className="flex-shrink-0 opacity-70" />
-                  {r.name}
-                </span>
-              </button>
-            );
-          })}
-
-          <p className="px-3 pt-3 pb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Option lists</p>
           {MASTER_LISTS.map(l => (
             <button
               key={l.id}
@@ -153,12 +122,7 @@ export default function Masters() {
           ))}
         </div>
 
-        {/* A record set, or the options in a list */}
-        {activeList === 'team' ? (
-          <div className="glass-panel rounded-2xl border border-white/5 p-5"><TeamMembers /></div>
-        ) : activeList === 'products' ? (
-          <div className="glass-panel rounded-2xl border border-white/5 p-5"><ProductCatalog /></div>
-        ) : (
+        {/* The options in the chosen list */}
         <div className="glass-panel rounded-2xl border border-white/5 p-5">
           <h2 className="text-base font-bold text-white">{list.name}</h2>
           <p className="text-xs text-slate-400 mt-1 leading-relaxed">{list.description}</p>
@@ -379,7 +343,6 @@ export default function Masters() {
             which is nearly always what you want instead of deleting.
           </p>
         </div>
-        )}
       </div>
     </div>
   );

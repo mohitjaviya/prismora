@@ -12,6 +12,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
     finance: false,
     support: false,
     analytics: false,
+    masters: false,
   });
 
   const toggleGroup = (group) => {
@@ -28,6 +29,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
       finance: ['/accounting', '/schemes', '/ledger', '/claims', '/incentives'].includes(path) || prev.finance,
       support: ['/complaints'].includes(path) || prev.support,
       analytics: ['/reports', '/ai-insights', '/ml-lab'].includes(path) || prev.analytics,
+      masters: path.startsWith('/masters') || prev.masters,
     }));
   }, [location.pathname]);
 
@@ -83,6 +85,17 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
         { name: 'Reports', path: '/reports', icon: <BarChart3 size={18} />, module: 'reports' },
         { name: 'AI Insights', path: '/ai-insights', icon: <Brain size={18} />, module: 'reports' },
         { name: 'ML Lab', path: '/ml-lab', icon: <FlaskConical size={18} />, module: 'reports' },
+      ]
+    },
+    {
+      // The reference data every other section draws on: who may sign in, what
+      // is sold, and the options that fill the dropdowns.
+      id: 'masters',
+      title: 'Masters',
+      items: [
+        { name: 'Team Members', path: '/masters/team', icon: <Users size={18} />, module: 'settings' },
+        { name: 'Product Catalogue', path: '/masters/products', icon: <Package2 size={18} />, module: 'settings' },
+        { name: 'Option Lists', path: '/masters/lists', icon: <Layers size={18} />, module: 'settings' },
       ]
     }
   ];
@@ -164,23 +177,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
       </div>
 
       {canAccess('settings') ? (
-        <div className="p-4 border-t border-white/5 bg-brand-primary-light/20 flex-shrink-0 space-y-1">
-          {/* Beside Settings rather than inside it: these lists decide what every
-              other screen offers, so they are their own thing to come back to. */}
-          <NavLink
-            to="/masters"
-            onClick={closeMobileMenu}
-            className={({ isActive }) =>
-              `flex items-center px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
-                isActive
-                  ? 'bg-gradient-to-r from-brand-primary-lighter/80 to-transparent text-brand-accent border-l-2 border-brand-accent'
-                  : 'text-slate-400 hover:bg-brand-primary-lighter/50 hover:text-white border-l-2 border-transparent'
-              }`
-            }
-          >
-            <Layers size={18} className="mr-3" />
-            <span className="font-semibold">Master Lists</span>
-          </NavLink>
+        <div className="p-4 border-t border-white/5 bg-brand-primary-light/20 flex-shrink-0">
           <NavLink
             to="/settings"
             onClick={closeMobileMenu}
