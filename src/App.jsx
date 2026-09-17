@@ -14,6 +14,7 @@ const Leads = lazy(() => import('./pages/Leads'));
 const Orders = lazy(() => import('./pages/Orders'));
 const Geography = lazy(() => import('./pages/Geography'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Masters = lazy(() => import('./pages/Masters'));
 const Customers = lazy(() => import('./pages/Customers'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Accounting = lazy(() => import('./pages/Accounting'));
@@ -144,6 +145,7 @@ function AppRoutes() {
         <Route path="ml-lab" element={<PermissionGuard module="reports"><MLLab /></PermissionGuard>} />
         <Route path="geography" element={<PermissionGuard module="geography"><Geography /></PermissionGuard>} />
         <Route path="settings" element={<PermissionGuard module="settings"><Settings /></PermissionGuard>} />
+        <Route path="masters" element={<PermissionGuard module="settings"><Masters /></PermissionGuard>} />
         <Route path="profile" element={<Profile />} />
       </Route>
     </Routes>

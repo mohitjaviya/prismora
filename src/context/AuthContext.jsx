@@ -408,6 +408,69 @@ export const AuthProvider = ({ children }) => {
     return newId;
   };
 
+  /**
+   * Create a colleague's login and profile together.
+   *
+   * Creating an account needs the service_role key, which can read past every
+   * policy and make anyone an administrator. It cannot go in the browser, so
+   * the work happens in the create-user Edge Function, which checks that the
+   * caller really is an administrator before it does anything.
+   *
+   * Returns { ok } or { ok: false, error, needsDeploy } — needsDeploy when the
+   * function has not been deployed yet, so Settings can fall back to telling
+   * the administrator to add the account in the Supabase dashboard rather than
+   * pretending the person can sign in.
+   */
+  const createUserAccount = async ({ name, email, password, role, managedUsers }) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return { ok: false, error: 'Your session has expired — sign in again.' };
+
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: { name, email, password, role, managedUsers },
+      });
+
+      if (error) {
+        const message = String(error.message || error);
+        // Not deployed, rather than refused. Worth telling apart: one is a
+        // setup step the administrator can take, the other is a real refusal.
+        const needsDeploy = /not found|404|failed to fetch|failed to send/i.test(message);
+        return { ok: false, error: message, needsDeploy };
+      }
+      if (data?.error) return { ok: false, error: data.error };
+
+      await fetchUsers();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err), needsDeploy: true };
+    }
+  };
+
+  /**
+   * Confirm the person at the keyboard knows the current password.
+   *
+   * There is nothing left to compare against — the password column was deleted
+   * when sign-in moved to Supabase Auth — so the only way to check is to use
+   * it. Signing in again with the same account refreshes the existing session
+   * rather than replacing it, so the user stays where they are.
+   *
+   * It is worth doing. Without it, an unattended signed-in browser is enough
+   * for a passer-by to change the password and lock the owner out.
+   */
+  const verifyCurrentPassword = async (currentPassword) => {
+    if (!user?.email || !currentPassword) return false;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      return !error;
+    } catch {
+      return false;
+    }
+  };
+
   const updateUser = async (id, updatedData) => {
     // A password change goes to Auth, never into `users`. Profile and Settings
     // both call this with { password }, which used to write the new password
@@ -489,7 +552,7 @@ export const AuthProvider = ({ children }) => {
   const isSales = user ? isSalesRole(user.role) : false;
 
   return (
-    <AuthContext.Provider value={{ user, users, authReady, isConfigured, missingEnvVars, login, logout, addUser, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, isAdmin, isManager, isSales }}>
+    <AuthContext.Provider value={{ user, users, authReady, isConfigured, missingEnvVars, login, logout, addUser, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, isAdmin, isManager, isSales }}>
       {children}
     </AuthContext.Provider>
   );

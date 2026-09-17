@@ -6,13 +6,9 @@ import { Plus, Edit2, Trash2, AlertCircle, LayoutGrid, List, Download, X, User, 
 import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { downloadCSV } from '../utils/exportUtils';
+import { optionsFor } from '../utils/masterLists';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
-
-const STATUSES = [
-  'Lead Created', 'Call', 'Sample Sent', 'Meeting',
-  'Negotiation', 'Distributor Approved', 'First Order', 'Active', 'Lost'
-];
 
 // Moving a lead into any of these means the customer has committed, which is
 // when an order is raised. Kept in one place because the drag handler and the
@@ -31,7 +27,13 @@ const INDIAN_STATES = [
 ];
 
 const Leads = () => {
-  const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog } = useData();
+  const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog, masters } = useData();
+
+  // Statuses and sources come from Master Lists. The fallback when nothing is
+  // configured lives in masterLists.js, which is also the single record of
+  // which keys the code itself depends on.
+  const statusOptions = optionsFor(masters, 'lead_status');
+  const sourceOptions = optionsFor(masters, 'lead_source');
   const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -341,12 +343,12 @@ const Leads = () => {
   const renderKanban = () => (
     <DragDropContext onDragEnd={onDragEnd}>
       <div className="flex gap-4 overflow-x-auto custom-scrollbar pb-4 mt-6 animate-fade-in-up items-start h-[calc(100vh-250px)]">
-        {STATUSES.map(status => {
+        {statusOptions.map(({ key: status, label: statusLabel }) => {
           const columnLeads = visibleLeads.filter(l => l.status === status);
           return (
             <div key={status} className="min-w-[300px] w-[300px] glass-panel rounded-xl p-3 flex flex-col h-full bg-brand-primary-light/60">
               <div className="flex justify-between items-center mb-4 px-2">
-                <h3 className="font-semibold text-slate-200">{status}</h3>
+                <h3 className="font-semibold text-slate-200">{statusLabel}</h3>
                 <span className="text-xs font-medium bg-brand-primary-lighter px-2 py-1 rounded-full">{columnLeads.length}</span>
               </div>
 
@@ -506,7 +508,8 @@ const Leads = () => {
                   </div>
                 </div>
               ) : (() => {
-                const progressiveStages = STATUSES.filter(s => s !== 'Lost');
+                const progressiveStages = statusOptions.filter(o => o.key !== 'Lost').map(o => o.key);
+                const labelOf = (k) => (statusOptions.find(o => o.key === k) || {}).label || k;
                 return (
                   <div className="bg-brand-primary/80 border border-white/5 rounded-2xl p-4 shadow-inner">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-4">Lead Progress Journey</span>
@@ -537,7 +540,7 @@ const Leads = () => {
                                     ? 'bg-brand-primary border-brand-accent text-brand-accent'
                                     : 'bg-brand-primary border-slate-700 text-slate-500'
                                 }`}
-                              title={status}
+                              title={labelOf(status)}
                             >
                               {isCompleted ? '✓' : idx + 1}
                             </div>
@@ -549,7 +552,7 @@ const Leads = () => {
                                     : 'text-slate-500'
                                 }`}
                             >
-                              {status}
+                              {labelOf(status)}
                             </span>
                           </div>
                         );
@@ -799,17 +802,7 @@ const Leads = () => {
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Lead Source</label>
                   <select value={formData.leadSource || ''} onChange={e => setFormData({ ...formData, leadSource: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Source --</option>
-                    <option value="Exhibition" className="bg-brand-primary">Exhibition</option>
-                    <option value="Reference" className="bg-brand-primary">Reference</option>
-                    <option value="Website" className="bg-brand-primary">Website</option>
-                    <option value="WhatsApp" className="bg-brand-primary">WhatsApp</option>
-                    <option value="IndiaMart" className="bg-brand-primary">IndiaMart</option>
-                    <option value="Cold Call" className="bg-brand-primary">Cold Call</option>
-                    <option value="Instagram" className="bg-brand-primary">Instagram</option>
-                    <option value="LinkedIn" className="bg-brand-primary">LinkedIn</option>
-                    <option value="Trade Show" className="bg-brand-primary">Trade Show</option>
-                    <option value="Walk-in" className="bg-brand-primary">Walk-in</option>
-                    <option value="Other" className="bg-brand-primary">Other</option>
+                    {sourceOptions.map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                   </select>
                 </div>
                 <div>
@@ -837,7 +830,7 @@ const Leads = () => {
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">Status</label>
                   <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
-                    {STATUSES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
+                    {statusOptions.map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                   </select>
                 </div>
                 <div>

@@ -27,7 +27,7 @@ const passwordPolicyError = (pw) => {
 const BLANK_PRODUCT_FORM = { name: '', category: 'Wellness', hsnCode: '', sku: '', gstPct: 12, mrp: '', distributorPrice: '', dealerPrice: '', retailerPrice: '', uom: 'BOTTLE', status: 'Active' };
 
 export default function Settings() {
-  const { user, users: allUsers, addUser, updateUser, deleteUser } = useAuth();
+  const { user, users: allUsers, addUser, createUserAccount, updateUser, deleteUser, verifyCurrentPassword } = useAuth();
   const { productCatalog, addProduct, updateProduct, deleteProduct, eventLog } = useData();
   const [auditSearch, setAuditSearch] = useState('');
 
@@ -73,10 +73,25 @@ export default function Settings() {
         alert('Profile saved. A password can only be changed by its own account holder, or reset from the Supabase dashboard.');
       }
     } else {
-      // createAuthAccount: false — signing up here would replace this admin's
-      // own session with the new user's. Create their login in the dashboard.
-      addUser({ ...payload, createAuthAccount: false });
-      alert(`Profile created for ${payload.email}. Now add the same email in Supabase → Authentication → Users so they can sign in.`);
+      // The login is created server-side, where the key that can do it is safe
+      // to hold. Falls back to the old two-step only when that function has not
+      // been deployed — better than silently making a profile nobody can use.
+      createUserAccount(payload).then(result => {
+        if (result.ok) {
+          alert(`${payload.name} can now sign in with ${payload.email}.`);
+          return;
+        }
+        if (result.needsDeploy) {
+          addUser({ ...payload, createAuthAccount: false });
+          alert(
+            `Profile created for ${payload.email}, but their login was not.\n\n` +
+            `The create-user function has not been deployed yet, so add the same email in ` +
+            `Supabase → Authentication → Users (tick Auto Confirm) and they can sign in.`
+          );
+          return;
+        }
+        alert(`Could not create the account: ${result.error}`);
+      });
     }
     setIsUserModalOpen(false);
   };
@@ -120,7 +135,7 @@ export default function Settings() {
   };
 
   // ── Password Handlers ────────────────────────────────────────────────────
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setPasswordMessage({ type: 'error', text: 'New passwords do not match.' });
@@ -131,12 +146,20 @@ export default function Settings() {
       setPasswordMessage({ type: 'error', text: policyError });
       return;
     }
-    const currentUser = allUsers.find(u => u.id === user.id);
-    if (currentUser?.password !== passwordForm.currentPassword) {
+    // The current password is checked by signing in with it, because there is
+    // nothing left to compare it against — passwords moved to Supabase Auth and
+    // the column this used to read was deleted. It was comparing against
+    // undefined, so changing a password had become impossible.
+    const verified = await verifyCurrentPassword(passwordForm.currentPassword);
+    if (!verified) {
       setPasswordMessage({ type: 'error', text: 'Current password is incorrect.' });
       return;
     }
-    updateUser(user.id, { password: passwordForm.newPassword });
+    const ok = await updateUser(user.id, { password: passwordForm.newPassword });
+    if (!ok) {
+      setPasswordMessage({ type: 'error', text: 'Could not change the password. Please try again.' });
+      return;
+    }
     setPasswordMessage({ type: 'success', text: 'Password changed successfully!' });
     setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setTimeout(() => setPasswordMessage({ type: '', text: '' }), 3000);

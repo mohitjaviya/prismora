@@ -56,6 +56,7 @@ const CACHE_KEYS_BY_TABLE = {
   territories: 'prismora_territories',
   vendor_payments: 'prismora_vendor_payments',
   vendors: 'prismora_vendors',
+  masters: 'prismora_masters',
   visit_reports: 'prismora_visit_reports',
 };
 
@@ -374,6 +375,7 @@ export const DataProvider = ({ children }) => {
   const [beatPlans, setBeatPlans] = useState(() => lsInit('prismora_beat_plans'));
   const [attendance, setAttendance] = useState(() => lsInit('prismora_attendance'));
   const [visitReports, setVisitReports] = useState(() => lsInit('prismora_visit_reports'));
+  const [masters, setMasters] = useState(() => lsInit('prismora_masters'));
   const [sfaExpenses, setSfaExpenses] = useState(() => lsInit('prismora_sfa_expenses'));
   const [vendorPayments, setVendorPayments] = useState(() => lsInit('prismora_vendor_payments'));
 
@@ -470,6 +472,7 @@ export const DataProvider = ({ children }) => {
       distributor_payments: begin(supabase.from('distributor_payments').select('*').order('createdAt', { ascending: false })),
       scheme_claims: begin(supabase.from('scheme_claims').select('*').order('createdAt', { ascending: false })),
       distributor_incentives: begin(supabase.from('distributor_incentives').select('*').order('createdAt', { ascending: false })),
+      masters: begin(supabase.from('masters').select('*').order('sort', { ascending: true })),
     };
     // ── Original fetches ──────────────────────────────────────────────────
     // Fetch Leads with local merge fallback
@@ -987,6 +990,21 @@ export const DataProvider = ({ children }) => {
       fetchedIncentives = local ? JSON.parse(local) : [];
     }
     applyFetched('prismora_distributor_incentives', setDistributorIncentives, fetchedIncentives);
+
+    // ── Masters (the configurable dropdown lists) ──
+    // A failed read falls back to the cache, and an empty table falls back to
+    // the defaults compiled into masterLists.js. Either way no dropdown in the
+    // app is ever left with nothing in it.
+    let fetchedMasters = [];
+    try {
+      const { data, error } = await inflight.masters;
+      if (error) throw error;
+      fetchedMasters = data || [];
+    } catch {
+      const local = localStorage.getItem('prismora_masters');
+      fetchedMasters = local ? JSON.parse(local) : [];
+    }
+    applyFetched('prismora_masters', setMasters, fetchedMasters);
   };
 
   // A backfill used to run here, uploading records that existed only in this
@@ -1453,6 +1471,102 @@ export const DataProvider = ({ children }) => {
         await persist('retailers update', supabase.from('retailers').update({ outstandingAmount: newOutstanding }).eq('id', retailer.id));
       }
     }
+  };
+
+  // ── Masters ──────────────────────────────────────────────────────────────
+  // The rules about locked keys live here, not only in the screen. A key the
+  // code branches on must not be renamable through any path — a screen can be
+  // bypassed, and the cost of getting it wrong is deliveries that stop billing.
+
+  const MASTER_COLUMNS = ['id', 'list', 'key', 'label', 'sort', 'active', 'locked', 'createdAt'];
+  const masterRow = shapeFor(MASTER_COLUMNS);
+
+  const addMasterOption = async (listId, label) => {
+    const clean = String(label || '').trim();
+    if (!listId || !clean) return { ok: false, error: 'Give the option a name.' };
+
+    const existing = masters.filter(m => m.list === listId);
+    if (existing.some(m => m.key.toLowerCase() === clean.toLowerCase())) {
+      return { ok: false, error: `"${clean}" is already in this list.` };
+    }
+    // Added options are never locked: the code cannot branch on something it
+    // has never heard of, so there is nothing to protect.
+    const row = masterRow({
+      id: `M-${listId}-${Date.now()}`,
+      list: listId,
+      key: clean,
+      label: clean,
+      sort: existing.reduce((max, m) => Math.max(max, Number(m.sort || 0)), -1) + 1,
+      active: true,
+      locked: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    const next = [...masters, row];
+    setMasters(next);
+    localStorage.setItem('prismora_masters', JSON.stringify(next));
+    const saved = await persist('masters insert', supabase.from('masters').insert([row]));
+    if (!saved) {
+      setMasters(masters);
+      localStorage.setItem('prismora_masters', JSON.stringify(masters));
+      return { ok: false, error: 'Could not save — see the banner above.' };
+    }
+    logEvent('master_added', `Added "${clean}" to ${listId}`, null, row.id);
+    return { ok: true };
+  };
+
+  const updateMasterOption = async (id, changes) => {
+    const before = masters.find(m => m.id === id);
+    if (!before) return { ok: false, error: 'That option no longer exists.' };
+
+    // Only the label, order and whether it is in use may move on a locked row.
+    const allowed = before.locked
+      ? { label: changes.label, sort: changes.sort, active: changes.active }
+      : changes;
+    const patch = {};
+    for (const [k, v] of Object.entries(allowed)) if (v !== undefined) patch[k] = v;
+    if (Object.keys(patch).length === 0) return { ok: true };
+
+    if (patch.label !== undefined && !String(patch.label).trim()) {
+      return { ok: false, error: 'An option needs a name.' };
+    }
+    if (patch.key !== undefined) {
+      const clean = String(patch.key).trim();
+      if (masters.some(m => m.list === before.list && m.id !== id && m.key.toLowerCase() === clean.toLowerCase())) {
+        return { ok: false, error: `"${clean}" is already in this list.` };
+      }
+      patch.key = clean;
+    }
+
+    const next = masters.map(m => m.id === id ? { ...m, ...patch } : m);
+    setMasters(next);
+    localStorage.setItem('prismora_masters', JSON.stringify(next));
+    const saved = await persist('masters update', supabase.from('masters').update(masterRow(patch)).eq('id', id));
+    if (!saved) {
+      setMasters(masters);
+      localStorage.setItem('prismora_masters', JSON.stringify(masters));
+      return { ok: false, error: 'Could not save — see the banner above.' };
+    }
+    return { ok: true };
+  };
+
+  const deleteMasterOption = async (id) => {
+    const before = masters.find(m => m.id === id);
+    if (!before) return { ok: true };
+    if (before.locked) {
+      return { ok: false, error: 'This one is part of a workflow and cannot be removed. Switch it off instead.' };
+    }
+    const next = masters.filter(m => m.id !== id);
+    setMasters(next);
+    localStorage.setItem('prismora_masters', JSON.stringify(next));
+    const saved = await persist('masters delete', supabase.from('masters').delete().eq('id', id));
+    if (!saved) {
+      setMasters(masters);
+      localStorage.setItem('prismora_masters', JSON.stringify(masters));
+      return { ok: false, error: 'Could not save — see the banner above.' };
+    }
+    logEvent('master_removed', `Removed "${before.label}" from ${before.list}`, null, id);
+    return { ok: true };
   };
 
   const deleteOrder = async (id) => {
@@ -2608,6 +2722,7 @@ export const DataProvider = ({ children }) => {
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, receiveStock,
+      masters, addMasterOption, updateMasterOption, deleteMasterOption,
       addVendor, updateVendor, deleteVendor,
       vendorPayments, addVendorPayment,
       purchaseReturns, addPurchaseReturn,

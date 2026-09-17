@@ -4,7 +4,7 @@ import { useData } from '../context/DataContext';
 import { User, Lock, Users, Shield, Eye, EyeOff, TrendingUp, ShoppingBag, Target, Star, Activity, Package } from 'lucide-react';
 
 const Profile = () => {
-  const { user, users: allUsers, updateUser } = useAuth();
+  const { user, users: allUsers, updateUser, verifyCurrentPassword } = useAuth();
   const { leads, orders, invoices } = useData();
 
   const [passwordForm, setPasswordForm] = useState({
@@ -51,7 +51,7 @@ const Profile = () => {
     return { totalLeads: myLeads.length, converted, conversionRate, totalOrders: myOrders.length, pendingOrders, totalRevenue, thisMonth, growthPct, paidInvoices };
   }, [leads, orders, invoices, user]);
 
-  const handleChangePassword = (e) => {
+  const handleChangePassword = async (e) => {
     e.preventDefault();
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -67,13 +67,20 @@ const Profile = () => {
       return;
     }
 
-    const currentUserRecord = allUsers.find(u => u.id === user.id);
-    if (currentUserRecord?.password !== passwordForm.currentPassword) {
+    // Verified by signing in with it. Passwords live in Supabase Auth now and
+    // the column this compared against was deleted, so it was testing against
+    // undefined and refusing every attempt.
+    const verified = await verifyCurrentPassword(passwordForm.currentPassword);
+    if (!verified) {
       setPasswordMessage({ type: 'error', text: 'Current password is incorrect.' });
       return;
     }
 
-    updateUser(user.id, { password: passwordForm.newPassword });
+    const ok = await updateUser(user.id, { password: passwordForm.newPassword });
+    if (!ok) {
+      setPasswordMessage({ type: 'error', text: 'Could not change the password. Please try again.' });
+      return;
+    }
     setPasswordMessage({ type: 'success', text: 'Password changed successfully!' });
     setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setTimeout(() => setPasswordMessage({ type: '', text: '' }), 4000);

@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase,
-  UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2,
-  MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck,
-  Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical
-} from 'lucide-react';
+import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2, MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck, Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical, Layers } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
@@ -169,7 +164,23 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
       </div>
 
       {canAccess('settings') ? (
-        <div className="p-4 border-t border-white/5 bg-brand-primary-light/20 flex-shrink-0">
+        <div className="p-4 border-t border-white/5 bg-brand-primary-light/20 flex-shrink-0 space-y-1">
+          {/* Beside Settings rather than inside it: these lists decide what every
+              other screen offers, so they are their own thing to come back to. */}
+          <NavLink
+            to="/masters"
+            onClick={closeMobileMenu}
+            className={({ isActive }) =>
+              `flex items-center px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                isActive
+                  ? 'bg-gradient-to-r from-brand-primary-lighter/80 to-transparent text-brand-accent border-l-2 border-brand-accent'
+                  : 'text-slate-400 hover:bg-brand-primary-lighter/50 hover:text-white border-l-2 border-transparent'
+              }`
+            }
+          >
+            <Layers size={18} className="mr-3" />
+            <span className="font-semibold">Master Lists</span>
+          </NavLink>
           <NavLink
             to="/settings"
             onClick={closeMobileMenu}
