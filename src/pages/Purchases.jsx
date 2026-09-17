@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildVendorLedger } from '../utils/distributorUtils';
-import { optionsFor } from '../utils/masterLists';
+import { optionsFor, badgeStyle } from '../utils/masterLists';
 
 
 const statusConfig = {
@@ -35,7 +35,15 @@ export default function Purchases() {
     addPurchaseOrder, updatePurchaseOrderStatus, cancelPurchaseOrder, deletePurchaseOrder,
     addVendor, updateVendor, deleteVendor, addGRN, receiveStock, addVendorPayment, addPurchaseReturn, masters } = useData();
   // statusConfig below is keyed on the stored value, so the filter uses keys.
-  const poStatuses = optionsFor(masters, 'po_status').map(o => o.key);
+  const poStatusOptions = optionsFor(masters, 'po_status');
+  // statusConfig below only knows the statuses that existed when it was
+  // written, so one added through Master Lists came out unstyled. Its own
+  // colour wins where it has one.
+  const statusStyle = (k) => {
+    const o = poStatusOptions.find(x => x.key === k);
+    return o?.color ? badgeStyle(o.color) : null;
+  };
+  const poStatuses = poStatusOptions.map(o => o.key);
   const { user, canAccess } = useAuth();
 
   const [activeTab, setActiveTab] = useState('orders');
@@ -311,7 +319,7 @@ export default function Purchases() {
                       <td className="p-4 text-slate-400">{formatDate(po.expectedDate)}</td>
                       <td className="p-4 text-slate-400">{formatDate(po.createdAt)}</td>
                       <td className="p-4 text-center">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${st.cls}`}>
+                        <span style={statusStyle(po.status) || undefined} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${statusStyle(po.status) ? "" : st.cls}`}>
                           {st.icon}{po.status}
                         </span>
                         {po.status === 'Confirmed' && (() => {
@@ -813,7 +821,7 @@ export default function Purchases() {
                 <p className="text-xs text-slate-400 mt-0.5">{viewingPO.vendorName}</p>
               </div>
               <div className="flex items-center gap-3">
-                <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${(statusConfig[viewingPO.status] || statusConfig['Draft']).cls}`}>
+                <span style={statusStyle(viewingPO.status) || undefined} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${statusStyle(viewingPO.status) ? "" : (statusConfig[viewingPO.status] || statusConfig['Draft']).cls}`}>
                   {(statusConfig[viewingPO.status] || statusConfig['Draft']).icon}{viewingPO.status}
                 </span>
                 <button onClick={() => setViewingPO(null)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={18} /></button>

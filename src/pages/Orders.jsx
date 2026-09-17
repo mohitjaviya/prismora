@@ -8,7 +8,7 @@ import { downloadCSV } from '../utils/exportUtils';
 import { allParties } from '../utils/distributorUtils';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
-import { optionsFor } from '../utils/masterLists';
+import { optionsFor, badgeStyle } from '../utils/masterLists';
 
 
 // Which role "owns" moving an order into a given status — enforces the
@@ -496,6 +496,14 @@ const Orders = () => {
     closeModal();
   };
 
+  // A status configured through Master Lists brings its own colour. The switch
+  // below stays as the fallback for the ones that predate it — and for
+  // 'Partially Delivered', which is derived rather than chosen.
+  const statusStyle = (status) => {
+    const o = statusOptions.find(x => x.key === status);
+    return o?.color ? badgeStyle(o.color) : null;
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'Pending': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
@@ -629,7 +637,7 @@ const Orders = () => {
                       </td>
                     )}
                     <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
+                      <span style={statusStyle(order.status) || undefined} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusStyle(order.status) ? "" : getStatusColor(order.status)}`}>
                         {order.status}
                       </span>
                       {order.status === 'Partially Delivered' && (
@@ -697,7 +705,7 @@ const Orders = () => {
                   ) : isSalesOnlyRole ? (
                     formData.status === 'Pending' ? (
                       <div className="flex items-center justify-between gap-3">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(formData.status)}`}>{formData.status}</span>
+                        <span style={statusStyle(formData.status) || undefined} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusStyle(formData.status) ? "" : getStatusColor(formData.status)}`}>{labelForStatus(formData.status)}</span>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => attemptSetStatus('Cancelled')} className="px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">Cancel Order</button>
                           <button type="button" onClick={() => attemptSetStatus('Processing')} className="btn-accent px-4 py-2 rounded-lg text-xs font-bold">Assign to Warehouse Manager</button>
@@ -705,7 +713,7 @@ const Orders = () => {
                       </div>
                     ) : (
                       <div className="flex items-center gap-3">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(formData.status)}`}>{formData.status}</span>
+                        <span style={statusStyle(formData.status) || undefined} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusStyle(formData.status) ? "" : getStatusColor(formData.status)}`}>{labelForStatus(formData.status)}</span>
                         <span className="text-xs text-slate-400">This order is now with the Warehouse/Dispatch team — you can no longer change its status.</span>
                       </div>
                     )

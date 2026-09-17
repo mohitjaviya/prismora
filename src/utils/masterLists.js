@@ -24,17 +24,24 @@
  * 'Delivered'.
  */
 
+// An option may be given as a bare string, or as [label, colour] where the
+// colour matters — a status badge has to be drawn in something.
+const opt = (entry, i, locked) => {
+  const [label, color] = Array.isArray(entry) ? entry : [entry, null];
+  return { key: label, label, color, description: '', sort: i, locked };
+};
+
 // A list whose values the code never branches on.
 const free = (id, name, description, defaults) => ({
   id, name, description, locked: false,
-  defaults: defaults.map((label, i) => ({ key: label, label, sort: i, locked: false })),
+  defaults: defaults.map((d, i) => opt(d, i, false)),
 });
 
 // A list the code reads. `built` keys cannot be renamed or removed; anything
 // added later is a plain option and behaves like a free one.
 const workflow = (id, name, description, defaults) => ({
   id, name, description, locked: true,
-  defaults: defaults.map((label, i) => ({ key: label, label, sort: i, locked: true })),
+  defaults: defaults.map((d, i) => opt(d, i, true)),
 });
 
 export const MASTER_LISTS = [
@@ -65,17 +72,21 @@ export const MASTER_LISTS = [
     ['Flat Discount', 'Cash Discount', 'Free Goods', 'Slab Discount', 'Seasonal Offer', 'Buy X Get Y']),
 
   workflow('lead_status', 'Lead Statuses', 'The stages a lead moves through. Converted, First Order and Active each raise an order.',
-    ['Lead Created', 'Call', 'Sample Sent', 'Meeting', 'Negotiation',
-      'Distributor Approved', 'First Order', 'Active', 'Lost']),
+    [['Lead Created', '#38bdf8'], ['Call', '#818cf8'], ['Sample Sent', '#a78bfa'],
+      ['Meeting', '#f472b6'], ['Negotiation', '#fbbf24'], ['Distributor Approved', '#34d399'],
+      ['First Order', '#22c55e'], ['Active', '#10b981'], ['Lost', '#f87171']]),
 
   workflow('order_status', 'Order Statuses', 'Delivered deducts stock and raises the invoice. Ready for Dispatch and Shipped check stock first.',
-    ['Pending', 'Processing', 'Ready for Dispatch', 'Shipped', 'Delivered', 'Cancelled']),
+    [['Pending', '#eab308'], ['Processing', '#3b82f6'], ['Ready for Dispatch', '#06b6d4'],
+      ['Shipped', '#a855f7'], ['Delivered', '#22c55e'], ['Cancelled', '#ef4444']]),
 
   workflow('po_status', 'Purchase Order Statuses', 'GRN Done and Closed drive the goods-receipt flow.',
-    ['Draft', 'Confirmed', 'GRN Done', 'Closed', 'Cancelled']),
+    [['Draft', '#64748b'], ['Confirmed', '#3b82f6'], ['GRN Done', '#10b981'],
+      ['Closed', '#a855f7'], ['Cancelled', '#f43f5e']]),
 
   workflow('complaint_status', 'Complaint Statuses', 'The stages a complaint moves through.',
-    ['Registered', 'Under Review', 'Resolved', 'Closed']),
+    [['Registered', '#f43f5e'], ['Under Review', '#f59e0b'],
+      ['Resolved', '#10b981'], ['Closed', '#64748b']]),
 ];
 
 export const listById = (id) => MASTER_LISTS.find(l => l.id === id) || null;
@@ -108,3 +119,28 @@ export const labelForKey = (masters, listId, key) => {
   const hit = optionsFor(masters, listId, { includeInactive: true }).find(o => o.key === key);
   return hit ? hit.label : key;
 };
+
+/**
+ * The colour stored against an option, if it has one.
+ *
+ * Badge colours used to live in a hardcoded map per screen — statusConfig in
+ * Purchases and Complaints, a switch in Orders. Those maps only know the
+ * statuses that existed when they were written, so a status added through
+ * Master Lists came out grey with no way to change it. The colour travels with
+ * the option now.
+ */
+export const colorForKey = (masters, listId, key) => {
+  const hit = optionsFor(masters, listId, { includeInactive: true }).find(o => o.key === key);
+  return hit?.color || null;
+};
+
+/**
+ * Inline styles for a tinted badge, matching the look the Tailwind classes give.
+ *
+ * Inline rather than class names because the colour is data: Tailwind only ships
+ * the classes it can see in the source, so a hex chosen by an administrator at
+ * runtime could never become `bg-[#abc123]/10`.
+ */
+export const badgeStyle = (color) => color
+  ? { backgroundColor: color + '1a', color, borderColor: color + '40' }
+  : null;

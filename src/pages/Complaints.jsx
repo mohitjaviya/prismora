@@ -7,7 +7,7 @@ import {
   CheckCircle, Clock, AlertTriangle, Eye, Edit2, RotateCcw
 } from 'lucide-react';
 import { downloadCSV } from '../utils/exportUtils';
-import { optionsFor } from '../utils/masterLists';
+import { optionsFor, badgeStyle } from '../utils/masterLists';
 
 
 const statusConfig = {
@@ -32,6 +32,13 @@ export default function Complaints() {
   // people read — statusConfig below is still keyed on the stored value.
   const complaintTypes = optionsFor(masters, 'complaint_type').map(o => o.key);
   const statusOptions = optionsFor(masters, 'complaint_status');
+  // statusConfig below only knows the statuses that existed when it was
+  // written, so one added through Master Lists came out unstyled. Its own
+  // colour wins where it has one.
+  const statusStyle = (k) => {
+    const o = statusOptions.find(x => x.key === k);
+    return o?.color ? badgeStyle(o.color) : null;
+  };
   const statuses = statusOptions.map(o => o.key);
   const { user, users: teamUsers, getAssignableUsers, canAccess } = useAuth();
 
@@ -199,7 +206,7 @@ export default function Complaints() {
                       <span className="text-xs bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded-full">{c.complaintType}</span>
                     </td>
                     <td className="p-4 text-center">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${st.cls}`}>{st.icon}{c.status}</span>
+                      <span style={statusStyle(c.status) || undefined} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${statusStyle(c.status) ? "" : st.cls}`}>{st.icon}{c.status}</span>
                     </td>
                     <td className="p-4 text-slate-400 text-xs">{formatDate(c.createdAt)}</td>
                     <td className="p-4 text-center">
@@ -235,7 +242,7 @@ export default function Complaints() {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-mono text-brand-accent font-bold text-sm">{viewingComplaint.id}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${(statusConfig[viewingComplaint.status] || statusConfig['Registered']).cls}`}>{viewingComplaint.status}</span>
+                  <span style={statusStyle(viewingComplaint.status) || undefined} className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusStyle(viewingComplaint.status) ? "" : (statusConfig[viewingComplaint.status] || statusConfig['Registered']).cls}`}>{viewingComplaint.status}</span>
                 </div>
                 <h3 className="text-xl font-bold text-white">{viewingComplaint.customerName}</h3>
               </div>

@@ -2,8 +2,16 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { Layers, Plus, Trash2, Lock, Check, X, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
-import { MASTER_LISTS, optionsFor } from '../utils/masterLists';
+import { Layers, Plus, Trash2, Lock, Check, X, ChevronUp, ChevronDown, AlertTriangle, Search, Palette } from 'lucide-react';
+import { MASTER_LISTS, optionsFor, badgeStyle } from '../utils/masterLists';
+
+// Offered as swatches so a colour can be picked without knowing hex. The free
+// text box stays, for a brand colour that is not on this list.
+const PRESET_COLOURS = [
+  ['Slate', '#64748b'], ['Blue', '#3b82f6'], ['Cyan', '#06b6d4'], ['Emerald', '#10b981'],
+  ['Green', '#22c55e'], ['Amber', '#f59e0b'], ['Orange', '#f97316'], ['Rose', '#f43f5e'],
+  ['Red', '#ef4444'], ['Purple', '#a855f7'], ['Violet', '#8b5cf6'], ['Pink', '#ec4899'],
+];
 
 /**
  * The dropdown lists, in one place, editable without a deployment.
@@ -23,12 +31,26 @@ export default function Masters() {
   const [editingId, setEditingId] = useState(null);
   const [editLabel, setEditLabel] = useState('');
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  // Which option's colour and description panel is open. Separate from the
+  // label edit, because renaming and restyling are different jobs.
+  const [detailId, setDetailId] = useState(null);
 
   const list = MASTER_LISTS.find(l => l.id === activeList);
-  const rows = useMemo(
+  const allRows = useMemo(
     () => optionsFor(masters, activeList, { includeInactive: true }),
     [masters, activeList]
   );
+  // Reordering compares against the unfiltered list, so a search that hides
+  // neighbours cannot make the arrows swap the wrong two rows.
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allRows;
+    return allRows.filter(r =>
+      String(r.label).toLowerCase().includes(q) ||
+      String(r.key).toLowerCase().includes(q) ||
+      String(r.description || '').toLowerCase().includes(q));
+  }, [allRows, search]);
 
   // Master data decides how every other screen behaves, so it sits behind the
   // same permission as the rest of Settings rather than being merely hidden.
@@ -60,7 +82,7 @@ export default function Masters() {
   };
 
   const move = async (row, direction) => {
-    const ordered = [...rows];
+    const ordered = [...allRows];
     const i = ordered.findIndex(r => r.id === row.id);
     const j = i + direction;
     if (i < 0 || j < 0 || j >= ordered.length) return;
@@ -129,6 +151,19 @@ export default function Masters() {
             <p className="mt-3 text-xs text-rose-400 font-medium">{error}</p>
           )}
 
+          {/* Only worth the space once a list is long enough to scan. */}
+          {allRows.length > 8 && (
+            <div className="relative mt-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={`Search ${allRows.length} options…`}
+                className="w-full glass-input rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-slate-600"
+              />
+            </div>
+          )}
+
           <div className="mt-4 space-y-1.5">
             {rows.map((row, idx) => (
               <div
@@ -164,13 +199,37 @@ export default function Masters() {
                   </>
                 ) : (
                   <>
+                    {/* Drawn as it will appear elsewhere, so the colour is
+                        chosen against the thing it actually produces. */}
+                    {row.color ? (
+                      <span
+                        className="text-[11px] font-bold px-2 py-0.5 rounded-full border flex-shrink-0"
+                        style={badgeStyle(row.color)}
+                      >
+                        {row.label}
+                      </span>
+                    ) : null}
+
                     <button onClick={() => startEdit(row)} className="flex-1 text-left min-w-0">
-                      <span className="text-sm text-white">{row.label}</span>
+                      {!row.color && <span className="text-sm text-white">{row.label}</span>}
                       {/* Shown only once they differ, so it explains itself the
                           moment someone renames something. */}
                       {row.label !== row.key && (
                         <span className="text-[10px] text-slate-500 ml-2 font-mono">stored as {row.key}</span>
                       )}
+                      {row.description && (
+                        <span className="block text-[10px] text-slate-500 truncate">{row.description}</span>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => setDetailId(detailId === row.id ? null : row.id)}
+                      className={`p-1.5 rounded-lg flex-shrink-0 transition-colors ${
+                        detailId === row.id ? 'text-brand-accent bg-brand-accent/10' : 'text-slate-500 hover:text-white'
+                      }`}
+                      title="Colour and description"
+                    >
+                      <Palette size={13} />
                     </button>
 
                     {row.locked && <Lock size={12} className="text-amber-400/70 flex-shrink-0" title="The app reads this value" />}
@@ -203,7 +262,68 @@ export default function Masters() {
                 )}
               </div>
             ))}
+
+            {rows.length === 0 && (
+              <p className="text-xs text-slate-500 text-center py-6">
+                {search ? `Nothing matches "${search}".` : 'This list is empty.'}
+              </p>
+            )}
           </div>
+
+          {/* Colour and description for whichever option has its panel open.
+              Kept below the list rather than inline, so opening it does not
+              push every other row about. */}
+          {detailId && (() => {
+            const row = allRows.find(r => r.id === detailId);
+            if (!row) return null;
+            return (
+              <div className="mt-3 rounded-xl border border-brand-accent/20 bg-brand-accent/5 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-bold text-white">{row.label}</p>
+                  <button onClick={() => setDetailId(null)} className="text-slate-400 hover:text-white"><X size={14} /></button>
+                </div>
+
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Colour</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {PRESET_COLOURS.map(([name, hex]) => (
+                    <button
+                      key={hex}
+                      title={name}
+                      onClick={() => updateMasterOption(row.id, { color: hex })}
+                      className={`w-7 h-7 rounded-lg border-2 transition-transform hover:scale-110 ${
+                        row.color === hex ? 'border-white' : 'border-transparent'
+                      }`}
+                      style={{ backgroundColor: hex }}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    value={row.color || ''}
+                    onChange={e => updateMasterOption(row.id, { color: e.target.value })}
+                    placeholder="#64748b"
+                    className="w-28 glass-input rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                  />
+                  <span className="text-[10px] text-slate-500">or type a hex code</span>
+                  {row.color && (
+                    <span className="ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full border"
+                      style={badgeStyle(row.color)}>{row.label}</span>
+                  )}
+                </div>
+
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Description</label>
+                <input
+                  defaultValue={row.description || ''}
+                  onBlur={e => updateMasterOption(row.id, { description: e.target.value })}
+                  placeholder="What this option means — for whoever picks it"
+                  className="w-full glass-input rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600"
+                />
+                <p className="text-[10px] text-slate-500 mt-1.5">
+                  The colour is used wherever this appears as a badge. Saved as you go.
+                </p>
+              </div>
+            );
+          })()}
 
           <form onSubmit={handleAdd} className="mt-4 flex gap-2">
             <input

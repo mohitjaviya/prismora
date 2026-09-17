@@ -1478,7 +1478,7 @@ export const DataProvider = ({ children }) => {
   // code branches on must not be renamable through any path — a screen can be
   // bypassed, and the cost of getting it wrong is deliveries that stop billing.
 
-  const MASTER_COLUMNS = ['id', 'list', 'key', 'label', 'sort', 'active', 'locked', 'createdAt'];
+  const MASTER_COLUMNS = ['id', 'list', 'key', 'label', 'color', 'description', 'sort', 'active', 'locked', 'createdAt'];
   const masterRow = shapeFor(MASTER_COLUMNS);
 
   const addMasterOption = async (listId, label) => {
@@ -1496,6 +1496,10 @@ export const DataProvider = ({ children }) => {
       list: listId,
       key: clean,
       label: clean,
+      // Status lists are drawn as badges, so a new one needs something to be
+      // drawn in. Grey is deliberate: obvious, and clearly not yet chosen.
+      color: listId.endsWith('status') ? '#64748b' : null,
+      description: '',
       sort: existing.reduce((max, m) => Math.max(max, Number(m.sort || 0)), -1) + 1,
       active: true,
       locked: false,
