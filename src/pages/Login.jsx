@@ -26,8 +26,16 @@ const Login = () => {
       );
     } else if (result === 'unconfirmed') {
       setError('This account exists but its email has not been confirmed. An administrator can confirm it in Supabase → Authentication → Users.');
-    } else if (result === 'no-profile') {
-      setError('Your sign-in worked, but this email has no profile in the system, so it has no role. An administrator needs to add it.');
+    } else if (typeof result === 'string' && result.startsWith('no-profile:')) {
+      // Says which of the two it was, on screen. "Could not be read" and "is not
+      // there" need opposite fixes, and telling them apart used to mean opening
+      // the console.
+      const [, why, who] = result.split(':');
+      setError(
+        why === 'read-blocked'
+          ? 'Your password was accepted, but the app could not read your profile — the database refused the request. This is a permissions problem, not a password one. (' + who + ')'
+          : 'Your password was accepted, but there is no profile for ' + who + ' in the system, so it has no role. An administrator needs to add it.'
+      );
     } else if (typeof result === 'string' && result.startsWith('error:')) {
       // The real message, rather than blaming the password for a problem that
       // has nothing to do with it.

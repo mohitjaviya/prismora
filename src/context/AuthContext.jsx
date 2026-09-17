@@ -322,12 +322,13 @@ export const AuthProvider = ({ children }) => {
 
       const profile = await loadProfileAfterSignIn(auth.user.email);
       if (!profile) {
-        // Authenticated, but no row in `users` — so no role and no permissions.
-        // Only reached after the retries above, so this really is a missing
-        // profile rather than a read that raced the new session.
+        // What the read actually returned, so a failure can be told apart from
+        // an account that is genuinely absent without opening the console.
+        const probe = await loadProfile(auth.user.email);
+        console.error('[Prismora] Profile lookup came back empty for', auth.user.email,
+          '— read failed:', probe.failed);
         await supabase.auth.signOut();
-        console.error('[Prismora] Signed in, but no matching profile in `users` for', auth.user.email);
-        return 'no-profile';
+        return 'no-profile:' + (probe.failed ? 'read-blocked' : 'not-found') + ':' + auth.user.email;
       }
       if (profile.status === 'Pending') { await supabase.auth.signOut(); return 'pending'; }
       if (profile.status === 'Rejected') { await supabase.auth.signOut(); return 'rejected'; }
