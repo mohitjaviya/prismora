@@ -2,10 +2,8 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isAdminRole } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
-import {
-  MessageSquareWarning, Plus, Trash2, Search, X, Download,
-  CheckCircle, Clock, AlertTriangle, Eye, Edit2, RotateCcw
-} from 'lucide-react';
+import { MessageSquareWarning, Plus, Trash2, X, Download, CheckCircle, Clock, AlertTriangle, Eye, RotateCcw } from 'lucide-react';
+import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
 
@@ -40,7 +38,7 @@ export default function Complaints() {
     return o?.color ? badgeStyle(o.color) : null;
   };
   const statuses = statusOptions.map(o => o.key);
-  const { user, users: teamUsers, getAssignableUsers, canAccess } = useAuth();
+  const { user, getAssignableUsers, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -117,121 +115,130 @@ export default function Complaints() {
     setIsResolveOpen(false);
   };
 
+  const complaintColumns = [
+    {
+      key: 'id', header: 'ID', sort: c => c.id || '',
+      render: c => <span className="font-mono text-[11px] font-bold text-brand-accent">{c.id}</span>,
+    },
+    {
+      key: 'customer', header: 'Customer', sort: c => c.customerName || '',
+      render: c => (
+        <>
+          <div className="font-semibold text-white">{c.customerName}</div>
+          <div className="text-[11px] text-slate-500">{c.customerPhone || '—'}</div>
+        </>
+      ),
+    },
+    {
+      key: 'product', header: 'Product / Batch', hideBelow: 'md', sort: c => c.product || '',
+      render: c => (
+        <>
+          <div>{c.product || '—'}</div>
+          <div className="text-[11px] text-slate-500 font-mono">{c.batchNumber || '—'}</div>
+        </>
+      ),
+    },
+    {
+      key: 'type', header: 'Type', hideBelow: 'lg', sort: c => c.complaintType || '',
+      render: c => <Badge tone="purple">{c.complaintType}</Badge>,
+    },
+    {
+      key: 'status', header: 'Status', align: 'center', sort: c => c.status || '',
+      render: c => {
+        const st = statusConfig[c.status] || statusConfig['Registered'];
+        const styled = statusStyle(c.status);
+        return (
+          <Badge color={styled ? styled.color : undefined}>
+            {st.icon}{c.status}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: 'date', header: 'Date', hideBelow: 'sm',
+      sort: c => (c.createdAt ? new Date(c.createdAt).getTime() : null),
+      render: c => <span className="text-slate-400">{formatDate(c.createdAt)}</span>,
+    },
+    {
+      key: 'actions', header: '', align: 'center', width: 'w-28',
+      render: c => (
+        <div className="flex items-center justify-center gap-0.5">
+          <IconButton icon={Eye} title="View complaint" size="sm"
+            onClick={e => { e.stopPropagation(); setViewingComplaint(c); }} />
+          {canManage && c.status !== 'Closed' && (
+            <IconButton icon={RotateCcw} title="Update status" size="sm"
+              onClick={e => { e.stopPropagation(); openResolve(c); }} />
+          )}
+          {isAdminRole(user?.role) && (
+            <IconButton icon={Trash2} title="Delete complaint" size="sm" tone="danger"
+              onClick={e => { e.stopPropagation(); if (confirm('Delete complaint?')) deleteComplaint(c.id); }} />
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <MessageSquareWarning size={24} className="text-brand-accent" /> Complaint Management
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Register, track and resolve customer complaints with batch-level root cause.</p>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={() => downloadCSV(filtered.map(c => ({ ID: c.id, Customer: c.customerName, Phone: c.customerPhone, Product: c.product, Batch: c.batchNumber, Type: c.complaintType, Status: c.status, Resolution: c.resolution, Date: formatDate(c.createdAt) })), 'PRISMORA_Complaints')}
-            className="glass-panel hover:bg-brand-primary-lighter/80 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5">
-            <Download size={16} className="text-brand-accent" /><span className="hidden sm:inline text-sm font-medium">Export</span>
-          </button>
-          <button onClick={openAdd} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-            <Plus size={16} /> Register Complaint
-          </button>
-        </div>
+      <PageHeader
+        icon={MessageSquareWarning}
+        title="Complaint Management"
+        subtitle="Register, track and resolve customer complaints with batch-level root cause."
+        actions={
+          <>
+            <Button icon={Download} onClick={() => downloadCSV(filtered.map(c => ({ ID: c.id, Customer: c.customerName, Phone: c.customerPhone, Product: c.product, Batch: c.batchNumber, Type: c.complaintType, Status: c.status, Resolution: c.resolution, Date: formatDate(c.createdAt) })), 'PRISMORA_Complaints')}>
+              Export
+            </Button>
+            <Button variant="primary" icon={Plus} onClick={openAdd}>Register Complaint</Button>
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Total Complaints" value={kpis.total} icon={MessageSquareWarning} tone="info" />
+        <StatCard label="Open / In Review" value={kpis.open} icon={Clock} tone={kpis.open > 0 ? 'danger' : 'accent'} />
+        <StatCard label="Resolved / Closed" value={kpis.resolved} icon={CheckCircle} tone="success" />
+        <StatCard label="Resolved Today" value={kpis.resolvedToday} icon={RotateCcw} tone="accent" />
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Complaints', value: kpis.total, color: 'text-blue-400' },
-          { label: 'Open / In Review', value: kpis.open, color: kpis.open > 0 ? 'text-rose-400' : 'text-slate-400' },
-          { label: 'Resolved / Closed', value: kpis.resolved, color: 'text-emerald-400' },
-          { label: 'Resolved Today', value: kpis.resolvedToday, color: 'text-brand-accent' },
-        ].map((k, i) => (
-          <div key={i} className="glass-panel rounded-2xl p-4 border border-white/5">
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{k.label}</p>
-            <p className={`text-xl font-extrabold mt-1 ${k.color}`}>{k.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="glass-panel rounded-2xl p-4 border border-white/5 flex flex-col md:flex-row gap-3 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by customer, product or ID..." className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-white" />
-        </div>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="glass-input rounded-xl px-4 py-2.5 text-sm text-slate-200 appearance-none">
+      <Card padding="p-4" className="flex flex-col md:flex-row gap-3 md:items-center">
+        <SearchInput
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by customer, product or ID"
+        />
+        <Select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="md:w-48">
           <option value="">All Types</option>
-          {complaintTypes.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
-        </select>
-        <div className="flex gap-2 flex-wrap">
-          {['All', ...statuses].map(s => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${statusFilter === s ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'border-white/5 text-slate-400 hover:text-white bg-brand-primary-lighter/40'}`}>
-              {s}
+          {complaintTypes.map(t => <option key={t} value={t}>{t}</option>)}
+        </Select>
+        <div className="flex gap-1.5 flex-wrap">
+          {['All', ...statuses].map(st => (
+            <button key={st} type="button" onClick={() => setStatusFilter(st)}
+              className={`h-10 px-3 rounded-xl text-xs font-semibold border transition-colors ${
+                statusFilter === st
+                  ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
+                  : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+              }`}>
+              {st}
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                <th className="p-4">ID</th>
-                <th className="p-4">Customer</th>
-                <th className="p-4">Product / Batch</th>
-                <th className="p-4">Type</th>
-                <th className="p-4 text-center">Status</th>
-                <th className="p-4">Date</th>
-                <th className="p-4 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-slate-300">
-              {filtered.length > 0 ? filtered.map(c => {
-                const st = statusConfig[c.status] || statusConfig['Registered'];
-                return (
-                  <tr key={c.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                    <td className="p-4 font-mono text-xs font-bold text-brand-accent">{c.id}</td>
-                    <td className="p-4">
-                      <div className="font-medium text-white">{c.customerName}</div>
-                      <div className="text-xs text-slate-500">{c.customerPhone || '—'}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-sm">{c.product || '—'}</div>
-                      <div className="text-xs text-slate-500 font-mono">{c.batchNumber || '—'}</div>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-xs bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded-full">{c.complaintType}</span>
-                    </td>
-                    <td className="p-4 text-center">
-                      <span style={statusStyle(c.status) || undefined} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${statusStyle(c.status) ? "" : st.cls}`}>{st.icon}{c.status}</span>
-                    </td>
-                    <td className="p-4 text-slate-400 text-xs">{formatDate(c.createdAt)}</td>
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button onClick={() => setViewingComplaint(c)} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"><Eye size={13} /></button>
-                        {canManage && c.status !== 'Closed' && (
-                          <button onClick={() => openResolve(c)} className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Update Status"><RotateCcw size={13} /></button>
-                        )}
-                        {isAdminRole(user?.role) && (
-                          <button onClick={() => { if (confirm('Delete complaint?')) deleteComplaint(c.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"><Trash2 size={13} /></button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              }) : (
-                <tr><td colSpan="7" className="p-12 text-center text-slate-500">
-                  <MessageSquareWarning size={32} className="mx-auto mb-3 opacity-20" />
-                  <p>No complaints found. Great job! 🎉</p>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        title="Complaints"
+        columns={complaintColumns}
+        rows={filtered}
+        rowKey={c => c.id}
+        onRowClick={c => setViewingComplaint(c)}
+        empty={{
+          icon: CheckCircle,
+          title: 'No complaints',
+          hint: 'Nothing has been registered against a batch. Complaints raised here carry the batch number, so a recurring fault can be traced back to where it was made.',
+          action: <Button variant="primary" icon={Plus} onClick={openAdd}>Register Complaint</Button>,
+        }}
+      />
+
 
       {/* View Detail Modal */}
       {viewingComplaint && createPortal(
