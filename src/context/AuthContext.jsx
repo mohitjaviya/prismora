@@ -240,16 +240,28 @@ export const AuthProvider = ({ children }) => {
       setAuthReady(true);
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Deliberately NOT an async callback, and nothing is awaited inside it.
+    //
+    // supabase-js runs these listeners while it holds its internal auth lock.
+    // Awaiting another Supabase call in here deadlocks: the query wants the
+    // session token, getting the token wants the lock, and the lock is not
+    // released until this callback returns. Sign-in reached the server and came
+    // back 200, and then everything stopped — no profile query was ever sent,
+    // login() never returned, so the screen showed no error and never moved.
+    // A refresh hit the same wall and sat on "Loading..." for ever.
+    //
+    // setTimeout puts the work in a later task, after the lock is gone.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
       if (event === 'SIGNED_OUT') { clearSession(); return; }
       const email = session?.user?.email;
       if (!email) return;
-      // Runs immediately after sign-in too, so it needs the same patience: the
-      // token may not be attached to outgoing requests for another moment.
-      const profile = await loadProfileAfterSignIn(email);
-      if (cancelled) return;
-      if (profile) applySession(profile);
+      setTimeout(async () => {
+        if (cancelled) return;
+        const profile = await loadProfileAfterSignIn(email);
+        if (cancelled || !profile) return;
+        applySession(profile);
+      }, 0);
     });
 
     return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
