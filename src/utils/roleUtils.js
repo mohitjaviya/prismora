@@ -112,3 +112,25 @@ export const rejectPermissionChange = ({ role, moduleId, access, editingOwnRole 
   }
   return null;
 };
+
+/**
+ * The compiled-in matrix, shaped like table rows.
+ *
+ * When the roles table is missing or unreachable, `accessFor` still answers
+ * from this matrix — so everyone keeps exactly the access they had. The screen
+ * would otherwise show an empty page and imply nobody has any permissions at
+ * all, which is the opposite of what is happening. These rows let it show the
+ * truth, marked read-only until the table exists.
+ */
+export const fallbackRoles = (permissionMatrix, levelMap) =>
+  Object.entries(permissionMatrix || {}).map(([name, permissions], i) => ({
+    id: name,
+    name,
+    level: levelMap?.[name] || 'staff',
+    description: '',
+    permissions,
+    sort: i,
+    active: true,
+    isSystem: true,
+    isFallback: true,
+  }));

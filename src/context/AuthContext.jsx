@@ -19,7 +19,7 @@ export const USER_ROLES = [
 
 // The levels these three used to hardcode. Kept as the fallback for a database
 // that cannot be reached or a roles table that has not been created.
-const FALLBACK_LEVELS = {
+export const FALLBACK_LEVELS = {
   'Super Admin': 'admin', 'Director': 'admin', 'Admin': 'admin',
   'Sales Manager': 'manager', 'Purchase Manager': 'manager', 'Manager': 'manager',
   'Sales Executive': 'sales', 'Sales': 'sales',
@@ -156,6 +156,7 @@ export const AuthProvider = ({ children }) => {
   });
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [rolesError, setRolesError] = useState('');
 
 
   // False until the Supabase session has been read once, so the app can tell
@@ -301,7 +302,16 @@ export const AuthProvider = ({ children }) => {
    */
   const fetchRoles = async () => {
     const { data, error } = await supabase.from('roles').select('*').order('sort', { ascending: true });
-    if (error || !data) return;
+    if (error || !data) {
+      // PGRST205 is the table not existing, which is a migration nobody has run
+      // yet rather than a fault. Anything else is a fault, and saying which is
+      // the difference between a five-second fix and an afternoon.
+      setRolesError(error?.code === 'PGRST205' || error?.code === '42P01'
+        ? 'missing'
+        : (error?.message || 'The roles could not be read.'));
+      return;
+    }
+    setRolesError('');
     setRoles(data);
     setRoleCache(data);
   };
@@ -592,7 +602,7 @@ export const AuthProvider = ({ children }) => {
   const isSales = user ? isSalesRole(user.role) : false;
 
   return (
-    <AuthContext.Provider value={{ user, users, roles, fetchRoles, authReady, isConfigured, missingEnvVars, login, logout, addUser, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, verifyCurrentPassword, isAdmin, isManager, isSales }}>
+    <AuthContext.Provider value={{ user, users, roles, rolesError, fetchRoles, authReady, isConfigured, missingEnvVars, login, logout, addUser, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, verifyCurrentPassword, isAdmin, isManager, isSales }}>
       {children}
     </AuthContext.Provider>
   );

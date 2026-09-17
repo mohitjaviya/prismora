@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MODULES, accessFor, levelFor, grantedCount, isAdminLevel, rejectPermissionChange,
+  fallbackRoles,
 } from '../roleUtils';
 
 const FALLBACK = {
@@ -115,5 +116,40 @@ describe('the module list', () => {
   it('knows admin is the only unrestricted level', () => {
     expect(isAdminLevel('admin')).toBe(true);
     expect(isAdminLevel('manager')).toBe(false);
+  });
+});
+
+describe('fallbackRoles - showing the compiled matrix when there is no table', () => {
+  it('turns the matrix into rows the screen can render', () => {
+    const rows = fallbackRoles(FALLBACK, FALLBACK_LEVELS);
+    expect(rows).toHaveLength(2);
+    expect(rows.map(r => r.id)).toEqual(['Sales Manager', 'Super Admin']);
+    expect(rows[0].permissions).toEqual(FALLBACK['Sales Manager']);
+  });
+
+  it('marks every row as a fallback, so the screen knows not to offer saving', () => {
+    expect(fallbackRoles(FALLBACK, FALLBACK_LEVELS).every(r => r.isFallback)).toBe(true);
+  });
+
+  it('carries the level across, since that decides admin and manager checks', () => {
+    const rows = fallbackRoles(FALLBACK, FALLBACK_LEVELS);
+    expect(rows.find(r => r.id === 'Super Admin').level).toBe('admin');
+    expect(rows.find(r => r.id === 'Sales Manager').level).toBe('manager');
+  });
+
+  it('defaults an unlevelled role to staff rather than guessing upwards', () => {
+    expect(fallbackRoles({ Mystery: {} }, {})[0].level).toBe('staff');
+  });
+
+  // The screen reads these rows the same way it reads real ones.
+  it('produces rows accessFor and grantedCount understand', () => {
+    const rows = fallbackRoles(FALLBACK, FALLBACK_LEVELS);
+    expect(accessFor(rows, {}, 'Sales Manager', 'leads')).toBe('full');
+    expect(accessFor(rows, {}, 'Super Admin', 'anything')).toBe('full');
+    expect(grantedCount(rows.find(r => r.id === 'Sales Manager'))).toBe(2);
+  });
+
+  it('copes with no matrix at all', () => {
+    expect(fallbackRoles(null, null)).toEqual([]);
   });
 });
