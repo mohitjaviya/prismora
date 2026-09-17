@@ -25,11 +25,11 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
     setOpenGroups(prev => ({
       ...prev,
       crm: ['/leads', '/customers', '/geography', '/sfa'].includes(path) || prev.crm,
-      ops: ['/orders', '/inventory', '/purchases', '/distributors', '/dealers', '/retailers', '/stock', '/price-list'].includes(path) || prev.ops,
+      ops: ['/orders', '/inventory', '/purchases', '/stock', '/price-list'].includes(path) || prev.ops,
       finance: ['/accounting', '/schemes', '/ledger', '/claims', '/incentives'].includes(path) || prev.finance,
       support: ['/complaints'].includes(path) || prev.support,
       analytics: ['/reports', '/ai-insights', '/ml-lab'].includes(path) || prev.analytics,
-      masters: path.startsWith('/masters') || prev.masters,
+      masters: path.startsWith('/masters') || ['/distributors', '/dealers', '/retailers'].includes(path) || prev.masters,
     }));
   }, [location.pathname]);
 
@@ -53,9 +53,6 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
         { name: ['Distributor', 'Dealer', 'Retailer'].includes(user?.role) ? 'My Orders' : 'Orders', path: '/orders', icon: <ShoppingCart size={18} />, module: 'orders' },
         { name: 'Inventory', path: '/inventory', icon: <Package2 size={18} />, module: 'inventory' },
         { name: 'Purchases', path: '/purchases', icon: <ShoppingBag size={18} />, module: 'purchases' },
-        { name: 'Distributors', path: '/distributors', icon: <Network size={18} />, module: 'distributors' },
-        { name: 'Dealers', path: '/dealers', icon: <Store size={18} />, module: 'dealers' },
-        { name: 'Retailers', path: '/retailers', icon: <Building2 size={18} />, module: 'retailers' },
         { name: 'Stock Availability', path: '/stock', icon: <Boxes size={18} />, module: 'stock' },
         { name: 'Price List', path: '/price-list', icon: <Tags size={18} />, module: 'priceList' },
       ]
@@ -95,6 +92,11 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
       items: [
         { name: 'Team Members', path: '/masters/team', icon: <Users size={18} />, module: 'settings' },
         { name: 'Product Catalogue', path: '/masters/products', icon: <Package2 size={18} />, module: 'settings' },
+        // Their own permission, not settings — a Purchase Manager keeps these
+        // without being given the run of the configuration screens.
+        { name: 'Distributors', path: '/distributors', icon: <Network size={18} />, module: 'distributors' },
+        { name: 'Dealers', path: '/dealers', icon: <Store size={18} />, module: 'dealers' },
+        { name: 'Retailers', path: '/retailers', icon: <Building2 size={18} />, module: 'retailers' },
         { name: 'Option Lists', path: '/masters/lists', icon: <Layers size={18} />, module: 'settings' },
       ]
     }
