@@ -6,7 +6,8 @@ import { Plus, Edit2, Trash2, AlertCircle, LayoutGrid, List, Download, X, User, 
 import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { downloadCSV } from '../utils/exportUtils';
-import { optionsFor } from '../utils/masterLists';
+import { optionsFor, colorForKey, labelForKey } from '../utils/masterLists';
+import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 
@@ -35,7 +36,7 @@ const Leads = () => {
   const statusOptions = optionsFor(masters, 'lead_status');
   const sourceOptions = optionsFor(masters, 'lead_source');
   const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -238,105 +239,100 @@ const Leads = () => {
     updateLead(draggableId, { status: destination.droppableId });
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Lead Created': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-      case 'Call': return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
-      case 'Sample Sent': return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
-      case 'Meeting': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-      case 'Negotiation': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
-      case 'Distributor Approved': return 'bg-pink-500/10 text-pink-400 border-pink-500/20';
-      case 'First Order': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-      case 'Active': return 'bg-green-500/10 text-green-400 border-green-500/20';
-      case 'Lost': return 'bg-red-500/10 text-red-400 border-red-500/20';
-      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-    }
-  };
+  // Colours come from Master Lists, where whoever added the status chose one.
+  // This used to be a switch of nine hardcoded cases, so a status added on the
+  // Masters screen arrived here grey and looked broken.
+  const statusColor = (status) => colorForKey(masters, 'lead_status', status);
+
+  const columns = [
+    {
+      key: 'name', header: 'Name & Company', sort: l => l.name,
+      render: l => (
+        <>
+          <div className="font-semibold text-white">{l.name}</div>
+          <div className="text-[11px] text-slate-500">{l.company}</div>
+        </>
+      ),
+    },
+    {
+      key: 'contact', header: 'Contact', hideBelow: 'md',
+      render: l => (
+        <>
+          <div className="truncate">{l.email}</div>
+          <div className="text-[11px] text-slate-500">{l.phone}</div>
+        </>
+      ),
+    },
+    {
+      key: 'value', header: 'Product / Value', align: 'right', sort: l => Number(l.dealValue) || 0,
+      render: l => {
+        const items = (Array.isArray(l.productInterest) ? l.productInterest : [l.productInterest]).filter(Boolean);
+        return (
+          <>
+            <div className="font-semibold text-white">&#8377;{Number(l.dealValue || 0).toLocaleString('en-IN')}</div>
+            <div className="text-[11px] text-slate-500 truncate">
+              {items.length ? items.slice(0, 2).join(', ') : '—'}
+              {items.length > 2 ? ` +${items.length - 2}` : ''}
+            </div>
+          </>
+        );
+      },
+    },
+    {
+      key: 'source', header: 'Source', hideBelow: 'lg', sort: l => l.leadSource || '',
+      render: l => (l.leadSource
+        ? <Badge color={colorForKey(masters, 'lead_source', l.leadSource)}>{labelForKey(masters, 'lead_source', l.leadSource)}</Badge>
+        : <span className="text-slate-600">&mdash;</span>),
+    },
+    {
+      key: 'status', header: 'Status', sort: l => l.status || '',
+      render: l => <Badge color={statusColor(l.status)}>{labelForKey(masters, 'lead_status', l.status)}</Badge>,
+    },
+    {
+      key: 'followUp', header: 'Follow Up', hideBelow: 'sm',
+      sort: l => (l.followUpDate ? new Date(l.followUpDate).getTime() : null),
+      render: l => {
+        if (!l.followUpDate) return <span className="text-slate-600">None</span>;
+        const days = differenceInDays(new Date(l.followUpDate), new Date());
+        const soon = days <= 2 && l.status !== 'First Order' && l.status !== 'Active';
+        return (
+          <span className={`inline-flex items-center gap-1.5 ${soon ? 'text-amber-400 font-semibold' : ''}`}>
+            {format(new Date(l.followUpDate), 'dd MMM yyyy')}
+            {soon && <AlertCircle size={13} className="flex-shrink-0" />}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'actions', header: '', align: 'right', width: 'w-24',
+      render: l => (
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton icon={Edit2} title="Edit lead" size="sm" tone="accent"
+            onClick={e => { e.stopPropagation(); handleOpenModal(l); }} />
+          <IconButton icon={Trash2} title="Delete lead" size="sm" tone="danger"
+            onClick={e => { e.stopPropagation(); deleteLead(l.id); }} />
+        </div>
+      ),
+    },
+  ];
 
   const renderTable = () => (
-    <div className="glass-panel rounded-2xl overflow-hidden mt-6 animate-fade-in-up">
-      <div className="overflow-x-auto custom-scrollbar">
-        <table className="w-full text-left text-sm text-slate-300">
-          <thead className="bg-brand-primary-lighter/50 text-slate-400 border-b border-slate-700/50">
-            <tr>
-              <th className="px-6 py-4 font-medium">Name &amp; Company</th>
-              <th className="px-6 py-4 font-medium">Contact</th>
-              <th className="px-6 py-4 font-medium">Product / Value</th>
-              <th className="px-6 py-4 font-medium">Source</th>
-              <th className="px-6 py-4 font-medium">Status</th>
-              <th className="px-6 py-4 font-medium">Follow Up</th>
-              <th className="px-6 py-4 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-700/50">
-            {visibleLeads.length > 0 ? visibleLeads.map((lead) => {
-              const daysUntilFollowUp = lead.followUpDate ? differenceInDays(new Date(lead.followUpDate), new Date()) : null;
-              const isDueSoon = daysUntilFollowUp !== null && daysUntilFollowUp <= 2 && lead.status !== 'First Order' && lead.status !== 'Active';
-
-              return (
-                <tr
-                  key={lead.id}
-                  id={`lead-row-${lead.id}`}
-                  onClick={() => setSelectedLeadView(lead)}
-                  className={`hover:bg-brand-primary-lighter/30 transition-colors cursor-pointer group ${highlightedRowId === lead.id ? 'bg-brand-accent/20' : ''}`}
-                >
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-white">{lead.name}</div>
-                    <div className="text-xs text-slate-500">{lead.company}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div>{lead.email}</div>
-                    <div className="text-xs text-slate-500">{lead.phone}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1 mb-1">
-                      {(Array.isArray(lead.productInterest) ? lead.productInterest : [lead.productInterest]).filter(Boolean).slice(0, 2).map(p => (
-                        <span key={p} className="text-xs bg-brand-accent/10 text-brand-accent border border-brand-accent/20 px-2 py-0.5 rounded-full">{p}</span>
-                      ))}
-                      {Array.isArray(lead.productInterest) && lead.productInterest.length > 2 && (
-                        <span className="text-xs text-slate-500">+{lead.productInterest.length - 2} more</span>
-                      )}
-                    </div>
-                    <div className="text-xs font-medium">₹{lead.dealValue.toLocaleString()}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-xs bg-slate-700/50 text-slate-300 border border-slate-600/30 px-2 py-0.5 rounded-full">{lead.leadSource || '—'}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(lead.status)}`}>
-                      {lead.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span>{lead.followUpDate ? format(new Date(lead.followUpDate), 'MMM dd, yyyy') : 'None'}</span>
-                      {isDueSoon && <AlertCircle size={16} className="text-red-400 animate-pulse" title="Follow up due soon!" />}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleOpenModal(lead); }}
-                      className="text-blue-400 hover:text-blue-300 mr-3 transition-colors"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteLead(lead.id); }}
-                      className="text-red-400 hover:text-red-300 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              );
-            }) : (
-              <tr>
-                <td colSpan="7" className="px-6 py-8 text-center text-slate-500">No leads found.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+    <div className="mt-6 animate-fade-in-up">
+      <DataTable
+        title="Leads"
+        columns={columns}
+        rows={visibleLeads}
+        rowKey={l => l.id}
+        onRowClick={l => setSelectedLeadView(l)}
+        search={l => `${l.name} ${l.company} ${l.email} ${l.phone} ${l.leadSource || ''} ${l.status || ''}`}
+        searchPlaceholder="Search name, company, email"
+        empty={{
+          icon: User,
+          title: 'No leads yet',
+          hint: 'A lead is anyone who might become a customer. Add the first one and it will show up here with its follow-up date.',
+          action: <Button variant="primary" icon={Plus} onClick={() => handleOpenModal()}>Add Lead</Button>,
+        }}
+      />
     </div>
   );
 
@@ -408,58 +404,46 @@ const Leads = () => {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Lead Management</h1>
-          <p className="text-slate-400 text-sm">Manage and track your potential customers.</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="flex bg-brand-primary-light/80 p-1 rounded-xl border border-white/5 backdrop-blur-sm">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-brand-primary-lighter text-brand-accent shadow-sm' : 'text-slate-400 hover:text-white'}`}
-            >
-              <List size={18} />
-            </button>
-            <button
-              onClick={() => setViewMode('board')}
-              className={`p-2 rounded-lg transition-all ${viewMode === 'board' ? 'bg-brand-primary-lighter text-brand-accent shadow-sm' : 'text-slate-400 hover:text-white'}`}
-            >
-              <LayoutGrid size={18} />
-            </button>
-          </div>
-
-          {(isAdminRole(user?.role) || isManagerRole(user?.role)) && (
-            <select
-              value={salespersonFilter}
-              onChange={e => setSalespersonFilter(e.target.value)}
-              className="glass-panel text-white text-sm px-3 py-2.5 rounded-xl border border-white/5 focus:ring-1 focus:ring-brand-accent appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23cbd5e1%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[length:10px_10px] bg-[position:right_10px_center] max-w-[160px]"
-            >
-              <option value="" className="bg-brand-primary">All Salespeople</option>
-              {getAssignableUsers().map(u => (
-                <option key={u.id} value={u.id} className="bg-brand-primary">{u.name}</option>
+      <PageHeader
+        icon={User}
+        title="Lead Management"
+        subtitle="Manage and track your potential customers."
+        actions={
+          <>
+            <div className="flex bg-brand-primary-lighter/50 p-1 rounded-xl border border-white/10 h-10 items-center">
+              {[{ id: 'table', Icon: List, label: 'Table view' }, { id: 'board', Icon: LayoutGrid, label: 'Board view' }].map(v => (
+                <button
+                  key={v.id}
+                  type="button"
+                  title={v.label}
+                  aria-label={v.label}
+                  aria-pressed={viewMode === v.id}
+                  onClick={() => setViewMode(v.id)}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                    viewMode === v.id ? 'bg-brand-accent/15 text-brand-accent' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <v.Icon size={15} />
+                </button>
               ))}
-            </select>
-          )}
+            </div>
 
-          <button
-            onClick={handleExport}
-            className="glass-panel hover:bg-brand-primary-lighter/80 text-white font-medium px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5"
-          >
-            <Download size={18} className="text-brand-accent" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
+            {(isAdminRole(user?.role) || isManagerRole(user?.role)) && (
+              <Select
+                value={salespersonFilter}
+                onChange={e => setSalespersonFilter(e.target.value)}
+                className="w-40"
+              >
+                <option value="">All Salespeople</option>
+                {getAssignableUsers().map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </Select>
+            )}
 
-          <button
-            onClick={() => handleOpenModal()}
-            className="bg-gradient-to-r from-brand-accent to-brand-accent-dark hover:from-brand-accent-light hover:to-brand-accent text-brand-primary font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:scale-105 shadow-lg shadow-brand-accent/20"
-          >
-            <Plus size={18} />
-            <span className="hidden sm:inline">Add Lead</span>
-          </button>
-        </div>
-      </div>
+            <Button icon={Download} onClick={handleExport}>Export</Button>
+            <Button variant="primary" icon={Plus} onClick={() => handleOpenModal()}>Add Lead</Button>
+          </>
+        }
+      />
 
       {viewMode === 'table' ? renderTable() : renderKanban()}
 
@@ -471,9 +455,9 @@ const Leads = () => {
               <div>
                 <div className="flex items-center gap-3">
                   <h2 className="text-2xl font-bold text-white">{selectedLeadView.name}</h2>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(selectedLeadView.status)}`}>
-                    {selectedLeadView.status}
-                  </span>
+                  <Badge color={statusColor(selectedLeadView.status)} className="text-[11px] px-2.5 py-1">
+                    {labelForKey(masters, 'lead_status', selectedLeadView.status)}
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-2 mt-2 text-slate-400 text-sm">
                   <Building size={14} />
