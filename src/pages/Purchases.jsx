@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   ShoppingBag, Plus, Trash2, Search, X, Download,
   CheckCircle, Clock, Truck, FileText, User, Edit2,
@@ -46,7 +47,31 @@ export default function Purchases() {
   const poStatuses = poStatusOptions.map(o => o.key);
   const { user, canAccess } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('orders');
+  // ?tab= lets another screen open this page on the right tab. Masters links
+  // here for Vendors, which is master data but cannot be lifted out — the
+  // vendor ledger is built from GRNs, payments and returns, all of which live
+  // in this workflow.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const TABS = ['orders', 'vendors', 'grn', 'returns'];
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    TABS.includes(requestedTab) ? requestedTab : 'orders'
+  );
+
+  // Following the same link again, or arriving from elsewhere, has to move the
+  // tab — the state above is only read once, when the page first mounts.
+  useEffect(() => {
+    if (requestedTab && TABS.includes(requestedTab) && requestedTab !== activeTab) {
+      setActiveTab(requestedTab);
+    }
+  }, [requestedTab]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clicking a tab drops the parameter, so a refresh keeps you where you are
+  // rather than snapping back to whichever tab the link named.
+  const chooseTab = (key) => {
+    setActiveTab(key);
+    if (searchParams.get('tab')) setSearchParams({}, { replace: true });
+  };
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [isPOModalOpen, setIsPOModalOpen] = useState(false);
@@ -265,7 +290,7 @@ export default function Purchases() {
       {/* Tabs */}
       <div className="flex border-b border-white/5 pb-px gap-1">
         {[['orders', 'Purchase Orders'], ['vendors', 'Vendors'], ['grn', 'GRN History'], ['returns', 'Returns']].map(([key, label]) => (
-          <button key={key} onClick={() => { setActiveTab(key); setSearch(''); }}
+          <button key={key} onClick={() => { chooseTab(key); setSearch(''); }}
             className={`px-5 py-3 font-semibold text-sm border-b-2 transition-all ${activeTab === key ? 'border-brand-accent text-brand-accent' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}>
             {label} {key === 'orders' ? `(${purchaseOrders.length})` : key === 'vendors' ? `(${vendors.length})` : key === 'grn' ? `(${grn.length})` : `(${purchaseReturns.length})`}
           </button>

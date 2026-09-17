@@ -29,9 +29,10 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
       finance: ['/accounting', '/schemes', '/ledger', '/claims', '/incentives'].includes(path) || prev.finance,
       support: ['/complaints'].includes(path) || prev.support,
       analytics: ['/reports', '/ai-insights', '/ml-lab'].includes(path) || prev.analytics,
-      masters: path.startsWith('/masters') || ['/distributors', '/dealers', '/retailers'].includes(path) || prev.masters,
+      masters: path.startsWith('/masters') || ['/distributors', '/dealers', '/retailers'].includes(path)
+        || (path === '/purchases' && location.search.includes('tab=vendors')) || prev.masters,
     }));
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   const closeMobileMenu = () => setIsMobileMenuOpen && setIsMobileMenuOpen(false);
 
@@ -97,6 +98,10 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
         { name: 'Distributors', path: '/distributors', icon: <Network size={18} />, module: 'distributors' },
         { name: 'Dealers', path: '/dealers', icon: <Store size={18} />, module: 'dealers' },
         { name: 'Retailers', path: '/retailers', icon: <Building2 size={18} />, module: 'retailers' },
+        // Opens the Purchases page on its Vendors tab. The vendor ledger is
+        // built from GRNs, payments and returns, so the screen cannot be lifted
+        // out of that workflow — but this is where people look for it.
+        { name: 'Vendors', path: '/purchases?tab=vendors', icon: <Briefcase size={18} />, module: 'purchases', tab: 'vendors' },
         { name: 'Option Lists', path: '/masters/lists', icon: <Layers size={18} />, module: 'settings' },
       ]
     }
@@ -158,13 +163,17 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
                         key={item.name}
                         to={item.path}
                         onClick={closeMobileMenu}
-                        className={({ isActive }) =>
-                          `flex items-center px-3.5 py-2 rounded-lg transition-all duration-200 group text-xs ${
-                            isActive 
+                        className={({ isActive }) => {
+                          const onTab = new URLSearchParams(location.search).get('tab');
+                          const active = item.tab
+                            ? isActive && onTab === item.tab
+                            : isActive && !onTab;
+                          return `flex items-center px-3.5 py-2 rounded-lg transition-all duration-200 group text-xs ${
+                            active 
                               ? 'bg-brand-accent/10 text-brand-accent border-l-2 border-brand-accent font-semibold shadow-sm' 
                               : 'text-slate-400 hover:bg-brand-primary-lighter/30 hover:text-white border-l-2 border-transparent'
-                          }`
-                        }
+                          }`;
+                        }}
                       >
                         <span className="mr-2.5 transition-transform group-hover:scale-110 duration-200">{item.icon}</span>
                         <span>{item.name}</span>
