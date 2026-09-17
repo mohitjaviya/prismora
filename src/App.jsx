@@ -15,6 +15,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Masters = lazy(() => import('./pages/Masters'));
 const TeamMembers = lazy(() => import('./pages/masters/TeamMembers'));
 const ProductCatalog = lazy(() => import('./pages/masters/ProductCatalog'));
+const Roles = lazy(() => import('./pages/masters/Roles'));
 const Customers = lazy(() => import('./pages/Customers'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Accounting = lazy(() => import('./pages/Accounting'));
@@ -150,6 +151,7 @@ function AppRoutes() {
         <Route path="masters/lists" element={<PermissionGuard module="settings"><Masters /></PermissionGuard>} />
         <Route path="masters/team" element={<PermissionGuard module="settings"><TeamMembers /></PermissionGuard>} />
         <Route path="masters/products" element={<PermissionGuard module="settings"><ProductCatalog /></PermissionGuard>} />
+        <Route path="masters/roles" element={<PermissionGuard module="settings"><Roles /></PermissionGuard>} />
         <Route path="profile" element={<Profile />} />
       </Route>
     </Routes>

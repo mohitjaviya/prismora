@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2, MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck, Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical, Layers } from 'lucide-react';
+import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2, MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck, Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical, Layers, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
@@ -92,6 +92,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
       title: 'Masters',
       items: [
         { name: 'Team Members', path: '/masters/team', icon: <Users size={18} />, module: 'settings' },
+        { name: 'Roles & Permissions', path: '/masters/roles', icon: <Shield size={18} />, module: 'settings' },
         { name: 'Product Catalogue', path: '/masters/products', icon: <Package2 size={18} />, module: 'settings' },
         // Their own permission, not settings — a Purchase Manager keeps these
         // without being given the run of the configuration screens.

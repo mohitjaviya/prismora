@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase, isConfigured, missingEnvVars } from '../supabaseClient';
+import { accessFor, levelFor } from '../utils/roleUtils';
 
 export const USER_ROLES = [
   'Super Admin',
@@ -16,9 +17,32 @@ export const USER_ROLES = [
   'Retailer'
 ];
 
-export const isAdminRole = (role) => ['Super Admin', 'Director', 'Admin'].includes(role);
-export const isManagerRole = (role) => ['Sales Manager', 'Purchase Manager', 'Manager'].includes(role);
-export const isSalesRole = (role) => ['Sales Executive', 'Sales'].includes(role);
+// The levels these three used to hardcode. Kept as the fallback for a database
+// that cannot be reached or a roles table that has not been created.
+const FALLBACK_LEVELS = {
+  'Super Admin': 'admin', 'Director': 'admin', 'Admin': 'admin',
+  'Sales Manager': 'manager', 'Purchase Manager': 'manager', 'Manager': 'manager',
+  'Sales Executive': 'sales', 'Sales': 'sales',
+  'Distributor': 'partner', 'Dealer': 'partner', 'Retailer': 'partner',
+};
+
+/**
+ * The roles table, cached at module scope.
+ *
+ * These three helpers are exported functions taking a role name, and they are
+ * called in 59 places — many outside a component, where a hook cannot reach.
+ * Rewriting all of them to read context would be a far larger change than the
+ * feature warrants, so AuthContext keeps this in step instead and they carry on
+ * working untouched.
+ */
+let ROLE_CACHE = [];
+export const setRoleCache = (rows) => { ROLE_CACHE = Array.isArray(rows) ? rows : []; };
+
+export const roleLevel = (role) => levelFor(ROLE_CACHE, FALLBACK_LEVELS, role);
+
+export const isAdminRole = (role) => roleLevel(role) === 'admin';
+export const isManagerRole = (role) => roleLevel(role) === 'manager';
+export const isSalesRole = (role) => roleLevel(role) === 'sales';
 
 // Full permission matrix — 'full' | 'view' | 'none'
 export const PERMISSIONS = {
@@ -131,6 +155,7 @@ export const AuthProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : null;
   });
   const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
 
 
   // False until the Supabase session has been read once, so the app can tell
@@ -267,6 +292,20 @@ export const AuthProvider = ({ children }) => {
     return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
   }, []);
 
+  /**
+   * The roles table, which decides what every screen offers.
+   *
+   * A failed read leaves the cache empty on purpose: accessFor and levelFor
+   * then fall back to the matrix compiled into the app, so an unreachable
+   * database changes nobody's access rather than removing all of it.
+   */
+  const fetchRoles = async () => {
+    const { data, error } = await supabase.from('roles').select('*').order('sort', { ascending: true });
+    if (error || !data) return;
+    setRoles(data);
+    setRoleCache(data);
+  };
+
   const fetchUsers = async () => {
     // Accounts come from Supabase and nowhere else. There used to be a
     // DEFAULT_USERS list merged in here and used as a login fallback, which
@@ -302,6 +341,7 @@ export const AuthProvider = ({ children }) => {
   // it exists, and the linter was right to say so.
   useEffect(() => {
     fetchUsers();
+    fetchRoles();
   }, []);
 
   // Returns true (success) | false (invalid credentials) | 'pending' | 'rejected'
@@ -539,9 +579,9 @@ export const AuthProvider = ({ children }) => {
   // level = 'view' (default) | 'full'
   const canAccess = (module, level = 'view') => {
     if (!user) return false;
-    const rolePerms = PERMISSIONS[user.role];
-    if (!rolePerms) return isAdminRole(user.role); // unknown role: grant if admin-tier
-    const access = rolePerms[module] || 'none';
+    // From the roles table where it has an answer, and from PERMISSIONS —
+    // the matrix this used to read directly — where it does not.
+    const access = accessFor(roles, PERMISSIONS, user.role, module);
     if (access === 'none') return false;
     if (level === 'full') return access === 'full';
     return true; // 'view' or 'full' both satisfy a 'view' check
@@ -552,7 +592,7 @@ export const AuthProvider = ({ children }) => {
   const isSales = user ? isSalesRole(user.role) : false;
 
   return (
-    <AuthContext.Provider value={{ user, users, authReady, isConfigured, missingEnvVars, login, logout, addUser, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, isAdmin, isManager, isSales }}>
+    <AuthContext.Provider value={{ user, users, roles, fetchRoles, authReady, isConfigured, missingEnvVars, login, logout, addUser, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, verifyCurrentPassword, isAdmin, isManager, isSales }}>
       {children}
     </AuthContext.Provider>
   );
