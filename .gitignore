@@ -28,9 +28,16 @@ dist-ssr
 __pycache__/
 *.pyc
 
-# Reference screenshots of other systems — notes, not part of the app,
-# and 4.8MB the repository does not need to carry.
-Masters/
+# Reference screenshots of other systems: notes, not part of the app, and
+# megabytes the repository does not need to carry.
+#
+# The leading slash matters. Written as `Masters/` this also matched
+# src/pages/masters/ -- git matches a bare directory name at any depth, and on
+# Windows it is not case-sensitive -- so three screens the app imports were
+# silently never committed and the build failed on a clean checkout. Anchored
+# to the root, it excludes only the folders meant here.
+/Masters/
+/Janki Erp/
 
 # Data backups. These hold real customer, order and staff records, and this
 # repository is public — a backup committed once stays in the history.
