@@ -43,6 +43,8 @@ export default function DataTable({
   columns,
   rows,
   rowKey = (r, i) => r?.id ?? i,
+  rowClassName,           // (row) => extra classes, for things like a jumped-to row
+  rowId,                  // (row) => a DOM id, so a page can scroll to one
   onRowClick,
   search,                 // (row) => string, or omit for no search box
   searchPlaceholder = 'Search',
@@ -156,9 +158,11 @@ export default function DataTable({
                 {visible.map((row, i) => (
                   <tr
                     key={rowKey(row, i)}
+                    id={rowId ? rowId(row) : undefined}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                     className={`border-b border-white/5 last:border-0 transition-colors
-                      ${onRowClick ? 'cursor-pointer' : ''} hover:bg-white/[0.03]`}
+                      ${onRowClick ? 'cursor-pointer' : ''} hover:bg-white/[0.03]
+                      ${rowClassName ? rowClassName(row) : ''}`}
                   >
                     {columns.map(col => (
                       <td

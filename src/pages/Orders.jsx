@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
 import { format } from 'date-fns';
-import { Plus, Edit2, Trash2, Download, Package, CheckCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart } from 'lucide-react';
+import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { downloadCSV } from '../utils/exportUtils';
 import { allParties } from '../utils/distributorUtils';
@@ -48,7 +49,7 @@ const Orders = () => {
   const statuses = statusOptions.map(o => o.key);
   const labelForStatus = (k) => (statusOptions.find(o => o.key === k) || {}).label || k;
   const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -532,158 +533,139 @@ const Orders = () => {
     downloadCSV(formattedData, 'PRISMORA_Orders');
   };
 
+  const safeDate = (d) => {
+    if (!d) return 'N/A';
+    const parsed = new Date(d);
+    return isNaN(parsed.getTime()) ? 'N/A' : format(parsed, 'dd MMM yyyy');
+  };
+
+  const orderColumns = [
+    {
+      key: 'id', header: 'Order / Date', sort: o => o.id,
+      render: o => (
+        <>
+          <div className="font-semibold text-white">{o.id}</div>
+          <div className="text-[11px] text-slate-500">{safeDate(o.date)}</div>
+          {o.splitFromOrderId && (
+            <div className="text-[10px] font-semibold text-cyan-400 mt-1">&#8627; Split from {o.splitFromOrderId}</div>
+          )}
+          {o.splitIntoOrderId && (
+            <div className="text-[10px] font-semibold text-cyan-400 mt-1">&rarr; Backorder: {o.splitIntoOrderId}</div>
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'customer', header: 'Customer & Location', sort: o => o.customerName || '',
+      render: o => (
+        <>
+          <div className="font-semibold text-white">{o.customerName}</div>
+          {(o.phone || o.email) && (
+            <div className="text-[11px] text-brand-accent mt-0.5 truncate">
+              {o.phone || '—'} &middot; {o.email || '—'}
+            </div>
+          )}
+          <div className="text-[11px] text-slate-500 mt-0.5 truncate">{o.companyName || 'N/A'}</div>
+          <div className="text-[11px] text-slate-500">{[o.city, o.state].filter(Boolean).join(', ')}</div>
+        </>
+      ),
+    },
+    {
+      key: 'product', header: 'Product', hideBelow: 'md', sort: o => o.product || '',
+      render: o => (
+        <>
+          <div className="text-brand-accent">{o.product}</div>
+          <div className="text-[11px] text-slate-500">Qty: {o.quantity}</div>
+        </>
+      ),
+    },
+    {
+      key: 'value', header: 'Value', align: 'right', sort: o => Number(o.value) || 0,
+      render: o => <span className="font-semibold text-white">&#8377;{Number(o.value || 0).toLocaleString('en-IN')}</span>,
+    },
+    ...(isSalesRole(user?.role) ? [] : [{
+      key: 'salesperson', header: 'Salesperson', hideBelow: 'lg',
+      sort: o => getSalespersonName(o.assignedTo) || '',
+      render: o => <span className="text-slate-400">{getSalespersonName(o.assignedTo)}</span>,
+    }]),
+    {
+      key: 'status', header: 'Status', sort: o => o.status || '',
+      render: o => (
+        <>
+          <Badge color={statusStyle(o.status) ? statusStyle(o.status).color : undefined}>{o.status}</Badge>
+          {o.status === 'Partially Delivered' && (
+            <div className="mt-1.5 w-28">
+              <div className="flex items-center justify-between text-[10px] font-semibold text-teal-400">
+                <span>{deliveryPct(o.deliveredQty, o.quantity)}%</span>
+                <span className="text-slate-500">{o.quantity - (o.deliveredQty || 0)} left</span>
+              </div>
+              <div className="mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full rounded-full bg-teal-400" style={{ width: `${deliveryPct(o.deliveredQty, o.quantity)}%` }} />
+              </div>
+            </div>
+          )}
+          {o.receivedByDistributor && (
+            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
+              <CheckCircle size={10} /> Receipt confirmed
+            </div>
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'actions', header: '', align: 'right', width: 'w-24',
+      render: o => (
+        <div className="flex items-center justify-end gap-0.5">
+          <IconButton icon={Edit2} title="Edit order" size="sm" tone="accent"
+            onClick={e => { e.stopPropagation(); handleOpenModal(o); }} />
+          <IconButton icon={Trash2} title="Delete order" size="sm" tone="danger"
+            onClick={e => { e.stopPropagation(); deleteOrder(o.id); }} />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 flex flex-col h-full">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Order Management</h1>
-          <p className="text-slate-400 text-sm">Track and monitor all product orders.</p>
-        </div>
-        <div className="flex gap-3 items-center">
-          {(isAdminRole(user?.role) || isManagerRole(user?.role)) && (
-            <select
-              value={salespersonFilter}
-              onChange={e => setSalespersonFilter(e.target.value)}
-              className="glass-panel text-white text-sm px-3 py-2.5 rounded-xl border border-white/5 focus:ring-1 focus:ring-brand-accent appearance-none pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23cbd5e1%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[length:10px_10px] bg-[position:right_10px_center] max-w-[160px]"
-            >
-              <option value="" className="bg-brand-primary">All Salespeople</option>
-              {getAssignableUsers().map(u => (
-                <option key={u.id} value={u.id} className="bg-brand-primary">{u.name}</option>
-              ))}
-            </select>
-          )}
+      <PageHeader
+        icon={ShoppingCart}
+        title="Order Management"
+        subtitle="Track and monitor all product orders."
+        actions={
+          <>
+            {(isAdminRole(user?.role) || isManagerRole(user?.role)) && (
+              <Select
+                value={salespersonFilter}
+                onChange={e => setSalespersonFilter(e.target.value)}
+                className="w-40"
+              >
+                <option value="">All Salespeople</option>
+                {getAssignableUsers().map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </Select>
+            )}
+            <Button icon={Download} onClick={handleExport}>Export</Button>
+            <Button variant="primary" icon={Plus} onClick={() => handleOpenModal()}>Add Order</Button>
+          </>
+        }
+      />
 
-          <button
-            onClick={handleExport}
-            className="glass-panel hover:bg-brand-primary-lighter/80 text-white font-medium px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5"
-          >
-            <Download size={18} className="text-brand-accent" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
-          <button
-            onClick={() => handleOpenModal()}
-            className="bg-gradient-to-r from-brand-accent to-brand-accent-dark hover:from-brand-accent-light hover:to-brand-accent text-brand-primary font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:scale-105 shadow-lg shadow-brand-accent/20"
-          >
-            <Plus size={18} />
-            <span className="hidden sm:inline">Add Order</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="glass-panel rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-brand-primary-lighter/50 text-slate-400 border-b border-slate-700/50">
-              <tr>
-                <th className="px-6 py-4 font-medium">Order ID / Date</th>
-                <th className="px-6 py-4 font-medium">Customer & Location</th>
-                <th className="px-6 py-4 font-medium">Product Details</th>
-                <th className="px-6 py-4 font-medium">Value</th>
-                {!isSalesRole(user?.role) && <th className="px-6 py-4 font-medium">Salesperson</th>}
-                <th className="px-6 py-4 font-medium">Status</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/50">
-              {visibleOrders.length > 0 ? visibleOrders.map((order) => {
-                const getSafeDateStr = (dateStr) => {
-                  try {
-                    if (!dateStr) return 'N/A';
-                    const d = new Date(dateStr);
-                    if (isNaN(d.getTime())) return 'N/A';
-                    return format(d, 'MMM dd, yyyy');
-                  } catch {
-                    return 'N/A';
-                  }
-                };
-
-                return (
-                  <tr
-                    key={order.id}
-                    id={`order-row-${order.id}`}
-                    onClick={() => handleOpenModal(order)}
-                    className={`hover:bg-brand-primary-lighter/30 transition-colors cursor-pointer ${highlightedRowId === order.id ? 'bg-brand-accent/20' : ''}`}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-white">{order.id}</div>
-                      <div className="text-xs text-slate-500">{getSafeDateStr(order.date)}</div>
-                      {order.splitFromOrderId && (
-                        <div className="text-[10px] font-semibold text-cyan-400 mt-1">↳ Split from {order.splitFromOrderId}</div>
-                      )}
-                      {order.splitIntoOrderId && (
-                        <div className="text-[10px] font-semibold text-cyan-400 mt-1">→ Backorder: {order.splitIntoOrderId}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-white">{order.customerName}</div>
-                      {(order.phone || order.email) && (
-                        <div className="text-xs text-brand-accent mt-0.5 font-medium">
-                          {order.phone || '—'} • {order.email || '—'}
-                        </div>
-                      )}
-                      <div className="text-xs text-slate-500 mt-0.5">{order.companyName || 'N/A'}</div>
-                      <div className="text-xs text-slate-500">{order.city}, {order.state}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-brand-accent">{order.product}</div>
-                      <div className="text-xs text-slate-400">Qty: {order.quantity}</div>
-                    </td>
-                    <td className="px-6 py-4 font-medium">
-                      ₹{order.value.toLocaleString()}
-                    </td>
-                    {!isSalesRole(user?.role) && (
-                      <td className="px-6 py-4 text-slate-400">
-                        {getSalespersonName(order.assignedTo)}
-                      </td>
-                    )}
-                    <td className="px-6 py-4">
-                      <span style={statusStyle(order.status) || undefined} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusStyle(order.status) ? "" : getStatusColor(order.status)}`}>
-                        {order.status}
-                      </span>
-                      {order.status === 'Partially Delivered' && (
-                        <div className="mt-1.5 w-32">
-                          <div className="flex items-center justify-between text-[10px] font-semibold text-teal-400">
-                            <span>{deliveryPct(order.deliveredQty, order.quantity)}% fulfilled</span>
-                            <span className="text-slate-500">{order.quantity - (order.deliveredQty || 0)} pending</span>
-                          </div>
-                          <div className="mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-teal-400"
-                              style={{ width: `${deliveryPct(order.deliveredQty, order.quantity)}%` }}
-                            />
-                          </div>
-                          <div className="mt-0.5 text-[10px] text-slate-500">
-                            {order.deliveredQty || 0} / {order.quantity} delivered
-                          </div>
-                        </div>
-                      )}
-                      {order.receivedByDistributor && (
-                        <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
-                          <CheckCircle size={10} /> Receipt Confirmed
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => handleOpenModal(order)} className="text-blue-400 hover:text-blue-300 mr-3">
-                        <Edit2 size={16} />
-                      </button>
-                      <button onClick={() => deleteOrder(order.id)} className="text-red-400 hover:text-red-300">
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              }) : (
-                <tr>
-                  <td colSpan={!isSalesRole(user?.role) ? "7" : "6"} className="px-6 py-8 text-center text-slate-500">
-                    No orders found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        title="Orders"
+        columns={orderColumns}
+        rows={visibleOrders}
+        rowKey={o => o.id}
+        rowId={o => `order-row-${o.id}`}
+        rowClassName={o => (highlightedRowId === o.id ? 'bg-brand-accent/15' : '')}
+        onRowClick={o => handleOpenModal(o)}
+        search={o => `${o.id} ${o.customerName} ${o.companyName || ''} ${o.product} ${o.city || ''} ${o.state || ''} ${o.status}`}
+        searchPlaceholder="Search order, customer, product"
+        empty={{
+          icon: ShoppingCart,
+          title: 'No orders yet',
+          hint: 'Orders appear here once one is raised, either from this screen or by converting a lead.',
+          action: <Button variant="primary" icon={Plus} onClick={() => handleOpenModal()}>Add Order</Button>,
+        }}
+      />
 
       {isModalOpen && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-brand-primary/80 backdrop-blur-sm">

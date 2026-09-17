@@ -323,6 +323,8 @@ const Leads = () => {
         columns={columns}
         rows={visibleLeads}
         rowKey={l => l.id}
+        rowId={l => `lead-row-${l.id}`}
+        rowClassName={l => (highlightedRowId === l.id ? 'bg-brand-accent/15' : '')}
         onRowClick={l => setSelectedLeadView(l)}
         search={l => `${l.name} ${l.company} ${l.email} ${l.phone} ${l.leadSource || ''} ${l.status || ''}`}
         searchPlaceholder="Search name, company, email"

@@ -2,11 +2,8 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
-import {
-  Network, Plus, Edit2, Trash2, Search, X, Download,
-  Phone, Mail, MapPin,
-  CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, ArrowUpCircle, ArrowDownCircle, Truck
-} from 'lucide-react';
+import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, ArrowUpCircle, ArrowDownCircle, Truck, Clock, AlertTriangle } from 'lucide-react';
+import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 
@@ -113,143 +110,156 @@ export default function Dealers() {
     setPaymentForm({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '' });
   };
 
-  return (
-    <div className="space-y-6 animate-fade-in-up">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Network size={24} className="text-brand-accent" /> Dealer Management
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Dealers linked to distributors, territory mapping & outstanding ledger.</p>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={() => downloadCSV(filtered.map(d => ({ Name: d.name, GSTIN: d.gstin, ParentDistributor: parentDistributorName(d.parentDistributorId), State: d.state, City: d.city, Territory: d.territory, Phone: d.phone, Email: d.email, Outstanding: d.outstandingAmount, CreditLimit: d.creditLimit, Status: d.status })), 'PRISMORA_Dealers')}
-            className="glass-panel hover:bg-brand-primary-lighter/80 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5">
-            <Download size={16} className="text-brand-accent" /><span className="hidden sm:inline text-sm font-medium">Export</span>
-          </button>
+  const dealerColumns = [
+    {
+      key: 'name', header: 'Dealer', sort: d => d.name || '',
+      render: d => (
+        <>
+          <div className="font-semibold text-white">{d.name}</div>
+          <div className="text-[11px] text-slate-500 font-mono">{d.gstin || '—'}</div>
+        </>
+      ),
+    },
+    {
+      key: 'parent', header: 'Parent Distributor', hideBelow: 'lg',
+      sort: d => parentDistributorName(d.parentDistributorId) || '',
+      render: d => (
+        <span className="inline-flex items-center gap-1.5">
+          <Truck size={12} className="text-brand-accent flex-shrink-0" />
+          {parentDistributorName(d.parentDistributorId)}
+        </span>
+      ),
+    },
+    {
+      key: 'territory', header: 'Territory / State', hideBelow: 'md', sort: d => d.territory || '',
+      render: d => (
+        <>
+          <div>{d.territory || '—'}</div>
+          <div className="text-[11px] text-slate-500">{d.state || '—'}</div>
+        </>
+      ),
+    },
+    {
+      key: 'contact', header: 'Contact', hideBelow: 'lg', sort: d => d.contactPerson || '',
+      render: d => (
+        <>
+          <div>{d.contactPerson || '—'}</div>
+          <div className="text-[11px] text-slate-500">{d.phone || d.email || '—'}</div>
+        </>
+      ),
+    },
+    {
+      key: 'outstanding', header: 'Outstanding', align: 'right',
+      sort: d => Number(d.outstandingAmount) || 0,
+      render: d => {
+        const over = (d.outstandingAmount || 0) > (d.creditLimit || 100000);
+        const pct = d.creditLimit ? Math.min(100, Math.round(((d.outstandingAmount || 0) / d.creditLimit) * 100)) : 0;
+        return (
+          <>
+            <span className={`font-bold ${over ? 'text-rose-400' : 'text-white'}`}>{formatCurrency(d.outstandingAmount || 0)}</span>
+            <div className="mt-1 h-1 bg-white/10 rounded-full overflow-hidden ml-auto w-24">
+              <div className={`h-full rounded-full ${pct > 90 ? 'bg-rose-500' : pct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${pct}%` }} />
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">{pct}% of limit</div>
+          </>
+        );
+      },
+    },
+    {
+      key: 'limit', header: 'Credit Limit', align: 'right', hideBelow: 'lg',
+      sort: d => Number(d.creditLimit) || 0,
+      render: d => <span className="text-slate-400">{formatCurrency(d.creditLimit)}</span>,
+    },
+    {
+      key: 'status', header: 'Status', align: 'center', sort: d => d.status || '',
+      render: d => <Badge>{d.status}</Badge>,
+    },
+    {
+      key: 'actions', header: '', align: 'center', width: 'w-32',
+      render: d => (
+        <div className="flex items-center justify-center gap-0.5">
+          {d.status === 'Pending' && canManage && (
+            <>
+              <IconButton icon={ShieldCheck} title="Approve" size="sm" onClick={() => approveDealer(d)} />
+              <IconButton icon={ShieldX} title="Reject" size="sm" tone="danger" onClick={() => rejectDealer(d)} />
+            </>
+          )}
+          <IconButton icon={Eye} title="View details" size="sm" onClick={() => setViewingDealer(d)} />
           {canManage && (
-            <button onClick={openAdd} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-              <Plus size={16} /> Add Dealer
-            </button>
+            <>
+              <IconButton icon={Edit2} title="Edit dealer" size="sm" tone="accent" onClick={() => openEdit(d)} />
+              <IconButton icon={Trash2} title="Delete dealer" size="sm" tone="danger"
+                onClick={() => { if (confirm('Delete this dealer?')) deleteDealer(d.id); }} />
+            </>
           )}
         </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-6 animate-fade-in-up">
+      <PageHeader
+        icon={Network}
+        title="Dealer Management"
+        subtitle="Dealers linked to distributors, territory mapping and outstanding ledger."
+        actions={
+          <>
+            <Button icon={Download} onClick={() => downloadCSV(filtered.map(d => ({ Name: d.name, GSTIN: d.gstin, ParentDistributor: parentDistributorName(d.parentDistributorId), State: d.state, City: d.city, Territory: d.territory, Phone: d.phone, Email: d.email, Outstanding: d.outstandingAmount, CreditLimit: d.creditLimit, Status: d.status })), 'PRISMORA_Dealers')}>
+              Export
+            </Button>
+            {canManage && <Button variant="primary" icon={Plus} onClick={openAdd}>Add Dealer</Button>}
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        <StatCard label="Total Dealers" value={kpis.total} icon={Network} tone="info" />
+        <StatCard label="Active" value={kpis.active} icon={ShieldCheck} tone="success" />
+        <StatCard label="Pending Approval" value={kpis.pending} icon={Clock} tone={kpis.pending > 0 ? 'warning' : 'accent'} />
+        <StatCard label="Total Outstanding" value={formatCurrency(kpis.totalOutstanding)} icon={Wallet} tone="accent" />
+        <StatCard label="Over Credit Limit" value={kpis.overLimit} icon={AlertTriangle} tone={kpis.overLimit > 0 ? 'danger' : 'accent'} />
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
-          { label: 'Total Dealers', value: kpis.total, color: 'text-blue-400' },
-          { label: 'Active', value: kpis.active, color: 'text-emerald-400' },
-          { label: 'Pending Approval', value: kpis.pending, color: kpis.pending > 0 ? 'text-amber-400' : 'text-slate-400' },
-          { label: 'Total Outstanding', value: formatCurrency(kpis.totalOutstanding), color: 'text-brand-accent' },
-          { label: 'Over Credit Limit', value: kpis.overLimit, color: kpis.overLimit > 0 ? 'text-rose-400' : 'text-slate-400' },
-        ].map((k, i) => (
-          <div key={i} className="glass-panel rounded-2xl p-4 border border-white/5">
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{k.label}</p>
-            <p className={`text-xl font-extrabold mt-1 ${k.color}`}>{k.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="glass-panel rounded-2xl p-4 border border-white/5 flex flex-col md:flex-row gap-3 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, territory or contact..." className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-white" />
-        </div>
-        <select value={stateFilter} onChange={e => setStateFilter(e.target.value)} className="glass-input rounded-xl px-4 py-2.5 text-sm text-slate-200 appearance-none">
+      <Card padding="p-4" className="flex flex-col md:flex-row gap-3 md:items-center">
+        <SearchInput
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search name, territory or contact"
+        />
+        <Select value={stateFilter} onChange={e => setStateFilter(e.target.value)} className="md:w-48">
           <option value="">All States</option>
-          {allStates.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
-        </select>
-        <div className="flex gap-2">
-          {['All', 'Pending', 'Active', 'Inactive'].map(s => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${statusFilter === s ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'border-white/5 text-slate-400 hover:text-white bg-brand-primary-lighter/40'}`}>
-              {s}
+          {allStates.map(st => <option key={st} value={st}>{st}</option>)}
+        </Select>
+        <div className="flex gap-1.5 flex-wrap">
+          {['All', 'Pending', 'Active', 'Inactive'].map(st => (
+            <button key={st} type="button" onClick={() => setStatusFilter(st)}
+              className={`h-10 px-3 rounded-xl text-xs font-semibold border transition-colors ${
+                statusFilter === st
+                  ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
+                  : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+              }`}>
+              {st}
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                <th className="p-4">Dealer</th>
-                <th className="p-4">Parent Distributor</th>
-                <th className="p-4">Territory / State</th>
-                <th className="p-4">Contact</th>
-                <th className="p-4 text-right">Outstanding</th>
-                <th className="p-4 text-right">Credit Limit</th>
-                <th className="p-4 text-center">Status</th>
-                <th className="p-4 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-slate-300">
-              {filtered.length > 0 ? filtered.map(d => {
-                const isOverLimit = (d.outstandingAmount || 0) > (d.creditLimit || 100000);
-                const utilizationPct = d.creditLimit ? Math.min(100, Math.round(((d.outstandingAmount || 0) / d.creditLimit) * 100)) : 0;
-                return (
-                  <tr key={d.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                    <td className="p-4">
-                      <div className="font-semibold text-white">{d.name}</div>
-                      <div className="text-xs text-slate-500 font-mono">{d.gstin || '—'}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-sm flex items-center gap-1.5"><Truck size={12} className="text-brand-accent flex-shrink-0" />{parentDistributorName(d.parentDistributorId)}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-sm">{d.territory || '—'}</div>
-                      <div className="text-xs text-slate-500">{d.state || '—'}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-sm">{d.contactPerson || '—'}</div>
-                      <div className="text-xs text-slate-500">{d.phone || d.email || '—'}</div>
-                    </td>
-                    <td className="p-4 text-right">
-                      <span className={`font-bold ${isOverLimit ? 'text-rose-400' : 'text-white'}`}>{formatCurrency(d.outstandingAmount || 0)}</span>
-                      <div className="mt-1 h-1 bg-brand-primary-lighter rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${utilizationPct > 90 ? 'bg-rose-500' : utilizationPct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${utilizationPct}%` }} />
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">{utilizationPct}% utilized</div>
-                    </td>
-                    <td className="p-4 text-right text-slate-400">{formatCurrency(d.creditLimit)}</td>
-                    <td className="p-4 text-center">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${d.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : d.status === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
-                        {d.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {d.status === 'Pending' && canManage ? (
-                          <>
-                            <button onClick={() => approveDealer(d)} className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Approve"><ShieldCheck size={14} /></button>
-                            <button onClick={() => rejectDealer(d)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Reject"><ShieldX size={14} /></button>
-                          </>
-                        ) : null}
-                        <button onClick={() => setViewingDealer(d)} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="View Details"><Eye size={14} /></button>
-                        {canManage && <>
-                          <button onClick={() => openEdit(d)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"><Edit2 size={14} /></button>
-                          <button onClick={() => { if (confirm('Delete this dealer?')) deleteDealer(d.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"><Trash2 size={14} /></button>
-                        </>}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              }) : (
-                <tr><td colSpan="8" className="p-12 text-center text-slate-500">
-                  <Network size={32} className="mx-auto mb-3 opacity-20" />
-                  <p>No dealers found.</p>
-                  {canManage && <button onClick={openAdd} className="mt-4 text-brand-accent hover:underline text-sm">+ Add your first dealer</button>}
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        title="Dealers"
+        columns={dealerColumns}
+        rows={filtered}
+        rowKey={d => d.id}
+        empty={{
+          icon: Network,
+          title: 'No dealers found',
+          hint: canManage
+            ? 'Dealers buy from a distributor rather than from you directly. Add one and its territory and outstanding balance appear here.'
+            : 'Nothing matches the filters above.',
+          action: canManage ? <Button variant="primary" icon={Plus} onClick={openAdd}>Add Dealer</Button> : undefined,
+        }}
+      />
+
 
       {/* Detail Modal */}
       {viewingDealer && createPortal(
