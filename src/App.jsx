@@ -8,6 +8,8 @@ const DistributorSignup = lazy(() => import('./pages/DistributorSignup'));
 const DealerSignup = lazy(() => import('./pages/DealerSignup'));
 const RetailerSignup = lazy(() => import('./pages/RetailerSignup'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+// Temporary: a public step-by-step sign-in test. Remove once sign-in is settled.
+const Diagnose = lazy(() => import('./pages/Diagnose'));
 const Leads = lazy(() => import('./pages/Leads'));
 const Orders = lazy(() => import('./pages/Orders'));
 const Geography = lazy(() => import('./pages/Geography'));
@@ -114,6 +116,7 @@ function AppRoutes() {
     <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/diagnose" element={<Diagnose />} />
       <Route path="/register-distributor" element={<DistributorSignup />} />
       <Route path="/register-dealer" element={<DealerSignup />} />
       <Route path="/register-retailer" element={<RetailerSignup />} />
