@@ -349,10 +349,24 @@ export const AuthProvider = ({ children }) => {
   // Declared after fetchUsers deliberately. An effect runs after the component
   // body, so calling it from above worked — but it read as using a value before
   // it exists, and the linter was right to say so.
+  //
+  // Keyed on the signed-in account, not on mount. Both tables answer only to an
+  // authenticated request — `users_read` and `roles_read` are TO authenticated —
+  // and an anonymous read of them does not fail. It returns success and no rows.
+  // Fetching on mount therefore raced the session restore and quietly lost:
+  // `users` was left empty, so every role card reported that nobody held it,
+  // and `roles` was left empty too, so the screen showed the compiled fallback
+  // however many times the migration had been run. Nothing refetched afterwards,
+  // so it stayed that way until the next sign-in.
+  //
+  // applySession replaces the user object on every refresh, so this is keyed on
+  // the id rather than the object — otherwise it would fetch in a loop.
   useEffect(() => {
+    if (!user?.id) return;
     fetchUsers();
     fetchRoles();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Returns true (success) | false (invalid credentials) | 'pending' | 'rejected'
   const login = async (email, password) => {

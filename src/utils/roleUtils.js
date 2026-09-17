@@ -134,3 +134,54 @@ export const fallbackRoles = (permissionMatrix, levelMap) =>
     isSystem: true,
     isFallback: true,
   }));
+
+/** How a role's access breaks down, for the summary on its card. */
+export const roleSummary = (role) => {
+  const counts = { full: 0, view: 0, none: 0 };
+  if (isAdminLevel(role?.level)) return { full: MODULES.length, view: 0, none: 0 };
+  MODULES.forEach(m => {
+    const a = role?.permissions?.[m.id];
+    counts[a === 'full' || a === 'view' ? a : 'none'] += 1;
+  });
+  return counts;
+};
+
+/**
+ * Who holds each role, keyed by role name.
+ *
+ * Matched without regard to case or surrounding space. `users.role` is free
+ * text holding a role's name, so a record saved as 'super admin' belongs to
+ * Super Admin by every reasonable reading, and showing it as nobody's role
+ * would be a lie about who can do what.
+ */
+const norm = (s) => String(s ?? '').trim().toLowerCase();
+
+export const peopleByRole = (users) => {
+  const out = {};
+  (users || []).forEach(u => {
+    const k = norm(u?.role);
+    if (!k) return;
+    (out[k] = out[k] || []).push(u);
+  });
+  return out;
+};
+
+export const holdersOf = (byRole, roleName) => byRole?.[norm(roleName)] || [];
+
+/**
+ * Role names people hold that no role defines.
+ *
+ * Worth surfacing rather than hiding: `accessFor` gives an unrecognised role
+ * nothing at all, so these are accounts that can sign in and then find every
+ * screen closed to them.
+ */
+export const orphanedRoles = (users, roles) => {
+  const known = new Set((roles || []).map(r => norm(r.id || r.name)));
+  const out = {};
+  (users || []).forEach(u => {
+    const k = norm(u?.role);
+    if (!k || known.has(k)) return;
+    (out[u.role] = out[u.role] || []).push(u);
+  });
+  return out;
+};

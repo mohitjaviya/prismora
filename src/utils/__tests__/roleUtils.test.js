@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MODULES, accessFor, levelFor, grantedCount, isAdminLevel, rejectPermissionChange,
-  fallbackRoles,
+  fallbackRoles, roleSummary, peopleByRole, holdersOf, orphanedRoles,
 } from '../roleUtils';
 
 const FALLBACK = {
@@ -151,5 +151,77 @@ describe('fallbackRoles - showing the compiled matrix when there is no table', (
 
   it('copes with no matrix at all', () => {
     expect(fallbackRoles(null, null)).toEqual([]);
+  });
+});
+
+describe('roleSummary - what a role adds up to', () => {
+  it('counts full, view and none across every module', () => {
+    const s = roleSummary(role({ permissions: { orders: 'full', leads: 'view' } }));
+    expect(s.full).toBe(1);
+    expect(s.view).toBe(1);
+    expect(s.none).toBe(MODULES.length - 2);
+  });
+
+  it('gives an admin role everything', () => {
+    expect(roleSummary({ level: 'admin' })).toEqual({ full: MODULES.length, view: 0, none: 0 });
+  });
+
+  it('always totals the module count, so the bar never over- or under-fills', () => {
+    const s = roleSummary(role({ permissions: { orders: 'nonsense', leads: 'view' } }));
+    expect(s.full + s.view + s.none).toBe(MODULES.length);
+  });
+
+  it('copes with no role at all', () => {
+    expect(roleSummary(null).none).toBe(MODULES.length);
+  });
+});
+
+describe('peopleByRole / holdersOf - who holds a role', () => {
+  const users = [
+    { id: 1, name: 'Asha', role: 'Super Admin' },
+    { id: 2, name: 'Bhavin', role: 'Sales Manager' },
+    { id: 3, name: 'Chirag', role: 'Sales Manager' },
+  ];
+
+  it('groups people under the role they hold', () => {
+    expect(holdersOf(peopleByRole(users), 'Sales Manager').map(u => u.name)).toEqual(['Bhavin', 'Chirag']);
+  });
+
+  // users.role is free text. A record saved as 'super admin' is still a Super
+  // Admin, and counting it as nobody would misstate who can do what.
+  it('matches regardless of case or surrounding space', () => {
+    const odd = [{ id: 9, name: 'Dev', role: '  SUPER ADMIN ' }];
+    expect(holdersOf(peopleByRole(odd), 'Super Admin').map(u => u.name)).toEqual(['Dev']);
+  });
+
+  it('returns nobody for a role no one holds, rather than undefined', () => {
+    expect(holdersOf(peopleByRole(users), 'Dispatch Team')).toEqual([]);
+    expect(holdersOf(peopleByRole(null), 'Anything')).toEqual([]);
+  });
+
+  it('ignores accounts with no role set', () => {
+    expect(Object.keys(peopleByRole([{ id: 1 }, { id: 2, role: '' }, { id: 3, role: null }]))).toEqual([]);
+  });
+});
+
+describe('orphanedRoles - accounts locked out by a role that does not exist', () => {
+  const roles = [{ id: 'Super Admin' }, { id: 'Sales Manager' }];
+
+  it('finds role names held by people but defined nowhere', () => {
+    const users = [{ id: 1, role: 'Super Admin' }, { id: 2, role: 'Regional Head' }];
+    expect(Object.keys(orphanedRoles(users, roles))).toEqual(['Regional Head']);
+  });
+
+  it('keeps everyone affected, so the warning can say how many', () => {
+    const users = [{ id: 1, role: 'Ghost' }, { id: 2, role: 'Ghost' }];
+    expect(orphanedRoles(users, roles).Ghost).toHaveLength(2);
+  });
+
+  it('does not report a role that differs only by case', () => {
+    expect(orphanedRoles([{ id: 1, role: 'sales manager' }], roles)).toEqual({});
+  });
+
+  it('reports nothing when every role is known', () => {
+    expect(orphanedRoles([{ id: 1, role: 'Super Admin' }], roles)).toEqual({});
   });
 });
