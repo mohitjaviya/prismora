@@ -10,8 +10,8 @@ import {
 } from 'lucide-react';
 import { downloadCSV } from '../utils/exportUtils';
 import { sendEmailAlert, templates } from '../utils/notificationUtils';
+import { optionsFor } from '../utils/masterLists';
 
-const WAREHOUSES = ['Main Warehouse', 'Secondary Warehouse', 'Cold Storage'];
 const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Out of Stock'];
 
 const getStockStatus = (item) => {
@@ -50,7 +50,9 @@ const BLANK_FORM = {
 const BLANK_ADJUST = { adjustment: '', reason: '' };
 
 export default function Inventory() {
-  const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock } = useData();
+  const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, masters } = useData();
+  // Options come from Master Lists; masterLists.js holds the fallback.
+  const warehouses = optionsFor(masters, 'warehouse').map(o => o.key);
   const { canAccess } = useAuth();
   const canManage = canAccess('inventory', 'full');
 
@@ -120,7 +122,7 @@ export default function Inventory() {
     setIsAddOpen(true);
   };
   const openAdjust = (item) => { setAdjustingItem(item); setAdjustForm(BLANK_ADJUST); setIsAdjustOpen(true); };
-  const openTransfer = (item) => { setTransferItem(item); setTransferForm({ toWarehouse: WAREHOUSES.find(w => w !== item.warehouse) || '', quantity: '', notes: '' }); };
+  const openTransfer = (item) => { setTransferItem(item); setTransferForm({ toWarehouse: warehouses.find(w => w !== item.warehouse) || '', quantity: '', notes: '' }); };
   const openCount = (item) => { setCountItem(item); setCountedQty(String(item.quantity)); };
 
   const handleTransfer = (e) => {
@@ -221,7 +223,7 @@ export default function Inventory() {
           <Warehouse className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
           <select value={warehouseFilter} onChange={e => setWarehouseFilter(e.target.value)} className="glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-200 appearance-none">
             <option value="">All Warehouses</option>
-            {WAREHOUSES.map(w => <option key={w} value={w} className="bg-brand-primary">{w}</option>)}
+            {warehouses.map(w => <option key={w} value={w} className="bg-brand-primary">{w}</option>)}
           </select>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -418,7 +420,7 @@ export default function Inventory() {
                 <div>
                   <label className={labelCls}>Warehouse</label>
                   <select value={form.warehouse} onChange={e => setForm({ ...form, warehouse: e.target.value })} className={inputCls}>
-                    {WAREHOUSES.map(w => <option key={w} value={w} className="bg-brand-primary">{w}</option>)}
+                    {warehouses.map(w => <option key={w} value={w} className="bg-brand-primary">{w}</option>)}
                   </select>
                 </div>
                 <div>
@@ -499,7 +501,7 @@ export default function Inventory() {
               <div>
                 <label className={labelCls}>Destination Warehouse *</label>
                 <select required value={transferForm.toWarehouse} onChange={e => setTransferForm(f => ({ ...f, toWarehouse: e.target.value }))} className={inputCls}>
-                  {WAREHOUSES.filter(w => w !== transferItem.warehouse).map(w => <option key={w} value={w} className="bg-brand-primary">{w}</option>)}
+                  {warehouses.filter(w => w !== transferItem.warehouse).map(w => <option key={w} value={w} className="bg-brand-primary">{w}</option>)}
                 </select>
               </div>
               <div>

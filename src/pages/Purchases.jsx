@@ -9,8 +9,8 @@ import {
 } from 'lucide-react';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildVendorLedger } from '../utils/distributorUtils';
+import { optionsFor } from '../utils/masterLists';
 
-const PO_STATUSES = ['Draft', 'Confirmed', 'GRN Done', 'Closed', 'Cancelled'];
 
 const statusConfig = {
   'Draft':      { cls: 'bg-slate-500/10 text-slate-400 border-slate-500/20', icon: <FileText size={12} /> },
@@ -33,7 +33,9 @@ const BLANK_LINE = { product: '', quantity: '', unitCost: '', batchNumber: '', e
 export default function Purchases() {
   const { purchaseOrders, vendors, grn, products, vendorPayments, purchaseReturns,
     addPurchaseOrder, updatePurchaseOrderStatus, cancelPurchaseOrder, deletePurchaseOrder,
-    addVendor, updateVendor, deleteVendor, addGRN, receiveStock, addVendorPayment, addPurchaseReturn } = useData();
+    addVendor, updateVendor, deleteVendor, addGRN, receiveStock, addVendorPayment, addPurchaseReturn, masters } = useData();
+  // statusConfig below is keyed on the stored value, so the filter uses keys.
+  const poStatuses = optionsFor(masters, 'po_status').map(o => o.key);
   const { user, canAccess } = useAuth();
 
   const [activeTab, setActiveTab] = useState('orders');
@@ -270,7 +272,7 @@ export default function Purchases() {
         </div>
         {activeTab === 'orders' && (
           <div className="flex gap-2 flex-wrap">
-            {['All', ...PO_STATUSES].map(s => (
+            {['All', ...poStatuses].map(s => (
               <button key={s} onClick={() => setStatusFilter(s)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${statusFilter === s ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'border-white/5 text-slate-400 hover:text-white bg-brand-primary-lighter/40'}`}>
                 {s}

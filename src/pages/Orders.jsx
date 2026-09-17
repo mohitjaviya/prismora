@@ -8,8 +8,8 @@ import { downloadCSV } from '../utils/exportUtils';
 import { allParties } from '../utils/distributorUtils';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
+import { optionsFor } from '../utils/masterLists';
 
-const STATUSES = ['Pending', 'Processing', 'Ready for Dispatch', 'Shipped', 'Delivered', 'Cancelled'];
 
 // Which role "owns" moving an order into a given status — enforces the
 // Sales → Warehouse → Dispatch fulfillment hierarchy. Super Admin/Admin can
@@ -40,7 +40,13 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, distributors, dealers, retailers, productCatalog } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, distributors, dealers, retailers, productCatalog, masters } = useData();
+  // From Master Lists. The stepper and the dropdown show the label; every
+  // check in this file — STATUS_OWNERS, the stock guards, the delivery
+  // branches — still compares the stored key, which cannot be renamed.
+  const statusOptions = optionsFor(masters, 'order_status');
+  const statuses = statusOptions.map(o => o.key);
+  const labelForStatus = (k) => (statusOptions.find(o => o.key === k) || {}).label || k;
   const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -710,15 +716,15 @@ const Orders = () => {
                         <div
                           className="h-full bg-brand-accent transition-all duration-500"
                           style={{
-                            width: `${(STATUSES.filter(s => s !== 'Cancelled').indexOf(formData.status) / (STATUSES.filter(s => s !== 'Cancelled').length - 1)) * 100
+                            width: `${(statuses.filter(s => s !== 'Cancelled').indexOf(formData.status) / (statuses.filter(s => s !== 'Cancelled').length - 1)) * 100
                               }%`
                           }}
                         />
                       </div>
 
                       {/* Steps */}
-                      {STATUSES.filter(s => s !== 'Cancelled').map((status, idx) => {
-                        const activeIdx = STATUSES.filter(s => s !== 'Cancelled').indexOf(formData.status);
+                      {statuses.filter(s => s !== 'Cancelled').map((status, idx) => {
+                        const activeIdx = statuses.filter(s => s !== 'Cancelled').indexOf(formData.status);
                         const isCompleted = idx < activeIdx;
                         const isActive = idx === activeIdx;
 
@@ -749,7 +755,7 @@ const Orders = () => {
                                     : 'text-slate-500 group-hover:text-slate-400'
                                 }`}
                             >
-                              {status}
+                              {labelForStatus(status)}
                             </span>
                           </button>
                         );
@@ -1119,7 +1125,7 @@ const Orders = () => {
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1.5">Status</label>
                     <select value={formData.status} onChange={e => attemptSetStatus(e.target.value)} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
-                      {STATUSES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
+                      {statusOptions.map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                     </select>
                     {statusError && (
                       <p className="mt-1.5 text-xs font-medium text-red-400">⚠️ {statusError}</p>

@@ -7,16 +7,14 @@ import {
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { Navigate } from 'react-router-dom';
+import { optionsFor } from '../utils/masterLists';
 
 const INDIAN_TAX_RATES = [0, 5, 12, 18, 28];
-const PRODUCT_CATEGORIES = ['Hair Care', 'Skin Care', 'Wellness', 'Personal Care', 'Other'];
-const UOMS = ['BOX', 'BOTTLE', 'TUBE', 'STRIP', 'PIECE', 'KG'];
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
 
 const BLANK_USER_FORM = { name: '', email: '', role: 'Sales Executive', managedUsers: [], password: '' };
-const PRODUCT_STATUSES = ['Active', 'Seasonal', 'Coming Soon', 'Discontinued'];
 
 // Password policy: min 8 chars, at least one letter and one number.
 const passwordPolicyError = (pw) => {
@@ -28,7 +26,11 @@ const BLANK_PRODUCT_FORM = { name: '', category: 'Wellness', hsnCode: '', sku: '
 
 export default function Settings() {
   const { user, users: allUsers, addUser, createUserAccount, updateUser, deleteUser, verifyCurrentPassword } = useAuth();
-  const { productCatalog, addProduct, updateProduct, deleteProduct, eventLog } = useData();
+  const { productCatalog, addProduct, updateProduct, deleteProduct, eventLog, masters } = useData();
+  // From Master Lists, with masterLists.js as the fallback.
+  const productCategories = optionsFor(masters, 'product_category').map(o => o.key);
+  const uoms = optionsFor(masters, 'uom').map(o => o.key);
+  const productStatuses = optionsFor(masters, 'product_status').map(o => o.key);
   const [auditSearch, setAuditSearch] = useState('');
 
   if (!isAdminRole(user?.role)) return <Navigate to="/" replace />;
@@ -459,20 +461,20 @@ export default function Settings() {
                 <div>
                   <label className={labelCls}>Category</label>
                   <select value={productForm.category} onChange={e => setProductForm({ ...productForm, category: e.target.value })} className={inputCls}>
-                    {PRODUCT_CATEGORIES.map(c => <option key={c} value={c} className="bg-brand-primary">{c}</option>)}
+                    {productCategories.map(c => <option key={c} value={c} className="bg-brand-primary">{c}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className={labelCls}>Unit of Measure (UOM)</label>
                   <select value={productForm.uom} onChange={e => setProductForm({ ...productForm, uom: e.target.value })} className={inputCls}>
-                    {UOMS.map(u => <option key={u} value={u} className="bg-brand-primary">{u}</option>)}
+                    {uoms.map(u => <option key={u} value={u} className="bg-brand-primary">{u}</option>)}
                   </select>
                 </div>
                 <div><label className={labelCls}>SKU / Barcode</label><input type="text" value={productForm.sku} onChange={e => setProductForm({ ...productForm, sku: e.target.value })} placeholder="e.g. PRM-HHO-100" className={inputCls} /></div>
                 <div>
                   <label className={labelCls}>Lifecycle Status</label>
                   <select value={productForm.status} onChange={e => setProductForm({ ...productForm, status: e.target.value })} className={inputCls}>
-                    {PRODUCT_STATUSES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
+                    {productStatuses.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
                   </select>
                 </div>
                 <div><label className={labelCls}>HSN Code *</label><input required type="text" value={productForm.hsnCode} onChange={e => setProductForm({ ...productForm, hsnCode: e.target.value })} placeholder="e.g. 30049011" className={inputCls} /></div>

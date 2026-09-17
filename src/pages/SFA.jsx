@@ -10,8 +10,8 @@ import {
   Upload, CheckSquare, XSquare, Route, Clock, Award, RefreshCw
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { optionsFor } from '../utils/masterLists';
 
-const EXPENSE_CATEGORIES = ['Travel', 'Food & Meals', 'Accommodation', 'Client Entertainment', 'Fuel', 'Miscellaneous'];
 
 export default function SFA() {
   const { user, users: allUsers, isAdmin, isManager, isSales } = useAuth();
@@ -20,8 +20,9 @@ export default function SFA() {
     attendance, addAttendanceRecord, updateAttendanceRecord,
     visitReports, addVisitReport,
     sfaExpenses, addSFAExpense, updateSFAExpense,
-    addOrder, productCatalog, territories, orders, retailers, dealers
-  } = useData();
+    addOrder, productCatalog, territories, orders, retailers, dealers, masters } = useData();
+  // Options come from Master Lists; masterLists.js holds the fallback.
+  const expenseCategories = optionsFor(masters, 'expense_category').map(o => o.key);
 
   const [activeTab, setActiveTab] = useState('attendance');
 
@@ -1625,7 +1626,7 @@ export default function SFA() {
                 <div>
                   <label className={lbl}>Category *</label>
                   <select required value={expenseForm.category} onChange={e => setExpenseForm({ ...expenseForm, category: e.target.value })} className={inp}>
-                    {EXPENSE_CATEGORIES.map(c => <option key={c} value={c} className="bg-brand-primary">{c}</option>)}
+                    {expenseCategories.map(c => <option key={c} value={c} className="bg-brand-primary">{c}</option>)}
                   </select>
                 </div>
                 <div className="col-span-2">

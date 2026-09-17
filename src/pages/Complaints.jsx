@@ -7,9 +7,8 @@ import {
   CheckCircle, Clock, AlertTriangle, Eye, Edit2, RotateCcw
 } from 'lucide-react';
 import { downloadCSV } from '../utils/exportUtils';
+import { optionsFor } from '../utils/masterLists';
 
-const COMPLAINT_TYPES = ['Quality Issue', 'Wrong Product', 'Damaged Packaging', 'Short Expiry', 'Missing Item', 'Billing Error', 'Delivery Issue', 'Other'];
-const STATUSES = ['Registered', 'Under Review', 'Resolved', 'Closed'];
 
 const statusConfig = {
   'Registered':   { cls: 'bg-rose-500/10 text-rose-400 border-rose-500/20', icon: <AlertTriangle size={12} /> },
@@ -28,7 +27,12 @@ const BLANK_FORM = { customerName: '', customerPhone: '', product: '', batchNumb
 const BLANK_RESOLVE = { status: 'Resolved', resolution: '' };
 
 export default function Complaints() {
-  const { complaints, products, addComplaint, updateComplaintStatus, deleteComplaint, distributors, dealers, retailers } = useData();
+  const { complaints, products, addComplaint, updateComplaintStatus, deleteComplaint, distributors, dealers, retailers, masters } = useData();
+  // From Master Lists. Statuses keep their stored key while the label is what
+  // people read — statusConfig below is still keyed on the stored value.
+  const complaintTypes = optionsFor(masters, 'complaint_type').map(o => o.key);
+  const statusOptions = optionsFor(masters, 'complaint_status');
+  const statuses = statusOptions.map(o => o.key);
   const { user, users: teamUsers, getAssignableUsers, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
@@ -150,10 +154,10 @@ export default function Complaints() {
         </div>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="glass-input rounded-xl px-4 py-2.5 text-sm text-slate-200 appearance-none">
           <option value="">All Types</option>
-          {COMPLAINT_TYPES.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
+          {complaintTypes.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
         </select>
         <div className="flex gap-2 flex-wrap">
-          {['All', ...STATUSES].map(s => (
+          {['All', ...statuses].map(s => (
             <button key={s} onClick={() => setStatusFilter(s)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${statusFilter === s ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'border-white/5 text-slate-400 hover:text-white bg-brand-primary-lighter/40'}`}>
               {s}
@@ -296,7 +300,7 @@ export default function Complaints() {
               <div>
                 <label className={labelCls}>New Status *</label>
                 <select required value={resolveForm.status} onChange={e => setResolveForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
-                  {STATUSES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
+                  {statusOptions.map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                 </select>
               </div>
               <div>
@@ -337,7 +341,7 @@ export default function Complaints() {
                   <label className={labelCls}>Complaint Type *</label>
                   <select required value={form.complaintType} onChange={e => setForm(f => ({ ...f, complaintType: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Type --</option>
-                    {COMPLAINT_TYPES.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
+                    {complaintTypes.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
                   </select>
                 </div>
                 <div className="sm:col-span-2">

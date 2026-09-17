@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import { downloadCSV } from '../utils/exportUtils';
 import { schemeLiveState } from '../utils/schemeUtils';
+import { optionsFor } from '../utils/masterLists';
 
-const SCHEME_TYPES = ['Flat Discount', 'Cash Discount', 'Free Goods', 'Slab Discount', 'Seasonal Offer', 'Buy X Get Y'];
 const APPLICABLE_TO = ['All', 'Distributor', 'Dealer', 'Retailer'];
 
 const formatCurrency = (val) =>
@@ -41,7 +41,9 @@ const BLANK_FORM = {
 };
 
 export default function Schemes() {
-  const { schemes, addScheme, updateScheme, deleteScheme, distributorIncentives, productCatalog } = useData();
+  const { schemes, addScheme, updateScheme, deleteScheme, distributorIncentives, productCatalog, masters } = useData();
+  // Options come from Master Lists; masterLists.js holds the fallback.
+  const schemeTypes = optionsFor(masters, 'scheme_type').map(o => o.key);
   const { canAccess } = useAuth();
 
   const canManage = canAccess('schemes', 'full');
@@ -334,7 +336,7 @@ export default function Schemes() {
                 <div>
                   <label className={labelCls}>Scheme Type *</label>
                   <select required value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={inputCls}>
-                    {SCHEME_TYPES.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
+                    {schemeTypes.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
                   </select>
                 </div>
                 <div>
