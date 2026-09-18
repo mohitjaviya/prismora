@@ -394,7 +394,7 @@ const Dashboard = () => {
                       <Tooltip 
                         {...CHART_TOOLTIP}
                       />
-                      <Line type="monotone" dataKey="demand" stroke={CHART_SINGLE} strokeWidth={3} dot={{ r: 4, fill: '#112240', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#60a5fa' }} />
+                      <Line type="monotone" dataKey="demand" stroke={CHART_SINGLE} strokeWidth={3} dot={{ r: 4, fill: 'var(--chart-tooltip-bg)', stroke: CHART_SINGLE, strokeWidth: 2 }} activeDot={{ r: 6, fill: CHART_SINGLE }} />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (

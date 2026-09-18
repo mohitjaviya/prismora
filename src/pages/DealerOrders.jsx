@@ -207,7 +207,7 @@ export default function DealerOrders() {
                 <div className="border border-white/5 rounded-xl overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-brand-primary-light/40 text-slate-400 text-xs uppercase">
+                      <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
                         <th className="p-3 text-left">Product</th>
                         <th className="p-3 text-right">Qty</th>
                         <th className="p-3 text-right">Rate</th>
@@ -277,7 +277,7 @@ export default function DealerOrders() {
             {Array.isArray(liveOrder.items) && liveOrder.items.length > 0 ? (
               <div className="border border-white/5 rounded-xl overflow-hidden mb-4">
                 <table className="w-full text-sm">
-                  <thead><tr className="bg-brand-primary-light/40 text-slate-400 text-xs uppercase"><th className="p-2.5 text-left">Product</th><th className="p-2.5 text-right">Qty</th><th className="p-2.5 text-right">Total</th></tr></thead>
+                  <thead><tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider"><th className="p-2.5 text-left">Product</th><th className="p-2.5 text-right">Qty</th><th className="p-2.5 text-right">Total</th></tr></thead>
                   <tbody className="divide-y divide-white/5 text-slate-300">
                     {liveOrder.items.map((i, idx) => (
                       <tr key={idx}><td className="p-2.5 flex items-center gap-1.5"><Package size={12} className="text-brand-accent" />{i.name}</td><td className="p-2.5 text-right">{i.quantity}</td><td className="p-2.5 text-right">{formatCurrency(i.total)}</td></tr>

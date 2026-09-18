@@ -993,7 +993,7 @@ const Orders = () => {
                     <div className="border border-slate-700/50 rounded-lg overflow-hidden">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="bg-brand-primary-lighter/40 text-slate-400 text-xs uppercase">
+                          <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
                             <th className="p-2.5 text-left">Product</th>
                             <th className="p-2.5 text-right">Qty</th>
                             <th className="p-2.5 text-right">Rate</th>
