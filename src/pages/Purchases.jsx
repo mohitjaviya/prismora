@@ -609,7 +609,7 @@ export default function Purchases() {
                 <span className="font-bold text-emerald-400">{formatCurrency(Number(returnForm.quantity) * Number(returnForm.unitCost) || 0)}</span>
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
-                <button type="button" onClick={() => setIsReturnModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
+                <button type="button" onClick={() => setIsReturnModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Record Return</button>
               </div>
             </form>
@@ -687,7 +687,7 @@ export default function Purchases() {
               </div>
 
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
-                <button type="button" onClick={() => setIsPOModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
+                <button type="button" onClick={() => setIsPOModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Create Purchase Order</button>
               </div>
             </form>
@@ -758,7 +758,7 @@ export default function Purchases() {
                 <textarea rows="2" value={grnForm.notes} onChange={e => setGRNForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
-                <button type="button" onClick={() => setIsGRNModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
+                <button type="button" onClick={() => setIsGRNModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Record GRN & Update Stock</button>
               </div>
             </form>
@@ -885,7 +885,7 @@ export default function Purchases() {
                 <div className="col-span-2"><label className={labelCls}>Address</label><textarea rows="2" value={vendorForm.address} onChange={e => setVendorForm(f => ({ ...f, address: e.target.value }))} className={`${inputCls} resize-none`} /></div>
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
-                <button type="button" onClick={() => setIsVendorModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
+                <button type="button" onClick={() => setIsVendorModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingVendor ? 'Save Changes' : 'Add Vendor'}</button>
               </div>
             </form>

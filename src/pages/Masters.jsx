@@ -193,7 +193,7 @@ export default function Masters() {
                       className="flex-1 glass-input rounded-lg px-2.5 py-1.5 text-sm text-white"
                     />
                     <button onClick={() => saveEdit(row)} className="p-1.5 text-emerald-400 hover:bg-emerald-400/10 rounded-lg" title="Save"><Check size={14} /></button>
-                    <button onClick={() => setEditingId(null)} className="p-1.5 text-slate-400 hover:bg-white/5 rounded-lg"><X size={14} /></button>
+                    <button onClick={() => setEditingId(null)} className="p-1.5 text-slate-400 hover:bg-white/5 rounded-lg" title="Cancel"><X size={14} /></button>
                   </>
                 ) : (
                   <>
@@ -252,7 +252,7 @@ export default function Masters() {
                           }
                         }}
                         className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg flex-shrink-0"
-                      >
+                       title="Remove this option">
                         <Trash2 size={13} />
                       </button>
                     )}

@@ -379,7 +379,7 @@ export default function Schemes() {
                 <div className="sm:col-span-2"><label className={labelCls}>Description</label><textarea rows="2" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description of the scheme terms..." className={`${inputCls} resize-none`} /></div>
               </div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingScheme ? 'Save Changes' : 'Create Scheme'}</button>
               </div>
             </form>
