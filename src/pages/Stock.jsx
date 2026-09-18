@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Boxes, CheckCircle, Clock, Package, Truck } from 'lucide-react';
-import { PageHeader, Card, StatCard, Badge, EmptyState, SearchInput } from '../components/ui';
+import { Boxes, CheckCircle, Clock, Package, Truck, Download } from 'lucide-react';
+import { downloadCSV } from '../utils/exportUtils';
+import { Badge, Button, Card, EmptyState, PageHeader, SearchInput, StatCard } from '../components/ui';
 import { aggregateReceived } from '../utils/stockUtils';
 import { allParties } from '../utils/distributorUtils';
 
@@ -73,8 +74,16 @@ export default function Stock() {
     </div>
   );
 
+  const handleExport = () => downloadCSV(rows.map(pr => ({
+  Product: pr.name,
+  Category: pr.category,
+  Received: pr.received,
+  Unconfirmed: pr.unconfirmed,
+  UOM: pr.uom,
+  })), `PRISMORA_Stock_${(party?.name || 'account').replace(/[^A-Za-z0-9]+/g, '_')}`);
+
   if (!party) {
-    return (
+  return (
       <div className="space-y-6 animate-fade-in-up">
         <PageHeader
           icon={Boxes}
@@ -109,6 +118,7 @@ export default function Stock() {
         subtitle={isParty
           ? 'Goods delivered to you by Janki Herbals, totalled by product.'
           : `Goods delivered to ${party.name} by Janki Herbals, totalled by product.`}
+        actions={<Button icon={Download} onClick={handleExport} disabled={!(rows.length > 0)}>Export</Button>}
       />
 
       {partyPicker}

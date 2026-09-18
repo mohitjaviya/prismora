@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole } from '../../context/AuthContext';
 import { createPortal } from 'react-dom';
-import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X, Download } from 'lucide-react';
+import { downloadCSV } from '../../utils/exportUtils';
 import { useConfirm } from '../../context/DialogContext';
 import { useToast } from '../../context/DialogContext';
-import { PageHeader, DataTable, Button, IconButton, Badge } from '../../components/ui';
+import { Badge, Button, DataTable, IconButton, PageHeader } from '../../components/ui';
 
 /**
  * The people who can sign in, and what each of them may reach.
@@ -132,13 +133,26 @@ export default function TeamMembers() {
     },
   ];
 
+  const handleExport = () => downloadCSV(allUsers.map(u => ({
+    Name: u.name,
+    Email: u.email,
+    Role: u.role,
+    Manages: (u.managedUsers || [])
+      .map(id => (allUsers.find(x => x.id === id) || {}).name)
+      .filter(Boolean)
+      .join('; '),
+  })), 'PRISMORA_Team_Members');
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         icon={Users}
         title="Team Members"
         subtitle="Who can sign in, and what each of them may reach."
-        actions={<Button variant="primary" icon={Plus} onClick={openUserAdd}>Add User</Button>}
+        actions={<>
+            <Button icon={Download} onClick={handleExport} disabled={!(allUsers.length > 0)}>Export</Button>
+            <Button variant="primary" icon={Plus} onClick={openUserAdd}>Add User</Button>
+              </>}
       />
 
       <DataTable

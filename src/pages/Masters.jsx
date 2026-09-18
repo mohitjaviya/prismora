@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { Layers, Plus, Trash2, Lock, Check, X, ChevronUp, ChevronDown, AlertTriangle, Search, Palette } from 'lucide-react';
-import { PageHeader } from '../components/ui';
+import { Layers, Plus, Trash2, Lock, Check, X, ChevronUp, ChevronDown, AlertTriangle, Search, Palette, Download } from 'lucide-react';
+import { downloadCSV } from '../utils/exportUtils';
+import { Button, PageHeader } from '../components/ui';
 import { MASTER_LISTS, optionsFor, badgeStyle } from '../utils/masterLists';
 
 // Offered as swatches so a colour can be picked without knowing hex. The free
@@ -91,12 +92,23 @@ export default function Masters() {
     await updateMasterOption(ordered[j].id, { sort: i });
   };
 
+  // The chosen list, not all twelve: they have nothing in common but the shape
+  // of a row, and a file mixing lead statuses with payment methods helps nobody.
+  const handleExport = () => downloadCSV(allRows.map(o => ({
+    Label: o.label,
+    Key: o.key,
+    Description: o.description || '',
+    Colour: o.color || '',
+    Active: o.active === false ? 'No' : 'Yes',
+  })), `PRISMORA_${activeList}`);
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         icon={Layers}
         title="Master Lists"
         subtitle="The options that appear in dropdowns across the app. Change them here instead of asking for a code change."
+        actions={<Button icon={Download} onClick={handleExport} disabled={!allRows.length}>Export</Button>}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">

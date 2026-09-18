@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { createPortal } from 'react-dom';
-import { Plus, Edit2, Trash2, Package, QrCode, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Package, QrCode, X, Download } from 'lucide-react';
+import { downloadCSV } from '../../utils/exportUtils';
 import { useConfirm } from '../../context/DialogContext';
-import { PageHeader, DataTable, Button, IconButton, Badge } from '../../components/ui';
+import { Badge, Button, DataTable, IconButton, PageHeader } from '../../components/ui';
 import { optionsFor } from '../../utils/masterLists';
 
 /**
@@ -119,13 +120,30 @@ export default function ProductCatalog() {
     },
   ];
 
+  const handleExport = () => downloadCSV(productCatalog.map(p => ({
+    Product: p.name,
+    SKU: p.sku,
+    Category: p.category,
+    Status: p.status || 'Active',
+    HSN: p.hsnCode,
+    UOM: p.uom,
+    GST: p.gstPct,
+    MRP: p.mrp,
+    Distributor: p.distributorPrice,
+    Dealer: p.dealerPrice,
+    Retailer: p.retailerPrice,
+  })), 'PRISMORA_Product_Catalogue');
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         icon={Package}
         title="Product Catalogue"
         subtitle="Prices, HSN codes and tax rates. Every order and invoice is priced from here."
-        actions={<Button variant="primary" icon={Plus} onClick={openProductAdd}>Add Product</Button>}
+        actions={<>
+            <Button icon={Download} onClick={handleExport} disabled={!(productCatalog.length > 0)}>Export</Button>
+            <Button variant="primary" icon={Plus} onClick={openProductAdd}>Add Product</Button>
+              </>}
       />
 
       <DataTable
