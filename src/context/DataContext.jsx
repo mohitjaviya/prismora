@@ -482,18 +482,22 @@ export const DataProvider = ({ children }) => {
     // ── Original fetches ──────────────────────────────────────────────────
     // Fetch Leads with local merge fallback
     let fetchedLeads = [];
-    // Tracked separately from the row count: a failed read and a genuinely
-    // empty table both leave the array at [], but only the second one should
-    // ever seed the demo rows below.
-    let fetchedLeadsOk = false;
     try {
       const { data, error } = await inflight.leads;
       if (error) throw error;
       fetchedLeads = data || [];
-      fetchedLeadsOk = true;
     } catch (err) {
       console.warn("Supabase fetch leads failed, using local fallback.", err);
     }
+    // Rows this browser has that the server did not return are added back.
+    // That covers what matters -- a read that failed, or a row written while
+    // the network was down -- but it cannot tell those apart from a row
+    // deleted on another device, which will reappear here until this
+    // browser's cache is cleared.
+    //
+    // Left this way on purpose. Trusting the server absolutely instead would
+    // hide a row whose write failed, which is the failure this fallback was
+    // added to stop.
     const localLeadsStr = localStorage.getItem('prismora_leads');
     if (localLeadsStr) {
       const localLeads = JSON.parse(localLeadsStr);
@@ -505,15 +509,10 @@ export const DataProvider = ({ children }) => {
 
     // Fetch Orders with local merge fallback
     let fetchedOrders = [];
-    // Tracked separately from the row count: a failed read and a genuinely
-    // empty table both leave the array at [], but only the second one should
-    // ever seed the demo rows below.
-    let fetchedOrdersOk = false;
     try {
       const { data, error } = await inflight.orders;
       if (error) throw error;
       fetchedOrders = data || [];
-      fetchedOrdersOk = true;
     } catch (err) {
       console.warn("Supabase fetch orders failed, using local fallback.", err);
     }
