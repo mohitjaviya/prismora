@@ -311,8 +311,8 @@ export default function Schemes() {
                         <button onClick={() => toggleStatus(s)} className={`p-1.5 rounded-lg transition-colors ${s.status === 'Active' ? 'text-emerald-400 hover:bg-emerald-400/10' : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'}`} title={s.status === 'Active' ? 'Deactivate' : 'Activate'}>
                           <CheckCircle size={14} />
                         </button>
-                        <button onClick={() => openEdit(s)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"><Edit2 size={14} /></button>
-                        <button onClick={() => { if (confirm('Delete scheme?')) deleteScheme(s.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                        <button onClick={() => openEdit(s)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors" title="Edit scheme"><Edit2 size={14} /></button>
+                        <button onClick={() => { if (confirm('Delete scheme?')) deleteScheme(s.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete scheme"><Trash2 size={14} /></button>
                       </div>
                     )}
                   </div>
@@ -336,7 +336,7 @@ export default function Schemes() {
           <div className="relative glass-panel bg-brand-primary w-full max-w-2xl max-h-[92vh] rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 flex flex-col overflow-hidden">
             <div className="flex justify-between items-center p-6 border-b border-white/5 flex-shrink-0">
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><Tag className="text-brand-accent" size={20} />{editingScheme ? 'Edit Scheme' : 'Create New Scheme'}</h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
+              <button onClick={() => setIsModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

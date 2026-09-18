@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Wallet, ArrowUpCircle, ArrowDownCircle, CreditCard } from 'lucide-react';
+import { Wallet, ArrowUpCircle, ArrowDownCircle, CreditCard, Download } from 'lucide-react';
+import { downloadCSV } from '../utils/exportUtils';
 import { PageHeader, DataTable, Card, StatCard, EmptyState, Button } from '../components/ui';
 import { buildLedgerEntries, allParties } from '../utils/distributorUtils';
 
@@ -51,6 +52,22 @@ export default function Ledger() {
   const ledgerBalance = entries.length ? entries[entries.length - 1].balance : 0;
   const storedBalance = Number(party?.outstandingAmount || 0);
   const drift = Math.round(ledgerBalance - storedBalance);
+
+  /**
+   * The statement of account, as a file.
+   *
+   * Every row in the order it is read on screen, with the running balance
+   * carried, because a statement without the balance beside each line is not a
+   * statement -- it is a list of amounts.
+   */
+  const handleExport = () => downloadCSV(entries.map(row => ({
+    Date: formatDate(row.date),
+    Description: row.description,
+    Reference: row.ref || '',
+    Debit: row.debit || '',
+    Credit: row.credit || '',
+    Balance: row.balance,
+  })), `PRISMORA_Statement_${(party?.name || 'account').replace(/[^A-Za-z0-9]+/g, '_')}`);
 
   const partyPicker = !isParty && (
     <div className="glass-panel rounded-2xl p-4 border border-white/5">
@@ -141,6 +158,9 @@ export default function Ledger() {
         subtitle={isParty
           ? 'Your invoices, payments and running balance with Janki Herbals.'
           : `Invoices, payments and running balance for ${party.name}.`}
+        actions={entries.length > 0
+          ? <Button icon={Download} onClick={handleExport}>Export statement</Button>
+          : undefined}
       />
 
       {partyPicker}

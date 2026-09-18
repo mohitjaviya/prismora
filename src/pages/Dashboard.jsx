@@ -384,7 +384,7 @@ const Dashboard = () => {
                 <ShoppingBag size={20} className="text-blue-400" />
                 Product Demand
               </h3>
-              <div className="h-64 flex items-center justify-center">
+              <div className="h-64">
                 {productData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={productData} margin={{ top: 10, right: 30, left: -20, bottom: 0 }}>
@@ -398,7 +398,9 @@ const Dashboard = () => {
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p className="text-slate-500">Not enough data.</p>
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-slate-500">Not enough data.</p>
+                  </div>
                 )}
               </div>
             </div>

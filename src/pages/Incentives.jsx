@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Gift, CheckCircle, Clock, Percent, Package, Wallet } from 'lucide-react';
+import { Gift, CheckCircle, Clock, Percent, Package, Wallet, Download } from 'lucide-react';
+import { downloadCSV } from '../utils/exportUtils';
 import { PageHeader, DataTable, Button, Badge, StatCard, Card, SearchInput } from '../components/ui';
 
 const formatCurrency = (val) =>
@@ -115,6 +116,18 @@ export default function Incentives() {
     }] : []),
   ];
 
+  const handleExport = () => downloadCSV(visible.map(i => ({
+    Incentive: i.id,
+    Party: partyName(i).name,
+    Type: partyName(i).type,
+    Scheme: i.schemeName,
+    Order: i.orderId || '',
+    Kind: i.incentiveType,
+    Value: i.incentiveValue,
+    Status: i.status,
+    Date: formatDate(i.createdAt),
+  })), 'PRISMORA_Incentives');
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
@@ -123,6 +136,7 @@ export default function Incentives() {
         subtitle={isParty
           ? 'Auto-calculated incentives earned from qualifying scheme orders.'
           : 'Incentives auto-generated across distributors, dealers and retailers from active schemes.'}
+        actions={<Button icon={Download} onClick={handleExport}>Export</Button>}
       />
 
       <div className="grid grid-cols-3 gap-3 sm:gap-4">

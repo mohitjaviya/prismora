@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
-import { FileCheck2, Plus, X, CheckCircle, XCircle, Clock, Wallet } from 'lucide-react';
+import { FileCheck2, Plus, X, CheckCircle, XCircle, Clock, Wallet, Download } from 'lucide-react';
+import { downloadCSV } from '../utils/exportUtils';
 import { PageHeader, DataTable, Button, Badge, StatCard, Card, SearchInput } from '../components/ui';
 
 const formatCurrency = (val) =>
@@ -154,6 +155,18 @@ export default function Claims() {
     }] : []),
   ];
 
+  const handleExport = () => downloadCSV(visibleClaims.map(c => ({
+    Claim: c.id,
+    Party: partyName(c).name,
+    Type: partyName(c).type,
+    Scheme: c.schemeName,
+    Order: c.orderId || '',
+    Amount: c.amount,
+    Status: c.status,
+    Notes: c.reviewNotes || '',
+    Date: formatDate(c.createdAt),
+  })), 'PRISMORA_Scheme_Claims');
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
@@ -162,7 +175,9 @@ export default function Claims() {
         subtitle={isParty
           ? 'Submit and track claims against active schemes you qualify for.'
           : 'Review and settle distributor, dealer and retailer scheme claims.'}
-        actions={isParty ? <Button variant="primary" icon={Plus} onClick={openAdd}>Submit Claim</Button> : undefined}
+        actions={<>
+          <Button icon={Download} onClick={handleExport}>Export</Button>
+          isParty ? <Button variant="primary" icon={Plus} onClick={openAdd}>Submit Claim</Button> : undefined</>}
       />
 
       <div className="grid grid-cols-3 gap-3 sm:gap-4">

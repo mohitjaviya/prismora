@@ -611,7 +611,7 @@ const Accounting = () => {
                   <CreditCard size={20} className="text-brand-accent" />
                   Expenses Breakdown
                 </h3>
-                <div className="h-64 flex items-center justify-center">
+                <div className="h-64">
                   {expenses.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -635,7 +635,9 @@ const Accounting = () => {
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
-                    <p className="text-slate-500 text-sm">No expenses logged yet.</p>
+                    <div className="h-full flex items-center justify-center">
+                      <p className="text-slate-500 text-sm">No expenses logged yet.</p>
+                    </div>
                   )}
                 </div>
               </div>

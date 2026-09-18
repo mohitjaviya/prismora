@@ -266,7 +266,7 @@ const Profile = () => {
                 onChange={e => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
                 className="w-full glass-input rounded-lg px-4 py-2.5 text-white pr-10"
               />
-              <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+              <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors" title="Show or hide the current password">
                 {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
@@ -281,7 +281,7 @@ const Profile = () => {
                 onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                 className="w-full glass-input rounded-lg px-4 py-2.5 text-white pr-10"
               />
-              <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+              <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors" title="Show or hide the new password">
                 {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
@@ -296,7 +296,7 @@ const Profile = () => {
                 onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                 className="w-full glass-input rounded-lg px-4 py-2.5 text-white pr-10"
               />
-              <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+              <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors" title="Show or hide the confirmation">
                 {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>

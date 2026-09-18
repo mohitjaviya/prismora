@@ -427,7 +427,7 @@ export default function Purchases() {
                                 reach it, so the only way out of a PO was to
                                 delete it and lose that it ever existed. */}
                             {(po.status === 'Draft' || po.status === 'Confirmed') && (
-                              <button onClick={() => { setCancellingPO(po); setCancelReason('Ordered by mistake'); }} className="px-2 py-1 text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-colors">Cancel</button>
+                              <button onClick={() => { setCancellingPO(po); setCancelReason('Ordered by mistake'); }} className="px-2 py-1 text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-colors" title="Cancel this purchase order">Cancel</button>
                             )}
                             <button onClick={() => { if (confirm('Delete this PO? Cancelling keeps the record — deleting removes it for good.')) deletePurchaseOrder(po.id); }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"><Trash2 size={13} /></button>
                           </div>
@@ -576,7 +576,7 @@ export default function Purchases() {
           <div className="relative glass-panel bg-brand-primary w-full max-w-lg rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 p-6">
             <div className="flex justify-between items-center mb-5">
               <h3 className="text-lg font-bold text-white">Record Purchase Return</h3>
-              <button onClick={() => setIsReturnModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={18} /></button>
+              <button onClick={() => setIsReturnModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={18} /></button>
             </div>
             <form onSubmit={handleSubmitReturn} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -624,7 +624,7 @@ export default function Purchases() {
           <div className="relative glass-panel bg-brand-primary w-full max-w-3xl max-h-[92vh] rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 flex flex-col overflow-hidden">
             <div className="flex justify-between items-center p-6 border-b border-white/5 flex-shrink-0">
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><ShoppingBag className="text-brand-accent" size={20} />Create Purchase Order</h3>
-              <button onClick={() => setIsPOModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
+              <button onClick={() => setIsPOModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmitPO} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -702,7 +702,7 @@ export default function Purchases() {
           <div className="relative glass-panel bg-brand-primary w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 flex flex-col overflow-hidden">
             <div className="flex justify-between items-center p-6 border-b border-white/5 flex-shrink-0">
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><Truck className="text-brand-accent" size={20} />Record GRN — {grnTargetPO.id}</h3>
-              <button onClick={() => setIsGRNModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
+              <button onClick={() => setIsGRNModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmitGRN} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
               <div className="bg-brand-primary-lighter/30 rounded-xl p-3 border border-white/5 text-xs text-slate-400">
@@ -873,7 +873,7 @@ export default function Purchases() {
           <div className="relative glass-panel bg-brand-primary w-full max-w-lg rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 p-6">
             <div className="flex justify-between items-center mb-5">
               <h3 className="text-lg font-bold text-white">{editingVendor ? 'Edit Vendor' : 'Add Vendor'}</h3>
-              <button onClick={() => setIsVendorModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={18} /></button>
+              <button onClick={() => setIsVendorModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={18} /></button>
             </div>
             <form onSubmit={handleSubmitVendor} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">

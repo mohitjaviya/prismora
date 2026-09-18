@@ -111,7 +111,7 @@ export default function Masters() {
                   ? 'bg-brand-accent/15 text-brand-accent font-semibold'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
-            >
+             title="Cancel">
               <span className="flex items-center gap-1.5">
                 {l.locked && <Lock size={11} className="opacity-60 flex-shrink-0" />}
                 {l.name}
@@ -192,7 +192,7 @@ export default function Masters() {
                       onKeyDown={e => { if (e.key === 'Enter') saveEdit(row); if (e.key === 'Escape') setEditingId(null); }}
                       className="flex-1 glass-input rounded-lg px-2.5 py-1.5 text-sm text-white"
                     />
-                    <button onClick={() => saveEdit(row)} className="p-1.5 text-emerald-400 hover:bg-emerald-400/10 rounded-lg"><Check size={14} /></button>
+                    <button onClick={() => saveEdit(row)} className="p-1.5 text-emerald-400 hover:bg-emerald-400/10 rounded-lg" title="Save"><Check size={14} /></button>
                     <button onClick={() => setEditingId(null)} className="p-1.5 text-slate-400 hover:bg-white/5 rounded-lg"><X size={14} /></button>
                   </>
                 ) : (
@@ -278,7 +278,7 @@ export default function Masters() {
               <div className="mt-3 rounded-xl border border-brand-accent/20 bg-brand-accent/5 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-bold text-white">{row.label}</p>
-                  <button onClick={() => setDetailId(null)} className="text-slate-400 hover:text-white"><X size={14} /></button>
+                  <button onClick={() => setDetailId(null)} className="text-slate-400 hover:text-white" title="Close"><X size={14} /></button>
                 </div>
 
                 <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Colour</label>
