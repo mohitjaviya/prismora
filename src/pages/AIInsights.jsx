@@ -6,8 +6,6 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '../components/ui';
 
-const formatCurrency = (val) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
 
 const compact = (n) => {
   n = Number(n || 0);
@@ -78,10 +76,11 @@ export default function AIInsights() {
       const last60 = dOrders.filter(o => daysAgo(o.date || o.createdAt) <= 60).length;
       const prior60 = dOrders.filter(o => { const g = daysAgo(o.date || o.createdAt); return g > 60 && g <= 120; }).length;
       const declining = prior60 > 0 && last60 < prior60;
-      let risk = 'Low', score = 0;
-      if (recency === Infinity || recency > 60) { risk = 'High'; score = 90; }
-      else if (recency > 30 || declining) { risk = 'Medium'; score = 55; }
-      else { risk = 'Low'; score = 20; }
+      // One expression rather than an initial value every branch overwrites.
+      const [risk, score] =
+        (recency === Infinity || recency > 60) ? ['High', 90]
+          : (recency > 30 || declining) ? ['Medium', 55]
+            : ['Low', 20];
       return { name: d.name, recency: recency === Infinity ? null : recency, orders: dOrders.length, risk, score, declining };
     }).sort((a, b) => b.score - a.score);
   }, [distributors, liveOrders]);
@@ -113,6 +112,11 @@ export default function AIInsights() {
       byProduct[i.product].qty += i.quantity || 0;
       byProduct[i.product].value += (i.quantity || 0) * (i.unitCost || 0);
       if (i.expiryDate) {
+        // react-hooks/purity flags reading the clock while rendering. Here the
+        // clock is the question: "expiring within ninety days" has no meaning
+        // without it. The memo recomputes when inventory changes, which is when
+        // the answer can actually change.
+        /* eslint-disable-next-line react-hooks/purity */
         const dLeft = Math.ceil((new Date(i.expiryDate) - Date.now()) / 86400000);
         if (dLeft > 0 && dLeft <= 90) byProduct[i.product].nearExpiry = true;
       }

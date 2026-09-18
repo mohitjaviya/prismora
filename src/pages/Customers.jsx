@@ -17,10 +17,6 @@ const Customers = () => {
   const [modalYearFilter, setModalYearFilter] = useState('All Time');
   const [modalProductFilter, setModalProductFilter] = useState('All Products');
 
-  // Route Guard: Anyone logged in can access, view is filtered dynamically
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
 
   // Filter orders and leads based on RBAC permissions
   const filteredOrders = useMemo(() => {
@@ -172,6 +168,15 @@ const Customers = () => {
       ),
     },
   ];
+
+  // Below every hook on purpose. Returning above one makes all the hooks
+  // after it conditional, and the render where this fires would run fewer
+  // of them than the render before -- which is the "rendered fewer hooks
+  // than expected" crash, not a lint nicety.
+  // Route Guard: Anyone logged in can access, view is filtered dynamically
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <div className="space-y-6 flex flex-col h-full animate-fade-in-up">

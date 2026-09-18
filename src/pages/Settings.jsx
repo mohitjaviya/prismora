@@ -19,13 +19,16 @@ export default function Settings() {
   const { user, updateUser, verifyCurrentPassword } = useAuth();
   const { eventLog } = useData();
 
-  if (!isAdminRole(user?.role)) return <Navigate to="/" replace />;
-
   const [activeTab, setActiveTab] = useState('audit'); // 'audit' | 'password'
   
   // Password States
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordMessage, setPasswordMessage] = useState({ type: '', text: '' });
+
+  // Below the hooks on purpose: a guard that returns above a useState makes
+  // every hook after it conditional, so a role change mid-session would
+  // crash the page rather than redirect it.
+  if (!isAdminRole(user?.role)) return <Navigate to="/" replace />;
 
   // ── Password Handlers ────────────────────────────────────────────────────
   const handlePasswordSubmit = async (e) => {

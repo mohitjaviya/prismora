@@ -410,10 +410,6 @@ export const DataProvider = ({ children }) => {
 
 
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     // A load must not undo something the user did while it was still running.
     // StrictMode runs this effect twice in development, and the walk through
@@ -1015,6 +1011,13 @@ export const DataProvider = ({ children }) => {
     }
     applyFetched('prismora_masters', setMasters, fetchedMasters);
   };
+
+  // Declared after fetchData deliberately. An effect body runs after the
+  // component body, so calling it from above worked -- but it read as using
+  // a value before it exists, and the linter was right to say so.
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   // A backfill used to run here, uploading records that existed only in this
   // browser. It was written for a specific situation: the database was missing
