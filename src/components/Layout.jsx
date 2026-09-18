@@ -6,7 +6,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import { isToday } from 'date-fns';
-import { Bell, X, CalendarClock, Sparkles, ShieldX } from 'lucide-react';
+import { X, CalendarClock, Sparkles, ShieldX } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const Layout = () => {

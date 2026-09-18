@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { useAuth } from '../context/AuthContext';
-import { isSalesRole, isManagerRole } from '../context/AuthContext';
+import { isSalesRole } from '../context/AuthContext';
 import {
   Plus, CalendarCheck, MapPin, User, LogIn, LogOut, CheckCircle2,
   Clipboard, Smartphone, ShoppingCart, Check, X, FileText,

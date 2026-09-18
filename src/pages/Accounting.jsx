@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Wallet, TrendingUp, Plus, Trash2, Calendar, FileText, CheckCircle, Clock, AlertCircle, ShoppingCart, ArrowUpRight, ArrowDownRight, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
+import { Wallet, TrendingUp, Plus, Trash2, FileText, CheckCircle, Clock, AlertCircle, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
 import { Button, Card, PageHeader } from '../components/ui';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -12,7 +12,7 @@ import {
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, colorAt } from '../utils/chartTheme';
 import { MONTHS, monthKey } from '../utils/months';
 import { unbookedPayouts, unbookedTotal } from '../utils/payouts';
-import { sendWhatsAppAlert, sendEmailAlert, templates } from '../utils/notificationUtils';
+import { sendWhatsAppAlert, sendEmailAlert } from '../utils/notificationUtils';
 
 
 const Accounting = () => {

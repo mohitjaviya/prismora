@@ -1,4 +1,4 @@
-import { Menu, Bell, User, LogOut, Search, Sun, Moon, CalendarClock, Activity, CheckCircle, XCircle, Package, Truck, Wallet, MessageSquareWarning, Users } from 'lucide-react';
+import { Menu, Bell, User, LogOut, Search, Sun, Moon, Activity, Package, Wallet, MessageSquareWarning, Users } from 'lucide-react';
 import { useAuth, isAdminRole } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useNotifications } from '../context/NotificationContext';

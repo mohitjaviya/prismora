@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole } from '../context/AuthContext';
-import { BarChart3, Download, Search, TrendingUp, Package2, Wallet, Users, Star, ChevronRight } from 'lucide-react';
+import { BarChart3, Download, TrendingUp, Package2, Wallet, Users, Star, ChevronRight } from 'lucide-react';
 import { PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 

@@ -8,7 +8,7 @@ import {
   CheckCircle, Clock, Truck, FileText, User, Edit2,
   ChevronRight, Package2, AlertCircle, Eye, Wallet, IndianRupee, ArrowUpCircle, ArrowDownCircle
 } from 'lucide-react';
-import { PageHeader } from '../components/ui';
+import { Button, PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildVendorLedger } from '../utils/distributorUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
@@ -156,6 +156,61 @@ export default function Purchases() {
     !search || v.name.toLowerCase().includes(search.toLowerCase())
   ), [vendors, search]);
 
+  /** Vendor names for the export; the tables resolve them inline. */
+  const vendorNameFor = (id) => (vendors.find(v => v.id === id) || {}).name || id || '-';
+
+  /**
+   * Export what is on screen, not everything.
+   *
+   * Each tab is its own list with its own columns, so exporting the "purchases"
+   * as one shape would mean inventing a row that is part order, part vendor and
+   * part receipt. The filters are applied too: what downloads is what was being
+   * looked at.
+   */
+  const handleExport = () => {
+    if (activeTab === 'orders') {
+      return downloadCSV(filteredOrders.map(po => ({
+        PO: po.id,
+        Vendor: vendorNameFor(po.vendorId),
+        Items: (po.items || []).length,
+        Total: po.totalAmount,
+        Status: po.status,
+        Expected: formatDate(po.expectedDate),
+        Created: formatDate(po.createdAt),
+      })), 'PRISMORA_Purchase_Orders');
+    }
+    if (activeTab === 'vendors') {
+      return downloadCSV(filteredVendors.map(v => ({
+        Name: v.name,
+        GSTIN: v.gstin,
+        Contact: v.contactPerson,
+        Phone: v.phone,
+        Email: v.email,
+        City: v.city,
+        State: v.state,
+        Outstanding: v.outstandingAmount,
+      })), 'PRISMORA_Vendors');
+    }
+    if (activeTab === 'grn') {
+      return downloadCSV((grn || []).map(g => ({
+        GRN: g.id,
+        PO: g.poId,
+        Vendor: vendorNameFor(g.vendorId),
+        Items: (g.items || []).length,
+        Received: formatDate(g.receivedDate || g.createdAt),
+      })), 'PRISMORA_GRN_History');
+    }
+    return downloadCSV((purchaseReturns || []).map(r => ({
+      Return: r.id,
+      Vendor: vendorNameFor(r.vendorId),
+      Product: r.product,
+      Quantity: r.quantity,
+      Value: r.value,
+      Reason: r.reason,
+      Date: formatDate(r.date || r.createdAt),
+    })), 'PRISMORA_Purchase_Returns');
+  };
+
   const addLineItem = () => setPOForm(f => ({ ...f, items: [...f.items, { ...BLANK_LINE }] }));
   const removeLineItem = (idx) => setPOForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
   const updateLineItem = (idx, key, val) => setPOForm(f => ({ ...f, items: f.items.map((item, i) => i === idx ? { ...item, [key]: val } : item) }));
@@ -250,6 +305,7 @@ export default function Purchases() {
         subtitle="Purchase orders, vendor management & goods receipt from Janki Herbals."
         actions={
         <>
+          <Button icon={Download} onClick={handleExport}>Export</Button>
           {canManage && (
           <div className="flex gap-3">
           {activeTab === 'orders' && (
