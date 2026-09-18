@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Tag, Plus, Trash2, X, Edit2, CheckCircle, Clock, Download, Percent, Gift, Calendar, BarChart3, Zap, Trophy } from 'lucide-react';
+import { useConfirm } from '../context/DialogContext';
 import { PageHeader, Button, StatCard, Card, SearchInput } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { schemeLiveState } from '../utils/schemeUtils';
@@ -40,6 +41,7 @@ const BLANK_FORM = {
 
 export default function Schemes() {
   const { schemes, addScheme, updateScheme, deleteScheme, distributorIncentives, productCatalog, masters } = useData();
+  const confirm = useConfirm();
   // Options come from Master Lists; masterLists.js holds the fallback.
   const schemeTypes = optionsFor(masters, 'scheme_type').map(o => o.key);
   const { canAccess } = useAuth();
@@ -312,7 +314,7 @@ export default function Schemes() {
                           <CheckCircle size={14} />
                         </button>
                         <button onClick={() => openEdit(s)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors" title="Edit scheme"><Edit2 size={14} /></button>
-                        <button onClick={() => { if (confirm('Delete scheme?')) deleteScheme(s.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete scheme"><Trash2 size={14} /></button>
+                        <button onClick={async () => { if (await confirm({ title: 'Delete scheme?', danger: true, confirmLabel: 'Delete' })) deleteScheme(s.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete scheme"><Trash2 size={14} /></button>
                       </div>
                     )}
                   </div>

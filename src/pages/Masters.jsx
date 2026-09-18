@@ -105,7 +105,7 @@ export default function Masters() {
           {MASTER_LISTS.map(l => (
             <button
               key={l.id}
-              onClick={() => { setActiveList(l.id); setEditingId(null); setDetailId(null); setError(''); setNewLabel(''); setSearch(''); }}
+              onClick={async () => { setActiveList(l.id); setEditingId(null); setDetailId(null); setError(''); setNewLabel(''); setSearch(''); }}
               className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors mb-0.5 ${
                 activeList === l.id
                   ? 'bg-brand-accent/15 text-brand-accent font-semibold'
@@ -247,7 +247,12 @@ export default function Masters() {
                     {!row.locked && (
                       <button
                         onClick={async () => {
-                          if (confirm(`Remove "${row.label}"? Records already using it will still show it.`)) {
+                          if (await confirm({
+                            title: `Remove "${row.label}"?`,
+                            body: 'Records already using it will still show it.',
+                            danger: true,
+                            confirmLabel: 'Remove',
+                          })) {
                             say(await deleteMasterOption(row.id));
                           }
                         }}

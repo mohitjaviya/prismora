@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Package2, Plus, Edit2, Trash2, AlertTriangle, X, Download, RefreshCw, TrendingDown, CheckCircle, Clock, AlertCircle, ArrowUp, ArrowDown, Mail, ArrowLeftRight, ClipboardCheck, Layers, Wallet } from 'lucide-react';
+import { useConfirm } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, Card, StatCard, SearchInput, Select } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { sendEmailAlert, templates } from '../utils/notificationUtils';
@@ -47,6 +48,7 @@ const BLANK_ADJUST = { adjustment: '', reason: '' };
 
 export default function Inventory() {
   const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, masters } = useData();
+  const confirm = useConfirm();
   // Options come from Master Lists; masterLists.js holds the fallback.
   const warehouses = optionsFor(masters, 'warehouse').map(o => o.key);
   const { canAccess } = useAuth();
@@ -340,7 +342,7 @@ export default function Inventory() {
                                 </button>
                               )}
                               <button onClick={() => openEdit(item)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors" title="Edit"><Edit2 size={14} /></button>
-                              <button onClick={() => { if (confirm('Delete this inventory batch?')) deleteInventoryItem(item.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={14} /></button>
+                              <button onClick={async () => { if (await confirm({ title: 'Delete this inventory batch?', danger: true, confirmLabel: 'Delete' })) deleteInventoryItem(item.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={14} /></button>
                             </div>
                           </td>
                         )}

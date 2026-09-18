@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole } from '../../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X } from 'lucide-react';
+import { useConfirm } from '../../context/DialogContext';
 import { useToast } from '../../context/DialogContext';
 import { PageHeader, DataTable, Button, IconButton, Badge } from '../../components/ui';
 
@@ -27,6 +28,7 @@ const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tr
 
 export default function TeamMembers() {
   const { user, users: allUsers, addUser, createUserAccount, updateUser, deleteUser } = useAuth();
+  const confirm = useConfirm();
   const toast = useToast();
 
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -123,7 +125,7 @@ export default function TeamMembers() {
           <IconButton icon={Edit2} title="Edit user" size="sm" tone="accent" onClick={() => openUserEdit(u)} />
           {u.id !== user.id && (
             <IconButton icon={Trash2} title="Delete user" size="sm" tone="danger"
-              onClick={() => { if (confirm('Delete this user?')) deleteUser(u.id); }} />
+              onClick={async () => { if (await confirm({ title: 'Delete this user?', danger: true, confirmLabel: 'Delete' })) deleteUser(u.id); }} />
           )}
         </div>
       ),

@@ -8,6 +8,7 @@ import {
   CheckCircle, Clock, Truck, FileText, User, Edit2,
   ChevronRight, Package2, AlertCircle, Eye, Wallet, IndianRupee, ArrowUpCircle, ArrowDownCircle
 } from 'lucide-react';
+import { useConfirm } from '../context/DialogContext';
 import { Button, PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildVendorLedger } from '../utils/distributorUtils';
@@ -36,6 +37,7 @@ export default function Purchases() {
   const { purchaseOrders, vendors, grn, products, vendorPayments, purchaseReturns,
     addPurchaseOrder, updatePurchaseOrderStatus, cancelPurchaseOrder, deletePurchaseOrder,
     addVendor, updateVendor, deleteVendor, addGRN, receiveStock, addVendorPayment, addPurchaseReturn, masters } = useData();
+  const confirm = useConfirm();
   // statusConfig below is keyed on the stored value, so the filter uses keys.
   const poStatusOptions = optionsFor(masters, 'po_status');
   // statusConfig below only knows the statuses that existed when it was
@@ -429,7 +431,7 @@ export default function Purchases() {
                             {(po.status === 'Draft' || po.status === 'Confirmed') && (
                               <button onClick={() => { setCancellingPO(po); setCancelReason('Ordered by mistake'); }} className="px-2 py-1 text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-colors" title="Cancel this purchase order">Cancel</button>
                             )}
-                            <button onClick={() => { if (confirm('Delete this PO? Cancelling keeps the record — deleting removes it for good.')) deletePurchaseOrder(po.id); }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete this purchase order"><Trash2 size={13} /></button>
+                            <button onClick={async () => { if (await confirm({ title: 'Delete this PO? Cancelling keeps the record — deleting removes it for good.', danger: true, confirmLabel: 'Delete' })) deletePurchaseOrder(po.id); }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete this purchase order"><Trash2 size={13} /></button>
                           </div>
                         </td>
                       )}
@@ -481,7 +483,7 @@ export default function Purchases() {
                         <button onClick={() => setViewingVendor(v)} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="View Ledger"><Eye size={14} /></button>
                         {canManage && <>
                           <button onClick={() => openEditVendor(v)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors" title="Edit vendor"><Edit2 size={14} /></button>
-                          <button onClick={() => { if (confirm('Delete vendor?')) deleteVendor(v.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete vendor"><Trash2 size={14} /></button>
+                          <button onClick={async () => { if (await confirm({ title: 'Delete vendor?', danger: true, confirmLabel: 'Delete' })) deleteVendor(v.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete vendor"><Trash2 size={14} /></button>
                         </>}
                       </div>
                     </td>

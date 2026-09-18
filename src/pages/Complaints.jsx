@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth, isAdminRole } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { MessageSquareWarning, Plus, Trash2, X, Download, CheckCircle, Clock, AlertTriangle, Eye, RotateCcw } from 'lucide-react';
+import { useConfirm } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
@@ -26,6 +27,7 @@ const BLANK_RESOLVE = { status: 'Resolved', resolution: '' };
 
 export default function Complaints() {
   const { complaints, products, addComplaint, updateComplaintStatus, deleteComplaint, distributors, dealers, retailers, masters } = useData();
+  const confirm = useConfirm();
   // From Master Lists. Statuses keep their stored key while the label is what
   // people read — statusConfig below is still keyed on the stored value.
   const complaintTypes = optionsFor(masters, 'complaint_type').map(o => o.key);
@@ -171,7 +173,7 @@ export default function Complaints() {
           )}
           {isAdminRole(user?.role) && (
             <IconButton icon={Trash2} title="Delete complaint" size="sm" tone="danger"
-              onClick={e => { e.stopPropagation(); if (confirm('Delete complaint?')) deleteComplaint(c.id); }} />
+              onClick={async e => { e.stopPropagation(); if (await confirm({ title: 'Delete complaint?', danger: true, confirmLabel: 'Delete' })) deleteComplaint(c.id); }} />
           )}
         </div>
       ),

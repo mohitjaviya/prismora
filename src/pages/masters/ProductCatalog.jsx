@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, Package, QrCode, X } from 'lucide-react';
+import { useConfirm } from '../../context/DialogContext';
 import { PageHeader, DataTable, Button, IconButton, Badge } from '../../components/ui';
 import { optionsFor } from '../../utils/masterLists';
 
@@ -25,6 +26,7 @@ const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tr
 
 export default function ProductCatalog() {
   const { productCatalog, addProduct, updateProduct, deleteProduct, masters } = useData();
+  const confirm = useConfirm();
 
   // The three lists this form offers are themselves master lists.
   const productCategories = optionsFor(masters, 'product_category').map(o => o.key);
@@ -111,7 +113,7 @@ export default function ProductCatalog() {
         <div className="flex items-center justify-center gap-0.5">
           <IconButton icon={Edit2} title="Edit product" size="sm" tone="accent" onClick={() => openProductEdit(p)} />
           <IconButton icon={Trash2} title="Delete product" size="sm" tone="danger"
-            onClick={() => { if (confirm('Delete this product?')) deleteProduct(p.id); }} />
+            onClick={async () => { if (await confirm({ title: 'Delete this product?', danger: true, confirmLabel: 'Delete' })) deleteProduct(p.id); }} />
         </div>
       ),
     },

@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, ArrowUpCircle, ArrowDownCircle, Truck, Clock, AlertTriangle } from 'lucide-react';
+import { useConfirm } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadCSV } from '../utils/exportUtils';
@@ -32,6 +33,7 @@ const BLANK_FORM = {
 
 export default function Distributors() {
   const { distributors, addDistributor, updateDistributor, deleteDistributor, invoices, distributorPayments, addDistributorPayment, orders, territories } = useData();
+  const confirm = useConfirm();
   const { user, users, updateUser, deleteUser, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
@@ -83,8 +85,8 @@ export default function Distributors() {
     if (linkedUser) updateUser(linkedUser.id, { status: 'Active' });
   };
 
-  const rejectDistributor = (d) => {
-    if (!confirm(`Reject and remove the registration for "${d.name}"?`)) return;
+  const rejectDistributor = async (d) => {
+    if (!await confirm({ title: `Reject and remove the registration for "${d.name}"?`, danger: true, confirmLabel: 'Remove' })) return;
     const linkedUser = users.find(u => u.distributorId === d.id);
     if (linkedUser) deleteUser(linkedUser.id);
     deleteDistributor(d.id);
@@ -177,7 +179,7 @@ export default function Distributors() {
             <>
               <IconButton icon={Edit2} title="Edit distributor" size="sm" tone="accent" onClick={() => openEdit(d)} />
               <IconButton icon={Trash2} title="Delete distributor" size="sm" tone="danger"
-                onClick={() => { if (confirm('Delete this distributor?')) deleteDistributor(d.id); }} />
+                onClick={async () => { if (await confirm({ title: 'Delete this distributor?', danger: true, confirmLabel: 'Delete' })) deleteDistributor(d.id); }} />
             </>
           )}
         </div>

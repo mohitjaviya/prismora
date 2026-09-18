@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, ArrowUpCircle, ArrowDownCircle, Truck, Clock, AlertTriangle } from 'lucide-react';
+import { useConfirm } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadCSV } from '../utils/exportUtils';
@@ -32,6 +33,7 @@ const BLANK_FORM = {
 
 export default function Dealers() {
   const { dealers, addDealer, updateDealer, deleteDealer, distributors, invoices, distributorPayments, addDealerPayment, orders, territories } = useData();
+  const confirm = useConfirm();
   const { user, users, updateUser, deleteUser, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
@@ -86,8 +88,8 @@ export default function Dealers() {
     if (linkedUser) updateUser(linkedUser.id, { status: 'Active' });
   };
 
-  const rejectDealer = (d) => {
-    if (!confirm(`Reject and remove the registration for "${d.name}"?`)) return;
+  const rejectDealer = async (d) => {
+    if (!await confirm({ title: `Reject and remove the registration for "${d.name}"?`, danger: true, confirmLabel: 'Remove' })) return;
     const linkedUser = users.find(u => u.dealerId === d.id);
     if (linkedUser) deleteUser(linkedUser.id);
     deleteDealer(d.id);
@@ -190,7 +192,7 @@ export default function Dealers() {
             <>
               <IconButton icon={Edit2} title="Edit dealer" size="sm" tone="accent" onClick={() => openEdit(d)} />
               <IconButton icon={Trash2} title="Delete dealer" size="sm" tone="danger"
-                onClick={() => { if (confirm('Delete this dealer?')) deleteDealer(d.id); }} />
+                onClick={async () => { if (await confirm({ title: 'Delete this dealer?', danger: true, confirmLabel: 'Delete' })) deleteDealer(d.id); }} />
             </>
           )}
         </div>

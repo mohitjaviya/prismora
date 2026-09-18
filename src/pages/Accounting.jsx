@@ -800,10 +800,14 @@ const Accounting = () => {
                               )}
                               {inv.status === 'Paid' && (
                                 <button
-                                  onClick={() => {
+                                  onClick={async () => {
                                     // Marking an invoice paid now also credits the partner, so a
                                     // misclick moves money. It has to be undoable.
-                                    if (confirm('Mark this invoice unpaid again? The payment recorded against the partner will be removed and their balance put back.')) {
+                                    if (await confirm({
+                                      title: 'Mark this invoice unpaid again?',
+                                      body: 'The payment recorded against the partner will be removed and their balance put back.',
+                                      confirmLabel: 'Mark unpaid',
+                                    })) {
                                       updateInvoiceStatus(inv.id, 'Unpaid');
                                     }
                                   }}
@@ -830,8 +834,8 @@ const Accounting = () => {
                                 <Printer size={16} />
                               </button>
                               <button
-                                onClick={() => {
-                                  if (confirm("Delete this invoice?")) deleteInvoice(inv.id);
+                                onClick={async () => {
+                                  if (await confirm({ title: "Delete this invoice?", danger: true, confirmLabel: 'Delete' })) deleteInvoice(inv.id);
                                 }}
                                 className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                                 title="Delete Invoice"
@@ -886,8 +890,8 @@ const Accounting = () => {
                         <td className="p-4 text-right font-bold text-white">{formatCurrency(exp.amount)}</td>
                         <td className="p-4 text-center">
                           <button
-                            onClick={() => {
-                              if (confirm("Delete this expense record?")) deleteExpense(exp.id);
+                            onClick={async () => {
+                              if (await confirm({ title: "Delete this expense record?", danger: true, confirmLabel: 'Delete' })) deleteExpense(exp.id);
                             }}
                             className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                             title="Delete Expense"

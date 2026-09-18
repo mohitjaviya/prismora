@@ -6,6 +6,7 @@ import { useAuth, isSalesRole } from '../context/AuthContext';
 import { 
   ArrowUpDown, Plus, Edit2, Trash2, MapPin, Users, Globe, ChevronRight, X, Compass, Check
 } from 'lucide-react';
+import { useConfirm } from '../context/DialogContext';
 import { PageHeader } from '../components/ui';
 import { createPortal } from 'react-dom';
 
@@ -26,6 +27,7 @@ const norm = (s) => String(s || '').trim().toLowerCase();
 
 export default function Geography() {
   const { orders, territories, addTerritory, updateTerritory, deleteTerritory } = useData();
+  const confirm = useConfirm();
   const { users: allUsers, canAccessData, isAdmin } = useAuth();
   
   const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'territories'
@@ -541,7 +543,7 @@ export default function Geography() {
                                 <Edit2 size={14} />
                               </button>
                               <button 
-                                onClick={() => { if (confirm('Delete territory?')) deleteTerritory(t.id); }}
+                                onClick={async () => { if (await confirm({ title: 'Delete territory?', danger: true, confirmLabel: 'Delete' })) deleteTerritory(t.id); }}
                                 className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                               >
                                 <Trash2 size={14} />
