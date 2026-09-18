@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import {
   linkedExpenseId, expenseForIncentive, expenseForClaim, expenseForFieldExpense,
@@ -1496,8 +1496,53 @@ export const DataProvider = ({ children }) => {
   // code branches on must not be renamable through any path — a screen can be
   // bypassed, and the cost of getting it wrong is deliveries that stop billing.
 
+  const absentMasterColumns = useRef(new Set());
+
   const MASTER_COLUMNS = ['id', 'list', 'key', 'label', 'color', 'description', 'sort', 'active', 'locked', 'createdAt'];
   const masterRow = shapeFor(MASTER_COLUMNS);
+
+  /**
+   * Columns the masters table may not have yet.
+   *
+   * ADD_MASTER_COLOURS.sql adds `color` and `description`. Until it is run,
+   * naming either one aborts the whole statement with PGRST204 rather than
+   * being ignored, so every option added or renamed was lost on refresh.
+   *
+   * Remembered per session rather than per write: once a column is known to be
+   * absent, later writes leave it out instead of failing and retrying again.
+   * The set starts empty, so running the migration needs no code change.
+   */
+  const OPTIONAL_MASTER_COLUMNS = ['color', 'description'];
+
+  const withoutAbsent = (row) => {
+    const copy = { ...row };
+    absentMasterColumns.current.forEach(c => delete copy[c]);
+    return copy;
+  };
+
+  /**
+   * Run a masters write, and try again without the column it was refused for.
+   *
+   * Returns true only when the database actually accepted it, so a caller can
+   * still tell the difference between saved and merely shown.
+   */
+  const persistMaster = async (label, build) => {
+    const { error } = await build(withoutAbsent);
+    if (!error) return true;
+
+    const message = String(error.message || '');
+    const culprit = OPTIONAL_MASTER_COLUMNS.find(c => message.includes(`'${c}'`));
+    if (!culprit || absentMasterColumns.current.has(culprit)) {
+      console.error(`[Prismora] Could not save ${label}:`, message || error);
+      return false;
+    }
+
+    console.warn(
+      `[Prismora] The masters table has no '${culprit}' column, so it is being left out. ` +
+      'Run ADD_MASTER_COLOURS.sql to keep colours and descriptions.');
+    absentMasterColumns.current.add(culprit);
+    return persistMaster(label, build);
+  };
 
   const addMasterOption = async (listId, label) => {
     const clean = String(label || '').trim();
@@ -1527,7 +1572,8 @@ export const DataProvider = ({ children }) => {
     const next = [...masters, row];
     setMasters(next);
     localStorage.setItem('prismora_masters', JSON.stringify(next));
-    const saved = await persist('masters insert', supabase.from('masters').insert([row]));
+    const saved = await persistMaster('the new option',
+      (shape) => supabase.from('masters').insert([shape(row)]));
     if (!saved) {
       setMasters(masters);
       localStorage.setItem('prismora_masters', JSON.stringify(masters));
@@ -1563,7 +1609,8 @@ export const DataProvider = ({ children }) => {
     const next = masters.map(m => m.id === id ? { ...m, ...patch } : m);
     setMasters(next);
     localStorage.setItem('prismora_masters', JSON.stringify(next));
-    const saved = await persist('masters update', supabase.from('masters').update(masterRow(patch)).eq('id', id));
+    const saved = await persistMaster('the change',
+      (shape) => supabase.from('masters').update(shape(masterRow(patch))).eq('id', id));
     if (!saved) {
       setMasters(masters);
       localStorage.setItem('prismora_masters', JSON.stringify(masters));
