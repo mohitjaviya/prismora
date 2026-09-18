@@ -9,6 +9,7 @@ import {
   Navigation, Receipt, BarChart3, Trophy, Target, TrendingUp,
   Upload, CheckSquare, XSquare, Route, Clock, Award, RefreshCw
 } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { optionsFor } from '../utils/masterLists';
 
@@ -437,25 +438,25 @@ export default function SFA() {
   return (
     <div className="space-y-6">
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <CalendarCheck size={24} className="text-brand-accent" />
-            Sales Force Automation
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">GPS tracking, beats, attendance, expenses & performance analytics.</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
+            <PageHeader
+        icon={CalendarCheck}
+        title="Sales Force Automation"
+        subtitle="GPS tracking, beats, attendance, expenses & performance analytics."
+        actions={
+        <>
+          <div className="flex gap-2 flex-wrap">
           {!isSREP && (
-            <button onClick={() => setIsBeatModalOpen(true)} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-              <Plus size={16} /> Assign Beat
-            </button>
+          <button onClick={() => setIsBeatModalOpen(true)} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
+          <Plus size={16} /> Assign Beat
+          </button>
           )}
           <button onClick={() => setIsExpenseModalOpen(true)} className="px-4 py-2.5 rounded-xl border border-brand-accent/30 text-brand-accent hover:bg-brand-accent/10 flex items-center gap-2 text-sm font-bold transition-all">
-            <Receipt size={16} /> File Expense
+          <Receipt size={16} /> File Expense
           </button>
-        </div>
-      </div>
+          </div>
+        </>
+        }
+      />
 
       {/* ── Tabs ───────────────────────────────────────────────────────── */}
       <div className="flex border-b border-white/5 pb-px gap-0.5 overflow-x-auto custom-scrollbar">

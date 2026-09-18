@@ -92,7 +92,7 @@ const DistributorSignup = () => {
               </p>
               <button
                 onClick={() => navigate('/login')}
-                className="w-full btn-accent font-bold rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-brand-accent/30"
+                className="w-full btn-accent font-bold rounded-xl h-11 px-4 inline-flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg shadow-brand-accent/30"
               >
                 Back to Sign In <ArrowRight size={18} />
               </button>
@@ -114,7 +114,7 @@ const DistributorSignup = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>GSTIN</label>
-                    <input type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className="w-full glass-input rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+                    <input type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className="w-full glass-input h-11 px-3.5 text-sm" />
                   </div>
                   <div>
                     <label className={labelCls}>Contact Person *</label>
@@ -155,7 +155,7 @@ const DistributorSignup = () => {
                   </div>
                   <div>
                     <label className={labelCls}>City / District *</label>
-                    <select required value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} disabled={!form.state} className="w-full glass-input rounded-xl px-3 py-2.5 text-sm text-white disabled:opacity-50">
+                    <select required value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} disabled={!form.state} className="w-full glass-input h-11 px-3.5 text-sm">
                       <option value="" className="bg-brand-primary text-slate-500">-- Select --</option>
                       {districts.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
                     </select>
@@ -164,7 +164,7 @@ const DistributorSignup = () => {
 
                 <div>
                   <label className={labelCls}>Territory / Zone (optional)</label>
-                  <input type="text" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} placeholder="Admin will confirm this on approval" className="w-full glass-input rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+                  <input type="text" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} placeholder="Admin will confirm this on approval" className="w-full glass-input h-11 px-3.5 text-sm" />
                 </div>
 
                 <div>
@@ -180,7 +180,7 @@ const DistributorSignup = () => {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full btn-accent font-bold rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-brand-accent/30 disabled:opacity-60 text-white"
+                  className="w-full btn-accent font-bold rounded-xl h-11 px-4 inline-flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-brand-accent/30 disabled:opacity-60 text-white"
                 >
                   {submitting ? 'Submitting...' : 'Submit Registration'} <ArrowRight size={18} />
                 </button>

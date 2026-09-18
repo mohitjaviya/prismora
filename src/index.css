@@ -171,12 +171,18 @@
     box-shadow: 0 4px 32px rgba(212,24,108,0.05), 0 1px 0 rgba(212,24,108,0.08) inset;
   }
 
-  /* Glass input */
+  /* The look of every form control.
+     The UI kit's Input, Select and Textarea build on this class rather than
+     restating it, so the controls inside a modal that was written by hand and
+     the ones the kit renders cannot drift apart. Size and padding are the
+     caller's business; everything visual is here. */
   .glass-input {
-    @apply bg-brand-primary-lighter/60 border border-white/10 backdrop-blur-md
-           focus:bg-brand-primary-lighter focus:border-brand-accent
-           focus:shadow-[0_0_18px_rgba(212,24,108,0.22)]
-           transition-all outline-none;
+    @apply bg-brand-primary-lighter/50 border border-white/10 backdrop-blur-md
+           text-white placeholder:text-slate-600 rounded-xl
+           focus:bg-brand-primary-lighter focus:border-brand-accent/50
+           focus:shadow-[0_0_0_3px_rgba(212,24,108,0.12)]
+           disabled:opacity-40 disabled:cursor-not-allowed
+           transition-colors outline-none;
   }
 
   /* Shimmer text utility */

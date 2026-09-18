@@ -9,10 +9,10 @@ import { Search as SearchIcon, ChevronDown } from 'lucide-react';
  * an input and a Button in the same row line up without anyone nudging margins.
  */
 
-const BASE = `w-full bg-brand-primary-lighter/50 border border-white/10 text-white
-  placeholder:text-slate-600 rounded-xl transition-colors outline-none
-  focus:border-brand-accent/50 focus:bg-brand-primary-lighter
-  disabled:opacity-40 disabled:cursor-not-allowed`;
+// Everything visual lives in .glass-input, in index.css. Restating it here is
+// how the kit's controls and the hand-written ones in modals drifted apart in
+// the first place, so this adds only width.
+const BASE = 'w-full glass-input';
 
 const SIZES = { sm: 'h-8 px-2.5 text-[11px]', md: 'h-10 px-3 text-xs', lg: 'h-11 px-3.5 text-sm' };
 
