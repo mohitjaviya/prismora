@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole } from '../../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X } from 'lucide-react';
+import { PageHeader, DataTable, Button, IconButton, Badge } from '../../components/ui';
 
 /**
  * The people who can sign in, and what each of them may reach.
@@ -75,73 +76,81 @@ export default function TeamMembers() {
     });
   };
 
+  const userColumns = [
+    {
+      key: 'name', header: 'User', sort: u => u.name || '',
+      render: u => (
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="w-8 h-8 rounded-full bg-brand-accent/10 text-brand-accent flex items-center justify-center font-bold text-[11px] uppercase flex-shrink-0">
+            {String(u.name || '?').substring(0, 2)}
+          </span>
+          <div className="min-w-0">
+            <div className="font-semibold text-white truncate">{u.name}</div>
+            <div className="text-[11px] text-slate-500 truncate">{u.email}</div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'role', header: 'Role', sort: u => u.role || '',
+      render: u => (
+        <Badge tone={isAdminRole(u.role) ? 'purple' : isManagerRole(u.role) ? 'accent' : 'info'}>
+          {u.role}
+        </Badge>
+      ),
+    },
+    {
+      key: 'managed', header: 'Team Members Managed', hideBelow: 'lg',
+      render: u => (isManagerRole(u.role)
+        ? (
+          <div className="flex flex-wrap gap-1">
+            {u.managedUsers && u.managedUsers.length > 0
+              ? u.managedUsers.map(id => {
+                const mu = allUsers.find(x => x.id === id);
+                return mu ? <Badge key={id} tone="neutral">{mu.name}</Badge> : null;
+              })
+              : <span className="italic text-slate-600">Nobody yet</span>}
+          </div>
+        )
+        : <span className="text-slate-600">—</span>),
+    },
+    {
+      key: 'actions', header: '', align: 'center', width: 'w-24',
+      render: u => (
+        <div className="flex items-center justify-center gap-0.5">
+          <IconButton icon={Edit2} title="Edit user" size="sm" tone="accent" onClick={() => openUserEdit(u)} />
+          {u.id !== user.id && (
+            <IconButton icon={Trash2} title="Delete user" size="sm" tone="danger"
+              onClick={() => { if (confirm('Delete this user?')) deleteUser(u.id); }} />
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div className="flex justify-between items-center gap-4">
-        <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2"><Users size={18} className="text-brand-accent" />Team Members</h2>
-          <p className="text-xs text-slate-400 mt-1">Who can sign in, and what each of them may reach.</p>
-        </div>
-        <button onClick={openUserAdd} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold flex-shrink-0">
-          <Plus size={16} /> Add User
-        </button>
-      </div>
+      <PageHeader
+        icon={Users}
+        title="Team Members"
+        subtitle="Who can sign in, and what each of them may reach."
+        actions={<Button variant="primary" icon={Plus} onClick={openUserAdd}>Add User</Button>}
+      />
 
-
-          <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                    <th className="p-4">User</th>
-                    <th className="p-4">Role</th>
-                    <th className="p-4">Team Members Managed</th>
-                    <th className="p-4 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-slate-300">
-                  {allUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                      <td className="p-4 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-brand-accent/10 text-brand-accent flex items-center justify-center font-bold text-xs uppercase">
-                          {u.name.substring(0, 2)}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-white">{u.name}</div>
-                          <div className="text-xs text-slate-500">{u.email}</div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${isAdminRole(u.role) ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : isManagerRole(u.role) ? 'bg-brand-accent/10 text-brand-accent border-brand-accent/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="p-4 text-xs text-slate-400">
-                        {isManagerRole(u.role) ? (
-                          <div className="flex flex-wrap gap-1">
-                            {u.managedUsers && u.managedUsers.length > 0 ? (
-                              u.managedUsers.map(managedId => {
-                                const mu = allUsers.find(x => x.id === managedId);
-                                return mu ? <span key={managedId} className="bg-white/5 px-2 py-0.5 rounded border border-white/5">{mu.name}</span> : null;
-                              })
-                            ) : <span className="italic text-slate-600">No managed users</span>}
-                          </div>
-                        ) : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => openUserEdit(u)} className="p-1 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"><Edit2 size={14} /></button>
-                          {u.id !== user.id && (
-                            <button onClick={() => { if (confirm('Delete this user?')) deleteUser(u.id); }} className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"><Trash2 size={14} /></button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      <DataTable
+        title="Team"
+        columns={userColumns}
+        rows={allUsers}
+        rowKey={u => u.id}
+        search={u => `${u.name} ${u.email} ${u.role}`}
+        searchPlaceholder="Search name, email or role"
+        empty={{
+          icon: Users,
+          title: 'Nobody has been added yet',
+          hint: 'A team member gets a login and whatever their role allows. What each role can reach is set on Roles & Permissions.',
+          action: <Button variant="primary" icon={Plus} onClick={openUserAdd}>Add User</Button>,
+        }}
+      />
 
   {isUserModalOpen && createPortal(
           <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-[6vh]">

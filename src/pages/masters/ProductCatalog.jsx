@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, Package, QrCode, X } from 'lucide-react';
+import { PageHeader, DataTable, Button, IconButton, Badge } from '../../components/ui';
 import { optionsFor } from '../../utils/masterLists';
 
 /**
@@ -62,72 +63,83 @@ export default function ProductCatalog() {
     setIsProductModalOpen(false);
   };
 
+  const productColumns = [
+    {
+      key: 'name', header: 'Product / SKU', sort: p => p.name || '',
+      render: p => (
+        <>
+          <div className="font-semibold text-white">{p.name}</div>
+          <div className="text-[10px] font-mono text-slate-500">{p.sku || 'No SKU'} &middot; {p.uom || 'BOX'}</div>
+        </>
+      ),
+    },
+    {
+      key: 'category', header: 'Category', hideBelow: 'lg', sort: p => p.category || '',
+      render: p => <Badge tone="accent">{p.category}</Badge>,
+    },
+    {
+      key: 'status', header: 'Status', align: 'center', sort: p => p.status || 'Active',
+      render: p => <Badge>{p.status || 'Active'}</Badge>,
+    },
+    {
+      key: 'hsn', header: 'HSN', align: 'center', hideBelow: 'lg', sort: p => p.hsnCode || '',
+      render: p => <span className="font-mono text-slate-400">{p.hsnCode || '—'}</span>,
+    },
+    {
+      key: 'gst', header: 'GST', align: 'center', hideBelow: 'md', sort: p => Number(p.gstPct) || 0,
+      render: p => <span className="font-bold text-brand-accent">{p.gstPct}%</span>,
+    },
+    {
+      key: 'mrp', header: 'MRP', align: 'right', hideBelow: 'md', sort: p => Number(p.mrp) || 0,
+      render: p => <span className="text-slate-400">{formatCurrency(p.mrp)}</span>,
+    },
+    {
+      key: 'distributorPrice', header: 'Distributor', align: 'right', sort: p => Number(p.distributorPrice) || 0,
+      render: p => <span className="font-bold text-white">{formatCurrency(p.distributorPrice)}</span>,
+    },
+    {
+      key: 'dealerPrice', header: 'Dealer', align: 'right', hideBelow: 'lg', sort: p => Number(p.dealerPrice) || 0,
+      render: p => <span className="text-slate-400">{formatCurrency(p.dealerPrice)}</span>,
+    },
+    {
+      key: 'retailerPrice', header: 'Retailer', align: 'right', hideBelow: 'lg', sort: p => Number(p.retailerPrice) || 0,
+      render: p => <span className="text-slate-400">{formatCurrency(p.retailerPrice)}</span>,
+    },
+    {
+      key: 'actions', header: '', align: 'center', width: 'w-24',
+      render: p => (
+        <div className="flex items-center justify-center gap-0.5">
+          <IconButton icon={Edit2} title="Edit product" size="sm" tone="accent" onClick={() => openProductEdit(p)} />
+          <IconButton icon={Trash2} title="Delete product" size="sm" tone="danger"
+            onClick={() => { if (confirm('Delete this product?')) deleteProduct(p.id); }} />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div className="flex justify-between items-center gap-4">
-        <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2"><Package size={18} className="text-brand-accent" />Product Catalogue</h2>
-          <p className="text-xs text-slate-400 mt-1">Prices, HSN codes and tax rates. Every order and invoice is priced from here.</p>
-        </div>
-        <button onClick={openProductAdd} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold flex-shrink-0">
-          <Plus size={16} /> Add Product
-        </button>
-      </div>
+      <PageHeader
+        icon={Package}
+        title="Product Catalogue"
+        subtitle="Prices, HSN codes and tax rates. Every order and invoice is priced from here."
+        actions={<Button variant="primary" icon={Plus} onClick={openProductAdd}>Add Product</Button>}
+      />
 
-
-          <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                    <th className="p-4">Product / SKU</th>
-                    <th className="p-4">Category</th>
-                    <th className="p-4 text-center">Status</th>
-                    <th className="p-4 text-center">HSN</th>
-                    <th className="p-4 text-center">GST %</th>
-                    <th className="p-4 text-right">MRP</th>
-                    <th className="p-4 text-right">Distributor (₹)</th>
-                    <th className="p-4 text-right">Dealer (₹)</th>
-                    <th className="p-4 text-right">Retailer (₹)</th>
-                    <th className="p-4 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-slate-300">
-                  {productCatalog.length > 0 ? productCatalog.map(p => (
-                    <tr key={p.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                      <td className="p-4">
-                        <div className="font-semibold text-white">{p.name}</div>
-                        <div className="text-[10px] font-mono text-slate-500">{p.sku || 'No SKU'} · {p.uom || 'BOX'}</div>
-                      </td>
-                      <td className="p-4 text-xs"><span className="bg-brand-accent/10 text-brand-accent border border-brand-accent/20 px-2 py-0.5 rounded-full">{p.category}</span></td>
-                      <td className="p-4 text-center">
-                        {(() => {
-                          const s = p.status || 'Active';
-                          const cls = s === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : s === 'Seasonal' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : s === 'Coming Soon' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-                          return <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${cls}`}>{s}</span>;
-                        })()}
-                      </td>
-                      <td className="p-4 text-center font-mono text-xs text-slate-400">{p.hsnCode || '—'}</td>
-                      <td className="p-4 text-center font-bold text-brand-accent">{p.gstPct}%</td>
-                      <td className="p-4 text-right font-medium text-slate-300">{formatCurrency(p.mrp)}</td>
-                      <td className="p-4 text-right font-bold text-white">{formatCurrency(p.distributorPrice)}</td>
-                      <td className="p-4 text-right text-slate-400">{formatCurrency(p.dealerPrice)}</td>
-                      <td className="p-4 text-right text-slate-400">{formatCurrency(p.retailerPrice)}</td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button onClick={() => setViewingQrProduct(p)} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="Generate QR Barcode"><QrCode size={14} /></button>
-                          <button onClick={() => openProductEdit(p)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors" title="Edit"><Edit2 size={14} /></button>
-                          <button onClick={() => { if (confirm('Delete this product?')) deleteProduct(p.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan="10" className="p-8 text-center text-slate-500">No products found in catalog.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      <DataTable
+        title="Products"
+        columns={productColumns}
+        rows={productCatalog}
+        rowKey={p => p.id}
+        search={p => `${p.name} ${p.sku || ''} ${p.category || ''} ${p.hsnCode || ''}`}
+        searchPlaceholder="Search product, SKU or HSN"
+        empty={{
+          icon: Package,
+          title: 'No products yet',
+          hint: 'Orders and invoices are priced from this catalogue, so add a product here before raising one against it.',
+          action: <Button variant="primary" icon={Plus} onClick={openProductAdd}>Add Product</Button>,
+        }}
+      />
 
   {isProductModalOpen && createPortal(
           <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-[5vh]">
