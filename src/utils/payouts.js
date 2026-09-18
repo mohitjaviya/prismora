@@ -23,10 +23,14 @@ export const linkedExpenseId = (sourceId) =>
   `EXP-${String(sourceId ?? '').replace(/^EXP-/, 'FLD-')}`;
 
 /**
- * Free goods cost stock, not cash.
+ * Free goods cost stock, not cash, so they are not booked as an expense here.
  *
- * Inventory already carries that cost, so booking it as an expense too would
- * count the same goods twice.
+ * Note what that leaves open: nothing anywhere deducts the goods from
+ * inventory either. A free-goods incentive records how many units were given
+ * away and no part of the system takes them off the shelf, because the
+ * incentive stores a quantity and never says which product it is units of.
+ * Booking it as cash would be wrong; the honest fix is a product on the
+ * scheme, which is a change to the scheme itself.
  */
 export const incentiveCashValue = (incentive) =>
   (incentive?.incentiveType === 'Free Goods' ? 0 : Number(incentive?.incentiveValue) || 0);

@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Wallet, TrendingUp, Plus, Trash2, Calendar, FileText, CheckCircle, Clock, AlertCircle, ShoppingCart, ArrowUpRight, ArrowDownRight, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle } from 'lucide-react';
+import { Wallet, TrendingUp, Plus, Trash2, Calendar, FileText, CheckCircle, Clock, AlertCircle, ShoppingCart, ArrowUpRight, ArrowDownRight, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
 import { Button, Card, PageHeader } from '../components/ui';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -79,7 +79,19 @@ const Accounting = () => {
     .filter(inv => inv.status === 'Paid')
     .reduce((sum, inv) => sum + Number(inv.tax || 0), 0);
 
-  const totalRevenue = totalIncome + totalTax;
+  // GST collected is not the business's money. It is held on behalf of the
+  // government and paid over, so it belongs on neither the revenue line nor
+  // the profit line. It is still shown, because it has to be remitted and
+  // knowing how much is owed matters -- it just is not earnings.
+  const gstCollected = totalTax;
+
+  // A credit note is a sales return: goods came back or a bill was reduced, so
+  // the income it cancels was never earned. It reduced the partner's balance
+  // and nothing else, which left profit overstated by every note ever issued.
+  const creditNoteValue = (creditNotes || []).reduce((sum, cn) => sum + (Number(cn?.amount) || 0), 0);
+
+  const netSales = totalIncome - creditNoteValue;
+  const totalRevenue = netSales;
 
   const totalExpensesValue = expenses
     .reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
@@ -469,16 +481,20 @@ const Accounting = () => {
             <div className="glass-panel relative overflow-hidden rounded-2xl p-6 hover:-translate-y-1 transition-all duration-300 group border border-white/5 bg-gradient-to-br from-brand-primary-light/80 to-brand-primary/50">
               <div className="absolute top-0 right-0 w-32 h-32 bg-brand-accent/5 rounded-full blur-3xl"></div>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-400">Total Income (Paid)</h3>
+                <h3 className="text-sm font-semibold text-slate-400">Net Sales (Paid)</h3>
                 <div className="p-3 bg-brand-primary/80 rounded-xl text-green-400"><TrendingUp size={20} /></div>
               </div>
               <p className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight break-all">
                 {formatCurrency(totalRevenue)}
               </p>
-              <div className="mt-2 text-xs text-slate-500 flex items-center gap-1">
-                <span>Base: {formatCurrency(totalIncome)}</span>
-                <span>•</span>
-                <span>GST: {formatCurrency(totalTax)}</span>
+              <div className="mt-2 text-[11px] text-slate-500 leading-relaxed">
+                <div>Invoiced and paid: {formatCurrency(totalIncome)}</div>
+                {creditNoteValue > 0 && (
+                  <div className="text-amber-400">Less credit notes: &minus;{formatCurrency(creditNoteValue)}</div>
+                )}
+                {/* Shown apart from the figure above, because it is not the
+                    business's money: it is collected and paid over. */}
+                <div>GST collected, to remit: {formatCurrency(gstCollected)}</div>
               </div>
             </div>
 
@@ -543,7 +559,7 @@ const Accounting = () => {
               {/* Spelled out, because this number changed when the cost of
                   goods was brought in and it should be obvious why. */}
               <p className="mt-1.5 text-[10px] text-slate-600 leading-relaxed">
-                Income {formatCurrency(totalRevenue)} − expenses {formatCurrency(totalExpensesValue)} − goods {formatCurrency(purchaseCost)}
+                Net sales {formatCurrency(totalRevenue)} &minus; expenses {formatCurrency(totalExpensesValue)} &minus; goods {formatCurrency(purchaseCost)}. GST is excluded: it is not earnings.
               </p>
             </div>
 
@@ -776,6 +792,21 @@ const Accounting = () => {
                                   title="Mark as Paid"
                                 >
                                   <Check size={16} />
+                                </button>
+                              )}
+                              {inv.status === 'Paid' && (
+                                <button
+                                  onClick={() => {
+                                    // Marking an invoice paid now also credits the partner, so a
+                                    // misclick moves money. It has to be undoable.
+                                    if (confirm('Mark this invoice unpaid again? The payment recorded against the partner will be removed and their balance put back.')) {
+                                      updateInvoiceStatus(inv.id, 'Unpaid');
+                                    }
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors"
+                                  title="Mark as unpaid"
+                                >
+                                  <Undo2 size={16} />
                                 </button>
                               )}
                               {inv.status === 'Unpaid' && (

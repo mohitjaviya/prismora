@@ -4,6 +4,10 @@ import {
   linkedExpenseId, expenseForIncentive, expenseForClaim, expenseForFieldExpense,
   unbookedPayouts,
 } from '../utils/payouts';
+import {
+  invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty,
+  invoicesSettledBy, balanceAfterPayment,
+} from '../utils/settlement';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 
 const DataContext = createContext();
@@ -1763,23 +1767,137 @@ export const DataProvider = ({ children }) => {
     return newId;
   };
 
-  const updateInvoiceStatus = async (id, status) => {
-    const oldInvoice = invoices.find(inv => inv.id === id);
+  /**
+   * Just the status. Used by the payment path, which has already moved the
+   * money and must not set off a second payment by doing so.
+   */
+  const writeInvoiceStatus = async (id, status) => {
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status } : inv));
     try {
       const { error } = await supabase.from('invoices').update({ status }).eq('id', id);
       if (error) throw error;
-    } catch (err) {
+    } catch {
       const local = localStorage.getItem('prismora_invoices');
       if (local) {
         const updated = JSON.parse(local).map(inv => inv.id === id ? { ...inv, status } : inv);
         localStorage.setItem('prismora_invoices', JSON.stringify(updated));
       }
     }
-    if (oldInvoice) logEvent('invoice_status_update', `Invoice ${id} marked as ${status}`, oldInvoice.assignedTo, id);
+  };
+
+  /** The distributor, dealer or retailer an invoice was raised against. */
+  const partyForInvoice = (invoice) => {
+    for (const [list, type] of [[distributors, 'Distributor'], [dealers, 'Dealer'], [retailers, 'Retailer']]) {
+      const found = (list || []).find(party => invoiceBelongsToParty(invoice, party, orders));
+      if (found) return { party: found, type };
+    }
+    return { party: null, type: null };
+  };
+
+  const writePartyOutstanding = async (type, party, value) => {
+    const patch = { outstandingAmount: value };
+    if (type === 'Distributor') return updateDistributor(party.id, patch);
+    if (type === 'Dealer') return updateDealer(party.id, patch);
+    return updateRetailer(party.id, patch);
+  };
+
+  /**
+   * Marking an invoice paid now also credits the partner it was raised against.
+   *
+   * There were two buttons for one event and neither did the other's job. This
+   * one set the status, which is what Accounting counts as income, and left the
+   * balance alone -- so a partner was chased for money already banked. Recording
+   * a payment did the opposite and the money never showed as income. Four
+   * invoices in this database were marked paid against a single payment record.
+   *
+   * The payment id is derived from the invoice, so pressing this twice, or
+   * pressing it after recording the payment by hand, collides on the primary
+   * key rather than crediting the partner twice.
+   */
+  const settleInvoiceAsPayment = async (invoice) => {
+    const { party, type } = partyForInvoice(invoice);
+    if (!party) return true;              // a walk-in invoice has no ledger to credit
+    const total = invoiceTotal(invoice);
+    if (total <= 0) return true;
+
+    const payId = paymentIdForInvoice(invoice.id);
+    if (distributorPayments.some(x => x.id === payId)) return true;
+
+    const field = type === 'Distributor' ? 'distributorId' : type === 'Dealer' ? 'dealerId' : 'retailerId';
+    const row = {
+      id: payId,
+      [field]: party.id,
+      amount: total,
+      method: 'Invoice settled',
+      reference: invoice.id,
+      date: new Date().toISOString(),
+      notes: `Recorded automatically when invoice ${invoice.id} was marked paid.`,
+      recordedBy: null,
+      createdAt: new Date().toISOString(),
+    };
+    const ok = await persist('distributor_payments insert (invoice settled)',
+      supabase.from('distributor_payments').insert([row]));
+    if (!ok) return false;
+
+    setDistributorPayments(prev => {
+      const next = prev.some(x => x.id === payId) ? prev : [row, ...prev];
+      localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
+      return next;
+    });
+    await writePartyOutstanding(type, party, balanceAfterPayment(party.outstandingAmount, total));
+    return true;
+  };
+
+  /** Moving an invoice back out of Paid takes the credit away again. */
+  const reverseInvoiceSettlement = async (invoice) => {
+    const payId = paymentIdForInvoice(invoice.id);
+    if (!distributorPayments.some(x => x.id === payId)) return;
+    const { party, type } = partyForInvoice(invoice);
+    const ok = await persist('distributor_payments delete (unsettled)',
+      supabase.from('distributor_payments').delete().eq('id', payId));
+    if (!ok) return;
+    setDistributorPayments(prev => {
+      const next = prev.filter(x => x.id !== payId);
+      localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
+      return next;
+    });
+    if (party) {
+      await writePartyOutstanding(type, party,
+        balanceAfterPayment(party.outstandingAmount, -invoiceTotal(invoice)));
+    }
+  };
+
+  const updateInvoiceStatus = async (id, status) => {
+    const invoice = invoices.find(inv => inv.id === id);
+    if (!invoice) return false;
+
+    // The credit is written before the status, and the status is left alone if
+    // it fails. An invoice reading Paid with the partner still owing for it is
+    // the exact split this change exists to close.
+    if (status === 'Paid' && invoice.status !== 'Paid') {
+      if (!await settleInvoiceAsPayment(invoice)) return false;
+    } else if (status !== 'Paid' && invoice.status === 'Paid') {
+      await reverseInvoiceSettlement(invoice);
+    }
+
+    await writeInvoiceStatus(id, status);
+    logEvent('invoice_status_update', `Invoice ${id} marked as ${status}`, invoice.assignedTo, id);
+    return true;
   };
 
   const deleteInvoice = async (id) => {
+    // Deleting the bill has to undo what raising it did, or the partner goes on
+    // owing for an invoice that no longer exists -- and the ledger below their
+    // balance stops adding up to it.
+    const invoice = invoices.find(inv => inv.id === id);
+    if (invoice) {
+      if (invoice.status === 'Paid') await reverseInvoiceSettlement(invoice);
+      const { party, type } = partyForInvoice(invoice);
+      if (party) {
+        await writePartyOutstanding(type, party,
+          balanceAfterPayment(party.outstandingAmount, invoiceTotal(invoice)));
+      }
+    }
     setInvoices(prev => prev.filter(inv => inv.id !== id));
     try { await supabase.from('invoices').delete().eq('id', id); }
     catch (err) { console.warn('Failed to delete invoice from Supabase.', err); }
@@ -1807,7 +1925,9 @@ export const DataProvider = ({ children }) => {
     const applyCredit = async (list, setter, table) => {
       const match = list.find(p => (p.name || '').toLowerCase() === name);
       if (!match) return false;
-      const newOutstanding = Math.max(0, (match.outstandingAmount || 0) - amount);
+      // Not floored at zero: a credit note larger than the balance leaves the
+      // partner in credit, which is money the business owes them.
+      const newOutstanding = balanceAfterPayment(match.outstandingAmount, amount);
       const next = list.map(p => p.id === match.id ? { ...p, outstandingAmount: newOutstanding } : p);
       setter(next);
       localStorage.setItem(`prismora_${table}`, JSON.stringify(next));
@@ -2282,7 +2402,9 @@ export const DataProvider = ({ children }) => {
 
     const vendor = vendors.find(v => v.id === paymentData.vendorId);
     if (vendor) {
-      const newOutstanding = Math.max(0, (vendor.outstandingAmount || 0) - Number(paymentData.amount || 0));
+      // Same as the sales side: paying a vendor more than is owed leaves a
+      // credit with them, it does not evaporate.
+      const newOutstanding = balanceAfterPayment(vendor.outstandingAmount, paymentData.amount);
       const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: newOutstanding } : v);
       setVendors(nextVendors);
       localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
@@ -2710,8 +2832,24 @@ export const DataProvider = ({ children }) => {
 
     const dist = distributors.find(d => d.id === paymentData.distributorId);
     if (dist) {
-      const newOutstanding = Math.max(0, (dist.outstandingAmount || 0) - Number(paymentData.amount || 0));
-      updateDistributor(dist.id, { outstandingAmount: newOutstanding });
+      // Not floored at zero any more. Paying more than is owed used to discard
+      // the excess, so a partner who paid in advance had that advance
+      // forgotten. A negative balance is money held on their behalf.
+      updateDistributor(dist.id, {
+        outstandingAmount: balanceAfterPayment(dist.outstandingAmount, paymentData.amount),
+      });
+
+      // And settle what it covers, so the money shows as income rather than
+      // only as a smaller balance. Oldest first, and only invoices the payment
+      // covers in full.
+      const theirs = invoices.filter(inv =>
+        inv.status !== 'Paid' && invoiceBelongsToParty(inv, dist, orders));
+      const { settled } = invoicesSettledBy(paymentData.amount, theirs);
+      for (const inv of settled) {
+        // writeInvoiceStatus, not updateInvoiceStatus: the money has already
+        // moved, and the public one would record a second payment for it.
+        await writeInvoiceStatus(inv.id, 'Paid');
+      }
     }
     logEvent('distributor_payment', `Payment of ₹${paymentData.amount} recorded for ${dist?.name || paymentData.distributorId}`, null, newId);
   };
@@ -2728,8 +2866,24 @@ export const DataProvider = ({ children }) => {
 
     const dealer = dealers.find(d => d.id === paymentData.dealerId);
     if (dealer) {
-      const newOutstanding = Math.max(0, (dealer.outstandingAmount || 0) - Number(paymentData.amount || 0));
-      updateDealer(dealer.id, { outstandingAmount: newOutstanding });
+      // Not floored at zero any more. Paying more than is owed used to discard
+      // the excess, so a partner who paid in advance had that advance
+      // forgotten. A negative balance is money held on their behalf.
+      updateDealer(dealer.id, {
+        outstandingAmount: balanceAfterPayment(dealer.outstandingAmount, paymentData.amount),
+      });
+
+      // And settle what it covers, so the money shows as income rather than
+      // only as a smaller balance. Oldest first, and only invoices the payment
+      // covers in full.
+      const theirs = invoices.filter(inv =>
+        inv.status !== 'Paid' && invoiceBelongsToParty(inv, dealer, orders));
+      const { settled } = invoicesSettledBy(paymentData.amount, theirs);
+      for (const inv of settled) {
+        // writeInvoiceStatus, not updateInvoiceStatus: the money has already
+        // moved, and the public one would record a second payment for it.
+        await writeInvoiceStatus(inv.id, 'Paid');
+      }
     }
     logEvent('dealer_payment', `Payment of ₹${paymentData.amount} recorded for ${dealer?.name || paymentData.dealerId}`, null, newId);
   };
@@ -2746,8 +2900,24 @@ export const DataProvider = ({ children }) => {
 
     const retailer = retailers.find(r => r.id === paymentData.retailerId);
     if (retailer) {
-      const newOutstanding = Math.max(0, (retailer.outstandingAmount || 0) - Number(paymentData.amount || 0));
-      updateRetailer(retailer.id, { outstandingAmount: newOutstanding });
+      // Not floored at zero any more. Paying more than is owed used to discard
+      // the excess, so a partner who paid in advance had that advance
+      // forgotten. A negative balance is money held on their behalf.
+      updateRetailer(retailer.id, {
+        outstandingAmount: balanceAfterPayment(retailer.outstandingAmount, paymentData.amount),
+      });
+
+      // And settle what it covers, so the money shows as income rather than
+      // only as a smaller balance. Oldest first, and only invoices the payment
+      // covers in full.
+      const theirs = invoices.filter(inv =>
+        inv.status !== 'Paid' && invoiceBelongsToParty(inv, retailer, orders));
+      const { settled } = invoicesSettledBy(paymentData.amount, theirs);
+      for (const inv of settled) {
+        // writeInvoiceStatus, not updateInvoiceStatus: the money has already
+        // moved, and the public one would record a second payment for it.
+        await writeInvoiceStatus(inv.id, 'Paid');
+      }
     }
     logEvent('retailer_payment', `Payment of ₹${paymentData.amount} recorded for ${retailer?.name || paymentData.retailerId}`, null, newId);
   };
