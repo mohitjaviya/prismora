@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { ShoppingBag, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, ArrowUpCircle, ArrowDownCircle, Network, Store, Clock, AlertTriangle } from 'lucide-react';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
+import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 
@@ -297,6 +298,10 @@ export default function Retailers() {
                   <p className="text-xs text-slate-400">Credit Limit</p>
                   <p className="text-lg font-bold text-emerald-400">{formatCurrency(viewingRetailer.creditLimit)}</p>
                 </div>
+              </div>
+
+              <div className="mt-5 pt-4 border-t border-white/5">
+                <PartnerOrderHistory party={viewingRetailer} kind="retailer" />
               </div>
 
               {viewingRetailer.status !== 'Pending' && (
