@@ -8,6 +8,7 @@ import {
   FlaskConical, Cpu, Target, Layers, Timer, CheckCircle2, XCircle,
   GitCompare, Grid3x3, ListTree, Sparkles,
 } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 
 const pct = (n) => `${(n * 100).toFixed(1)}%`;
 const shortLabel = (l) => l.replace(/_/g, ' ');
@@ -64,14 +65,11 @@ export default function MLLab() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <FlaskConical size={24} className="text-brand-accent" /> ML Lab
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">
-          A Multinomial Naive Bayes intent classifier trained on TF-IDF features — implemented from scratch, trained in your browser.
-        </p>
-      </div>
+      <PageHeader
+        icon={FlaskConical}
+        title="ML Lab"
+        subtitle="A Multinomial Naive Bayes intent classifier trained on TF-IDF features — implemented from scratch, trained in your browser."
+      />
 
       {/* Headline metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">

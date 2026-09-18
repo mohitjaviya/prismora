@@ -4,6 +4,7 @@ import {
   Sparkles, TrendingUp, TrendingDown, AlertTriangle, Boxes, Users,
   Target, Brain, Gauge, ArrowRight, Clock
 } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -161,12 +162,11 @@ export default function AIInsights() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Brain size={24} className="text-brand-accent" /> AI Insights
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">Predictive analytics & recommendations derived from your live business data.</p>
-      </div>
+      <PageHeader
+        icon={Brain}
+        title="AI Insights"
+        subtitle="Predictive analytics & recommendations derived from your live business data."
+      />
 
       {/* Business Summary */}
       <div className="glass-panel rounded-2xl p-5 border border-brand-accent/20 bg-gradient-to-br from-brand-accent/[0.06] to-transparent">

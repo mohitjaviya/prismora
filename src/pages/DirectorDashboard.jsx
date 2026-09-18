@@ -5,6 +5,7 @@ import {
   TrendingUp, Wallet, Network, Store, Building2, Package2, AlertTriangle,
   Target, Trophy, IndianRupee, ArrowUpRight, ArrowDownRight, Boxes, Users
 } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
 
@@ -217,12 +218,11 @@ export default function DirectorDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Trophy size={24} className="text-brand-accent" /> Executive Cockpit
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">Complete business health at a glance — sales, network, collections, finance & alerts.</p>
-      </div>
+      <PageHeader
+        icon={Trophy}
+        title="Executive Cockpit"
+        subtitle="Complete business health at a glance — sales, network, collections, finance & alerts."
+      />
 
       {/* Sales KPIs + Target */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

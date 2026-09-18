@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAuth, isAdminRole, isManagerRole, isSalesRole } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { User, Lock, Users, Shield, Eye, EyeOff, TrendingUp, ShoppingBag, Target, Star, Activity, Package } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 
 const Profile = () => {
   const { user, users: allUsers, updateUser, verifyCurrentPassword } = useAuth();
@@ -107,13 +108,11 @@ const Profile = () => {
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in-up">
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <User size={24} className="text-brand-accent" />
-          My Profile
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">View your account details and manage your password.</p>
-      </div>
+      <PageHeader
+        icon={User}
+        title="My Profile"
+        subtitle="View your account details and manage your password."
+      />
 
       {/* Identity Card */}
       <div className="glass-panel rounded-2xl p-6 flex items-center gap-5">

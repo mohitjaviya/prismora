@@ -8,6 +8,7 @@ import {
   CheckCircle, Clock, Truck, FileText, User, Edit2,
   ChevronRight, Package2, AlertCircle, Eye, Wallet, IndianRupee, ArrowUpCircle, ArrowDownCircle
 } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildVendorLedger } from '../utils/distributorUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
@@ -243,33 +244,34 @@ export default function Purchases() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ShoppingBag size={24} className="text-brand-accent" /> Purchase Management
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Purchase orders, vendor management & goods receipt from Janki Herbals.</p>
-        </div>
-        {canManage && (
+            <PageHeader
+        icon={ShoppingBag}
+        title="Purchase Management"
+        subtitle="Purchase orders, vendor management & goods receipt from Janki Herbals."
+        actions={
+        <>
+          {canManage && (
           <div className="flex gap-3">
-            {activeTab === 'orders' && (
-              <button onClick={() => setIsPOModalOpen(true)} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-                <Plus size={16} /> Create PO
-              </button>
-            )}
-            {activeTab === 'vendors' && (
-              <button onClick={openAddVendor} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-                <Plus size={16} /> Add Vendor
-              </button>
-            )}
-            {activeTab === 'returns' && (
-              <button onClick={() => setIsReturnModalOpen(true)} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-                <Plus size={16} /> Record Return
-              </button>
-            )}
+          {activeTab === 'orders' && (
+          <button onClick={() => setIsPOModalOpen(true)} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
+          <Plus size={16} /> Create PO
+          </button>
+          )}
+          {activeTab === 'vendors' && (
+          <button onClick={openAddVendor} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
+          <Plus size={16} /> Add Vendor
+          </button>
+          )}
+          {activeTab === 'returns' && (
+          <button onClick={() => setIsReturnModalOpen(true)} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
+          <Plus size={16} /> Record Return
+          </button>
+          )}
           </div>
-        )}
-      </div>
+          )}
+        </>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">

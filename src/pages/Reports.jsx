@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole } from '../context/AuthContext';
 import { BarChart3, Download, Search, TrendingUp, Package2, Wallet, Users, Star, ChevronRight } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 
 const formatCurrency = (val) =>
@@ -389,19 +390,20 @@ export default function Reports() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <BarChart3 size={24} className="text-brand-accent" /> Reports Hub
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">20+ business reports across sales, inventory, financials, CRM, and team performance.</p>
-        </div>
-        {activeReport && reportData.length > 0 && (
+            <PageHeader
+        icon={BarChart3}
+        title="Reports Hub"
+        subtitle="20+ business reports across sales, inventory, financials, CRM, and team performance."
+        actions={
+        <>
+          {activeReport && reportData.length > 0 && (
           <button onClick={handleExport} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-            <Download size={16} /> Export CSV
+          <Download size={16} /> Export CSV
           </button>
-        )}
-      </div>
+          )}
+        </>
+        }
+      />
 
       {/* Date Range Filter */}
       <div className="glass-panel rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row gap-3 items-center">

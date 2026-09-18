@@ -2,12 +2,8 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
-import {
-  Package2, Plus, Edit2, Trash2, Search, Filter,
-  AlertTriangle, X, Download, RefreshCw, TrendingDown,
-  CheckCircle, Clock, AlertCircle, Warehouse, ArrowUp, ArrowDown, Mail,
-  ArrowLeftRight, ClipboardCheck
-} from 'lucide-react';
+import { Package2, Plus, Edit2, Trash2, AlertTriangle, X, Download, RefreshCw, TrendingDown, CheckCircle, Clock, AlertCircle, ArrowUp, ArrowDown, Mail, ArrowLeftRight, ClipboardCheck, Layers, Wallet } from 'lucide-react';
+import { PageHeader, DataTable, Button, Card, StatCard, SearchInput, Select } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { sendEmailAlert, templates } from '../utils/notificationUtils';
 import { optionsFor } from '../utils/masterLists';
@@ -174,103 +170,85 @@ export default function Inventory() {
   const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
   const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
+  const productColumns = [
+    { key: 'product', header: 'Product', sort: p => p.product || '',
+      render: p => <span className="font-semibold text-white">{p.product}</span> },
+    { key: 'batchCount', header: 'Batches', align: 'center', sort: p => p.batchCount,
+      render: p => <span className="text-slate-400">{p.batchCount}</span> },
+    { key: 'totalQty', header: 'Total Qty', align: 'center', sort: p => p.totalQty,
+      render: p => <span className="font-bold text-white">{p.totalQty}</span> },
+    { key: 'reserved', header: 'Reserved', align: 'center', hideBelow: 'sm', sort: p => p.reserved,
+      render: p => <span className="text-slate-400">{p.reserved}</span> },
+    { key: 'available', header: 'Available to Sell', align: 'center', sort: p => p.available,
+      render: p => (
+        <span className={`font-bold ${p.available > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{p.available}</span>
+      ) },
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Package2 size={24} className="text-brand-accent" />
-            Inventory Management
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Warehouse stock, batch tracking, expiry & reorder alerts.</p>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={handleExport} className="glass-panel hover:bg-brand-primary-lighter/80 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5">
-            <Download size={16} className="text-brand-accent" /><span className="hidden sm:inline text-sm font-medium">Export CSV</span>
-          </button>
-          {(canManage) && (
-            <button onClick={openAdd} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-              <Plus size={16} /> Add Batch
-            </button>
-          )}
-        </div>
+      <PageHeader
+        icon={Package2}
+        title="Inventory Management"
+        subtitle="Warehouse stock, batch tracking, expiry and reorder alerts."
+        actions={
+          <>
+            <Button icon={Download} onClick={handleExport}>Export CSV</Button>
+            {canManage && <Button variant="primary" icon={Plus} onClick={openAdd}>Add Batch</Button>}
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        <StatCard label="Total SKUs" value={kpis.totalSKUs} icon={Package2} tone="info" />
+        <StatCard label="Total Batches" value={kpis.totalBatches} icon={Layers} tone="accent" />
+        <StatCard label="Low / Critical" value={kpis.lowStock} icon={AlertTriangle}
+          tone={kpis.lowStock > 0 ? 'warning' : 'accent'} />
+        <StatCard label="Expiring Soon" value={kpis.expiringSoon} icon={Clock}
+          tone={kpis.expiringSoon > 0 ? 'danger' : 'accent'} />
+        <StatCard label="Stock Value" value={formatCurrency(kpis.stockValue)} icon={Wallet} tone="accent"
+          className="col-span-2 lg:col-span-1" />
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
-          { label: 'Total SKUs', value: kpis.totalSKUs, color: 'text-blue-400', bg: 'bg-blue-500/5' },
-          { label: 'Total Batches', value: kpis.totalBatches, color: 'text-purple-400', bg: 'bg-purple-500/5' },
-          { label: 'Low / Critical', value: kpis.lowStock, color: 'text-amber-400', bg: 'bg-amber-500/5' },
-          { label: 'Expiring Soon', value: kpis.expiringSoon, color: 'text-orange-400', bg: 'bg-orange-500/5' },
-          { label: 'Stock Value', value: formatCurrency(kpis.stockValue), color: 'text-brand-accent', bg: 'bg-brand-accent/5', wide: true },
-        ].map((k, i) => (
-          <div key={i} className={`glass-panel rounded-2xl p-4 border border-white/5 ${k.wide ? 'col-span-2 lg:col-span-1' : ''}`}>
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{k.label}</p>
-            <p className={`text-xl font-extrabold mt-1 ${k.color}`}>{k.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="glass-panel rounded-2xl p-4 border border-white/5 flex flex-col md:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search product or batch..." className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-white" />
-        </div>
-        <div className="relative">
-          <Warehouse className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-          <select value={warehouseFilter} onChange={e => setWarehouseFilter(e.target.value)} className="glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-200 appearance-none">
-            <option value="">All Warehouses</option>
-            {warehouses.map(w => <option key={w} value={w} className="bg-brand-primary">{w}</option>)}
-          </select>
-        </div>
-        <div className="flex gap-2 flex-wrap">
+      <Card padding="p-4" className="flex flex-col md:flex-row gap-3 md:items-center">
+        <SearchInput
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search product or batch"
+        />
+        <Select value={warehouseFilter} onChange={e => setWarehouseFilter(e.target.value)} className="md:w-48">
+          <option value="">All Warehouses</option>
+          {warehouses.map(w => <option key={w} value={w}>{w}</option>)}
+        </Select>
+        <div className="flex gap-1.5 flex-wrap">
           {STATUS_FILTERS.map(sf => (
-            <button key={sf} onClick={() => setStatusFilter(sf)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${statusFilter === sf ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400 hover:text-white'}`}>
+            <button key={sf} type="button" onClick={() => setStatusFilter(sf)}
+              className={`h-10 px-3 rounded-xl text-xs font-semibold border transition-colors ${
+                statusFilter === sf
+                  ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
+                  : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+              }`}>
               {sf}
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      {/* Product Totals Table — click a product to see its individual batches */}
-      <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                <th className="p-4">Product</th>
-                <th className="p-4 text-center">Batches</th>
-                <th className="p-4 text-center">Total Qty</th>
-                <th className="p-4 text-center">Reserved</th>
-                <th className="p-4 text-center">Available to Sell</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-slate-300">
-              {productSummary.length > 0 ? productSummary.map(p => (
-                <tr key={p.product} onClick={() => setViewingProduct(p.product)} className="hover:bg-brand-primary-lighter/20 transition-colors cursor-pointer">
-                  <td className="p-4 font-semibold text-white">{p.product}</td>
-                  <td className="p-4 text-center text-slate-400">{p.batchCount}</td>
-                  <td className="p-4 text-center font-bold text-white">{p.totalQty}</td>
-                  <td className="p-4 text-center text-slate-400">{p.reserved}</td>
-                  <td className={`p-4 text-center font-bold ${p.available > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{p.available}</td>
-                </tr>
-              )) : (
-                <tr><td colSpan="5" className="p-12 text-center text-slate-500">
-                  <Package2 size={32} className="mx-auto mb-3 opacity-20" />
-                  <p>No inventory items match your filters.</p>
-                  {(canManage) && (
-                    <button onClick={openAdd} className="mt-4 text-brand-accent hover:underline text-sm">+ Add your first batch</button>
-                  )}
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        title="Products"
+        columns={productColumns}
+        rows={productSummary}
+        rowKey={p => p.product}
+        onRowClick={p => setViewingProduct(p.product)}
+        empty={{
+          icon: Package2,
+          title: 'Nothing in stock here',
+          hint: canManage
+            ? 'Stock arrives either from a goods receipt against a purchase order, or by adding a batch here directly. Each batch carries its own expiry date.'
+            : 'Nothing matches the filters above.',
+          action: canManage ? <Button variant="primary" icon={Plus} onClick={openAdd}>Add Batch</Button> : undefined,
+        }}
+      />
 
       {/* Batch Detail Modal — opened by clicking a product row above */}
       {viewingProduct && createPortal(

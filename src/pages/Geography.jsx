@@ -6,6 +6,7 @@ import { useAuth, isSalesRole } from '../context/AuthContext';
 import { 
   ArrowUpDown, Plus, Edit2, Trash2, MapPin, Users, Globe, ChevronRight, X, Compass, Check
 } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 import { createPortal } from 'react-dom';
 
 const INDIAN_STATES = [
@@ -231,24 +232,23 @@ export default function Geography() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Globe size={24} className="text-brand-accent" />
-            Geography & Territories
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Manage corporate distribution sales territories and view performance distribution.</p>
-        </div>
-        
-        {activeTab === 'territories' && isAdmin && (
-          <button 
-            onClick={handleOpenAdd}
-            className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold"
+            <PageHeader
+        icon={Globe}
+        title="Geography & Territories"
+        subtitle="Manage corporate distribution sales territories and view performance distribution."
+        actions={
+        <>
+          {activeTab === 'territories' && isAdmin && (
+          <button
+          onClick={handleOpenAdd}
+          className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold"
           >
-            <Plus size={16} /> Add Territory
+          <Plus size={16} /> Add Territory
           </button>
-        )}
-      </div>
+          )}
+        </>
+        }
+      />
 
       {/* Tabs */}
       <div className="flex border-b border-white/5 pb-px gap-1">

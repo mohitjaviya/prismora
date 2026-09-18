@@ -8,6 +8,7 @@ import {
   CheckCircle, Clock, AlertCircle, ShoppingCart, ArrowUpRight, 
   ArrowDownRight, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag
 } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, Legend, PieChart, Pie, Cell 
@@ -314,35 +315,35 @@ const Accounting = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Wallet className="text-brand-accent animate-pulse" size={28} />
-            Accounting Hub
-          </h1>
-          <p className="text-slate-400 text-sm">Monitor business income, track operational expenses, and analyze net margins.</p>
-        </div>
-        <div className="flex gap-3">
+            <PageHeader
+        icon={Wallet}
+        title="Accounting Hub"
+        subtitle="Monitor business income, track operational expenses, and analyze net margins."
+        actions={
+        <>
+          <div className="flex gap-3">
           <button
-            onClick={() => setIsExpenseModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-primary-light border border-white/10 hover:border-brand-accent/50 text-slate-200 rounded-xl transition-all"
+          onClick={() => setIsExpenseModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-primary-light border border-white/10 hover:border-brand-accent/50 text-slate-200 rounded-xl transition-all"
           >
-            <Plus size={16} /> Log Expense
+          <Plus size={16} /> Log Expense
           </button>
           <button
-            onClick={() => setIsCreditModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-primary-light border border-white/10 hover:border-brand-accent/50 text-slate-200 rounded-xl transition-all"
+          onClick={() => setIsCreditModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-primary-light border border-white/10 hover:border-brand-accent/50 text-slate-200 rounded-xl transition-all"
           >
-            <FileText size={16} /> Credit Note
+          <FileText size={16} /> Credit Note
           </button>
           <button
-            onClick={() => setIsInvoiceModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm btn-accent rounded-xl"
+          onClick={() => setIsInvoiceModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm btn-accent rounded-xl"
           >
-            <Plus size={16} /> Generate Invoice
+          <Plus size={16} /> Generate Invoice
           </button>
-        </div>
-      </div>
+          </div>
+        </>
+        }
+      />
 
       {/* Tabs Menu */}
       <div className="flex border-b border-white/5 pb-px">

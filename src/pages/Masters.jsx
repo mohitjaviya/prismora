@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Layers, Plus, Trash2, Lock, Check, X, ChevronUp, ChevronDown, AlertTriangle, Search, Palette } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 import { MASTER_LISTS, optionsFor, badgeStyle } from '../utils/masterLists';
 
 // Offered as swatches so a colour can be picked without knowing hex. The free
@@ -92,14 +93,11 @@ export default function Masters() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Layers size={24} className="text-brand-accent" /> Master Lists
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">
-          The options that appear in dropdowns across the app. Change them here instead of asking for a code change.
-        </p>
-      </div>
+      <PageHeader
+        icon={Layers}
+        title="Master Lists"
+        subtitle="The options that appear in dropdowns across the app. Change them here instead of asking for a code change."
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
         {/* What to work on */}
