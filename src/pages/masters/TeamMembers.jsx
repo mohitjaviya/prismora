@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole } from '../../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X } from 'lucide-react';
+import { useToast } from '../../context/DialogContext';
 import { PageHeader, DataTable, Button, IconButton, Badge } from '../../components/ui';
 
 /**
@@ -26,6 +27,7 @@ const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tr
 
 export default function TeamMembers() {
   const { user, users: allUsers, addUser, createUserAccount, updateUser, deleteUser } = useAuth();
+  const toast = useToast();
 
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -37,7 +39,7 @@ export default function TeamMembers() {
   const handleUserSubmit = (e) => {
     e.preventDefault();
     if ((!editingUser || userForm.password) && passwordPolicyError(userForm.password)) {
-      alert(passwordPolicyError(userForm.password));
+      toast(passwordPolicyError(userForm.password), 'error');
       return;
     }
     const payload = { ...userForm, managedUsers: isManagerRole(userForm.role) ? userForm.managedUsers : [] };
@@ -47,23 +49,23 @@ export default function TeamMembers() {
       const { password, ...profileOnly } = payload;
       updateUser(editingUser.id, editingUser.id === user?.id ? payload : profileOnly);
       if (password && editingUser.id !== user?.id) {
-        alert('Profile saved. A password can only be changed by its own account holder, or reset from the Supabase dashboard.');
+        toast('Profile saved. A password can only be changed by its own account holder, or reset from the Supabase dashboard.', 'success');
       }
     } else {
       // The login is made server-side by the create-user function, which holds
       // the key that can do it. Falls back to the manual two-step where that
       // function has not been deployed.
       createUserAccount(payload).then(result => {
-        if (result.ok) { alert(payload.name + ' can now sign in with ' + payload.email + '.'); return; }
+        if (result.ok) { toast(payload.name + ' can now sign in with ' + payload.email + '.', 'success'); return; }
         if (result.needsDeploy) {
           addUser({ ...payload, createAuthAccount: false });
-          alert('Profile created for ' + payload.email + ', but their login was not.' +
+          toast('Profile created for ' + payload.email + ', but their login was not.' +
             String.fromCharCode(10, 10) +
             'The create-user function has not been deployed yet, so add the same email in ' +
-            'Supabase → Authentication → Users (tick Auto Confirm) and they can sign in.');
+            'Supabase → Authentication → Users (tick Auto Confirm) and they can sign in.', 'success');
           return;
         }
-        alert('Could not create the account: ' + result.error);
+        toast('Could not create the account: ' + result.error, 'error');
       });
     }
     setIsUserModalOpen(false);

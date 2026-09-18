@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { FileCheck2, Plus, X, CheckCircle, XCircle, Clock, Wallet, Download } from 'lucide-react';
+import { useToast } from '../context/DialogContext';
 import { downloadCSV } from '../utils/exportUtils';
 import { PageHeader, DataTable, Button, Badge, StatCard, Card, SearchInput } from '../components/ui';
 
@@ -33,6 +34,7 @@ const PAYOUT_FAILED = 'The payout could not be recorded as an expense, so the st
 
 export default function Claims() {
   const { schemeClaims, addSchemeClaim, updateSchemeClaimStatus, schemes, orders, distributors, dealers, retailers } = useData();
+  const toast = useToast();
   const { user, canAccess } = useAuth();
 
   const isParty = ['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
@@ -104,7 +106,7 @@ export default function Claims() {
   const handleReview = async (status) => {
     if (!reviewingClaim) return;
     if (!await updateSchemeClaimStatus(reviewingClaim.id, status, reviewNotes)) {
-      alert(PAYOUT_FAILED);
+      toast(PAYOUT_FAILED, 'error');
       return;
     }
     setReviewingClaim(null);

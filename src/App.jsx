@@ -161,15 +161,18 @@ function AppRoutes() {
 }
 
 import { NotificationProvider } from './context/NotificationContext';
+import { DialogProvider } from './context/DialogContext';
 
 function App() {
   return (
     <AuthProvider>
       <DataProvider>
         <NotificationProvider>
+          <DialogProvider>
           <Router>
             <AppRoutes />
           </Router>
+          </DialogProvider>
         </NotificationProvider>
       </DataProvider>
     </AuthProvider>

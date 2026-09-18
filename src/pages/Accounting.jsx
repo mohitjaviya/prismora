@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Wallet, TrendingUp, Plus, Trash2, FileText, CheckCircle, Clock, AlertCircle, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
+import { useToast } from '../context/DialogContext';
 import { Button, Card, PageHeader } from '../components/ui';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -17,6 +18,7 @@ import { sendWhatsAppAlert, sendEmailAlert } from '../utils/notificationUtils';
 
 const Accounting = () => {
   const { user, users, canAccessData, canAccess } = useAuth();
+  const toast = useToast();
    const {
     orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, leads, productCatalog, distributors,
     distributorIncentives, schemeClaims, sfaExpenses, reconcilePayouts,
@@ -267,7 +269,7 @@ const Accounting = () => {
     }
 
     if (!customerName || isNaN(amount) || amount <= 0) {
-      alert("Please fill in valid details.");
+      toast("Please fill in valid details.", 'error');
       return;
     }
 
@@ -298,7 +300,7 @@ const Accounting = () => {
     const amount = Number(expenseAmount);
     
     if (isNaN(amount) || amount <= 0) {
-      alert("Please enter a valid amount.");
+      toast("Please enter a valid amount.", 'error');
       return;
     }
 
@@ -325,7 +327,7 @@ const Accounting = () => {
   const handleCreditSubmit = (e) => {
     e.preventDefault();
     const amount = Number(creditForm.amount);
-    if (!creditForm.customerName || isNaN(amount) || amount <= 0) { alert('Enter a valid customer and amount.'); return; }
+    if (!creditForm.customerName || isNaN(amount) || amount <= 0) { toast('Enter a valid customer and amount.', 'success'); return; }
     addCreditNote({
       customerName: creditForm.customerName,
       invoiceId: creditForm.invoiceId || null,
@@ -1043,7 +1045,7 @@ const Accounting = () => {
                           setCustomCustomerName(uninvoicedOrders[0].customerName);
                           setCustomAmount(uninvoicedOrders[0].value);
                         } else {
-                          alert("No uninvoiced orders available.");
+                          toast("No uninvoiced orders available.", 'error');
                         }
                       }}
                       className={`py-2 text-xs font-bold rounded-lg border transition-all ${

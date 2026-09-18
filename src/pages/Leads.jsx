@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
 import { format, differenceInDays } from 'date-fns';
 import { Plus, Edit2, Trash2, AlertCircle, LayoutGrid, List, Download, X, User, Phone, Mail, FileText, Calendar, Building, Package, DollarSign, MapPin } from 'lucide-react';
+import { useToast } from '../context/DialogContext';
 import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { downloadCSV } from '../utils/exportUtils';
@@ -29,6 +30,7 @@ const INDIAN_STATES = [
 
 const Leads = () => {
   const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog, masters } = useData();
+  const toast = useToast();
 
   // Statuses and sources come from Master Lists. The fallback when nothing is
   // configured lives in masterLists.js, which is also the single record of
@@ -180,7 +182,7 @@ const Leads = () => {
 
     if (formData.status === 'Converted') {
       if (!formData.state || !formData.state.trim() || !formData.city || !formData.city.trim()) {
-        alert("⚠️ Cannot convert lead: Please select a State and enter a City first.");
+        toast("⚠️ Cannot convert lead: Please select a State and enter a City first.", 'error');
         return;
       }
     }
@@ -228,7 +230,7 @@ const Leads = () => {
     if (isConversion(destination.droppableId)) {
       const targetLead = leads.find(l => l.id === draggableId);
       if (!targetLead || !targetLead.state || !targetLead.state.trim() || !targetLead.city || !targetLead.city.trim()) {
-        alert("⚠️ Cannot convert lead: Please edit the lead and set both State and City before converting.");
+        toast("⚠️ Cannot convert lead: Please edit the lead and set both State and City before converting.", 'error');
         return;
       }
       // Confirm the quantities before any order exists.

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Gift, CheckCircle, Clock, Percent, Package, Wallet, Download } from 'lucide-react';
+import { useToast } from '../context/DialogContext';
 import { downloadCSV } from '../utils/exportUtils';
 import { PageHeader, DataTable, Button, Badge, StatCard, Card, SearchInput } from '../components/ui';
 
@@ -20,6 +21,7 @@ const PAYOUT_FAILED = 'The payout could not be recorded as an expense, so the st
 
 export default function Incentives() {
   const { distributorIncentives, markIncentivePaid, distributors, dealers, retailers } = useData();
+  const toast = useToast();
   const { user, canAccess } = useAuth();
 
   const isParty = ['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
@@ -111,7 +113,7 @@ export default function Incentives() {
     ...(canManage ? [{
       key: 'actions', header: '', align: 'center', width: 'w-28',
       render: i => (i.status === 'Earned'
-        ? <Button size="sm" onClick={async () => { if (!await markIncentivePaid(i.id)) alert(PAYOUT_FAILED); }}>Mark Paid</Button>
+        ? <Button size="sm" onClick={async () => { if (!await markIncentivePaid(i.id)) toast(PAYOUT_FAILED, 'error'); }}>Mark Paid</Button>
         : null),
     }] : []),
   ];
