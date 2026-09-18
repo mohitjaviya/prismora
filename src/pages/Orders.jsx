@@ -557,16 +557,19 @@ const Orders = () => {
     },
     {
       key: 'customer', header: 'Customer & Location', sort: o => o.customerName || '',
+      // The contact and address lines stand down on a phone. They pushed the
+      // value and status columns off the side of the screen, and those are the
+      // two things you actually open this list to see.
       render: o => (
         <>
           <div className="font-semibold text-white">{o.customerName}</div>
           {(o.phone || o.email) && (
-            <div className="text-[11px] text-brand-accent mt-0.5 truncate">
+            <div className="hidden sm:block text-[11px] text-brand-accent mt-0.5 truncate">
               {o.phone || '—'} &middot; {o.email || '—'}
             </div>
           )}
-          <div className="text-[11px] text-slate-500 mt-0.5 truncate">{o.companyName || 'N/A'}</div>
-          <div className="text-[11px] text-slate-500">{[o.city, o.state].filter(Boolean).join(', ')}</div>
+          <div className="hidden sm:block text-[11px] text-slate-500 mt-0.5 truncate">{o.companyName || 'N/A'}</div>
+          <div className="text-[11px] text-slate-500 truncate">{[o.city, o.state].filter(Boolean).join(', ')}</div>
         </>
       ),
     },

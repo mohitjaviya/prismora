@@ -129,7 +129,9 @@ export default function DataTable({
       ) : (
         <>
           <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full min-w-[640px]">
+            {/* Narrow enough that a phone shows three or four columns rather than
+                  two, and still wide enough that cells do not cramp on a laptop. */}
+              <table className="w-full min-w-[520px]">
               <thead>
                 <tr className="border-b border-white/5 bg-white/[0.02]">
                   {columns.map(col => {
