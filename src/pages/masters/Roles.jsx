@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import { useAuth, PERMISSIONS, FALLBACK_LEVELS } from '../../context/AuthContext';
 import { supabase } from '../../supabaseClient';
 import {
-  Shield, ChevronLeft, Lock, AlertTriangle, Check, Search, Users, Copy, RefreshCw,
+  Shield, ChevronLeft, Lock, AlertTriangle, Check, Users, Copy, RefreshCw,
 } from 'lucide-react';
+import { PageHeader, Button, StatCard, SearchInput } from '../../components/ui';
 import {
   MODULES, MODULE_GROUPS, ROLE_LEVELS, grantedCount, isAdminLevel, rejectPermissionChange,
   fallbackRoles, roleSummary, peopleByRole, holdersOf, orphanedRoles,
@@ -182,36 +183,27 @@ export default function Roles() {
 
     return (
       <div className="space-y-6 animate-fade-in-up">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Shield size={24} className="text-brand-accent" /> Roles &amp; Permissions
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              What each role can reach. Change it here instead of asking for a code change.
-            </p>
-          </div>
-          <button
-            onClick={refresh}
-            disabled={refreshing}
-            className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:border-white/25 transition-colors flex items-center gap-1.5 disabled:opacity-40"
-          >
-            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Refresh
-          </button>
-        </div>
+        <PageHeader
+          icon={Shield}
+          title="Roles & Permissions"
+          subtitle="What each role can reach. Change it here instead of asking for a code change."
+          actions={
+            <Button onClick={refresh} disabled={refreshing}>
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Refresh
+            </Button>
+          }
+        />
 
         {/* Where the people are, which is what the screen is usually opened to find out */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Roles', value: shown.length },
-            { label: 'People assigned', value: assigned },
-            { label: 'Roles nobody holds', value: unheld },
-          ].map(s => (
-            <div key={s.label} className="glass-panel rounded-2xl border border-white/5 px-4 py-3">
-              <p className="text-xl font-extrabold text-white">{s.value}</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">{s.label}</p>
-            </div>
-          ))}
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          <StatCard label="Roles" value={shown.length} icon={Shield} tone="accent" />
+          <StatCard label="People assigned" value={assigned} icon={Users} tone="info" />
+          <StatCard
+            label="Roles nobody holds"
+            value={unheld}
+            tone={unheld > 0 ? 'warning' : 'accent'}
+            hint={unheld > 0 ? 'Defined, but not given to anyone yet' : undefined}
+          />
         </div>
 
         {usingFallback && (
@@ -262,15 +254,11 @@ export default function Roles() {
 
         {/* Search and level filter. Fifteen roles is already more than a screenful. */}
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1 min-w-0">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search roles"
-              className="w-full bg-brand-primary-lighter/30 border border-white/5 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-brand-accent/40"
-            />
-          </div>
+          <SearchInput
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search roles"
+          />
           <div className="flex gap-1 flex-wrap">
             {[{ id: 'all', name: 'All' }, ...ROLE_LEVELS].map(l => (
               <button

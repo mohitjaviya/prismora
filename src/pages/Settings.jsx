@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAuth, isAdminRole } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { Settings as SettingsIcon, Lock, History, Search } from 'lucide-react';
+import { Settings as SettingsIcon, Lock, History } from 'lucide-react';
+import { PageHeader, DataTable, Badge } from '../components/ui';
 import {  } from 'react-dom';
 import { Navigate } from 'react-router-dom';
 
@@ -17,7 +18,6 @@ const passwordPolicyError = (pw) => {
 export default function Settings() {
   const { user, updateUser, verifyCurrentPassword } = useAuth();
   const { eventLog } = useData();
-  const [auditSearch, setAuditSearch] = useState('');
 
   if (!isAdminRole(user?.role)) return <Navigate to="/" replace />;
 
@@ -61,20 +61,37 @@ export default function Settings() {
   const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
   const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
+  // The audit trail is chronological and the newest entries are the point of
+  // it, so it stays in the order the data layer returns and is not sortable.
+  const auditColumns = [
+    {
+      key: 'timestamp', header: 'When',
+      render: e => (
+        <span className="font-mono text-slate-400 whitespace-nowrap">
+          {e.timestamp
+            ? new Date(e.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+            : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'type', header: 'Action',
+      render: e => <Badge tone="accent" className="font-mono">{e.type}</Badge>,
+    },
+    { key: 'message', header: 'Detail', render: e => <span className="text-slate-300">{e.message}</span> },
+    {
+      key: 'dataId', header: 'Ref', hideBelow: 'md',
+      render: e => <span className="font-mono text-slate-500">{e.dataId || '—'}</span>,
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <SettingsIcon size={24} className="text-brand-accent" />
-            Admin Settings
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">The audit trail, and your own password. Team members and the product catalogue moved to Master Lists.</p>
-        </div>
-        <div className="flex gap-3">
-        </div>
-      </div>
+      <PageHeader
+        icon={SettingsIcon}
+        title="Admin Settings"
+        subtitle="The audit trail, and your own password. Team members and the product catalogue moved to Master Lists."
+      />
 
       {/* Tabs */}
       <div className="flex border-b border-white/5 pb-px gap-1">
@@ -94,46 +111,24 @@ export default function Settings() {
       {/* ── Tab: Audit Log ──────────────────────────────────────────────────── */}
       {activeTab === 'audit' && (
         <div className="space-y-4">
-          <div className="glass-panel rounded-2xl p-4 border border-white/5">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input value={auditSearch} onChange={e => setAuditSearch(e.target.value)} placeholder="Search audit trail by action or detail..." className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-white" />
-            </div>
-          </div>
-          <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-            <div className="overflow-x-auto custom-scrollbar max-h-[600px]">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead className="sticky top-0">
-                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                    <th className="p-4">Timestamp</th>
-                    <th className="p-4">Action</th>
-                    <th className="p-4">Detail</th>
-                    <th className="p-4">Ref</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-slate-300">
-                  {(() => {
-                    const q = auditSearch.toLowerCase();
-                    const rows = (eventLog || []).filter(e => !q || (e.type || '').toLowerCase().includes(q) || (e.message || '').toLowerCase().includes(q));
-                    return rows.length > 0 ? rows.slice(0, 300).map(e => (
-                      <tr key={e.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                        <td className="p-4 text-xs font-mono text-slate-400 whitespace-nowrap">{e.timestamp ? new Date(e.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                        <td className="p-4"><span className="text-[10px] font-bold bg-brand-accent/10 text-brand-accent border border-brand-accent/20 px-2 py-0.5 rounded-full font-mono">{e.type}</span></td>
-                        <td className="p-4 text-xs text-slate-300">{e.message}</td>
-                        <td className="p-4 text-xs font-mono text-slate-500">{e.dataId || '—'}</td>
-                      </tr>
-                    )) : (
-                      <tr><td colSpan="4" className="p-12 text-center text-slate-500">
-                        <History size={32} className="mx-auto mb-3 opacity-20" />
-                        <p>No audit events{auditSearch ? ' match your search' : ' recorded yet'}.</p>
-                      </td></tr>
-                    );
-                  })()}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-500">Showing the most recent 300 events. The audit trail records every create/update/delete, order status change, payment, and approval across the platform.</p>
+          <DataTable
+            title="Audit trail"
+            columns={auditColumns}
+            rows={eventLog || []}
+            rowKey={e => e.id}
+            pageSize={50}
+            search={e => `${e.type || ''} ${e.message || ''} ${e.dataId || ''}`}
+            searchPlaceholder="Search by action or detail"
+            empty={{
+              icon: History,
+              title: 'Nothing recorded yet',
+              hint: 'Every create, update and delete is written here, along with order status changes, payments and approvals. It fills up as the system is used.',
+            }}
+          />
+          <p className="text-[11px] text-slate-500">
+            The audit trail records every create, update and delete, plus order status changes, payments and
+            approvals across the platform.
+          </p>
         </div>
       )}
 
