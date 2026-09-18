@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Wallet, ArrowUpCircle, ArrowDownCircle, CreditCard } from 'lucide-react';
-import { PageHeader, DataTable, Card, StatCard, EmptyState } from '../components/ui';
+import { PageHeader, DataTable, Card, StatCard, EmptyState, Button } from '../components/ui';
 import { buildLedgerEntries, allParties } from '../utils/distributorUtils';
 
 const formatCurrency = (val) =>
@@ -12,14 +12,20 @@ const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
 
 export default function Ledger() {
-  const { invoices, distributorPayments, distributors, dealers, retailers, orders } = useData();
-  const { user } = useAuth();
+  const { invoices, distributorPayments, distributors, dealers, retailers, orders, correctPartyBalance } = useData();
+  const { user, canAccess } = useAuth();
 
   // A partner sees their own account. Staff have full access to this screen but
   // are not a party themselves, so they choose whose ledger to read — a running
   // balance only means anything for one account at a time.
   const isParty = ['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
   const [selectedPartyId, setSelectedPartyId] = useState('');
+  const [correcting, setCorrecting] = useState(false);
+  const [correction, setCorrection] = useState(null);
+
+  // A partner may read their own ledger but not rewrite the company's record of
+  // what they owe, so the correction is staff-only.
+  const canCorrect = !isParty && canAccess('accounting', 'full');
 
   const ownParty = useMemo(() => {
     if (user?.role === 'Dealer') return dealers?.find(d => d.id === user?.dealerId);
@@ -162,6 +168,47 @@ export default function Ledger() {
           <p className="text-[10px] text-slate-500 mt-1.5">of the credit limit above</p>
         </Card>
       </div>
+
+      {drift !== 0 && canCorrect && (
+        <Card padding="p-4" className="border-amber-500/25 bg-amber-500/5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-xs text-amber-300 leading-relaxed">
+                <span className="font-bold">
+                  The account record and this ledger disagree by {formatCurrency(Math.abs(drift))}.
+                </span>{' '}
+                The record says {formatCurrency(storedBalance)}; the entries below add up to{' '}
+                {formatCurrency(ledgerBalance)}. The entries are the ones that can be checked row by row.
+              </p>
+              <p className="text-[11px] text-amber-300/70 mt-1.5 leading-relaxed">
+                The balance is not editable on any form, so correcting it by hand would mean inventing a payment
+                that never happened. This sets the record to what the documents add up to.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              disabled={correcting}
+              onClick={async () => {
+                setCorrecting(true);
+                setCorrection(await correctPartyBalance(party, party.partyType));
+                setCorrecting(false);
+              }}
+            >
+              {correcting ? 'Correcting…' : 'Correct the record'}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {correction && (
+        <Card padding="p-4" className="border-emerald-500/25 bg-emerald-500/5">
+          <p className="text-xs text-emerald-300 leading-relaxed">
+            {correction.changed
+              ? `Outstanding corrected from ${formatCurrency(correction.from)} to ${formatCurrency(correction.to)}.`
+              : 'The record already matched the ledger; nothing was changed.'}
+          </p>
+        </Card>
+      )}
 
       <DataTable
         title="Entries"

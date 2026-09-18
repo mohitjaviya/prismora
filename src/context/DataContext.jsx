@@ -8,6 +8,7 @@ import {
   invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty,
   invoicesSettledBy, balanceAfterPayment,
 } from '../utils/settlement';
+import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 
 const DataContext = createContext();
@@ -1451,10 +1452,17 @@ export const DataProvider = ({ children }) => {
    */
   const chargePartyForOrder = async (order) => {
     if (!order) return;
+
+    // The tax belongs on the balance. The ledger counts an invoice as amount
+    // plus tax, because that is what the partner is billed and what they will
+    // pay, while this used to add only the order value. Every invoiced order
+    // therefore pushed the two figures apart by exactly the GST on it, which
+    // is a drift nobody caused and nobody could see without opening the ledger.
+    const owed = Number(order.value || 0) + gstForOrder(order);
     if (order.distributorId) {
       const dist = distributors.find(d => d.id === order.distributorId);
       if (dist) {
-        const newOutstanding = (dist.outstandingAmount || 0) + Number(order.value || 0);
+        const newOutstanding = (dist.outstandingAmount || 0) + owed;
         const nextDist = distributors.map(d => d.id === dist.id ? { ...d, outstandingAmount: newOutstanding } : d);
         setDistributors(nextDist);
         localStorage.setItem('prismora_distributors', JSON.stringify(nextDist));
@@ -1463,7 +1471,7 @@ export const DataProvider = ({ children }) => {
     } else if (order.dealerId) {
       const dealer = dealers.find(d => d.id === order.dealerId);
       if (dealer) {
-        const newOutstanding = (dealer.outstandingAmount || 0) + Number(order.value || 0);
+        const newOutstanding = (dealer.outstandingAmount || 0) + owed;
         const nextDealers = dealers.map(d => d.id === dealer.id ? { ...d, outstandingAmount: newOutstanding } : d);
         setDealers(nextDealers);
         localStorage.setItem('prismora_dealers', JSON.stringify(nextDealers));
@@ -1472,7 +1480,7 @@ export const DataProvider = ({ children }) => {
     } else if (order.retailerId) {
       const retailer = retailers.find(r => r.id === order.retailerId);
       if (retailer) {
-        const newOutstanding = (retailer.outstandingAmount || 0) + Number(order.value || 0);
+        const newOutstanding = (retailer.outstandingAmount || 0) + owed;
         const nextRetailers = retailers.map(r => r.id === retailer.id ? { ...r, outstandingAmount: newOutstanding } : r);
         setRetailers(nextRetailers);
         localStorage.setItem('prismora_retailers', JSON.stringify(nextRetailers));
@@ -2051,6 +2059,36 @@ export const DataProvider = ({ children }) => {
       if (ok) { booked += 1; value += Number(row.amount) || 0; } else { failed += 1; }
     }
     return { found: pending.length, booked, value, failed };
+  };
+
+  /**
+   * Put a partner's stored balance back in step with their ledger.
+   *
+   * `outstandingAmount` is a single number kept on the party record and moved
+   * by every invoice, payment and credit note; the ledger recomputes the same
+   * figure from those documents. Two sources for one number, so they drift --
+   * a failed write, a deleted invoice, an edit made straight in the database.
+   *
+   * The causes found so far are fixed, but nothing repairs a gap that already
+   * exists, and the balance is not editable on any form: correcting it by hand
+   * would mean inventing a payment that never happened. This sets the stored
+   * figure to what the documents add up to, which is the one of the two that
+   * can be checked row by row.
+   */
+  const correctPartyBalance = async (party, partyType) => {
+    if (!party?.id || !partyType) return null;
+
+    const entries = buildLedgerEntries(party, invoices, distributorPayments, orders);
+    const derived = entries.length ? entries[entries.length - 1].balance : 0;
+    const stored = Number(party.outstandingAmount || 0);
+    const drift = Math.round(derived - stored);
+    if (drift === 0) return { changed: false, from: stored, to: derived, drift: 0 };
+
+    await writePartyOutstanding(partyType, party, derived);
+    logEvent('balance_corrected',
+      `${party.name}: outstanding corrected from ${stored} to ${derived} to match the ledger`,
+      null, party.id);
+    return { changed: true, from: stored, to: derived, drift };
   };
 
   const addExpense = async (expenseData) => {
@@ -3032,7 +3070,7 @@ export const DataProvider = ({ children }) => {
       addProduct, updateProduct, deleteProduct,
       addInvoice, updateInvoiceStatus, deleteInvoice,
       creditNotes, addCreditNote,
-      addExpense, deleteExpense, reconcilePayouts,
+      addExpense, deleteExpense, reconcilePayouts, correctPartyBalance,
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, receiveStock,
