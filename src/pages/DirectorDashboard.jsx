@@ -6,6 +6,7 @@ import {
   Target, Trophy, IndianRupee, ArrowUpRight, ArrowDownRight, Boxes, Users
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -18,7 +19,6 @@ const compactCurrency = (val) => {
   return `₹${n}`;
 };
 
-const CHART_COLORS = ['#D4186C', '#6366F1', '#A78BFA', '#38BDF8', '#34D399', '#FBBF24'];
 
 export default function DirectorDashboard() {
   const {
@@ -309,11 +309,11 @@ export default function DirectorDashboard() {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyTrend} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} vertical={false} />
-                <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `${v / 1000}k`} />
-                <Tooltip contentStyle={{ backgroundColor: '#112240', borderColor: '#334155', borderRadius: '8px' }} formatter={v => formatCurrency(v)} cursor={{ fill: 'rgba(212,24,108,0.08)' }} />
-                <Bar dataKey="sales" fill="#D4186C" radius={[4, 4, 0, 0]} maxBarSize={34} />
+                <CartesianGrid {...CHART_GRID} />
+                <XAxis dataKey="month" {...CHART_AXIS} />
+                <YAxis {...CHART_AXIS} tickFormatter={v => `${v / 1000}k`} />
+                <Tooltip {...CHART_TOOLTIP} formatter={v => formatCurrency(v)} cursor={{ fill: 'rgba(212,24,108,0.08)' }} />
+                <Bar dataKey="sales" fill={CHART_SINGLE} radius={[4, 4, 0, 0]} maxBarSize={34} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -332,7 +332,7 @@ export default function DirectorDashboard() {
                       <span className="text-brand-accent font-bold flex-shrink-0">{compactCurrency(p.value)}</span>
                     </div>
                     <div className="h-1.5 bg-brand-primary-lighter rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${(p.value / max) * 100}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                      <div className="h-full rounded-full" style={{ width: `${(p.value / max) * 100}%`, backgroundColor: colorAt(i) }} />
                     </div>
                   </div>
                 );
@@ -378,10 +378,10 @@ export default function DirectorDashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={stateSales} layout="vertical" margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
                   <XAxis type="number" hide />
-                  <YAxis type="category" dataKey="state" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} width={70} />
-                  <Tooltip contentStyle={{ backgroundColor: '#112240', borderColor: '#334155', borderRadius: '8px' }} formatter={v => formatCurrency(v)} cursor={{ fill: 'rgba(212,24,108,0.08)' }} />
+                  <YAxis type="category" dataKey="state" {...CHART_AXIS} width={70} />
+                  <Tooltip {...CHART_TOOLTIP} formatter={v => formatCurrency(v)} cursor={{ fill: 'rgba(212,24,108,0.08)' }} />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                    {stateSales.map((s, i) => <Cell key={s.state} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    {stateSales.map((s, i) => <Cell key={s.state} fill={colorAt(i)} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

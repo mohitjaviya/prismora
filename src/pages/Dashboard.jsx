@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isAdminRole } from '../context/AuthContext';
-import { Users, TrendingUp, ShoppingBag, DollarSign, ArrowUpRight, ArrowDownRight, Clock, ChevronLeft, Target, Edit3 } from 'lucide-react';
+import { Users, TrendingUp, ShoppingBag, DollarSign, Clock, ChevronLeft, Target, Edit3, LayoutDashboard, BarChart3 } from 'lucide-react';
+import { PageHeader, StatCard, EmptyState } from '../components/ui';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts';
+import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
+import { MONTHS, monthKey } from '../utils/months';
 import DistributorDashboard from './DistributorDashboard';
 import DealerDashboard from './DealerDashboard';
 import RetailerDashboard from './RetailerDashboard';
 import DirectorDashboard from './DirectorDashboard';
 
-const COLORS = ['#6366F1', '#818CF8', '#A78BFA', '#38BDF8', '#818CF8'];
-const LEAD_COLORS = ['#38BDF8', '#6366F1', '#A78BFA', '#F472B6', '#34D399', '#FBBF24'];
 
 const Dashboard = () => {
   const { leads, orders } = useData();
@@ -113,10 +114,10 @@ const Dashboard = () => {
     : (currentRev > 0 ? 100 : 0);
 
   const kpis = [
-    { title: 'Total Leads', value: totalLeads.toLocaleString('en-IN'), icon: <Users size={24} className="text-brand-accent" />, mom: leadsMoM },
-    { title: 'Conversion Rate', value: `${conversionRate}%`, icon: <TrendingUp size={24} className="text-green-400" />, mom: convMoM },
-    { title: 'Pipeline Value', value: formatCurrency(pipelineValue), icon: <DollarSign size={24} className="text-brand-accent" />, mom: pipelineMoM },
-    { title: 'Total Revenue', value: formatCurrency(totalRevenue), icon: <ShoppingBag size={24} className="text-brand-accent-light" />, mom: revMoM },
+    { title: 'Total Leads', value: totalLeads.toLocaleString('en-IN'), icon: Users, tone: 'accent', mom: leadsMoM },
+    { title: 'Conversion Rate', value: `${conversionRate}%`, icon: TrendingUp, tone: 'success', mom: convMoM },
+    { title: 'Pipeline Value', value: formatCurrency(pipelineValue), icon: DollarSign, tone: 'info', mom: pipelineMoM },
+    { title: 'Total Revenue', value: formatCurrency(totalRevenue), icon: ShoppingBag, tone: 'accent', mom: revMoM },
   ];
 
   // Prepare chart data from real database records
@@ -124,13 +125,11 @@ const Dashboard = () => {
   visibleOrders.forEach(order => {
     if (order.status !== 'Cancelled' && order.date) {
       const date = new Date(order.date);
-      const monthStr = date.toLocaleString('default', { month: 'short' });
+      const monthStr = monthKey(date);
       monthlyRevenue[monthStr] = (monthlyRevenue[monthStr] || 0) + (order.value || 0);
     }
   });
-
-  const monthsOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const salesData = monthsOrder
+  const salesData = MONTHS
     .filter(m => monthlyRevenue[m] !== undefined)
     .map(month => ({
       month,
@@ -143,7 +142,7 @@ const Dashboard = () => {
     visibleOrders.forEach(order => {
       if (order.status !== 'Cancelled' && order.date) {
         const date = new Date(order.date);
-        const monthStr = date.toLocaleString('default', { month: 'short' });
+        const monthStr = monthKey(date);
         if (monthStr === selectedMonth) {
           productsInMonth[order.product] = (productsInMonth[order.product] || 0) + (order.value || 0);
         }
@@ -185,30 +184,25 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard Overview</h1>
-          <p className="text-slate-400 text-sm">Welcome back to your PRISMORA sales intelligence hub.</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={LayoutDashboard}
+        title="Dashboard Overview"
+        subtitle="Welcome back to your PRISMORA sales intelligence hub."
+      />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-        {kpis.map((kpi, idx) => (
-          <div key={idx} className="glass-panel relative overflow-hidden rounded-2xl p-6 hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-accent/10 transition-all duration-300 group border border-white/5 bg-gradient-to-br from-brand-primary-light/80 to-brand-primary/50">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-accent/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-brand-accent/10 transition-colors"></div>
-            <div className="flex items-center justify-between mb-4 relative z-10">
-              <h3 className="text-sm font-semibold text-slate-400 group-hover:text-slate-200 transition-colors">{kpi.title}</h3>
-              <div className="p-3 bg-brand-primary/80 rounded-xl shadow-inner border border-white/5 text-brand-accent group-hover:scale-110 transition-transform">{kpi.icon}</div>
-            </div>
-            <div className="relative z-10 flex flex-wrap items-baseline gap-2 mt-1">
-              <p className="text-2xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300 tracking-tight break-all">{kpi.value}</p>
-              <span className={`text-xs font-medium flex items-center ${kpi.mom >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {kpi.mom >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                {kpi.mom > 0 ? '+' : ''}{kpi.mom}%
-              </span>
-            </div>
-          </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {kpis.map(k => (
+          <StatCard
+            key={k.title}
+            label={k.title}
+            value={k.value}
+            icon={k.icon}
+            tone={k.tone}
+            // StatCard drops a zero trend. Every card used to read "0%" against
+            // an empty database, which looks like a broken widget rather than
+            // an honest absence of history to compare against.
+            trend={k.mom}
+          />
         ))}
       </div>
 
@@ -260,7 +254,13 @@ const Dashboard = () => {
             <div className="mt-4">
               <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-700 ${targetPct >= 100 ? 'bg-brand-accent' : targetPct >= 70 ? 'bg-amber-400' : 'bg-blue-400'}`}
+                  className={`h-full rounded-full transition-all duration-700 ${
+                      // Progress is the brand's own colour; amber once the month is
+                      // close enough that the gap is worth acting on; emerald when
+                      // the target is met. Blue said 'information' about a number
+                      // that is really about progress.
+                      targetPct >= 100 ? 'bg-emerald-400' : targetPct >= 70 ? 'bg-amber-400' : 'bg-brand-accent'
+                    }`}
                   style={{ width: `${targetPct}%` }}
                 />
               </div>
@@ -292,6 +292,13 @@ const Dashboard = () => {
               {selectedMonth ? `Product Breakdown: ${selectedMonth}` : 'Revenue Trend (YTD)'}
             </h3>
             <div className="h-72">
+              {(selectedMonth ? drilldownData : salesData).length === 0 ? (
+                <EmptyState
+                  icon={BarChart3}
+                  title="No revenue to chart yet"
+                  hint="This fills in as orders are raised. An order counts from the day it is placed, and cancelled ones are left out."
+                />
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 {selectedMonth ? (
                   <PieChart>
@@ -305,30 +312,28 @@ const Dashboard = () => {
                       dataKey="value"
                     >
                       {drilldownData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={`cell-${index}`} fill={colorAt(index)} />
                       ))}
                     </Pie>
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#112240', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
-                      itemStyle={{ color: '#D4AF37' }}
+                      {...CHART_TOOLTIP}
                       formatter={(value) => `₹${value.toLocaleString()}`}
                     />
                     <Legend />
                   </PieChart>
                 ) : (
                   <BarChart data={salesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} onClick={handleBarClick} style={{ cursor: 'pointer' }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} vertical={false} />
-                    <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `₹${value/1000}k`} />
+                    <CartesianGrid {...CHART_GRID} />
+                    <XAxis dataKey="month" {...CHART_AXIS} />
+                    <YAxis {...CHART_AXIS} tickFormatter={(value) => `₹${value/1000}k`} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#112240', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
-                      itemStyle={{ color: '#D4AF37' }}
-                      cursor={{fill: '#ffffff', opacity: 0.05}}
+                      {...CHART_TOOLTIP}
                     />
-                    <Bar dataKey="revenue" fill="#D4AF37" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                    <Bar dataKey="revenue" fill={CHART_SINGLE} radius={[4, 4, 0, 0]} maxBarSize={50} />
                   </BarChart>
                 )}
               </ResponsiveContainer>
+              )}
             </div>
           </div>
 
@@ -340,6 +345,14 @@ const Dashboard = () => {
                 Lead Status
               </h3>
               <div className="h-64">
+                {leadStatusData.length === 0 ? (
+                  <EmptyState
+                    compact
+                    icon={Users}
+                    title="No leads yet"
+                    hint="Add a lead and this shows how they are spread across the pipeline."
+                  />
+                ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -352,15 +365,16 @@ const Dashboard = () => {
                       dataKey="value"
                     >
                       {leadStatusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={LEAD_COLORS[index % LEAD_COLORS.length]} />
+                        <Cell key={`cell-${index}`} fill={colorAt(index)} />
                       ))}
                     </Pie>
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#112240', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
+                      {...CHART_TOOLTIP}
                     />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
+                )}
               </div>
             </div>
 
@@ -374,14 +388,13 @@ const Dashboard = () => {
                 {productData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={productData} margin={{ top: 10, right: 30, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} vertical={false} />
-                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                      <CartesianGrid {...CHART_GRID} />
+                      <XAxis dataKey="name" {...CHART_AXIS} />
+                      <YAxis {...CHART_AXIS} />
                       <Tooltip 
-                        contentStyle={{ backgroundColor: '#112240', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
-                        itemStyle={{ color: '#60a5fa' }}
+                        {...CHART_TOOLTIP}
                       />
-                      <Line type="monotone" dataKey="demand" stroke="#60a5fa" strokeWidth={3} dot={{ r: 4, fill: '#112240', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#60a5fa' }} />
+                      <Line type="monotone" dataKey="demand" stroke={CHART_SINGLE} strokeWidth={3} dot={{ r: 4, fill: '#112240', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#60a5fa' }} />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (

@@ -12,9 +12,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, Legend, PieChart, Pie, Cell 
 } from 'recharts';
+import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, colorAt } from '../utils/chartTheme';
+import { MONTHS, monthKey } from '../utils/months';
 import { sendWhatsAppAlert, sendEmailAlert, templates } from '../utils/notificationUtils';
 
-const CHART_COLORS = ['#D4186C', '#6366F1', '#A78BFA', '#38BDF8', '#34D399', '#FBBF24'];
 
 const Accounting = () => {
   const { user, users, canAccessData, canAccess } = useAuth();
@@ -176,16 +177,15 @@ const Accounting = () => {
   // Get trend data (grouped by month)
   const getMonthlyTrendData = () => {
     const data = {};
-    const monthsOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     // Default initial empty states
-    monthsOrder.forEach(m => {
+    MONTHS.forEach(m => {
       data[m] = { month: m, Income: 0, Expenses: 0 };
     });
 
     invoices.forEach(inv => {
       if (inv.status === 'Paid' && inv.createdAt) {
-        const m = new Date(inv.createdAt).toLocaleString('default', { month: 'short' });
+        const m = monthKey(inv.createdAt);
         if (data[m]) {
           data[m].Income += Number(inv.amount || 0) + Number(inv.tax || 0);
         }
@@ -194,7 +194,7 @@ const Accounting = () => {
 
     expenses.forEach(exp => {
       if (exp.date) {
-        const m = new Date(exp.date).toLocaleString('default', { month: 'short' });
+        const m = monthKey(exp.date);
         if (data[m]) {
           data[m].Expenses += Number(exp.amount || 0);
         }
@@ -202,8 +202,8 @@ const Accounting = () => {
     });
 
     // Only display months with active income or expenses
-    const activeMonths = monthsOrder.map(m => data[m]).filter(d => d.Income > 0 || d.Expenses > 0);
-    return activeMonths.length > 0 ? activeMonths : monthsOrder.map(m => data[m]);
+    const activeMonths = MONTHS.map(m => data[m]).filter(d => d.Income > 0 || d.Expenses > 0);
+    return activeMonths.length > 0 ? activeMonths : MONTHS.map(m => data[m]);
   };
 
   // Get expense categories data
@@ -502,18 +502,17 @@ const Accounting = () => {
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={getMonthlyTrendData()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} vertical={false} />
-                    <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val / 1000}k`} />
+                    <CartesianGrid {...CHART_GRID} />
+                    <XAxis dataKey="month" {...CHART_AXIS} />
+                    <YAxis {...CHART_AXIS} tickFormatter={(val) => `₹${val / 1000}k`} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#112240', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
-                      itemStyle={{ color: '#D4186C' }}
+                      {...CHART_TOOLTIP}
                       formatter={(val) => `₹${val.toLocaleString()}`}
                       cursor={false}
                     />
                     <Legend verticalAlign="top" height={36} iconType="circle" />
-                    <Bar dataKey="Income" fill="#34D399" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                    <Bar dataKey="Expenses" fill="#EF4444" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                    <Bar dataKey="Income" fill={colorAt(2)} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                    <Bar dataKey="Expenses" fill={colorAt(7)} radius={[4, 4, 0, 0]} maxBarSize={30} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -540,11 +539,11 @@ const Accounting = () => {
                           dataKey="value"
                         >
                           {getExpenseCategoriesData().map((entry, idx) => (
-                            <Cell key={`cell-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                            <Cell key={`cell-${idx}`} fill={colorAt(idx)} />
                           ))}
                         </Pie>
                         <Tooltip 
-                          contentStyle={{ backgroundColor: '#112240', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
+                          {...CHART_TOOLTIP}
                           formatter={(val) => `₹${val.toLocaleString()}`}
                         />
                       </PieChart>
@@ -561,7 +560,7 @@ const Accounting = () => {
                   {getExpenseCategoriesData().map((item, idx) => (
                     <div key={item.name} className="flex justify-between items-center text-xs">
                       <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}></div>
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colorAt(idx) }}></div>
                         <span className="text-slate-400">{item.name}</span>
                       </div>
                       <span className="text-slate-200 font-semibold">{formatCurrency(item.value)}</span>

@@ -80,6 +80,61 @@
 .light .bg-white\/5       { background-color: rgba(212,24,108,0.04) !important; }
 .light .border-slate-700  { border-color: #F0D9E8 !important; }
 
+/* ─── Chart colours ─────────────────────────────────────────────────────── */
+/* Recharts writes its styling into inline styles, which a class on the root
+   cannot reach. Routing them through custom properties is what lets the same
+   chart theme follow the light toggle. See src/utils/chartTheme.js. */
+:root {
+  --chart-tooltip-bg:     #1A1020;
+  --chart-tooltip-border: rgba(212,24,108,0.28);
+  --chart-tooltip-text:   #F8FAFC;
+  --chart-grid:           rgba(255,255,255,0.08);
+  --chart-axis:           #94A3B8;
+  --chart-cursor:         rgba(255,255,255,0.05);
+
+  /* One series: the brand accent. With nothing beside it there is no pair to
+     tell apart, so only the lightness band, the chroma floor and contrast
+     apply -- and it clears all three on both surfaces. */
+  --viz-single: #D4186C;
+
+  /* Two or more: a fixed, validated order. Checked with the palette validator
+     against this panel colour, not chosen by eye: worst adjacent colour-vision
+     deficiency dE 8.4, normal-vision dE 19.3, every slot over 3:1 on #1A1020.
+     The order is the safety mechanism, so slots are filled 1..N and never
+     cycled or re-ordered per chart. */
+  --viz-1: #3987e5;   /* blue    */
+  --viz-2: #d95926;   /* orange  */
+  --viz-3: #199e70;   /* aqua    */
+  --viz-4: #c98500;   /* yellow  */
+  --viz-5: #d55181;   /* magenta */
+  --viz-6: #008300;   /* green   */
+  --viz-7: #9085e9;   /* violet  */
+  --viz-8: #e66767;   /* red     */
+}
+
+.light {
+  --chart-tooltip-bg:     #FFFFFF;
+  --chart-tooltip-border: rgba(212,24,108,0.22);
+  --chart-tooltip-text:   #1A0A12;
+  --chart-grid:           rgba(212,24,108,0.10);
+  --chart-axis:           #7D5A6C;
+  --chart-cursor:         rgba(212,24,108,0.06);
+
+  /* The same eight hues stepped for the light panel, not an automatic flip of
+     the dark ones. Three of them sit just under 3:1 here, which the method
+     allows only where the value is readable another way -- every chart on this
+     screen carries a legend and a tooltip, which is that relief. */
+  --viz-single: #D4186C;
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-6: #008300;
+  --viz-7: #4a3aa7;
+  --viz-8: #e34948;
+}
+
 /* ─── Base ──────────────────────────────────────────────────────────────── */
 @layer base {
   body {
