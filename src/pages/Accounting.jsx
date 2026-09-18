@@ -586,7 +586,7 @@ const Accounting = () => {
                 Income vs Expenses (Monthly)
               </h3>
               <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={getMonthlyTrendData()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid {...CHART_GRID} />
                     <XAxis dataKey="month" {...CHART_AXIS} />
@@ -613,7 +613,7 @@ const Accounting = () => {
                 </h3>
                 <div className="h-64">
                   {expenses.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height={256}>
                       <PieChart>
                         <Pie
                           data={getExpenseCategoriesData()}

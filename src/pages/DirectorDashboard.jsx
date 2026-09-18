@@ -307,7 +307,7 @@ export default function DirectorDashboard() {
         <div className="lg:col-span-2 glass-panel rounded-2xl p-5 border border-white/5">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-brand-accent" />Sales Trend — {thisYear}</h3>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={256}>
               <BarChart data={monthlyTrend} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
                 <CartesianGrid {...CHART_GRID} />
                 <XAxis dataKey="month" {...CHART_AXIS} />
@@ -375,7 +375,7 @@ export default function DirectorDashboard() {
           <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><Users size={16} className="text-brand-accent" />Top States</h3>
           <div className="h-52">
             {stateSales.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={208}>
                 <BarChart data={stateSales} layout="vertical" margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
                   <XAxis type="number" hide />
                   <YAxis type="category" dataKey="state" {...CHART_AXIS} width={70} />

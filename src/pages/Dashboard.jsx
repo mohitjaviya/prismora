@@ -299,7 +299,7 @@ const Dashboard = () => {
                   hint="This fills in as orders are raised. An order counts from the day it is placed, and cancelled ones are left out."
                 />
               ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={288}>
                 {selectedMonth ? (
                   <PieChart>
                     <Pie
@@ -353,7 +353,7 @@ const Dashboard = () => {
                     hint="Add a lead and this shows how they are spread across the pipeline."
                   />
                 ) : (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height={256}>
                   <PieChart>
                     <Pie
                       data={leadStatusData}
@@ -386,7 +386,7 @@ const Dashboard = () => {
               </h3>
               <div className="h-64">
                 {productData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height={256}>
                     <LineChart data={productData} margin={{ top: 10, right: 30, left: -20, bottom: 0 }}>
                       <CartesianGrid {...CHART_GRID} />
                       <XAxis dataKey="name" {...CHART_AXIS} />
