@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Wallet, ShoppingCart, Tag, Gift, ArrowRight, CreditCard } from 'lucide-react';
+import { Wallet, ShoppingCart, Tag, Gift, ArrowRight, CreditCard, UserX } from 'lucide-react';
+import { PageHeader, Card, StatCard, EmptyState } from '../components/ui';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -44,17 +45,24 @@ export default function RetailerDashboard() {
 
   if (!retailer) {
     return (
-      <div className="glass-panel rounded-2xl border border-white/5 p-12 text-center text-slate-500">
-        <p>Your retailer profile could not be found. Contact support.</p>
+      <div className="space-y-6 animate-fade-in-up">
+        <PageHeader icon={UserX} title="Account not linked" />
+        <Card padding="p-0">
+          <EmptyState
+            icon={UserX}
+            title="Your retailer profile could not be found"
+            hint="This login is not linked to a retailer record, so there is no account to show. An administrator can link it from the Retailers screen — it takes a moment and nothing is lost in the meantime."
+          />
+        </Card>
       </div>
     );
   }
 
   const kpiCards = [
-    { label: 'Outstanding', value: formatCurrency(retailer.outstandingAmount || 0), icon: <Wallet size={22} className="text-rose-400" />, sub: `${utilizationPct}% of ${formatCurrency(retailer.creditLimit)} limit` },
-    { label: 'Orders This Month', value: ordersThisMonth.length, icon: <ShoppingCart size={22} className="text-brand-accent" />, sub: `${formatCurrency(ordersThisMonth.reduce((s, o) => s + Number(o.value || 0), 0))} total value` },
-    { label: 'Active Schemes', value: activeSchemesCount, icon: <Tag size={22} className="text-blue-400" />, sub: 'currently available to you' },
-    { label: 'Incentives Pending', value: formatCurrency(incentivesPending), icon: <Gift size={22} className="text-emerald-400" />, sub: 'awaiting payout' },
+    { label: 'Outstanding', tone: 'danger', value: formatCurrency(retailer.outstandingAmount || 0), icon: Wallet, sub: `${utilizationPct}% of ${formatCurrency(retailer.creditLimit)} limit` },
+    { label: 'Orders This Month', tone: 'accent', value: ordersThisMonth.length, icon: ShoppingCart, sub: `${formatCurrency(ordersThisMonth.reduce((s, o) => s + Number(o.value || 0), 0))} total value` },
+    { label: 'Active Schemes', tone: 'info', value: activeSchemesCount, icon: Tag, sub: 'currently available to you' },
+    { label: 'Incentives Pending', tone: 'success', value: formatCurrency(incentivesPending), icon: Gift, sub: 'awaiting payout' },
   ];
 
   const quickLinks = [
@@ -66,25 +74,18 @@ export default function RetailerDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Welcome back, {retailer.name}</h1>
-        <p className="text-slate-400 text-sm mt-1">Here's a snapshot of your account with Janki Herbals.</p>
-      </div>
+      <PageHeader
+        title={`Welcome back, ${retailer.name}`}
+        subtitle="A snapshot of your account with Janki Herbals."
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpiCards.map((k, i) => (
-          <div key={i} className="glass-panel rounded-2xl p-5 border border-white/5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{k.label}</span>
-              {k.icon}
-            </div>
-            <p className="text-2xl font-extrabold text-white">{k.value}</p>
-            <p className="text-[11px] text-slate-500 mt-1">{k.sub}</p>
-          </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {kpiCards.map(k => (
+          <StatCard key={k.label} label={k.label} value={k.value} icon={k.icon} tone={k.tone} hint={k.sub} />
         ))}
       </div>
 
-      <div className="glass-panel rounded-2xl border border-white/5 p-5">
+      <Card>
         <h3 className="text-sm font-bold text-white mb-4">Quick Actions</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {quickLinks.map(link => (
@@ -94,7 +95,7 @@ export default function RetailerDashboard() {
             </Link>
           ))}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

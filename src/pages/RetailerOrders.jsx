@@ -2,9 +2,8 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
-import {
-  ShoppingCart, Plus, Trash2, X, Package, Tag, Truck, CheckCircle, Clock, PackageCheck
-} from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, X, Package, Tag, Truck, CheckCircle, Clock, PackageCheck, UserX } from 'lucide-react';
+import { PageHeader, DataTable, Button, Badge, Card, EmptyState } from '../components/ui';
 import { isSchemeEligible } from '../utils/schemeUtils';
 
 const formatCurrency = (val) =>
@@ -102,72 +101,82 @@ export default function RetailerOrders() {
 
   if (!retailer) {
     return (
-      <div className="glass-panel rounded-2xl border border-white/5 p-12 text-center text-slate-500">
-        <ShoppingCart size={32} className="mx-auto mb-3 opacity-20" />
-        <p>Your retailer profile could not be found. Contact support.</p>
+      <div className="space-y-6 animate-fade-in-up">
+        <PageHeader icon={UserX} title="Account not linked" />
+        <Card padding="p-0">
+          <EmptyState
+            icon={UserX}
+            title="Your retailer profile could not be found"
+            hint="This login is not linked to a retailer record, so there are no orders to show. An administrator can link it from the Retailers screen."
+          />
+        </Card>
       </div>
     );
   }
 
+  const orderColumns = [
+    {
+      key: 'id', header: 'Order / Date', sort: o => o.id || '',
+      render: o => (
+        <>
+          <div className="font-semibold text-white">{o.id}</div>
+          <div className="text-[11px] text-slate-500">{formatDate(o.date || o.createdAt)}</div>
+        </>
+      ),
+    },
+    {
+      key: 'product', header: 'Product', sort: o => o.product || '',
+      render: o => (
+        <>
+          <div className="text-brand-accent">{o.product}</div>
+          <div className="text-[11px] text-slate-500">Qty: {o.quantity}</div>
+        </>
+      ),
+    },
+    {
+      key: 'value', header: 'Value', align: 'right', sort: o => Number(o.value) || 0,
+      render: o => <span className="font-semibold text-white">{formatCurrency(o.value)}</span>,
+    },
+    {
+      key: 'status', header: 'Status', align: 'center', sort: o => o.status || '',
+      render: o => (
+        <>
+          <Badge>{statusConfig[o.status]?.icon}{o.status}</Badge>
+          {o.receivedByDistributor && (
+            <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
+              <CheckCircle size={10} /> Receipt confirmed
+            </div>
+          )}
+        </>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ShoppingCart size={24} className="text-brand-accent" /> My Orders
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Place new orders and track your order history.</p>
-        </div>
-        <button onClick={openOrderModal} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-          <Plus size={16} /> Place New Order
-        </button>
-      </div>
+      <PageHeader
+        icon={ShoppingCart}
+        title="My Orders"
+        subtitle="Place new orders and track your order history."
+        actions={<Button variant="primary" icon={Plus} onClick={openOrderModal}>Place New Order</Button>}
+      />
 
-      <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                <th className="p-4">Order ID / Date</th>
-                <th className="p-4">Product(s)</th>
-                <th className="p-4 text-right">Value</th>
-                <th className="p-4 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-slate-300">
-              {myOrders.length > 0 ? myOrders.map(o => (
-                <tr key={o.id} onClick={() => setViewingOrder(o)} className="hover:bg-brand-primary-lighter/20 transition-colors cursor-pointer">
-                  <td className="p-4">
-                    <div className="font-semibold text-white">{o.id}</div>
-                    <div className="text-xs text-slate-500">{formatDate(o.date || o.createdAt)}</div>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-brand-accent">{o.product}</div>
-                    <div className="text-xs text-slate-500">Qty: {o.quantity}</div>
-                  </td>
-                  <td className="p-4 text-right font-medium text-white">{formatCurrency(o.value)}</td>
-                  <td className="p-4 text-center">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusConfig[o.status]?.cls || 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
-                      {statusConfig[o.status]?.icon}{o.status}
-                    </span>
-                    {o.receivedByDistributor && (
-                      <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
-                        <CheckCircle size={10} /> Receipt Confirmed
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              )) : (
-                <tr><td colSpan="4" className="p-12 text-center text-slate-500">
-                  <ShoppingCart size={32} className="mx-auto mb-3 opacity-20" />
-                  <p>No orders yet.</p>
-                  <button onClick={openOrderModal} className="mt-4 text-brand-accent hover:underline text-sm">+ Place your first order</button>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        title="Orders"
+        columns={orderColumns}
+        rows={myOrders}
+        rowKey={o => o.id}
+        onRowClick={o => setViewingOrder(o)}
+        search={o => `${o.id} ${o.product} ${o.status}`}
+        searchPlaceholder="Search order or product"
+        empty={{
+          icon: ShoppingCart,
+          title: 'No orders yet',
+          hint: 'Orders you place appear here with their status, and stay here as a record once delivered.',
+          action: <Button variant="primary" icon={Plus} onClick={openOrderModal}>Place your first order</Button>,
+        }}
+      />
+
 
       {/* Place Order Modal */}
       {isModalOpen && createPortal(

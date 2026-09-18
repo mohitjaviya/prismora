@@ -171,7 +171,7 @@ export default function Ledger() {
         empty={{
           icon: Wallet,
           title: 'No ledger activity yet',
-          hint: 'Entries appear here once an order is marked Delivered \u2014 that is the point an invoice is raised against the account. Payments are recorded here as credits.',
+          hint: 'Entries appear here once an order is marked Delivered — that is the point an invoice is raised against the account. Payments are recorded here as credits.',
         }}
       />
     </div>
