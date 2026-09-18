@@ -1,5 +1,9 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import {
+  linkedExpenseId, expenseForIncentive, expenseForClaim, expenseForFieldExpense,
+  unbookedPayouts,
+} from '../utils/payouts';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 
 const DataContext = createContext();
@@ -1829,6 +1833,106 @@ export const DataProvider = ({ children }) => {
   };
 
   // ── Expenses ─────────────────────────────────────────────────────────────
+  /**
+   * An expense that mirrors money leaving the business somewhere else.
+   *
+   * Settling a claim, paying an incentive and approving a field expense all
+   * moved real money and none of them reached Accounting: the screen sums the
+   * `expenses` table, and the only thing that ever wrote to it was its own Add
+   * Expense form. Net profit was overstated by every payout ever made.
+   *
+   * The id is derived from whatever caused the expense rather than being the
+   * next free number. That makes booking the same payout twice impossible --
+   * the primary key refuses it -- instead of relying on a check that two clicks
+   * in quick succession could both pass. It is also what lets the books be
+   * reconciled later without creating duplicates.
+   *
+   * The expenses table has exactly id, category, amount, description, date,
+   * assignedTo and createdAt. Naming any other column aborts the whole insert
+   * with 42703, so the link to the source lives in the id, not in a column
+   * nobody has added yet.
+   *
+   * What each payout turns into lives in utils/payouts.js, where it is tested
+   * without a database.
+   */
+  const bookLinkedExpense = async ({ sourceId, category, amount, description, date, assignedTo }) => {
+    const value = Number(amount) || 0;
+    // Nothing to book is not a failure: an incentive paid in free goods costs
+    // stock, which inventory already accounts for, not cash.
+    if (value <= 0) return true;
+
+    const id = linkedExpenseId(sourceId);
+    if (expenses.some(e => e.id === id)) return true;
+
+    const row = {
+      id,
+      category,
+      amount: value,
+      description,
+      date: date || new Date().toISOString(),
+      assignedTo: assignedTo || null,
+      createdAt: new Date().toISOString(),
+    };
+
+    const ok = await persist(`expenses insert (${category})`, supabase.from('expenses').insert([row]));
+    if (!ok) return false;
+
+    setExpenses(prev => (prev.some(e => e.id === id) ? prev : [row, ...prev]));
+    try {
+      const local = JSON.parse(localStorage.getItem('prismora_expenses') || '[]');
+      if (!local.some(e => e.id === id)) {
+        localStorage.setItem('prismora_expenses', JSON.stringify([row, ...local]));
+      }
+    } catch { /* storage blocked; state and the database are already correct */ }
+    logEvent('expense_new', `${category}: ${description}`, assignedTo || null, id);
+    return true;
+  };
+
+  /** Undo the above, for a status that moves back out of the state that booked it. */
+  const unbookLinkedExpense = async (sourceId) => {
+    const id = linkedExpenseId(sourceId);
+    if (!expenses.some(e => e.id === id)) return;
+    const ok = await persist('expenses delete (reversal)', supabase.from('expenses').delete().eq('id', id));
+    if (!ok) return;
+    setExpenses(prev => prev.filter(e => e.id !== id));
+    try {
+      const local = JSON.parse(localStorage.getItem('prismora_expenses') || '[]');
+      localStorage.setItem('prismora_expenses', JSON.stringify(local.filter(e => e.id !== id)));
+    } catch { /* storage blocked */ }
+    logEvent('expense_reversed', `Reversed the expense booked for ${sourceId}`, null, id);
+  };
+
+  /**
+   * Book payouts that happened before any of this was wired up.
+   *
+   * Correct behaviour from here on cannot find money that already left. This
+   * looks for incentives marked Paid, claims marked Settled and field expenses
+   * marked Approved that have no expense against them, and books them.
+   *
+   * Safe to run as often as you like: the expense id is derived from the
+   * payout, so anything already booked is skipped rather than duplicated.
+   * Returns what it did, so the screen can say so rather than claiming success.
+   */
+  const reconcilePayouts = async () => {
+    const pending = unbookedPayouts({
+      expenses,
+      incentives: distributorIncentives,
+      claims: schemeClaims,
+      fieldExpenses: sfaExpenses,
+    });
+    let booked = 0;
+    let value = 0;
+    let failed = 0;
+    for (const row of pending) {
+      // Sequential on purpose. These are writes to one table with derived ids;
+      // firing them together risks the same row twice on a retry, and there are
+      // never enough of them for the wait to matter.
+      const ok = await bookLinkedExpense(row);
+      if (ok) { booked += 1; value += Number(row.amount) || 0; } else { failed += 1; }
+    }
+    return { found: pending.length, booked, value, failed };
+  };
+
   const addExpense = async (expenseData) => {
     const maxId = expenses.reduce((max, exp) => {
       const num = parseInt(exp.id.replace('EXP-', ''), 10);
@@ -2573,12 +2677,24 @@ export const DataProvider = ({ children }) => {
   };
 
   const updateSFAExpense = async (id, updatedData) => {
+    const claim = sfaExpenses.find(e => e.id === id);
+
+    // Approving a field expense commits the company to paying it, and these
+    // sat in their own table that Accounting never read.
+    if (updatedData.status === 'Approved' && claim) {
+      const expense = expenseForFieldExpense(claim);
+      if (expense && !await bookLinkedExpense(expense)) return false;
+    } else if (updatedData.status && updatedData.status !== 'Approved') {
+      await unbookLinkedExpense(id);
+    }
+
     setSfaExpenses(prev => {
       const next = prev.map(e => e.id === id ? { ...e, ...updatedData } : e);
       localStorage.setItem('prismora_sfa_expenses', JSON.stringify(next));
       return next;
     });
     await persist('sfa_expenses update', supabase.from('sfa_expenses').update(updatedData).eq('id', id));
+    return true;
   };
 
   // ── Distributor Payments (Outstanding Ledger credits) ──────────────────────
@@ -2650,13 +2766,26 @@ export const DataProvider = ({ children }) => {
   };
 
   const updateSchemeClaimStatus = async (id, status, reviewNotes = '') => {
+    const claim = schemeClaims.find(c => c.id === id);
+
+    // Settled is the point the money goes out. Approved is a decision, not a
+    // payment, so it books nothing.
+    if (status === 'Settled' && claim) {
+      const expense = expenseForClaim(claim);
+      if (expense && !await bookLinkedExpense({ ...expense, date: new Date().toISOString() })) return false;
+    } else if (status !== 'Settled') {
+      // Moved back out of Settled: the payment is undone, so the books follow.
+      await unbookLinkedExpense(id);
+    }
+
     setSchemeClaims(prev => {
       const next = prev.map(c => c.id === id ? { ...c, status, reviewNotes } : c);
       localStorage.setItem('prismora_scheme_claims', JSON.stringify(next));
       return next;
     });
     await persist('scheme_claims update', supabase.from('scheme_claims').update({ status, reviewNotes }).eq('id', id));
-    logEvent('scheme_claim_updated', `Scheme claim ${id} → ${status}`, null, id);
+    logEvent('scheme_claim_updated', `Scheme claim ${id} \u2192 ${status}`, null, id);
+    return true;
   };
 
   // ── Distributor/Dealer/Retailer Incentives (auto-generated from Schemes) ───
@@ -2704,12 +2833,23 @@ export const DataProvider = ({ children }) => {
   };
 
   const markIncentivePaid = async (id) => {
+    const incentive = distributorIncentives.find(i => i.id === id);
+    if (!incentive) return false;
+
+    // Booked before the status changes, and the status is left alone if it
+    // fails. An incentive that reads Paid with nothing in the books is the
+    // failure this whole change exists to stop, so it must not be the one the
+    // code falls back to.
+    const expense = expenseForIncentive(incentive);
+    if (expense && !await bookLinkedExpense({ ...expense, date: new Date().toISOString() })) return false;
+
     setDistributorIncentives(prev => {
       const next = prev.map(i => i.id === id ? { ...i, status: 'Paid' } : i);
       localStorage.setItem('prismora_distributor_incentives', JSON.stringify(next));
       return next;
     });
     await persist('distributor_incentives update', supabase.from('distributor_incentives').update({ status: 'Paid' }).eq('id', id));
+    return true;
   };
 
   return (
@@ -2722,7 +2862,7 @@ export const DataProvider = ({ children }) => {
       addProduct, updateProduct, deleteProduct,
       addInvoice, updateInvoiceStatus, deleteInvoice,
       creditNotes, addCreditNote,
-      addExpense, deleteExpense,
+      addExpense, deleteExpense, reconcilePayouts,
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, receiveStock,

@@ -14,6 +14,10 @@ import { createPortal } from 'react-dom';
 import { optionsFor } from '../utils/masterLists';
 
 
+// Marking a payout without recording it is the failure this guard exists to
+// stop, so a refused write has to be said out loud rather than looking inert.
+const PAYOUT_FAILED = 'The payout could not be recorded as an expense, so the status has been left unchanged rather than showing money as paid that the books do not have. The reason is in the browser console; try again once it is resolved.';
+
 export default function SFA() {
   const { user, users: allUsers, isAdmin, isManager, isSales } = useAuth();
   const {
@@ -1090,7 +1094,7 @@ export default function SFA() {
                         <td className="p-4 text-center">
                           {exp.status === 'Pending' ? (
                             <div className="flex items-center justify-center gap-1.5">
-                              <button onClick={() => updateSFAExpense(exp.id, { status: 'Approved' })} className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-400 transition-colors" title="Approve"><CheckSquare size={14} /></button>
+                              <button onClick={async () => { if (!await updateSFAExpense(exp.id, { status: 'Approved' })) alert(PAYOUT_FAILED); }} className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-400 transition-colors" title="Approve"><CheckSquare size={14} /></button>
                               <button onClick={() => updateSFAExpense(exp.id, { status: 'Rejected' })} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 transition-colors" title="Reject"><XSquare size={14} /></button>
                             </div>
                           ) : <span className="text-slate-600 italic text-xs">—</span>}

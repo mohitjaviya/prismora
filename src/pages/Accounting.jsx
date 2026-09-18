@@ -3,18 +3,15 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { 
-  Wallet, TrendingUp, Plus, Trash2, Calendar, FileText, 
-  CheckCircle, Clock, AlertCircle, ShoppingCart, ArrowUpRight, 
-  ArrowDownRight, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag
-} from 'lucide-react';
-import { PageHeader } from '../components/ui';
+import { Wallet, TrendingUp, Plus, Trash2, Calendar, FileText, CheckCircle, Clock, AlertCircle, ShoppingCart, ArrowUpRight, ArrowDownRight, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle } from 'lucide-react';
+import { Button, Card, PageHeader } from '../components/ui';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, Legend, PieChart, Pie, Cell 
 } from 'recharts';
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, colorAt } from '../utils/chartTheme';
 import { MONTHS, monthKey } from '../utils/months';
+import { unbookedPayouts, unbookedTotal } from '../utils/payouts';
 import { sendWhatsAppAlert, sendEmailAlert, templates } from '../utils/notificationUtils';
 
 
@@ -22,6 +19,7 @@ const Accounting = () => {
   const { user, users, canAccessData, canAccess } = useAuth();
    const {
     orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, leads, productCatalog, distributors,
+    distributorIncentives, schemeClaims, sfaExpenses, reconcilePayouts,
     addInvoice, updateInvoiceStatus, deleteInvoice,
     addExpense, deleteExpense, creditNotes, addCreditNote,
     grn, vendors, purchaseReturns
@@ -46,6 +44,8 @@ const Accounting = () => {
   }, [rawExpenses, canAccessData]);
 
   // State variables - non-Admins start on 'invoices' tab since overview is Admin-only
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState(null);
   const [activeTab, setActiveTab] = useState(canAccess('accounting', 'full') ? 'overview' : 'invoices'); // 'overview' | 'invoices' | 'expenses'
   const [invoiceFilter, setInvoiceFilter] = useState('All'); // 'All' | 'Paid' | 'Unpaid' | 'Overdue'
   
@@ -105,6 +105,19 @@ const Accounting = () => {
   // What is still owed to vendors — the mirror of outstanding receivables,
   // which this screen already showed on its own.
   const vendorPayables = (vendors || []).reduce((sum, v) => sum + Number(v.outstandingAmount || 0), 0);
+
+  // Money that has already gone out but never reached this screen: incentives
+  // marked Paid, claims marked Settled and field expenses marked Approved all
+  // used to change a status and nothing else. They are booked as they happen
+  // now, but anything paid before that was wired up is still missing, and no
+  // amount of correct behaviour from here on would find it.
+  const missingPayouts = unbookedPayouts({
+    expenses,
+    incentives: distributorIncentives,
+    claims: schemeClaims,
+    fieldExpenses: sfaExpenses,
+  });
+  const missingPayoutValue = unbookedTotal(missingPayouts);
 
   const netProfit = totalRevenue - totalExpensesValue - purchaseCost;
   const profitMargin = totalRevenue ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
@@ -344,6 +357,62 @@ const Accounting = () => {
         </>
         }
       />
+
+        {missingPayouts.length > 0 && canAccess('accounting', 'full') && (
+          <Card padding="p-4" className="border-amber-500/25 bg-amber-500/5">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex items-start gap-3 min-w-0">
+                <AlertTriangle size={15} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-xs text-amber-300 leading-relaxed">
+                    <span className="font-bold">
+                      {missingPayouts.length === 1
+                        ? 'One payout is missing from the books'
+                        : `${missingPayouts.length} payouts are missing from the books`}
+                      {' — '}{formatCurrency(missingPayoutValue)}.
+                    </span>{' '}
+                    Scheme incentives, settled claims and approved field expenses used to change a status and nothing
+                    else, so the money left the business without being recorded. Net profit above is overstated by
+                    this much.
+                  </p>
+                  <p className="text-[11px] text-amber-300/70 mt-1.5 leading-relaxed">
+                    Anything paid from now on is booked as it happens. This only covers what was paid before that.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="primary"
+                disabled={reconciling}
+                onClick={async () => {
+                  setReconciling(true);
+                  setReconcileResult(await reconcilePayouts());
+                  setReconciling(false);
+                }}
+              >
+                {reconciling ? 'Booking…' : 'Book them'}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {reconcileResult && (
+          <Card
+            padding="p-4"
+            className={reconcileResult.failed > 0
+              ? 'border-rose-500/25 bg-rose-500/5'
+              : 'border-emerald-500/25 bg-emerald-500/5'}
+          >
+            <p className={`text-xs leading-relaxed ${reconcileResult.failed > 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+              {reconcileResult.booked > 0 && (
+                <>Booked {reconcileResult.booked} payout{reconcileResult.booked === 1 ? '' : 's'} worth{' '}
+                {formatCurrency(reconcileResult.value)}. </>
+              )}
+              {reconcileResult.failed > 0
+                ? `${reconcileResult.failed} could not be written and are still missing — the reason is in the browser console. Running this again is safe.`
+                : reconcileResult.booked === 0 ? 'Nothing needed booking.' : 'Net profit above now accounts for them.'}
+            </p>
+          </Card>
+        )}
 
       {/* Tabs Menu */}
       <div className="flex border-b border-white/5 pb-px">

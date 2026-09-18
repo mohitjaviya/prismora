@@ -28,6 +28,8 @@ const BLANK_FORM = { schemeId: '', orderId: '', amount: '', notes: '' };
 // chain of ternaries.
 const PARTY_ID_FIELD = { Distributor: 'distributorId', Dealer: 'dealerId', Retailer: 'retailerId' };
 
+const PAYOUT_FAILED = 'The payout could not be recorded as an expense, so the status has been left unchanged rather than showing money as paid that the books do not have. The reason is in the browser console; try again once it is resolved.';
+
 export default function Claims() {
   const { schemeClaims, addSchemeClaim, updateSchemeClaimStatus, schemes, orders, distributors, dealers, retailers } = useData();
   const { user, canAccess } = useAuth();
@@ -98,9 +100,12 @@ export default function Claims() {
 
   const openReview = (claim) => { setReviewingClaim(claim); setReviewNotes(claim.reviewNotes || ''); };
 
-  const handleReview = (status) => {
+  const handleReview = async (status) => {
     if (!reviewingClaim) return;
-    updateSchemeClaimStatus(reviewingClaim.id, status, reviewNotes);
+    if (!await updateSchemeClaimStatus(reviewingClaim.id, status, reviewNotes)) {
+      alert(PAYOUT_FAILED);
+      return;
+    }
     setReviewingClaim(null);
   };
 

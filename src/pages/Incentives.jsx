@@ -13,6 +13,10 @@ const formatDate = (d) =>
 // Maps a portal role to the id field its records carry on shared tables.
 const PARTY_ID_FIELD = { Distributor: 'distributorId', Dealer: 'dealerId', Retailer: 'retailerId' };
 
+// Marking a payout without recording it is the failure this guard exists to
+// stop, so a refused write has to be said out loud rather than looking inert.
+const PAYOUT_FAILED = 'The payout could not be recorded as an expense, so the status has been left unchanged rather than showing money as paid that the books do not have. The reason is in the browser console; try again once it is resolved.';
+
 export default function Incentives() {
   const { distributorIncentives, markIncentivePaid, distributors, dealers, retailers } = useData();
   const { user, canAccess } = useAuth();
@@ -106,7 +110,7 @@ export default function Incentives() {
     ...(canManage ? [{
       key: 'actions', header: '', align: 'center', width: 'w-28',
       render: i => (i.status === 'Earned'
-        ? <Button size="sm" onClick={() => markIncentivePaid(i.id)}>Mark Paid</Button>
+        ? <Button size="sm" onClick={async () => { if (!await markIncentivePaid(i.id)) alert(PAYOUT_FAILED); }}>Mark Paid</Button>
         : null),
     }] : []),
   ];
