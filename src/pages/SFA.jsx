@@ -7,13 +7,33 @@ import {
   Plus, CalendarCheck, MapPin, User, LogIn, LogOut, CheckCircle2,
   Clipboard, Smartphone, ShoppingCart, Check, X, FileText,
   Navigation, Receipt, BarChart3, Trophy, Target, TrendingUp,
-  Upload, CheckSquare, XSquare, Route, Clock, Award, RefreshCw
+  Upload, CheckSquare, XSquare, Route, Clock, RefreshCw
 } from 'lucide-react';
 import { useToast } from '../context/DialogContext';
-import { PageHeader } from '../components/ui';
+import { Button, PageHeader, StatCard } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { optionsFor } from '../utils/masterLists';
+import { shiftDuration } from '../utils/attendance';
 
+
+/**
+ * A date as the rest of the application writes it.
+ *
+ * Every other screen runs its dates through toLocaleDateString('en-IN'), so
+ * they read "17 Sept 2026". SFA printed the stored ISO string instead, which
+ * put "2026-09-18" in a Date column narrow enough to wrap it onto two lines,
+ * in seven places across five tabs.
+ *
+ * Anything unparseable is shown as it was stored rather than as "Invalid
+ * Date" -- if the value is wrong, seeing the wrong value is what helps.
+ */
+const fmtDate = (value) => {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? String(value)
+    : parsed.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
 
 // Marking a payout without recording it is the failure this guard exists to
 // stop, so a refused write has to be said out loud rather than looking inert.
@@ -27,7 +47,7 @@ export default function SFA() {
     attendance, addAttendanceRecord, updateAttendanceRecord,
     visitReports, addVisitReport,
     sfaExpenses, addSFAExpense, updateSFAExpense,
-    addOrder, productCatalog, territories, orders, retailers, dealers, masters } = useData();
+    addOrder, productCatalog, territories, retailers, dealers, masters } = useData();
   // Options come from Master Lists; masterLists.js holds the fallback.
   const expenseCategories = optionsFor(masters, 'expense_category').map(o => o.key);
 
@@ -448,20 +468,12 @@ export default function SFA() {
         icon={CalendarCheck}
         title="Sales Force Automation"
         subtitle="GPS tracking, beats, attendance, expenses & performance analytics."
-        actions={
-        <>
-          <div className="flex gap-2 flex-wrap">
+        actions={<>
           {!isSREP && (
-          <button onClick={() => setIsBeatModalOpen(true)} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-          <Plus size={16} /> Assign Beat
-          </button>
+            <Button variant="primary" icon={Plus} onClick={() => setIsBeatModalOpen(true)}>Assign Beat</Button>
           )}
-          <button onClick={() => setIsExpenseModalOpen(true)} className="px-4 py-2.5 rounded-xl border border-brand-accent/30 text-brand-accent hover:bg-brand-accent/10 flex items-center gap-2 text-sm font-bold transition-all">
-          <Receipt size={16} /> File Expense
-          </button>
-          </div>
-        </>
-        }
+          <Button variant="accent" icon={Receipt} onClick={() => setIsExpenseModalOpen(true)}>File Expense</Button>
+        </>}
       />
 
       {/* ── Tabs ───────────────────────────────────────────────────────── */}
@@ -503,6 +515,9 @@ export default function SFA() {
                   <div className="text-xs text-slate-300 space-y-1 font-medium">
                     <div className="flex justify-between"><span>Punch In:</span><span className="text-white font-bold">{myAttendanceToday.checkInTime}</span></div>
                     <div className="flex justify-between"><span>Punch Out:</span><span className="text-white font-bold">{myAttendanceToday.checkOutTime || 'Active Shift'}</span></div>
+                    {myAttendanceToday.checkOutTime && (
+                      <div className="flex justify-between"><span>Worked:</span><span className="text-white font-bold">{shiftDuration(myAttendanceToday.checkInTime, myAttendanceToday.checkOutTime)}</span></div>
+                    )}
                     {myAttendanceToday.punchInLat ? (
                       <div className="flex justify-between items-center pt-1 border-t border-emerald-500/10">
                         <span className="text-slate-400">📍 Location:</span>
@@ -531,11 +546,11 @@ export default function SFA() {
                   <input id="sfa-notes-start-location" type="text" value={punchNotes} onChange={e => setPunchNotes(e.target.value)} placeholder="e.g. Starting at Anand market area" className={inp} />
                 </div>
                 {!myAttendanceToday ? (
-                  <button type="submit" disabled={isPunchingIn} className="w-full btn-accent py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait">
+                  <Button type="submit" variant="primary" size="lg" disabled={isPunchingIn} className="w-full">
                     {isPunchingIn ? <><RefreshCw size={15} className="animate-spin" />Getting your location…</> : <><LogIn size={16} />Punch In / Start Day</>}
-                  </button>
+                  </Button>
                 ) : !myAttendanceToday.checkOutTime ? (
-                  <button type="button" onClick={handlePunchOut} className="w-full py-2.5 rounded-xl bg-red-500/15 border border-red-500/20 hover:bg-red-500/25 text-red-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"><LogOut size={16} />Punch Out / End Shift</button>
+                  <Button variant="danger" size="lg" onClick={handlePunchOut} className="w-full"><LogOut size={16} />Punch Out / End Shift</Button>
                 ) : null}
               </form>
             </div>
@@ -543,12 +558,12 @@ export default function SFA() {
           <div className={`${isSREP ? 'lg:col-span-8' : 'lg:col-span-12'} glass-panel rounded-2xl overflow-hidden border border-white/5`}>
             <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex justify-between items-center">
               <span className="text-sm font-bold text-white uppercase tracking-wider">Attendance Register</span>
-              <span className="text-xs text-slate-400">{isSREP ? attendance.filter(a => a.userId === user?.id).length : attendance.length} records</span>
+              <span className="text-xs text-slate-400">{(() => { const n = isSREP ? attendance.filter(a => a.userId === user?.id).length : attendance.length; return `${n} ${n === 1 ? 'record' : 'records'}`; })()}</span>
             </div>
             <div className="overflow-x-auto custom-scrollbar">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
-                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                     {isManagerOrAbove && <th className="p-4">Representative</th>}<th className="p-4">Date</th>
                     <th className="p-4 text-center">In</th><th className="p-4 text-center">Out</th>
                     <th className="p-4 text-center">Duration</th>
@@ -563,7 +578,10 @@ export default function SFA() {
                       ? attendance.filter(a => a.userId === user?.id)
                       : attendance;
                     return visibleRecords.length > 0 ? visibleRecords.map(att => {
-                    const duration = att.checkInTime && att.checkOutTime ? '~8h' : att.checkInTime ? 'Active' : '—';
+                    // Was hard-coded to '~8h' for every closed shift, so a
+                    // punch-out one minute after the punch-in beside it read
+                    // as a full working day.
+                    const duration = shiftDuration(att.checkInTime, att.checkOutTime);
                     return (
                       <tr key={att.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
                         {isManagerOrAbove && (
@@ -574,9 +592,9 @@ export default function SFA() {
                             </div>
                           </td>
                         )}
-                        <td className="p-4 text-xs font-mono text-slate-400">{att.date}</td>
-                        <td className="p-4 text-center font-bold text-brand-accent">{att.checkInTime || '—'}</td>
-                        <td className="p-4 text-center font-bold text-slate-400">{att.checkOutTime || '—'}</td>
+                        <td className="p-4 text-xs text-slate-400 whitespace-nowrap">{fmtDate(att.date)}</td>
+                        <td className="p-4 text-center font-semibold text-white whitespace-nowrap">{att.checkInTime || '—'}</td>
+                        <td className="p-4 text-center font-semibold text-white whitespace-nowrap">{att.checkOutTime || '—'}</td>
                         <td className="p-4 text-center">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-bold border ${att.checkOutTime ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : att.checkInTime ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}>{duration}</span>
                         </td>
@@ -729,7 +747,7 @@ export default function SFA() {
                   <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left text-sm border-collapse">
                       <thead>
-                        <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                        <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                           <th className="p-3">Date</th><th className="p-3">Check In</th>
                           <th className="p-3">Check Out</th><th className="p-3">Notes</th>
                           <th className="p-3 text-center">Status</th>
@@ -741,7 +759,7 @@ export default function SFA() {
                           .sort((a, b) => b.date.localeCompare(a.date))
                           .map(att => (
                             <tr key={att.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                              <td className="p-3 text-xs font-mono font-bold text-white">{att.date}</td>
+                              <td className="p-3 text-xs font-bold text-white whitespace-nowrap">{fmtDate(att.date)}</td>
                               <td className="p-3 text-xs font-bold text-brand-accent">{att.checkInTime || '—'}</td>
                               <td className="p-3 text-xs text-slate-400">{att.checkOutTime || '—'}</td>
                               <td className="p-3 text-xs text-slate-400 max-w-[200px] truncate italic">{att.notes || '—'}</td>
@@ -778,13 +796,18 @@ export default function SFA() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'beats' && (
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
+          <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex justify-between items-center">
+            <span className="text-sm font-bold text-white uppercase tracking-wider">Beat Plan</span>
+            <span className="text-xs text-slate-400">{filteredBeats.length} {filteredBeats.length === 1 ? 'beat' : 'beats'}</span>
+          </div>
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left text-sm border-collapse">
               <thead>
-                <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                   <th className="p-4">Route Assignment</th><th className="p-4">Territory</th>
                   <th className="p-4">Date</th><th className="p-4">Outlets</th>
-                  <th className="p-4 text-center">Status</th><th className="p-4 text-right">Action</th>
+                  {/* "Action" held "1/1 done", which is not an action. */}
+                  <th className="p-4 text-center">Status</th><th className="p-4 text-right">Coverage</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-300">
@@ -795,7 +818,7 @@ export default function SFA() {
                         : <span className="text-brand-accent text-xs bg-brand-accent/10 border border-brand-accent/20 px-2 py-0.5 rounded">My Beat</span>}
                     </td>
                     <td className="p-4"><div className="flex items-center gap-1 font-medium text-white"><MapPin size={12} className="text-brand-accent" />{beat.territory}</div></td>
-                    <td className="p-4 text-xs font-mono font-bold text-slate-400">{beat.date}</td>
+                    <td className="p-4 text-xs font-bold text-slate-400 whitespace-nowrap">{fmtDate(beat.date)}</td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1">
                         {Array.isArray(beat.outlets) && beat.outlets.map((outlet, idx) => {
@@ -882,9 +905,9 @@ export default function SFA() {
                   </div>
                 )}
 
-                <button onClick={captureLocation} disabled={isLocating} className="w-full btn-accent py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-wait">
+                <Button variant="primary" size="lg" onClick={captureLocation} disabled={isLocating} className="w-full">
                   {isLocating ? <><RefreshCw size={16} className="animate-spin" />Getting Location…</> : <><Navigation size={16} />{gpsLocation ? 'Refresh Location' : 'Get My Location'}</>}
-                </button>
+                </Button>
               </div>
 
               {/* Location Trail */}
@@ -940,7 +963,7 @@ export default function SFA() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead>
-                    <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                       <th className="p-4">Representative</th><th className="p-4">Check-In</th>
                       <th className="p-4">Check-Out</th><th className="p-4 text-center">Visits Today</th>
                       <th className="p-4 text-center">Status</th>
@@ -980,22 +1003,29 @@ export default function SFA() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'visits' && (
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
+          {/* Every other table on this page names itself and says how much it
+              holds. This one opened straight onto a header row, so it read as
+              a fragment of a page rather than a section of one. */}
+          <div className="px-3 py-4 border-b border-white/5 bg-brand-primary-light/20 flex justify-between items-center">
+            <span className="text-sm font-bold text-white uppercase tracking-wider">Visit Reports</span>
+            <span className="text-xs text-slate-400">{visitReports.length} {visitReports.length === 1 ? 'report' : 'reports'}</span>
+          </div>
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left text-sm border-collapse">
               <thead>
-                <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                  <th className="p-4">Outlet</th><th className="p-4">Representative</th><th className="p-4">Date</th>
-                  <th className="p-4 text-center">Outcome</th><th className="p-4">Products Pitched</th>
-                  <th className="p-4 text-center">Order</th><th className="p-4">Next follow-up</th><th className="p-4">Notes</th>
+                <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
+                  <th className="px-3 py-4">Outlet</th><th className="px-3 py-4">Rep</th><th className="px-3 py-4">Date</th>
+                  <th className="px-3 py-4 text-center">Outcome</th><th className="px-3 py-4">Products Pitched</th>
+                  <th className="px-3 py-4 text-center">Order</th><th className="px-3 py-4">Follow-up</th><th className="px-3 py-4">Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-300">
                 {visitReports.length > 0 ? visitReports.map(vr => (
                   <tr key={vr.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                    <td className="p-4"><div className="font-semibold text-white">{vr.outletName}</div><div className="text-[10px] text-slate-500 mt-0.5">{vr.outletContact || 'No contact'}</div></td>
-                    <td className="p-4 text-sm text-slate-300">{getRepName(vr.executiveId)}</td>
-                    <td className="p-4 text-xs font-mono text-slate-400">{vr.visitDate}</td>
-                    <td className="p-4 text-center">
+                    <td className="px-3 py-4"><div className="font-semibold text-white">{vr.outletName}</div><div className="text-[10px] text-slate-500 mt-0.5">{vr.outletContact || 'No contact'}</div></td>
+                    <td className="px-3 py-4 text-sm text-slate-300">{getRepName(vr.executiveId)}</td>
+                    <td className="px-3 py-4 text-xs text-slate-400 whitespace-nowrap">{fmtDate(vr.visitDate)}</td>
+                    <td className="px-3 py-4 text-center">
                       {vr.outcome === 'Not Visited'
                         ? <span className="inline-flex items-center gap-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[10px] font-bold" title={vr.notVisitedReason || ''}>Not visited</span>
                         : <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold">Visited</span>}
@@ -1003,19 +1033,32 @@ export default function SFA() {
                         <div className="text-[10px] text-slate-500 mt-1 max-w-[9rem] truncate mx-auto" title={vr.notVisitedReason}>{vr.notVisitedReason}</div>
                       )}
                     </td>
-                    <td className="p-4">
+                    <td className="px-3 py-4">
                       <div className="flex flex-wrap gap-1">
-                        {Array.isArray(vr.productsShown) && vr.productsShown.length > 0 ? vr.productsShown.map((p, i) => (
-                          <span key={i} className="bg-brand-accent/10 border border-brand-accent/20 text-brand-accent text-[9px] px-1.5 py-0.5 rounded">{p}</span>
-                        )) : <span className="text-xs text-slate-600 italic">None</span>}
+                        {/* Three, then a count. Every product pitched was
+                            listed, so one row with eight of them stood four
+                            times taller than its neighbours. The rest are in
+                            the tooltip. */}
+                        {Array.isArray(vr.productsShown) && vr.productsShown.length > 0 ? (
+                          <>
+                            {vr.productsShown.slice(0, 3).map((p, i) => (
+                              <span key={i} className="bg-brand-accent/10 border border-brand-accent/20 text-brand-accent text-[10px] px-1.5 py-0.5 rounded">{p}</span>
+                            ))}
+                            {vr.productsShown.length > 3 && (
+                              <span className="text-[10px] text-slate-500 px-1 py-0.5" title={vr.productsShown.join(', ')}>
+                                +{vr.productsShown.length - 3} more
+                              </span>
+                            )}
+                          </>
+                        ) : <span className="text-xs text-slate-600 italic">None</span>}
                       </div>
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="px-3 py-4 text-center">
                       {vr.orderPlaced
                         ? <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold"><ShoppingCart size={10} />Order Placed</span>
                         : <span className="text-[10px] text-slate-500 italic">Pitched Only</span>}
                     </td>
-                    <td className="p-4">
+                    <td className="px-3 py-4">
                       {(() => {
                         if (!vr.nextFollowUp) return <span className="text-[11px] text-slate-600 italic">None set</span>;
                         const due = new Date(vr.nextFollowUp);
@@ -1024,13 +1067,13 @@ export default function SFA() {
                         const when = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Today' : `in ${days}d`;
                         return (
                           <div>
-                            <div className={`text-xs font-mono font-bold ${tone}`}>{vr.nextFollowUp}</div>
+                            <div className={`text-xs font-bold whitespace-nowrap ${tone}`}>{fmtDate(vr.nextFollowUp)}</div>
                             <div className={`text-[10px] ${tone}`}>{when}</div>
                           </div>
                         );
                       })()}
                     </td>
-                    <td className="p-4 text-xs text-slate-400 italic max-w-xs truncate" title={vr.notes}>{vr.notes || '—'}</td>
+                    <td className="px-3 py-4 text-xs text-slate-400 italic max-w-xs truncate" title={vr.notes}>{vr.notes || '—'}</td>
                   </tr>
                 )) : <tr><td colSpan="8" className="p-8 text-center text-slate-500">No visit reports yet.</td></tr>}
               </tbody>
@@ -1044,18 +1087,17 @@ export default function SFA() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'expenses' && (
         <div className="space-y-6">
-          {/* Summary Cards */}
+          {/* The three tabs that show figures each drew their own card -- icon
+              above the number here, beside it there, absent in the third -- and
+              none of them matched the StatCard the rest of the application uses. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: 'Total Claimed', value: `₹${myExpenses.reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('en-IN')}`, color: 'text-white' },
-              { label: 'Approved', value: `₹${myExpenses.filter(e => e.status === 'Approved').reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('en-IN')}`, color: 'text-emerald-400' },
-              { label: 'Pending', value: myExpenses.filter(e => e.status === 'Pending').length, color: 'text-yellow-400' },
-              { label: 'Rejected', value: myExpenses.filter(e => e.status === 'Rejected').length, color: 'text-red-400' },
+              { label: 'Total Claimed', value: `₹${myExpenses.reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('en-IN')}`, icon: Receipt, tone: 'accent' },
+              { label: 'Approved', value: `₹${myExpenses.filter(e => e.status === 'Approved').reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('en-IN')}`, icon: CheckCircle2, tone: 'success' },
+              { label: 'Pending', value: myExpenses.filter(e => e.status === 'Pending').length, icon: Clock, tone: 'warning' },
+              { label: 'Rejected', value: myExpenses.filter(e => e.status === 'Rejected').length, icon: XSquare, tone: 'danger' },
             ].map((s, i) => (
-              <div key={i} className="glass-panel rounded-2xl p-4 border border-white/5">
-                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-2">{s.label}</p>
-                <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-              </div>
+              <StatCard key={i} label={s.label} value={s.value} icon={s.icon} tone={s.tone} />
             ))}
           </div>
 
@@ -1063,12 +1105,12 @@ export default function SFA() {
           <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
             <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex justify-between items-center">
               <span className="text-sm font-bold text-white uppercase tracking-wider">{isManagerOrAbove ? 'All Expense Claims' : 'My Expense Claims'}</span>
-              <button onClick={() => setIsExpenseModalOpen(true)} className="btn-accent px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1"><Plus size={13} />New Claim</button>
+              <Button variant="primary" size="sm" icon={Plus} onClick={() => setIsExpenseModalOpen(true)}>New Claim</Button>
             </div>
             <div className="overflow-x-auto custom-scrollbar">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
-                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                     {isManagerOrAbove && <th className="p-4">Rep</th>}
                     <th className="p-4">Date</th><th className="p-4">Category</th>
                     <th className="p-4">Description</th><th className="p-4">Receipt</th>
@@ -1080,7 +1122,7 @@ export default function SFA() {
                   {myExpenses.length > 0 ? myExpenses.map(exp => (
                     <tr key={exp.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
                       {isManagerOrAbove && <td className="p-4 text-xs font-semibold text-white">{getRepName(exp.userId)}</td>}
-                      <td className="p-4 text-xs font-mono text-slate-400">{exp.date}</td>
+                      <td className="p-4 text-xs text-slate-400 whitespace-nowrap">{fmtDate(exp.date)}</td>
                       <td className="p-4"><span className="bg-brand-accent/10 border border-brand-accent/20 text-brand-accent text-[10px] px-2 py-0.5 rounded">{exp.category}</span></td>
                       <td className="p-4 text-xs text-slate-300 max-w-[200px] truncate">{exp.description}</td>
                       <td className="p-4 text-xs">
@@ -1223,21 +1265,14 @@ export default function SFA() {
                   {/* KPI Cards */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                     {[
-                      { label: 'Total Visits', value: stats.visits, icon: MapPin, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-                      { label: 'Orders Placed', value: stats.ordersPlaced, icon: ShoppingCart, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                      { label: 'Conversion', value: `${stats.conversionRate}%`, icon: TrendingUp, color: 'text-brand-accent', bg: 'bg-brand-accent/10' },
-                      { label: 'Days Attended', value: stats.days, icon: CalendarCheck, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-                      { label: 'Beats Done', value: `${stats.visitedBeats}/${stats.beatsTotal}`, icon: Target, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-                    ].map((stat, i) => {
-                      const Icon = stat.icon;
-                      return (
-                        <div key={i} className="glass-panel rounded-2xl p-5 border border-white/5 space-y-3">
-                          <div className={`w-9 h-9 rounded-xl ${stat.bg} flex items-center justify-center ${stat.color}`}><Icon size={18} /></div>
-                          <p className={`text-2xl font-black ${stat.color}`}>{stat.value}</p>
-                          <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">{stat.label}</p>
-                        </div>
-                      );
-                    })}
+                      { label: 'Total Visits', value: stats.visits, icon: MapPin, tone: 'info' },
+                      { label: 'Orders Placed', value: stats.ordersPlaced, icon: ShoppingCart, tone: 'success' },
+                      { label: 'Conversion', value: `${stats.conversionRate}%`, icon: TrendingUp, tone: 'accent' },
+                      { label: 'Days Attended', value: stats.days, icon: CalendarCheck, tone: 'info' },
+                      { label: 'Beats Done', value: `${stats.visitedBeats}/${stats.beatsTotal}`, icon: Target, tone: 'warning' },
+                    ].map((stat, i) => (
+                      <StatCard key={i} label={stat.label} value={stat.value} icon={stat.icon} tone={stat.tone} />
+                    ))}
                   </div>
 
                   {/* Beat Completion Progress */}
@@ -1248,7 +1283,7 @@ export default function SFA() {
                         {beatPlans.filter(b => b.executiveId === user.id).map(beat => (
                           <div key={beat.id} className="space-y-1.5">
                             <div className="flex justify-between text-xs">
-                              <span className="text-slate-300 font-medium">{beat.territory} <span className="text-slate-600 font-normal">— {beat.date}</span></span>
+                              <span className="text-slate-300 font-medium">{beat.territory} <span className="text-slate-600 font-normal">— {fmtDate(beat.date)}</span></span>
                               <span className={`font-bold ${beatCovered(beat) ? 'text-emerald-400' : beat.status === 'Not Visited' ? 'text-rose-400' : 'text-yellow-400'}`}>{beat.status}</span>
                             </div>
                             <div className="w-full bg-brand-primary rounded-full h-1.5">
@@ -1268,20 +1303,13 @@ export default function SFA() {
               {/* Team Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Field Visits', value: visitReports.length, icon: MapPin },
-                  { label: 'Orders from Field', value: visitReports.filter(v => v.orderPlaced).length, icon: ShoppingCart },
-                  { label: 'Active Today', value: attendance.filter(a => a.date === todayStr).length, icon: User },
-                  { label: 'Beats Completed', value: beatPlans.filter(b => BEAT_FINISHED.includes(b.status)).length, icon: CheckCircle2 },
-                ].map((s, i) => {
-                  const Icon = s.icon;
-                  return (
-                    <div key={i} className="glass-panel rounded-2xl p-4 border border-white/5 space-y-2">
-                      <Icon size={18} className="text-brand-accent opacity-70" />
-                      <p className="text-2xl font-black text-white">{s.value}</p>
-                      <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">{s.label}</p>
-                    </div>
-                  );
-                })}
+                  { label: 'Total Field Visits', value: visitReports.length, icon: MapPin, tone: 'accent' },
+                  { label: 'Orders from Field', value: visitReports.filter(v => v.orderPlaced).length, icon: ShoppingCart, tone: 'success' },
+                  { label: 'Active Today', value: attendance.filter(a => a.date === todayStr).length, icon: User, tone: 'info' },
+                  { label: 'Beats Completed', value: beatPlans.filter(b => BEAT_FINISHED.includes(b.status)).length, icon: CheckCircle2, tone: 'success' },
+                ].map((s, i) => (
+                  <StatCard key={i} label={s.label} value={s.value} icon={s.icon} tone={s.tone} />
+                ))}
               </div>
 
               {/* Leaderboard */}
@@ -1293,7 +1321,7 @@ export default function SFA() {
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left text-sm border-collapse">
                     <thead>
-                      <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                      <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                         <th className="p-4 w-16">Rank</th><th className="p-4">Representative</th>
                         <th className="p-4 text-center">Visits</th><th className="p-4 text-center">Orders</th>
                         <th className="p-4 text-center">Conversion</th><th className="p-4 text-center">Attendance</th>
@@ -1387,8 +1415,8 @@ export default function SFA() {
                 <textarea id="sfa-outlets-to-visit" required rows="3" placeholder="e.g. Radhe Medicals, Vrindavan Wellness, Krishna Pharma" value={beatForm.outlets} onChange={e => setBeatForm({ ...beatForm, outlets: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
               </div>
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
-                <button type="button" onClick={() => setIsBeatModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Schedule Route</button>
+                <Button variant="secondary" onClick={() => setIsBeatModalOpen(false)}>Cancel</Button>
+                <Button type="submit" variant="primary">Schedule Route</Button>
               </div>
             </form>
           </div>
@@ -1605,8 +1633,8 @@ export default function SFA() {
                 </div>
               </div>
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
-                <button type="button" onClick={() => setIsVisitModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" disabled={isSubmittingVisit} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60 disabled:cursor-wait">{isSubmittingVisit ? 'Saving…' : 'Submit Visit Report'}</button>
+                <Button variant="secondary" onClick={() => setIsVisitModalOpen(false)}>Cancel</Button>
+                <Button type="submit" variant="primary" disabled={isSubmittingVisit}>{isSubmittingVisit ? 'Saving…' : 'Submit Visit Report'}</Button>
               </div>
             </form>
           </div>
@@ -1657,8 +1685,8 @@ export default function SFA() {
                 </div>
               </div>
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
-                <button type="button" onClick={() => setIsExpenseModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl font-bold">Submit Claim</button>
+                <Button variant="secondary" onClick={() => setIsExpenseModalOpen(false)}>Cancel</Button>
+                <Button type="submit" variant="primary">Submit Claim</Button>
               </div>
             </form>
           </div>
