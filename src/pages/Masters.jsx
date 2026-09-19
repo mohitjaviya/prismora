@@ -298,8 +298,8 @@ export default function Masters() {
                   <button onClick={() => setDetailId(null)} className="text-slate-400 hover:text-white" title="Close"><X size={14} /></button>
                 </div>
 
-                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Colour</label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
+                <span id="colour-group" className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Colour</span>
+                <div role="group" aria-labelledby="colour-group" className="flex flex-wrap gap-1.5 mb-2">
                   {PRESET_COLOURS.map(([name, hex]) => (
                     <button
                       key={hex}

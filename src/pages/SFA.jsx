@@ -1408,8 +1408,8 @@ export default function SFA() {
             </div>
             <form onSubmit={handleVisitSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
               <div>
-                <label className={lbl}>What happened at this outlet?</label>
-                <div className="grid grid-cols-2 gap-2">
+                <span id="visit-outcome-group" className={lbl}>What happened at this outlet?</span>
+                <div role="group" aria-labelledby="visit-outcome-group" className="grid grid-cols-2 gap-2">
                   {[
                     { key: 'Visited', text: 'I visited', hint: 'Pitched products, took an order or left a follow-up' },
                     { key: 'Not Visited', text: 'Could not visit', hint: 'Shop closed, owner away, ran out of time' },
@@ -1460,8 +1460,8 @@ export default function SFA() {
                 )}
                 {visitForm.outcome === 'Visited' && (<>
                 <div className="sm:col-span-2">
-                  <label className={lbl}>Products Pitched</label>
-                  <div className="grid grid-cols-2 gap-2 bg-brand-primary-dark/50 p-3 rounded-xl border border-white/5">
+                  <span id="products-pitched-group" className={lbl}>Products Pitched</span>
+                  <div role="group" aria-labelledby="products-pitched-group" className="grid grid-cols-2 gap-2 bg-brand-primary-dark/50 p-3 rounded-xl border border-white/5">
                     {productCatalog.map(p => {
                       const on = visitForm.productsShown?.includes(p.name);
                       return (

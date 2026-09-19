@@ -1024,8 +1024,8 @@ const Accounting = () => {
             <form onSubmit={handleGenerateInvoiceSubmit} className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Invoice Type</label>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
+                  <span id="invoice-type-group" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Invoice Type</span>
+                  <div role="group" aria-labelledby="invoice-type-group" className="grid grid-cols-2 gap-3 mb-3">
                     <button
                       type="button"
                       onClick={() => {
@@ -1144,8 +1144,8 @@ const Accounting = () => {
 
                 {/* With or without GST */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Bill with GST?</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <span id="bill-with-gst-group" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Bill with GST?</span>
+                  <div role="group" aria-labelledby="bill-with-gst-group" className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setInvoiceWithTax(true)}

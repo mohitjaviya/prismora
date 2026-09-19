@@ -181,7 +181,7 @@ export default function TeamMembers() {
               <form onSubmit={handleUserSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
                 <div><label htmlFor="teammembers-full-name" className={labelCls}>Full Name *</label><input id="teammembers-full-name" required type="text" value={userForm.name} onChange={e => setUserForm({ ...userForm, name: e.target.value })} placeholder="e.g. Rahul Sharma" className={inputCls} /></div>
                 <div><label htmlFor="teammembers-email-address" className={labelCls}>Email Address *</label><input id="teammembers-email-address" required type="email" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="rahul@prismora.com" className={inputCls} /></div>
-                <div><label className={labelCls}>{editingUser ? 'New Password (optional)' : 'Password *'}</label><input required={!editingUser} type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className={inputCls} /></div>
+                <div><label htmlFor="teammembers-password" className={labelCls}>{editingUser ? 'New Password (optional)' : 'Password *'}</label><input id="teammembers-password" required={!editingUser} type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className={inputCls} /></div>
                 <div>
                   <label htmlFor="teammembers-role" className={labelCls}>Role *</label>
                   <select id="teammembers-role" value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })} className={inputCls}>
@@ -194,8 +194,8 @@ export default function TeamMembers() {
                 {/* Manager checklist */}
                 {isManagerRole(userForm.role) && (
                   <div className="bg-brand-primary-lighter/30 p-4 rounded-xl border border-white/5 space-y-2">
-                    <label className="block text-xs font-bold text-brand-accent uppercase tracking-wider">Assign Team Members</label>
-                    <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar">
+                    <span id="assign-team-members-group" className="block text-xs font-bold text-brand-accent uppercase tracking-wider">Assign Team Members</span>
+                    <div role="group" aria-labelledby="assign-team-members-group" className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar">
                       {allUsers.filter(u => isSalesRole(u.role)).map(su => {
                         const isSelected = userForm.managedUsers?.includes(su.id);
                         return (

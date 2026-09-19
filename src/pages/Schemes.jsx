@@ -359,8 +359,8 @@ export default function Schemes() {
                 <div><label htmlFor="schemes-free-goods-qty-if-applicable" className={labelCls}>Free Goods Qty (if applicable)</label><input id="schemes-free-goods-qty-if-applicable" type="number" min="0" value={form.freeGoodsQty} onChange={e => setForm(f => ({ ...f, freeGoodsQty: e.target.value }))} placeholder="e.g. 5 units" className={inputCls} /></div>
                 <div><label htmlFor="schemes-minimum-order-value" className={labelCls}>Minimum Order Value (₹)</label><input id="schemes-minimum-order-value" type="number" min="0" value={form.minOrderValue} onChange={e => setForm(f => ({ ...f, minOrderValue: e.target.value }))} placeholder="e.g. 50000" className={inputCls} /></div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Applicable Products <span className="normal-case text-slate-500 font-normal">(leave all unchecked for "All Products")</span></label>
-                  <div className="flex flex-wrap gap-2 p-3 glass-input rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
+                  <span id="applicable-products-group" className={labelCls}>Applicable Products <span className="normal-case text-slate-500 font-normal">(leave all unchecked for "All Products")</span></span>
+                  <div role="group" aria-labelledby="applicable-products-group" className="flex flex-wrap gap-2 p-3 glass-input rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
                     {productCatalog.map(p => (
                       <label key={p.id} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer border transition-colors ${form.applicableProducts.includes(p.name) ? 'bg-brand-accent/15 border-brand-accent text-brand-accent' : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400 hover:text-white'}`}>
                         <input type="checkbox" className="hidden" checked={form.applicableProducts.includes(p.name)} onChange={() => toggleProductTarget(p.name)} />

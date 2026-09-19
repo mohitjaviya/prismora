@@ -992,8 +992,8 @@ const Orders = () => {
                 )}
                 {Array.isArray(formData.items) && formData.items.length > 0 && (
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Itemized Breakdown</label>
-                    <div className="border border-slate-700/50 rounded-lg overflow-hidden">
+                    <span id="itemised-breakdown-group" className="block text-sm font-medium text-slate-300 mb-1.5">Itemized Breakdown</span>
+                    <div role="group" aria-labelledby="itemised-breakdown-group" className="border border-slate-700/50 rounded-lg overflow-hidden">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
