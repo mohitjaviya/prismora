@@ -1,3 +1,4 @@
+import { cloneElement, isValidElement, useId } from 'react';
 import { Search as SearchIcon, ChevronDown } from 'lucide-react';
 
 /**
@@ -16,16 +17,28 @@ const BASE = 'w-full glass-input';
 
 const SIZES = { sm: 'h-8 px-2.5 text-[11px]', md: 'h-10 px-3 text-xs', lg: 'h-11 px-3.5 text-sm' };
 
-/** Label, control, and the one line explaining it — spaced the same everywhere. */
+/**
+ * Label, control, and the one line explaining it — spaced the same everywhere.
+ *
+ * The label is tied to the control rather than merely sitting above it. A
+ * label that is only visually adjacent is invisible to a screen reader, which
+ * then announces the field as "edit text" and nothing else, and clicking it
+ * does not focus the field either. The id is generated, so callers do not have
+ * to invent unique ones and cannot collide.
+ */
 export function Field({ label, hint, error, required, children, className = '' }) {
+  const id = useId();
+  const control = isValidElement(children) && !children.props.id
+    ? cloneElement(children, { id })
+    : children;
   return (
     <div className={`min-w-0 ${className}`}>
       {label && (
-        <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">
+        <label htmlFor={id} className="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">
           {label}{required && <span className="text-brand-accent ml-0.5">*</span>}
         </label>
       )}
-      {children}
+      {control}
       {error
         ? <p className="text-[10px] text-rose-400 mt-1 leading-snug">{error}</p>
         : hint ? <p className="text-[10px] text-slate-500 mt-1 leading-snug">{hint}</p> : null}

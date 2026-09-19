@@ -354,28 +354,28 @@ export default function Retailers() {
             </div>
             <form onSubmit={handleRecordPayment} className="space-y-4">
               <div>
-                <label className={labelCls}>Amount (₹) *</label>
-                <input required type="number" min="1" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
+                <label htmlFor="retailers-amount" className={labelCls}>Amount (₹) *</label>
+                <input id="retailers-amount" required type="number" min="1" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Method</label>
-                  <select value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} className={inputCls}>
+                  <label htmlFor="retailers-method" className={labelCls}>Method</label>
+                  <select id="retailers-method" value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} className={inputCls}>
                     {['Bank Transfer', 'Cheque', 'UPI', 'Cash', 'Other'].map(m => <option key={m} value={m} className="bg-brand-primary">{m}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Date</label>
-                  <input type="date" value={paymentForm.date} onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))} className={inputCls} style={{ colorScheme: 'dark' }} />
+                  <label htmlFor="retailers-date" className={labelCls}>Date</label>
+                  <input id="retailers-date" type="date" value={paymentForm.date} onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))} className={inputCls} style={{ colorScheme: 'dark' }} />
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Reference / UTR</label>
-                <input type="text" value={paymentForm.reference} onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))} className={inputCls} />
+                <label htmlFor="retailers-reference-utr" className={labelCls}>Reference / UTR</label>
+                <input id="retailers-reference-utr" type="text" value={paymentForm.reference} onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))} className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Notes</label>
-                <textarea rows="2" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
+                <label htmlFor="retailers-notes" className={labelCls}>Notes</label>
+                <textarea id="retailers-notes" rows="2" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
@@ -399,8 +399,8 @@ export default function Retailers() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2"><label className={labelCls}>Company / Business Name *</label><input required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Geeta Retailers" className={inputCls} /></div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Parent Dealer *</label>
-                  <select required value={form.parentDealerId} onChange={e => setForm(f => ({ ...f, parentDealerId: e.target.value }))} className={inputCls}>
+                  <label htmlFor="retailers-parent-dealer" className={labelCls}>Parent Dealer *</label>
+                  <select id="retailers-parent-dealer" required value={form.parentDealerId} onChange={e => setForm(f => ({ ...f, parentDealerId: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Dealer --</option>
                     {activeDealers.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({d.territory})</option>)}
                   </select>
@@ -410,8 +410,8 @@ export default function Retailers() {
                 <div><label className={labelCls}>Phone</label><input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
                 <div><label className={labelCls}>Email</label><input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></div>
                 <div>
-                  <label className={labelCls}>State *</label>
-                  <select required value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
+                  <label htmlFor="retailers-state" className={labelCls}>State *</label>
+                  <select id="retailers-state" required value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
                     {INDIAN_STATES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
                   </select>
@@ -419,17 +419,17 @@ export default function Retailers() {
                 <div><label className={labelCls}>City</label><input type="text" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className={inputCls} /></div>
                 <div><label className={labelCls}>Pincode *</label><input required type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /></div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Delivery Address *</label>
-                  <textarea required rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} />
+                  <label htmlFor="retailers-delivery-address" className={labelCls}>Delivery Address *</label>
+                  <textarea id="retailers-delivery-address" required rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} />
                   <p className="text-[10px] text-slate-500 mt-1">Used as the default delivery address on their orders. Dispatch cannot send goods to a city alone.</p>
                 </div>
                 <div>
-                  <label className={labelCls}>Territory / Zone</label>
+                  <label htmlFor="retailers-territory-zone" className={labelCls}>Territory / Zone</label>
                   {/* Chosen, not typed. Free text produced four spellings of the
                       same area across beats, partners and orders, none of which
                       matched a territory record — so a partner order could not be
                       routed to the rep who owns that area. */}
-                  <select value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} className={inputCls} style={{ colorScheme: 'dark' }}>
+                  <select id="retailers-territory-zone" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} className={inputCls} style={{ colorScheme: 'dark' }}>
                     <option value="" className="bg-brand-primary">{territories.length === 0 ? 'No territories set up yet' : 'Select a territory…'}</option>
                     {territories.map(t => (
                       <option key={t.id} value={t.name} className="bg-brand-primary">{t.name} ({t.state})</option>
@@ -445,8 +445,8 @@ export default function Retailers() {
                 </div>
                 <div><label className={labelCls}>Credit Limit (₹)</label><input type="number" min="0" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /></div>
                 <div>
-                  <label className={labelCls}>Status</label>
-                  <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
+                  <label htmlFor="retailers-status" className={labelCls}>Status</label>
+                  <select id="retailers-status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
                     <option value="Active" className="bg-brand-primary">Active</option>
                     <option value="Inactive" className="bg-brand-primary">Inactive</option>
                   </select>

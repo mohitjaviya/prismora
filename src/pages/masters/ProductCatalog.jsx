@@ -173,28 +173,28 @@ export default function ProductCatalog() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2"><label className={labelCls}>Product Name *</label><input required type="text" value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} placeholder="e.g. Brahmi Amla Shakar 200ml" className={inputCls} /></div>
                   <div>
-                    <label className={labelCls}>Category</label>
-                    <select value={productForm.category} onChange={e => setProductForm({ ...productForm, category: e.target.value })} className={inputCls}>
+                    <label htmlFor="productcatalog-category" className={labelCls}>Category</label>
+                    <select id="productcatalog-category" value={productForm.category} onChange={e => setProductForm({ ...productForm, category: e.target.value })} className={inputCls}>
                       {productCategories.map(c => <option key={c} value={c} className="bg-brand-primary">{c}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className={labelCls}>Unit of Measure (UOM)</label>
-                    <select value={productForm.uom} onChange={e => setProductForm({ ...productForm, uom: e.target.value })} className={inputCls}>
+                    <label htmlFor="productcatalog-unit-of-measure-uom" className={labelCls}>Unit of Measure (UOM)</label>
+                    <select id="productcatalog-unit-of-measure-uom" value={productForm.uom} onChange={e => setProductForm({ ...productForm, uom: e.target.value })} className={inputCls}>
                       {uoms.map(u => <option key={u} value={u} className="bg-brand-primary">{u}</option>)}
                     </select>
                   </div>
                   <div><label className={labelCls}>SKU / Barcode</label><input type="text" value={productForm.sku} onChange={e => setProductForm({ ...productForm, sku: e.target.value })} placeholder="e.g. PRM-HHO-100" className={inputCls} /></div>
                   <div>
-                    <label className={labelCls}>Lifecycle Status</label>
-                    <select value={productForm.status} onChange={e => setProductForm({ ...productForm, status: e.target.value })} className={inputCls}>
+                    <label htmlFor="productcatalog-lifecycle-status" className={labelCls}>Lifecycle Status</label>
+                    <select id="productcatalog-lifecycle-status" value={productForm.status} onChange={e => setProductForm({ ...productForm, status: e.target.value })} className={inputCls}>
                       {productStatuses.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
                     </select>
                   </div>
                   <div><label className={labelCls}>HSN Code *</label><input required type="text" value={productForm.hsnCode} onChange={e => setProductForm({ ...productForm, hsnCode: e.target.value })} placeholder="e.g. 30049011" className={inputCls} /></div>
                   <div>
-                    <label className={labelCls}>GST Rate *</label>
-                    <select value={productForm.gstPct} onChange={e => setProductForm({ ...productForm, gstPct: e.target.value })} className={inputCls}>
+                    <label htmlFor="productcatalog-gst-rate" className={labelCls}>GST Rate *</label>
+                    <select id="productcatalog-gst-rate" value={productForm.gstPct} onChange={e => setProductForm({ ...productForm, gstPct: e.target.value })} className={inputCls}>
                       {INDIAN_TAX_RATES.map(r => <option key={r} value={r} className="bg-brand-primary">{r}% GST</option>)}
                     </select>
                   </div>

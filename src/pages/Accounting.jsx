@@ -961,8 +961,8 @@ const Accounting = () => {
             </div>
             <form onSubmit={handleCreditSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Against Invoice (optional)</label>
-                <select value={creditForm.invoiceId} onChange={e => {
+                <label htmlFor="accounting-against-invoice-optional" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Against Invoice (optional)</label>
+                <select id="accounting-against-invoice-optional" value={creditForm.invoiceId} onChange={e => {
                   const inv = invoices.find(i => i.id === e.target.value);
                   setCreditForm(f => ({ ...f, invoiceId: e.target.value, customerName: inv ? inv.customerName : f.customerName, amount: inv ? String(Number(inv.amount || 0) + Number(inv.tax || 0)) : f.amount }));
                 }} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
@@ -971,17 +971,17 @@ const Accounting = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Customer Name *</label>
-                <input type="text" required value={creditForm.customerName} onChange={e => setCreditForm(f => ({ ...f, customerName: e.target.value }))} placeholder="e.g. Gujarat Super Stockist" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600" />
+                <label htmlFor="accounting-customer-name" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Customer Name *</label>
+                <input id="accounting-customer-name" type="text" required value={creditForm.customerName} onChange={e => setCreditForm(f => ({ ...f, customerName: e.target.value }))} placeholder="e.g. Gujarat Super Stockist" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Credit Amount (₹) *</label>
-                  <input type="number" required min="1" value={creditForm.amount} onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600" />
+                  <label htmlFor="accounting-credit-amount" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Credit Amount (₹) *</label>
+                  <input id="accounting-credit-amount" type="number" required min="1" value={creditForm.amount} onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Reason *</label>
-                  <select value={creditForm.reason} onChange={e => setCreditForm(f => ({ ...f, reason: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
+                  <label htmlFor="accounting-reason" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Reason *</label>
+                  <select id="accounting-reason" value={creditForm.reason} onChange={e => setCreditForm(f => ({ ...f, reason: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
                     {['Sales Return', 'Damaged Goods', 'Price Adjustment', 'Overbilling', 'Scheme Credit', 'Other'].map(r => <option key={r} value={r} className="bg-brand-primary">{r}</option>)}
                   </select>
                 </div>
@@ -1065,8 +1065,8 @@ const Accounting = () => {
 
                 {selectedOrderId ? (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Select Order</label>
-                    <select
+                    <label htmlFor="accounting-select-order" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Select Order</label>
+                    <select id="accounting-select-order"
                       value={selectedOrderId}
                       onChange={(e) => {
                         setSelectedOrderId(e.target.value);
@@ -1088,8 +1088,8 @@ const Accounting = () => {
                 ) : (
                   <>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Customer Name</label>
-                      <input
+                      <label htmlFor="accounting-customer-name-2" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Customer Name</label>
+                      <input id="accounting-customer-name-2"
                         type="text"
                         required
                         placeholder="e.g. Arjun Patel"
@@ -1099,8 +1099,8 @@ const Accounting = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Base Amount (₹)</label>
-                      <input
+                      <label htmlFor="accounting-base-amount" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Base Amount (₹)</label>
+                      <input id="accounting-base-amount"
                         type="number"
                         required
                         min="1"
@@ -1114,8 +1114,8 @@ const Accounting = () => {
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Due Date</label>
-                  <input
+                  <label htmlFor="accounting-due-date" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Due Date</label>
+                  <input id="accounting-due-date"
                     type="date"
                     required
                     value={invoiceDueDate}
@@ -1251,8 +1251,8 @@ const Accounting = () => {
             <form onSubmit={handleAddExpenseSubmit} className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Category</label>
-                  <select
+                  <label htmlFor="accounting-category" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Category</label>
+                  <select id="accounting-category"
                     value={expenseCategory}
                     onChange={(e) => setExpenseCategory(e.target.value)}
                     className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white"
@@ -1267,8 +1267,8 @@ const Accounting = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Amount (₹)</label>
-                  <input
+                  <label htmlFor="accounting-amount" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Amount (₹)</label>
+                  <input id="accounting-amount"
                     type="number"
                     required
                     min="1"
@@ -1280,8 +1280,8 @@ const Accounting = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Description</label>
-                  <textarea
+                  <label htmlFor="accounting-description" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Description</label>
+                  <textarea id="accounting-description"
                     placeholder="Details about the transaction"
                     value={expenseDescription}
                     onChange={(e) => setExpenseDescription(e.target.value)}
@@ -1291,8 +1291,8 @@ const Accounting = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Date</label>
-                  <input
+                  <label htmlFor="accounting-date" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Date</label>
+                  <input id="accounting-date"
                     type="date"
                     required
                     value={expenseDate}

@@ -257,9 +257,9 @@ const Profile = () => {
         </div>
         <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Current Password</label>
+            <label htmlFor="profile-current-password" className="block text-sm font-medium text-slate-300 mb-1.5">Current Password</label>
             <div className="relative">
-              <input
+              <input id="profile-current-password"
                 type={showCurrent ? 'text' : 'password'}
                 required
                 value={passwordForm.currentPassword}
@@ -272,9 +272,9 @@ const Profile = () => {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">New Password</label>
+            <label htmlFor="profile-new-password" className="block text-sm font-medium text-slate-300 mb-1.5">New Password</label>
             <div className="relative">
-              <input
+              <input id="profile-new-password"
                 type={showNew ? 'text' : 'password'}
                 required
                 value={passwordForm.newPassword}
@@ -287,9 +287,9 @@ const Profile = () => {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Confirm New Password</label>
+            <label htmlFor="profile-confirm-new-password" className="block text-sm font-medium text-slate-300 mb-1.5">Confirm New Password</label>
             <div className="relative">
-              <input
+              <input id="profile-confirm-new-password"
                 type={showConfirm ? 'text' : 'password'}
                 required
                 value={passwordForm.confirmPassword}

@@ -141,16 +141,16 @@ export default function Settings() {
           <h3 className="text-lg font-bold text-white mb-4">Update Account Security</h3>
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
             <div>
-              <label className={labelCls}>Current Password</label>
-              <input type="password" required value={passwordForm.currentPassword} onChange={e => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className={inputCls} />
+              <label htmlFor="settings-current-password" className={labelCls}>Current Password</label>
+              <input id="settings-current-password" type="password" required value={passwordForm.currentPassword} onChange={e => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>New Password</label>
-              <input type="password" required value={passwordForm.newPassword} onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className={inputCls} />
+              <label htmlFor="settings-new-password" className={labelCls}>New Password</label>
+              <input id="settings-new-password" type="password" required value={passwordForm.newPassword} onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Confirm New Password</label>
-              <input type="password" required value={passwordForm.confirmPassword} onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className={inputCls} />
+              <label htmlFor="settings-confirm-new-password" className={labelCls}>Confirm New Password</label>
+              <input id="settings-confirm-new-password" type="password" required value={passwordForm.confirmPassword} onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className={inputCls} />
             </div>
             {passwordMessage.text && (
               <p className={`text-xs ${passwordMessage.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>{passwordMessage.text}</p>

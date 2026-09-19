@@ -705,20 +705,20 @@ const Leads = () => {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Name</label>
-                  <input type="text" required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="leads-name" className="block text-sm font-medium text-slate-300 mb-1.5">Name</label>
+                  <input id="leads-name" type="text" required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Company</label>
-                  <input type="text" value={formData.company} onChange={e => setFormData({ ...formData, company: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="leads-company" className="block text-sm font-medium text-slate-300 mb-1.5">Company</label>
+                  <input id="leads-company" type="text" value={formData.company} onChange={e => setFormData({ ...formData, company: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
-                  <input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="leads-email" className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
+                  <input id="leads-email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Phone</label>
-                  <input type="text" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="leads-phone" className="block text-sm font-medium text-slate-300 mb-1.5">Phone</label>
+                  <input id="leads-phone" type="text" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">
@@ -782,20 +782,20 @@ const Leads = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Deal Value (₹)</label>
-                  <input type="number" required value={formData.dealValue} onChange={e => setFormData({ ...formData, dealValue: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="leads-deal-value" className="block text-sm font-medium text-slate-300 mb-1.5">Deal Value (₹)</label>
+                  <input id="leads-deal-value" type="number" required value={formData.dealValue} onChange={e => setFormData({ ...formData, dealValue: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Lead Source</label>
-                  <select value={formData.leadSource || ''} onChange={e => setFormData({ ...formData, leadSource: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
+                  <label htmlFor="leads-lead-source" className="block text-sm font-medium text-slate-300 mb-1.5">Lead Source</label>
+                  <select id="leads-lead-source" value={formData.leadSource || ''} onChange={e => setFormData({ ...formData, leadSource: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Source --</option>
                     {sourceOptions.map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Lead Type</label>
-                  <select value={formData.leadType || ''} onChange={e => setFormData({ ...formData, leadType: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
+                  <label htmlFor="leads-lead-type" className="block text-sm font-medium text-slate-300 mb-1.5">Lead Type</label>
+                  <select id="leads-lead-type" value={formData.leadType || ''} onChange={e => setFormData({ ...formData, leadType: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Lead Type --</option>
                     <option value="Distributor" className="bg-brand-primary">Distributor</option>
                     <option value="Super Stockist" className="bg-brand-primary">Super Stockist</option>
@@ -805,8 +805,8 @@ const Leads = () => {
                 </div>
                 {!isSalesRole(user?.role) && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Assign To</label>
-                    <select value={formData.assignedTo} onChange={e => setFormData({ ...formData, assignedTo: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
+                    <label htmlFor="leads-assign-to" className="block text-sm font-medium text-slate-300 mb-1.5">Assign To</label>
+                    <select id="leads-assign-to" value={formData.assignedTo} onChange={e => setFormData({ ...formData, assignedTo: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                       <option value="" className="bg-brand-primary">Select Salesperson</option>
                       {getAssignableUsers().map(u => (
                         <option key={u.id} value={u.id} className="bg-brand-primary">{u.name}</option>
@@ -816,14 +816,14 @@ const Leads = () => {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Status</label>
-                  <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
+                  <label htmlFor="leads-status" className="block text-sm font-medium text-slate-300 mb-1.5">Status</label>
+                  <select id="leads-status" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                     {statusOptions.map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">State (Optional)</label>
-                  <select
+                  <label htmlFor="leads-state-optional" className="block text-sm font-medium text-slate-300 mb-1.5">State (Optional)</label>
+                  <select id="leads-state-optional"
                     value={formData.state || ''}
                     onChange={e => setFormData({ ...formData, state: e.target.value, city: '' })}
                     className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
@@ -836,9 +836,9 @@ const Leads = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">City / District (Optional)</label>
+                  <label htmlFor="leads-city-district-optional" className="block text-sm font-medium text-slate-300 mb-1.5">City / District (Optional)</label>
                   {formData.state && STATE_DISTRICTS[formData.state] ? (
-                    <select
+                    <select id="leads-city-district-optional"
                       value={formData.city || ''}
                       onChange={e => setFormData({ ...formData, city: e.target.value })}
                       className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
@@ -861,8 +861,8 @@ const Leads = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Territory (Optional)</label>
-                  <input
+                  <label htmlFor="leads-territory-optional" className="block text-sm font-medium text-slate-300 mb-1.5">Territory (Optional)</label>
+                  <input id="leads-territory-optional"
                     type="text"
                     value={formData.territory || ''}
                     onChange={e => setFormData({ ...formData, territory: e.target.value })}
@@ -871,21 +871,21 @@ const Leads = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Follow Up Date</label>
-                  <input type="date" value={formData.followUpDate} onChange={e => setFormData({ ...formData, followUpDate: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
+                  <label htmlFor="leads-follow-up-date" className="block text-sm font-medium text-slate-300 mb-1.5">Follow Up Date</label>
+                  <input id="leads-follow-up-date" type="date" value={formData.followUpDate} onChange={e => setFormData({ ...formData, followUpDate: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
                 </div>
               </div>
 
               <div className="mt-4">
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Remarks / Notes</label>
-                <textarea rows="3" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white custom-scrollbar" placeholder="Add primary remarks or notes..."></textarea>
+                <label htmlFor="leads-remarks-notes" className="block text-sm font-medium text-slate-300 mb-1.5">Remarks / Notes</label>
+                <textarea id="leads-remarks-notes" rows="3" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white custom-scrollbar" placeholder="Add primary remarks or notes..."></textarea>
               </div>
 
               {/* Documents & File Attachments Upload Mock */}
               <div className="mt-4 col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Lead Documents & Attachments</label>
+                <label htmlFor="leads-lead-documents-attachments" className="block text-sm font-medium text-slate-300 mb-1.5">Lead Documents & Attachments</label>
                 <div className="border-2 border-dashed border-slate-700 rounded-xl p-4 text-center hover:border-brand-accent/50 transition-colors relative cursor-pointer bg-brand-primary-lighter/10">
-                  <input
+                  <input id="leads-lead-documents-attachments"
                     type="file"
                     multiple
                     className="absolute inset-0 opacity-0 cursor-pointer"
@@ -949,8 +949,8 @@ const Leads = () => {
                 {convertItems.map((row, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-end">
                     <div className="col-span-12 sm:col-span-6">
-                      <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Product</label>
-                      <select
+                      <label htmlFor="leads-product" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Product</label>
+                      <select id="leads-product"
                         value={row.name}
                         onChange={e => updateConvertItem(idx, { name: e.target.value })}
                         className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
@@ -963,8 +963,8 @@ const Leads = () => {
                       </select>
                     </div>
                     <div className="col-span-5 sm:col-span-2">
-                      <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Quantity</label>
-                      <input
+                      <label htmlFor="leads-quantity" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Quantity</label>
+                      <input id="leads-quantity"
                         type="number" min="0" value={row.quantity}
                         onChange={e => updateConvertItem(idx, { quantity: e.target.value })}
                         placeholder="0"
@@ -972,8 +972,8 @@ const Leads = () => {
                       />
                     </div>
                     <div className="col-span-5 sm:col-span-2">
-                      <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Unit ₹</label>
-                      <input
+                      <label htmlFor="leads-unit" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Unit ₹</label>
+                      <input id="leads-unit"
                         type="number" min="0" value={row.unitPrice}
                         onChange={e => updateConvertItem(idx, { unitPrice: e.target.value })}
                         className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"

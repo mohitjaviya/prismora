@@ -326,8 +326,8 @@ export default function Masters() {
                   )}
                 </div>
 
-                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Description</label>
-                <input
+                <label htmlFor="masters-description" className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Description</label>
+                <input id="masters-description"
                   defaultValue={row.description || ''}
                   onBlur={e => updateMasterOption(row.id, { description: e.target.value })}
                   placeholder="What this option means — for whoever picks it"

@@ -858,8 +858,8 @@ const Orders = () => {
 
               <div className="grid grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Customer Name *</label>
-                  <input
+                  <label htmlFor="orders-customer-name" className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Customer Name *</label>
+                  <input id="orders-customer-name"
                     required
                     type="text"
                     disabled={Boolean(boundPartyId)}
@@ -926,23 +926,23 @@ const Orders = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Company Name</label>
-                  <input type="text" value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent" />
+                  <label htmlFor="orders-company-name" className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Company Name</label>
+                  <input id="orders-company-name" type="text" value={formData.companyName} onChange={e => setFormData({ ...formData, companyName: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Contact Phone</label>
-                  <input type="text" placeholder="e.g. 9876543210" value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="orders-contact-phone" className="block text-xs font-medium text-slate-300 mb-1.5">Contact Phone</label>
+                  <input id="orders-contact-phone" type="text" placeholder="e.g. 9876543210" value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Contact Email</label>
-                  <input type="email" placeholder="e.g. client@prismora.com" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="orders-contact-email" className="block text-xs font-medium text-slate-300 mb-1.5">Contact Email</label>
+                  <input id="orders-contact-email" type="email" placeholder="e.g. client@prismora.com" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 {!(Array.isArray(formData.items) && formData.items.length > 0) && (
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Product</label>
+                    <label htmlFor="orders-product" className="block text-sm font-medium text-slate-300 mb-1.5">Product</label>
                     {isCustomProduct ? (
                       <div className="flex gap-2">
-                        <input
+                        <input id="orders-product"
                           type="text"
                           required
                           value={formData.product}
@@ -1023,8 +1023,8 @@ const Orders = () => {
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Quantity</label>
-                  <input
+                  <label htmlFor="orders-quantity" className="block text-sm font-medium text-slate-300 mb-1.5">Quantity</label>
+                  <input id="orders-quantity"
                     type="number"
                     required
                     min="1"
@@ -1051,8 +1051,8 @@ const Orders = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Order Value (₹)</label>
-                  <input type="number" required value={formData.value} onChange={e => setFormData({ ...formData, value: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="orders-order-value" className="block text-sm font-medium text-slate-300 mb-1.5">Order Value (₹)</label>
+                  <input id="orders-order-value" type="number" required value={formData.value} onChange={e => setFormData({ ...formData, value: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                   {getUnitRate(formData.product, formData) > 0 && (
                     <p className="mt-1 text-[11px] text-slate-500">
                       Auto-calculated at ₹{getUnitRate(formData.product, formData).toLocaleString('en-IN')} / unit ({rateLabel(formData)}). Editable if negotiated.
@@ -1060,8 +1060,8 @@ const Orders = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">State *</label>
-                  <select
+                  <label htmlFor="orders-state" className="block text-sm font-medium text-slate-300 mb-1.5">State *</label>
+                  <select id="orders-state"
                     required
                     value={formData.state}
                     onChange={e => setFormData({ ...formData, state: e.target.value })}
@@ -1074,16 +1074,16 @@ const Orders = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
-                  <input type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="orders-city" className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
+                  <input id="orders-city" type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Pincode *</label>
-                  <input type="text" inputMode="numeric" maxLength={6} value={formData.deliveryPincode || ''} onChange={e => setFormData({ ...formData, deliveryPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <label htmlFor="orders-pincode" className="block text-sm font-medium text-slate-300 mb-1.5">Pincode *</label>
+                  <input id="orders-pincode" type="text" inputMode="numeric" maxLength={6} value={formData.deliveryPincode || ''} onChange={e => setFormData({ ...formData, deliveryPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Delivery Address *</label>
-                  <textarea
+                  <label htmlFor="orders-delivery-address" className="block text-sm font-medium text-slate-300 mb-1.5">Delivery Address *</label>
+                  <textarea id="orders-delivery-address"
                     rows="2"
                     value={formData.deliveryAddress || ''}
                     onChange={e => setFormData({ ...formData, deliveryAddress: e.target.value })}
@@ -1104,8 +1104,8 @@ const Orders = () => {
 
                 {!isSalesRole(user?.role) && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Assign To</label>
-                    <select value={formData.assignedTo} onChange={e => setFormData({ ...formData, assignedTo: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
+                    <label htmlFor="orders-assign-to" className="block text-sm font-medium text-slate-300 mb-1.5">Assign To</label>
+                    <select id="orders-assign-to" value={formData.assignedTo} onChange={e => setFormData({ ...formData, assignedTo: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
                       <option value="" className="bg-brand-primary">Select Salesperson</option>
                       {getAssignableUsers().map(u => (
                         <option key={u.id} value={u.id} className="bg-brand-primary">{u.name}</option>
@@ -1116,8 +1116,8 @@ const Orders = () => {
 
                 {!(editingOrder && isSalesOnlyRole) && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Status</label>
-                    <select value={formData.status} onChange={e => attemptSetStatus(e.target.value)} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
+                    <label htmlFor="orders-status" className="block text-sm font-medium text-slate-300 mb-1.5">Status</label>
+                    <select id="orders-status" value={formData.status} onChange={e => attemptSetStatus(e.target.value)} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
                       {statusOptions.map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                     </select>
                     {statusError && (
@@ -1126,8 +1126,8 @@ const Orders = () => {
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Order Date</label>
-                  <input type="date" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
+                  <label htmlFor="orders-order-date" className="block text-sm font-medium text-slate-300 mb-1.5">Order Date</label>
+                  <input id="orders-order-date" type="date" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
                 </div>
               </div>
 
@@ -1159,8 +1159,8 @@ const Orders = () => {
                 <div className="flex justify-between"><span>In stock now:</span><span className="text-brand-accent font-bold">{getAvailableQty(formData.product)}</span></div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Quantity to deliver now *</label>
-                <input type="number" min="1" max={Math.min(orderRemainingQty(formData), getAvailableQty(formData.product))} value={partialQty}
+                <label htmlFor="orders-quantity-to-deliver-now" className="block text-sm font-medium text-slate-300 mb-1.5">Quantity to deliver now *</label>
+                <input id="orders-quantity-to-deliver-now" type="number" min="1" max={Math.min(orderRemainingQty(formData), getAvailableQty(formData.product))} value={partialQty}
                   onChange={e => setPartialQty(e.target.value)} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" autoFocus />
                 <p className="mt-1.5 text-xs text-slate-500">Max {Math.min(orderRemainingQty(formData), getAvailableQty(formData.product))} (limited by stock & remaining qty). The rest stays pending on this order.</p>
               </div>

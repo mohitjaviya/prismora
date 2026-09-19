@@ -106,18 +106,18 @@ const DealerSignup = () => {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className={labelCls}>Business Name *</label>
+                  <label htmlFor="dealersignup-business-name" className={labelCls}>Business Name *</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Building2 size={16} /></div>
-                    <input required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mohan Dealers" className={inputCls} />
+                    <input id="dealersignup-business-name" required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mohan Dealers" className={inputCls} />
                   </div>
                 </div>
 
                 <div>
-                  <label className={labelCls}>Parent Distributor *</label>
+                  <label htmlFor="dealersignup-parent-distributor" className={labelCls}>Parent Distributor *</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Truck size={16} /></div>
-                    <select required value={form.parentDistributorId} onChange={e => setForm(f => ({ ...f, parentDistributorId: e.target.value }))} className={inputCls}>
+                    <select id="dealersignup-parent-distributor" required value={form.parentDistributorId} onChange={e => setForm(f => ({ ...f, parentDistributorId: e.target.value }))} className={inputCls}>
                       <option value="" className="bg-brand-primary text-slate-500">-- Select the Distributor you buy through --</option>
                       {activeDistributors.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({d.territory})</option>)}
                     </select>
@@ -126,49 +126,49 @@ const DealerSignup = () => {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={labelCls}>GSTIN</label>
-                    <input type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className="w-full glass-input h-11 px-3.5 text-sm" />
+                    <label htmlFor="dealersignup-gstin" className={labelCls}>GSTIN</label>
+                    <input id="dealersignup-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className="w-full glass-input h-11 px-3.5 text-sm" />
                   </div>
                   <div>
-                    <label className={labelCls}>Contact Person *</label>
+                    <label htmlFor="dealersignup-contact-person" className={labelCls}>Contact Person *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><User size={16} /></div>
-                      <input required type="text" value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} />
+                      <input id="dealersignup-contact-person" required type="text" value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} />
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={labelCls}>Phone *</label>
+                    <label htmlFor="dealersignup-phone" className={labelCls}>Phone *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Phone size={16} /></div>
-                      <input required type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} />
+                      <input id="dealersignup-phone" required type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} />
                     </div>
                   </div>
                   <div>
-                    <label className={labelCls}>Email Address *</label>
+                    <label htmlFor="dealersignup-email-address" className={labelCls}>Email Address *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Mail size={16} /></div>
-                      <input required type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="name@company.com" className={inputCls} />
+                      <input id="dealersignup-email-address" required type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="name@company.com" className={inputCls} />
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={labelCls}>State *</label>
+                    <label htmlFor="dealersignup-state" className={labelCls}>State *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><MapPin size={16} /></div>
-                      <select required value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value, city: '' }))} className={inputCls}>
+                      <select id="dealersignup-state" required value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value, city: '' }))} className={inputCls}>
                         <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
                         {Object.keys(STATE_DISTRICTS).map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
                       </select>
                     </div>
                   </div>
                   <div>
-                    <label className={labelCls}>City / District *</label>
-                    <select required value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} disabled={!form.state} className="w-full glass-input h-11 px-3.5 text-sm">
+                    <label htmlFor="dealersignup-city-district" className={labelCls}>City / District *</label>
+                    <select id="dealersignup-city-district" required value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} disabled={!form.state} className="w-full glass-input h-11 px-3.5 text-sm">
                       <option value="" className="bg-brand-primary text-slate-500">-- Select --</option>
                       {districts.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
                     </select>
@@ -176,15 +176,15 @@ const DealerSignup = () => {
                 </div>
 
                 <div>
-                  <label className={labelCls}>Territory / Zone (optional)</label>
-                  <input type="text" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} placeholder="Admin will confirm this on approval" className="w-full glass-input h-11 px-3.5 text-sm" />
+                  <label htmlFor="dealersignup-territory-zone-optional" className={labelCls}>Territory / Zone (optional)</label>
+                  <input id="dealersignup-territory-zone-optional" type="text" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} placeholder="Admin will confirm this on approval" className="w-full glass-input h-11 px-3.5 text-sm" />
                 </div>
 
                 <div>
-                  <label className={labelCls}>Password *</label>
+                  <label htmlFor="dealersignup-password" className={labelCls}>Password *</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Lock size={16} /></div>
-                    <input required minLength={6} type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" className={inputCls} />
+                    <input id="dealersignup-password" required minLength={6} type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" className={inputCls} />
                   </div>
                 </div>
 

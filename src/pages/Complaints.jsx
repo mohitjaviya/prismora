@@ -314,14 +314,14 @@ export default function Complaints() {
             </div>
             <form onSubmit={handleSubmitResolve} className="space-y-4">
               <div>
-                <label className={labelCls}>New Status *</label>
-                <select required value={resolveForm.status} onChange={e => setResolveForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
+                <label htmlFor="complaints-new-status" className={labelCls}>New Status *</label>
+                <select id="complaints-new-status" required value={resolveForm.status} onChange={e => setResolveForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
                   {statusOptions.map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Resolution Notes</label>
-                <textarea required rows="3" value={resolveForm.resolution} onChange={e => setResolveForm(f => ({ ...f, resolution: e.target.value }))} placeholder="Describe how the complaint was resolved..." className={`${inputCls} resize-none`} />
+                <label htmlFor="complaints-resolution-notes" className={labelCls}>Resolution Notes</label>
+                <textarea id="complaints-resolution-notes" required rows="3" value={resolveForm.resolution} onChange={e => setResolveForm(f => ({ ...f, resolution: e.target.value }))} placeholder="Describe how the complaint was resolved..." className={`${inputCls} resize-none`} />
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsResolveOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
@@ -346,28 +346,28 @@ export default function Complaints() {
                 <div><label className={labelCls}>Customer Name *</label><input required disabled={isParty} type="text" value={form.customerName} onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))} className={`${inputCls} ${isParty ? 'opacity-60 cursor-not-allowed' : ''}`} /></div>
                 <div><label className={labelCls}>Customer Phone</label><input type="tel" value={form.customerPhone} onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))} className={inputCls} /></div>
                 <div>
-                  <label className={labelCls}>Product Involved</label>
-                  <select value={form.product} onChange={e => setForm(f => ({ ...f, product: e.target.value }))} className={inputCls}>
+                  <label htmlFor="complaints-product-involved" className={labelCls}>Product Involved</label>
+                  <select id="complaints-product-involved" value={form.product} onChange={e => setForm(f => ({ ...f, product: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Product (optional) --</option>
                     {products.map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
                   </select>
                 </div>
                 <div><label className={labelCls}>Batch Number</label><input type="text" value={form.batchNumber} onChange={e => setForm(f => ({ ...f, batchNumber: e.target.value }))} placeholder="e.g. RBH-2025-001" className={inputCls} /></div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Complaint Type *</label>
-                  <select required value={form.complaintType} onChange={e => setForm(f => ({ ...f, complaintType: e.target.value }))} className={inputCls}>
+                  <label htmlFor="complaints-complaint-type" className={labelCls}>Complaint Type *</label>
+                  <select id="complaints-complaint-type" required value={form.complaintType} onChange={e => setForm(f => ({ ...f, complaintType: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Type --</option>
                     {complaintTypes.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Description</label>
-                  <textarea rows="3" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the complaint in detail..." className={`${inputCls} resize-none`} />
+                  <label htmlFor="complaints-description" className={labelCls}>Description</label>
+                  <textarea id="complaints-description" rows="3" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the complaint in detail..." className={`${inputCls} resize-none`} />
                 </div>
                 {canManage && (
                   <div>
-                    <label className={labelCls}>Assign To</label>
-                    <select value={form.assignedTo} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))} className={inputCls}>
+                    <label htmlFor="complaints-assign-to" className={labelCls}>Assign To</label>
+                    <select id="complaints-assign-to" value={form.assignedTo} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))} className={inputCls}>
                       <option value="" className="bg-brand-primary">-- Assign to team member --</option>
                       {getAssignableUsers().map(u => <option key={u.id} value={u.id} className="bg-brand-primary">{u.name}</option>)}
                     </select>

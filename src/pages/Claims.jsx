@@ -234,26 +234,26 @@ export default function Claims() {
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className={labelCls}>Scheme *</label>
-                <select required value={form.schemeId} onChange={e => setForm(f => ({ ...f, schemeId: e.target.value }))} className={inputCls}>
+                <label htmlFor="claims-scheme" className={labelCls}>Scheme *</label>
+                <select id="claims-scheme" required value={form.schemeId} onChange={e => setForm(f => ({ ...f, schemeId: e.target.value }))} className={inputCls}>
                   <option value="" className="bg-brand-primary text-slate-500">-- Select a scheme --</option>
                   {eligibleSchemes.map(s => <option key={s.id} value={s.id} className="bg-brand-primary">{s.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Related Order (optional)</label>
-                <select value={form.orderId} onChange={e => setForm(f => ({ ...f, orderId: e.target.value }))} className={inputCls}>
+                <label htmlFor="claims-related-order-optional" className={labelCls}>Related Order (optional)</label>
+                <select id="claims-related-order-optional" value={form.orderId} onChange={e => setForm(f => ({ ...f, orderId: e.target.value }))} className={inputCls}>
                   <option value="" className="bg-brand-primary text-slate-500">-- None --</option>
                   {myOrders.map(o => <option key={o.id} value={o.id} className="bg-brand-primary">{o.id} — {formatCurrency(o.value)}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Claim Amount (₹) *</label>
-                <input required type="number" min="1" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
+                <label htmlFor="claims-claim-amount" className={labelCls}>Claim Amount (₹) *</label>
+                <input id="claims-claim-amount" required type="number" min="1" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Notes</label>
-                <textarea rows="3" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Explain how you qualified for this scheme..." className={`${inputCls} resize-none`} />
+                <label htmlFor="claims-notes" className={labelCls}>Notes</label>
+                <textarea id="claims-notes" rows="3" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Explain how you qualified for this scheme..." className={`${inputCls} resize-none`} />
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
@@ -279,8 +279,8 @@ export default function Claims() {
               <p><span className="text-slate-500">Amount:</span> <span className="font-bold text-white">{formatCurrency(reviewingClaim.amount)}</span></p>
               {reviewingClaim.notes && <p><span className="text-slate-500">Notes:</span> {reviewingClaim.notes}</p>}
             </div>
-            <label className={labelCls}>Review Notes</label>
-            <textarea rows="2" value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} className={`${inputCls} resize-none mb-4`} />
+            <label htmlFor="claims-review-notes" className={labelCls}>Review Notes</label>
+            <textarea id="claims-review-notes" rows="2" value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} className={`${inputCls} resize-none mb-4`} />
             <div className="grid grid-cols-3 gap-2">
               <button onClick={() => handleReview('Rejected')} className="px-3 py-2 text-xs font-bold bg-red-500/15 text-red-400 border border-red-500/30 rounded-lg">Reject</button>
               <button onClick={() => handleReview('Approved')} className="px-3 py-2 text-xs font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30 rounded-lg">Approve</button>

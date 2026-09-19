@@ -190,15 +190,15 @@ export default function DealerOrders() {
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
               <div className="flex gap-3 items-end">
                 <div className="flex-1">
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Product</label>
-                  <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
+                  <label htmlFor="dealerorders-product" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Product</label>
+                  <select id="dealerorders-product" value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Product --</option>
                     {productCatalog.map(p => <option key={p.id} value={p.id} className="bg-brand-primary">{p.name} — {formatCurrency(p.dealerPrice)}/{p.uom}</option>)}
                   </select>
                 </div>
                 <div className="w-28">
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Qty</label>
-                  <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white" />
+                  <label htmlFor="dealerorders-qty" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Qty</label>
+                  <input id="dealerorders-qty" type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white" />
                 </div>
                 <button type="button" onClick={addToCart} className="btn-accent px-4 py-2.5 rounded-xl text-sm font-bold flex-shrink-0">Add</button>
               </div>

@@ -58,8 +58,8 @@ export default function Stock() {
 
   const partyPicker = !isParty && (
     <div className="glass-panel rounded-2xl p-4 border border-white/5">
-      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Viewing stock held by</label>
-      <select
+      <label htmlFor="stock-viewing-stock-held-by" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Viewing stock held by</label>
+      <select id="stock-viewing-stock-held-by"
         value={selectedPartyId}
         onChange={e => setSelectedPartyId(e.target.value)}
         className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white"

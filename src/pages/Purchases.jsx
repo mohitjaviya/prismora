@@ -583,15 +583,15 @@ export default function Purchases() {
             <form onSubmit={handleSubmitReturn} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className={labelCls}>Vendor *</label>
-                  <select required value={returnForm.vendorId} onChange={e => setReturnForm(f => ({ ...f, vendorId: e.target.value }))} className={inputCls}>
+                  <label htmlFor="purchases-vendor" className={labelCls}>Vendor *</label>
+                  <select id="purchases-vendor" required value={returnForm.vendorId} onChange={e => setReturnForm(f => ({ ...f, vendorId: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Vendor --</option>
                     {vendors.map(v => <option key={v.id} value={v.id} className="bg-brand-primary">{v.name}</option>)}
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Product *</label>
-                  <select required value={returnForm.product} onChange={e => setReturnForm(f => ({ ...f, product: e.target.value }))} className={inputCls}>
+                  <label htmlFor="purchases-product" className={labelCls}>Product *</label>
+                  <select id="purchases-product" required value={returnForm.product} onChange={e => setReturnForm(f => ({ ...f, product: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Product --</option>
                     {products.map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
                   </select>
@@ -599,8 +599,8 @@ export default function Purchases() {
                 <div><label className={labelCls}>Quantity *</label><input required type="number" min="1" value={returnForm.quantity} onChange={e => setReturnForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} /></div>
                 <div><label className={labelCls}>Unit Cost (₹) *</label><input required type="number" min="0" value={returnForm.unitCost} onChange={e => setReturnForm(f => ({ ...f, unitCost: e.target.value }))} className={inputCls} /></div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Reason *</label>
-                  <select required value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className={inputCls}>
+                  <label htmlFor="purchases-reason" className={labelCls}>Reason *</label>
+                  <select id="purchases-reason" required value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className={inputCls}>
                     {['Damaged goods', 'Wrong item', 'Quality issue', 'Expired stock', 'Excess supply', 'Other'].map(r => <option key={r} value={r} className="bg-brand-primary">{r}</option>)}
                   </select>
                 </div>
@@ -631,15 +631,15 @@ export default function Purchases() {
             <form onSubmit={handleSubmitPO} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Vendor *</label>
-                  <select required value={poForm.vendorId} onChange={e => setPOForm(f => ({ ...f, vendorId: e.target.value, vendorName: vendors.find(v => v.id === e.target.value)?.name || '' }))} className={inputCls}>
+                  <label htmlFor="purchases-vendor-2" className={labelCls}>Vendor *</label>
+                  <select id="purchases-vendor-2" required value={poForm.vendorId} onChange={e => setPOForm(f => ({ ...f, vendorId: e.target.value, vendorName: vendors.find(v => v.id === e.target.value)?.name || '' }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Vendor --</option>
                     {vendors.map(v => <option key={v.id} value={v.id} className="bg-brand-primary">{v.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Expected Delivery Date</label>
-                  <input type="date" value={poForm.expectedDate} onChange={e => setPOForm(f => ({ ...f, expectedDate: e.target.value }))} className={inputCls} />
+                  <label htmlFor="purchases-expected-delivery-date" className={labelCls}>Expected Delivery Date</label>
+                  <input id="purchases-expected-delivery-date" type="date" value={poForm.expectedDate} onChange={e => setPOForm(f => ({ ...f, expectedDate: e.target.value }))} className={inputCls} />
                 </div>
               </div>
 
@@ -684,8 +684,8 @@ export default function Purchases() {
               </div>
 
               <div>
-                <label className={labelCls}>Notes</label>
-                <textarea rows="2" value={poForm.notes} onChange={e => setPOForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special instructions..." className={`${inputCls} resize-none`} />
+                <label htmlFor="purchases-notes" className={labelCls}>Notes</label>
+                <textarea id="purchases-notes" rows="2" value={poForm.notes} onChange={e => setPOForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special instructions..." className={`${inputCls} resize-none`} />
               </div>
 
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
@@ -712,8 +712,8 @@ export default function Purchases() {
                 <span className="font-semibold text-white">PO Total:</span> {formatCurrency(grnTargetPO.total)}
               </div>
               <div>
-                <label className={labelCls}>Received Date *</label>
-                <input required type="date" value={grnForm.receivedDate} onChange={e => setGRNForm(f => ({ ...f, receivedDate: e.target.value }))} className={inputCls} />
+                <label htmlFor="purchases-received-date" className={labelCls}>Received Date *</label>
+                <input id="purchases-received-date" required type="date" value={grnForm.receivedDate} onChange={e => setGRNForm(f => ({ ...f, receivedDate: e.target.value }))} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Items Received</label>
@@ -730,20 +730,20 @@ export default function Purchases() {
                       <p className="text-xs font-semibold text-white mb-2 truncate">{item.product}</p>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="block text-[10px] text-slate-500 mb-1">Qty received</label>
-                          <input type="number" min="0" value={item.receivedQty}
+                          <label htmlFor="purchases-qty-received" className="block text-[10px] text-slate-500 mb-1">Qty received</label>
+                          <input id="purchases-qty-received" type="number" min="0" value={item.receivedQty}
                             onChange={e => patch('receivedQty', e.target.value)}
                             className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" placeholder="Qty" />
                         </div>
                         <div>
-                          <label className="block text-[10px] text-slate-500 mb-1">Batch #</label>
-                          <input type="text" value={item.batchNumber || ''}
+                          <label htmlFor="purchases-batch" className="block text-[10px] text-slate-500 mb-1">Batch #</label>
+                          <input id="purchases-batch" type="text" value={item.batchNumber || ''}
                             onChange={e => patch('batchNumber', e.target.value)}
                             className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" placeholder="Batch" />
                         </div>
                         <div>
-                          <label className="block text-[10px] text-slate-500 mb-1">Expiry</label>
-                          <input type="date" value={item.expiryDate ? String(item.expiryDate).slice(0, 10) : ''}
+                          <label htmlFor="purchases-expiry" className="block text-[10px] text-slate-500 mb-1">Expiry</label>
+                          <input id="purchases-expiry" type="date" value={item.expiryDate ? String(item.expiryDate).slice(0, 10) : ''}
                             onChange={e => patch('expiryDate', e.target.value)}
                             className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" />
                         </div>
@@ -756,8 +756,8 @@ export default function Purchases() {
                 })}
               </div>
               <div>
-                <label className={labelCls}>Notes</label>
-                <textarea rows="2" value={grnForm.notes} onChange={e => setGRNForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
+                <label htmlFor="purchases-notes-2" className={labelCls}>Notes</label>
+                <textarea id="purchases-notes-2" rows="2" value={grnForm.notes} onChange={e => setGRNForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsGRNModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
@@ -836,28 +836,28 @@ export default function Purchases() {
             </div>
             <form onSubmit={handleRecordPayment} className="space-y-4">
               <div>
-                <label className={labelCls}>Amount (₹) *</label>
-                <input required type="number" min="1" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
+                <label htmlFor="purchases-amount" className={labelCls}>Amount (₹) *</label>
+                <input id="purchases-amount" required type="number" min="1" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Method</label>
-                  <select value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} className={inputCls}>
+                  <label htmlFor="purchases-method" className={labelCls}>Method</label>
+                  <select id="purchases-method" value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} className={inputCls}>
                     {['Bank Transfer', 'Cheque', 'UPI', 'Cash', 'Other'].map(m => <option key={m} value={m} className="bg-brand-primary">{m}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Date</label>
-                  <input type="date" value={paymentForm.date} onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))} className={inputCls} style={{ colorScheme: 'dark' }} />
+                  <label htmlFor="purchases-date" className={labelCls}>Date</label>
+                  <input id="purchases-date" type="date" value={paymentForm.date} onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))} className={inputCls} style={{ colorScheme: 'dark' }} />
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Reference / UTR</label>
-                <input type="text" value={paymentForm.reference} onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))} className={inputCls} />
+                <label htmlFor="purchases-reference-utr" className={labelCls}>Reference / UTR</label>
+                <input id="purchases-reference-utr" type="text" value={paymentForm.reference} onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))} className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Notes</label>
-                <textarea rows="2" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
+                <label htmlFor="purchases-notes-3" className={labelCls}>Notes</label>
+                <textarea id="purchases-notes-3" rows="2" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
@@ -1015,8 +1015,8 @@ export default function Purchases() {
             </div>
             <form onSubmit={(e) => { e.preventDefault(); cancelPurchaseOrder(cancellingPO.id, cancelReason); setCancellingPO(null); }} className="p-6 space-y-4">
               <div>
-                <label className={labelCls}>Reason *</label>
-                <select required value={cancelReason} onChange={e => setCancelReason(e.target.value)} className={inputCls}>
+                <label htmlFor="purchases-reason-2" className={labelCls}>Reason *</label>
+                <select id="purchases-reason-2" required value={cancelReason} onChange={e => setCancelReason(e.target.value)} className={inputCls}>
                   {['Ordered by mistake', 'Vendor cannot supply', 'Price changed', 'No longer needed', 'Duplicate order', 'Other'].map(r => (
                     <option key={r} value={r} className="bg-brand-primary">{r}</option>
                   ))}

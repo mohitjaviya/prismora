@@ -183,8 +183,8 @@ export default function TeamMembers() {
                 <div><label className={labelCls}>Email Address *</label><input required type="email" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="rahul@prismora.com" className={inputCls} /></div>
                 <div><label className={labelCls}>{editingUser ? 'New Password (optional)' : 'Password *'}</label><input required={!editingUser} type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className={inputCls} /></div>
                 <div>
-                  <label className={labelCls}>Role *</label>
-                  <select value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })} className={inputCls}>
+                  <label htmlFor="teammembers-role" className={labelCls}>Role *</label>
+                  <select id="teammembers-role" value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })} className={inputCls}>
                     {USER_ROLES.map(role => (
                       <option key={role} value={role} className="bg-brand-primary">{role}</option>
                     ))}

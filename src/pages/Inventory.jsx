@@ -371,49 +371,49 @@ export default function Inventory() {
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Product *</label>
-                  <select required value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} className={inputCls}>
+                  <label htmlFor="inventory-product" className={labelCls}>Product *</label>
+                  <select id="inventory-product" required value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Product --</option>
                     {products.map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Batch Number</label>
-                  <input type="text" value={form.batchNumber} onChange={e => setForm({ ...form, batchNumber: e.target.value })} placeholder="e.g. RBH-2025-001" className={inputCls} />
+                  <label htmlFor="inventory-batch-number" className={labelCls}>Batch Number</label>
+                  <input id="inventory-batch-number" type="text" value={form.batchNumber} onChange={e => setForm({ ...form, batchNumber: e.target.value })} placeholder="e.g. RBH-2025-001" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Expiry Date</label>
-                  <input type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} className={inputCls} />
+                  <label htmlFor="inventory-expiry-date" className={labelCls}>Expiry Date</label>
+                  <input id="inventory-expiry-date" type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Quantity *</label>
-                  <input required type="number" min="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" className={inputCls} />
+                  <label htmlFor="inventory-quantity" className={labelCls}>Quantity *</label>
+                  <input id="inventory-quantity" required type="number" min="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Unit Cost (₹)</label>
-                  <input type="number" min="0" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} placeholder="0" className={inputCls} />
+                  <label htmlFor="inventory-unit-cost" className={labelCls}>Unit Cost (₹)</label>
+                  <input id="inventory-unit-cost" type="number" min="0" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} placeholder="0" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Reorder Level</label>
-                  <input type="number" min="0" value={form.reorderLevel} onChange={e => setForm({ ...form, reorderLevel: e.target.value })} className={inputCls} />
+                  <label htmlFor="inventory-reorder-level" className={labelCls}>Reorder Level</label>
+                  <input id="inventory-reorder-level" type="number" min="0" value={form.reorderLevel} onChange={e => setForm({ ...form, reorderLevel: e.target.value })} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Warehouse</label>
-                  <select value={form.warehouse} onChange={e => setForm({ ...form, warehouse: e.target.value })} className={inputCls}>
+                  <label htmlFor="inventory-warehouse" className={labelCls}>Warehouse</label>
+                  <select id="inventory-warehouse" value={form.warehouse} onChange={e => setForm({ ...form, warehouse: e.target.value })} className={inputCls}>
                     {warehouses.map(w => <option key={w} value={w} className="bg-brand-primary">{w}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Reserved</label>
-                  <input type="number" min="0" value={form.reserved} onChange={e => setForm({ ...form, reserved: e.target.value })} className={inputCls} />
+                  <label htmlFor="inventory-reserved" className={labelCls}>Reserved</label>
+                  <input id="inventory-reserved" type="number" min="0" value={form.reserved} onChange={e => setForm({ ...form, reserved: e.target.value })} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Transit</label>
-                  <input type="number" min="0" value={form.transit} onChange={e => setForm({ ...form, transit: e.target.value })} className={inputCls} />
+                  <label htmlFor="inventory-transit" className={labelCls}>Transit</label>
+                  <input id="inventory-transit" type="number" min="0" value={form.transit} onChange={e => setForm({ ...form, transit: e.target.value })} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Damaged</label>
-                  <input type="number" min="0" value={form.damaged} onChange={e => setForm({ ...form, damaged: e.target.value })} className={inputCls} />
+                  <label htmlFor="inventory-damaged" className={labelCls}>Damaged</label>
+                  <input id="inventory-damaged" type="number" min="0" value={form.damaged} onChange={e => setForm({ ...form, damaged: e.target.value })} className={inputCls} />
                 </div>
               </div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
@@ -442,18 +442,18 @@ export default function Inventory() {
             </div>
             <form onSubmit={handleAdjust} className="space-y-4">
               <div>
-                <label className={labelCls}>Adjustment (+ to add, - to subtract)</label>
+                <label htmlFor="inventory-adjustment-to-add-to-subtract" className={labelCls}>Adjustment (+ to add, - to subtract)</label>
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setAdjustForm(f => ({ ...f, adjustment: f.adjustment === '' ? '-' : (Number(f.adjustment) < 0 ? String(-Number(f.adjustment)) : '-' + Math.abs(Number(f.adjustment))) }))}
                     className="p-2.5 glass-input rounded-xl text-red-400 hover:bg-red-400/10 transition-colors"><ArrowDown size={16} /></button>
-                  <input type="number" required value={adjustForm.adjustment} onChange={e => setAdjustForm({ ...adjustForm, adjustment: e.target.value })} placeholder="e.g. 50 or -10" className={`${inputCls} flex-1`} />
+                  <input id="inventory-adjustment-to-add-to-subtract" type="number" required value={adjustForm.adjustment} onChange={e => setAdjustForm({ ...adjustForm, adjustment: e.target.value })} placeholder="e.g. 50 or -10" className={`${inputCls} flex-1`} />
                   <button type="button" onClick={() => setAdjustForm(f => ({ ...f, adjustment: f.adjustment === '' ? '' : String(Math.abs(Number(f.adjustment))) }))}
                     className="p-2.5 glass-input rounded-xl text-emerald-400 hover:bg-emerald-400/10 transition-colors"><ArrowUp size={16} /></button>
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Reason *</label>
-                <input required type="text" value={adjustForm.reason} onChange={e => setAdjustForm({ ...adjustForm, reason: e.target.value })} placeholder="e.g. GRN received, Damaged goods, Stock count correction" className={inputCls} />
+                <label htmlFor="inventory-reason" className={labelCls}>Reason *</label>
+                <input id="inventory-reason" required type="text" value={adjustForm.reason} onChange={e => setAdjustForm({ ...adjustForm, reason: e.target.value })} placeholder="e.g. GRN received, Damaged goods, Stock count correction" className={inputCls} />
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsAdjustOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
@@ -479,18 +479,18 @@ export default function Inventory() {
             </div>
             <form onSubmit={handleTransfer} className="space-y-4">
               <div>
-                <label className={labelCls}>Destination Warehouse *</label>
-                <select required value={transferForm.toWarehouse} onChange={e => setTransferForm(f => ({ ...f, toWarehouse: e.target.value }))} className={inputCls}>
+                <label htmlFor="inventory-destination-warehouse" className={labelCls}>Destination Warehouse *</label>
+                <select id="inventory-destination-warehouse" required value={transferForm.toWarehouse} onChange={e => setTransferForm(f => ({ ...f, toWarehouse: e.target.value }))} className={inputCls}>
                   {warehouses.filter(w => w !== transferItem.warehouse).map(w => <option key={w} value={w} className="bg-brand-primary">{w}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Quantity to Transfer * <span className="normal-case text-slate-500 font-normal">(max {transferItem.quantity})</span></label>
-                <input required type="number" min="1" max={transferItem.quantity} value={transferForm.quantity} onChange={e => setTransferForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} />
+                <label htmlFor="inventory-quantity-to-transfer-max" className={labelCls}>Quantity to Transfer * <span className="normal-case text-slate-500 font-normal">(max {transferItem.quantity})</span></label>
+                <input id="inventory-quantity-to-transfer-max" required type="number" min="1" max={transferItem.quantity} value={transferForm.quantity} onChange={e => setTransferForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Notes</label>
-                <input type="text" value={transferForm.notes} onChange={e => setTransferForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. Restocking Secondary Warehouse" className={inputCls} />
+                <label htmlFor="inventory-notes" className={labelCls}>Notes</label>
+                <input id="inventory-notes" type="text" value={transferForm.notes} onChange={e => setTransferForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. Restocking Secondary Warehouse" className={inputCls} />
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setTransferItem(null)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
@@ -516,8 +516,8 @@ export default function Inventory() {
             </div>
             <form onSubmit={handleCount} className="space-y-4">
               <div>
-                <label className={labelCls}>Physically Counted Quantity *</label>
-                <input required type="number" min="0" value={countedQty} onChange={e => setCountedQty(e.target.value)} className={inputCls} autoFocus />
+                <label htmlFor="inventory-physically-counted-quantity" className={labelCls}>Physically Counted Quantity *</label>
+                <input id="inventory-physically-counted-quantity" required type="number" min="0" value={countedQty} onChange={e => setCountedQty(e.target.value)} className={inputCls} autoFocus />
               </div>
               {countedQty !== '' && Number(countedQty) !== countItem.quantity && (
                 <div className={`rounded-xl p-3 border text-sm font-medium ${Number(countedQty) - countItem.quantity > 0 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>

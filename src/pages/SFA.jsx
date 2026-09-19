@@ -527,8 +527,8 @@ export default function SFA() {
               )}
               <form onSubmit={handlePunchIn} className="space-y-3">
                 <div>
-                  <label className={lbl}>Notes / Start Location</label>
-                  <input type="text" value={punchNotes} onChange={e => setPunchNotes(e.target.value)} placeholder="e.g. Starting at Anand market area" className={inp} />
+                  <label htmlFor="sfa-notes-start-location" className={lbl}>Notes / Start Location</label>
+                  <input id="sfa-notes-start-location" type="text" value={punchNotes} onChange={e => setPunchNotes(e.target.value)} placeholder="e.g. Starting at Anand market area" className={inp} />
                 </div>
                 {!myAttendanceToday ? (
                   <button type="submit" disabled={isPunchingIn} className="w-full btn-accent py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait">
@@ -1354,19 +1354,19 @@ export default function SFA() {
             </div>
             <form onSubmit={handleCreateBeat} className="p-6 space-y-4">
               <div>
-                <label className={lbl}>Assign Executive *</label>
-                <select required value={beatForm.executiveId} onChange={e => setBeatForm({ ...beatForm, executiveId: e.target.value })} className={inp}>
+                <label htmlFor="sfa-assign-executive" className={lbl}>Assign Executive *</label>
+                <select id="sfa-assign-executive" required value={beatForm.executiveId} onChange={e => setBeatForm({ ...beatForm, executiveId: e.target.value })} className={inp}>
                   <option value="" className="bg-brand-primary">Select Sales Representative</option>
                   {salesReps.map(su => <option key={su.id} value={su.id} className="bg-brand-primary">{su.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className={lbl}>Beat Date *</label>
-                <input type="date" required value={beatForm.date} onChange={e => setBeatForm({ ...beatForm, date: e.target.value })} className={inp} />
+                <label htmlFor="sfa-beat-date" className={lbl}>Beat Date *</label>
+                <input id="sfa-beat-date" type="date" required value={beatForm.date} onChange={e => setBeatForm({ ...beatForm, date: e.target.value })} className={inp} />
               </div>
               <div>
-                <label className={lbl}>Territory Zone *</label>
-                <select required value={beatForm.territory} onChange={e => setBeatForm({ ...beatForm, territory: e.target.value })} className={inp} disabled={territories.length === 0}>
+                <label htmlFor="sfa-territory-zone" className={lbl}>Territory Zone *</label>
+                <select id="sfa-territory-zone" required value={beatForm.territory} onChange={e => setBeatForm({ ...beatForm, territory: e.target.value })} className={inp} disabled={territories.length === 0}>
                   <option value="" className="bg-brand-primary">{territories.length === 0 ? 'No territories set up yet' : 'Select Territory'}</option>
                   {territories.map(t => <option key={t.id} value={t.name} className="bg-brand-primary">{t.name} ({t.state})</option>)}
                 </select>
@@ -1382,9 +1382,9 @@ export default function SFA() {
                 )}
               </div>
               <div>
-                <label className={lbl}>Outlets to Visit *</label>
+                <label htmlFor="sfa-outlets-to-visit" className={lbl}>Outlets to Visit *</label>
                 <p className="text-[10px] text-slate-500 mb-1.5">Separate outlet names with commas</p>
-                <textarea required rows="3" placeholder="e.g. Radhe Medicals, Vrindavan Wellness, Krishna Pharma" value={beatForm.outlets} onChange={e => setBeatForm({ ...beatForm, outlets: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
+                <textarea id="sfa-outlets-to-visit" required rows="3" placeholder="e.g. Radhe Medicals, Vrindavan Wellness, Krishna Pharma" value={beatForm.outlets} onChange={e => setBeatForm({ ...beatForm, outlets: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
               </div>
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsBeatModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
@@ -1433,8 +1433,8 @@ export default function SFA() {
 
               {visitForm.outcome === 'Not Visited' && (
                 <div>
-                  <label className={lbl}>Why not? *</label>
-                  <input
+                  <label htmlFor="sfa-why-not" className={lbl}>Why not? *</label>
+                  <input id="sfa-why-not"
                     type="text" required
                     placeholder="e.g. Shop closed for the day"
                     value={visitForm.notVisitedReason}
@@ -1449,13 +1449,13 @@ export default function SFA() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={lbl}>Outlet Name</label>
-                  <input type="text" readOnly value={visitForm.outletName} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-slate-400 cursor-not-allowed" />
+                  <label htmlFor="sfa-outlet-name" className={lbl}>Outlet Name</label>
+                  <input id="sfa-outlet-name" type="text" readOnly value={visitForm.outletName} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-slate-400 cursor-not-allowed" />
                 </div>
                 {visitForm.outcome === 'Visited' && (
                 <div>
-                  <label className={lbl}>Store Contact *</label>
-                  <input type="tel" required placeholder="9876543210" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
+                  <label htmlFor="sfa-store-contact" className={lbl}>Store Contact *</label>
+                  <input id="sfa-store-contact" type="tel" required placeholder="9876543210" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
                 </div>
                 )}
                 {visitForm.outcome === 'Visited' && (<>
@@ -1474,8 +1474,8 @@ export default function SFA() {
                 </div>
                 <div className="sm:col-span-2 bg-brand-primary-lighter/30 p-4 rounded-xl border border-white/5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-brand-accent uppercase">Order Placed?</label>
-                    <input type="checkbox" checked={visitForm.orderPlaced} onChange={e => setVisitForm({ ...visitForm, orderPlaced: e.target.checked })} className="w-5 h-5 rounded accent-brand-accent" />
+                    <label htmlFor="sfa-order-placed" className="text-xs font-bold text-brand-accent uppercase">Order Placed?</label>
+                    <input id="sfa-order-placed" type="checkbox" checked={visitForm.orderPlaced} onChange={e => setVisitForm({ ...visitForm, orderPlaced: e.target.checked })} className="w-5 h-5 rounded accent-brand-accent" />
                   </div>
                   {visitForm.orderPlaced && (
                     <div className="space-y-2 pt-2 animate-fade-in-up">
@@ -1485,19 +1485,19 @@ export default function SFA() {
                       {visitForm.orderItems.map((row, idx) => (
                         <div key={idx} className="grid grid-cols-12 gap-2 items-end">
                           <div className="col-span-12 sm:col-span-6">
-                            <label className={lbl}>Product</label>
-                            <select value={row.name} onChange={e => updateOrderItem(idx, { name: e.target.value })} className={inp}>
+                            <label htmlFor="sfa-product" className={lbl}>Product</label>
+                            <select id="sfa-product" value={row.name} onChange={e => updateOrderItem(idx, { name: e.target.value })} className={inp}>
                               <option value="" className="bg-brand-primary">Select a product…</option>
                               {productCatalog.map(p => <option key={p.id} value={p.name} className="bg-brand-primary">{p.name}</option>)}
                             </select>
                           </div>
                           <div className="col-span-5 sm:col-span-2">
-                            <label className={lbl}>Qty</label>
-                            <input type="number" min="0" placeholder="0" value={row.quantity} onChange={e => updateOrderItem(idx, { quantity: e.target.value })} className={inp} />
+                            <label htmlFor="sfa-qty" className={lbl}>Qty</label>
+                            <input id="sfa-qty" type="number" min="0" placeholder="0" value={row.quantity} onChange={e => updateOrderItem(idx, { quantity: e.target.value })} className={inp} />
                           </div>
                           <div className="col-span-5 sm:col-span-2">
-                            <label className={lbl}>Rate ₹</label>
-                            <input type="number" min="0" value={row.unitPrice} onChange={e => updateOrderItem(idx, { unitPrice: e.target.value })} className={inp} />
+                            <label htmlFor="sfa-rate" className={lbl}>Rate ₹</label>
+                            <input id="sfa-rate" type="number" min="0" value={row.unitPrice} onChange={e => updateOrderItem(idx, { unitPrice: e.target.value })} className={inp} />
                           </div>
                           <div className="col-span-2 flex items-center justify-end gap-1 pb-2">
                             <span className="text-xs font-bold text-white tabular-nums">
@@ -1527,13 +1527,13 @@ export default function SFA() {
                         <p className="text-[10px] font-bold text-brand-accent uppercase tracking-wider">Outlet details for this order</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
-                            <label className={lbl}>Shop / Company name</label>
-                            <input type="text" value={visitForm.outletCompany} onChange={e => setVisitForm({ ...visitForm, outletCompany: e.target.value })} className={inp} />
+                            <label htmlFor="sfa-shop-company-name" className={lbl}>Shop / Company name</label>
+                            <input id="sfa-shop-company-name" type="text" value={visitForm.outletCompany} onChange={e => setVisitForm({ ...visitForm, outletCompany: e.target.value })} className={inp} />
                           </div>
                           <div>
-                            <label className={lbl}>City *</label>
+                            <label htmlFor="sfa-city" className={lbl}>City *</label>
                             {cityOptions.length > 0 && !cityIsOther ? (
-                              <select
+                              <select id="sfa-city"
                                 required
                                 value={visitForm.outletCity}
                                 onChange={e => {
@@ -1568,20 +1568,20 @@ export default function SFA() {
                             </p>
                           </div>
                           <div>
-                            <label className={lbl}>Store contact</label>
-                            <input type="tel" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
+                            <label htmlFor="sfa-store-contact-2" className={lbl}>Store contact</label>
+                            <input id="sfa-store-contact-2" type="tel" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
                           </div>
                           <div>
-                            <label className={lbl}>Email</label>
-                            <input type="email" placeholder="Optional" value={visitForm.outletEmail} onChange={e => setVisitForm({ ...visitForm, outletEmail: e.target.value })} className={inp} />
+                            <label htmlFor="sfa-email" className={lbl}>Email</label>
+                            <input id="sfa-email" type="email" placeholder="Optional" value={visitForm.outletEmail} onChange={e => setVisitForm({ ...visitForm, outletEmail: e.target.value })} className={inp} />
                           </div>
                           <div>
-                            <label className={lbl}>Pincode *</label>
-                            <input required type="text" inputMode="numeric" maxLength={6} value={visitForm.outletPincode} onChange={e => setVisitForm({ ...visitForm, outletPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className={inp} />
+                            <label htmlFor="sfa-pincode" className={lbl}>Pincode *</label>
+                            <input id="sfa-pincode" required type="text" inputMode="numeric" maxLength={6} value={visitForm.outletPincode} onChange={e => setVisitForm({ ...visitForm, outletPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className={inp} />
                           </div>
                           <div className="sm:col-span-2">
-                            <label className={lbl}>Delivery address *</label>
-                            <textarea required rows="2" value={visitForm.outletAddress} onChange={e => setVisitForm({ ...visitForm, outletAddress: e.target.value })} placeholder="Shop number, street, area" className={inp + ' resize-none'} />
+                            <label htmlFor="sfa-delivery-address" className={lbl}>Delivery address *</label>
+                            <textarea id="sfa-delivery-address" required rows="2" value={visitForm.outletAddress} onChange={e => setVisitForm({ ...visitForm, outletAddress: e.target.value })} placeholder="Shop number, street, area" className={inp + ' resize-none'} />
                             <p className="text-[10px] text-slate-500 mt-1">Where this order gets delivered. Dispatch cannot send goods to a city alone.</p>
                           </div>
                         </div>
@@ -1596,12 +1596,12 @@ export default function SFA() {
                 </div>
                 </>)}
                 <div className="sm:col-span-2">
-                  <label className={lbl}>Next Follow-up</label>
-                  <input type="date" value={visitForm.nextFollowUp} onChange={e => setVisitForm({ ...visitForm, nextFollowUp: e.target.value })} className={inp} />
+                  <label htmlFor="sfa-next-follow-up" className={lbl}>Next Follow-up</label>
+                  <input id="sfa-next-follow-up" type="date" value={visitForm.nextFollowUp} onChange={e => setVisitForm({ ...visitForm, nextFollowUp: e.target.value })} className={inp} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={lbl}>Visit Notes</label>
-                  <textarea rows="3" placeholder="Retailer feedback, interest level, next steps…" value={visitForm.notes} onChange={e => setVisitForm({ ...visitForm, notes: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
+                  <label htmlFor="sfa-visit-notes" className={lbl}>Visit Notes</label>
+                  <textarea id="sfa-visit-notes" rows="3" placeholder="Retailer feedback, interest level, next steps…" value={visitForm.notes} onChange={e => setVisitForm({ ...visitForm, notes: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
                 </div>
               </div>
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
@@ -1627,22 +1627,22 @@ export default function SFA() {
             <form onSubmit={handleExpenseSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={lbl}>Date *</label>
-                  <input type="date" required value={expenseForm.date} onChange={e => setExpenseForm({ ...expenseForm, date: e.target.value })} className={inp} />
+                  <label htmlFor="sfa-date" className={lbl}>Date *</label>
+                  <input id="sfa-date" type="date" required value={expenseForm.date} onChange={e => setExpenseForm({ ...expenseForm, date: e.target.value })} className={inp} />
                 </div>
                 <div>
-                  <label className={lbl}>Category *</label>
-                  <select required value={expenseForm.category} onChange={e => setExpenseForm({ ...expenseForm, category: e.target.value })} className={inp}>
+                  <label htmlFor="sfa-category" className={lbl}>Category *</label>
+                  <select id="sfa-category" required value={expenseForm.category} onChange={e => setExpenseForm({ ...expenseForm, category: e.target.value })} className={inp}>
                     {expenseCategories.map(c => <option key={c} value={c} className="bg-brand-primary">{c}</option>)}
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className={lbl}>Amount (₹) *</label>
-                  <input type="number" required min="1" placeholder="e.g. 450" value={expenseForm.amount} onChange={e => setExpenseForm({ ...expenseForm, amount: e.target.value })} className={inp} />
+                  <label htmlFor="sfa-amount" className={lbl}>Amount (₹) *</label>
+                  <input id="sfa-amount" type="number" required min="1" placeholder="e.g. 450" value={expenseForm.amount} onChange={e => setExpenseForm({ ...expenseForm, amount: e.target.value })} className={inp} />
                 </div>
                 <div className="col-span-2">
-                  <label className={lbl}>Description *</label>
-                  <textarea required rows="2" placeholder="e.g. Auto fare from Anand station to market area" value={expenseForm.description} onChange={e => setExpenseForm({ ...expenseForm, description: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
+                  <label htmlFor="sfa-description" className={lbl}>Description *</label>
+                  <textarea id="sfa-description" required rows="2" placeholder="e.g. Auto fare from Anand station to market area" value={expenseForm.description} onChange={e => setExpenseForm({ ...expenseForm, description: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
                 </div>
                 <div className="col-span-2">
                   <label className={lbl}>Upload Receipt</label>

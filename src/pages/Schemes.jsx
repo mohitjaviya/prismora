@@ -344,14 +344,14 @@ export default function Schemes() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2"><label className={labelCls}>Scheme Name *</label><input required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Monsoon Mega Sale 2026" className={inputCls} /></div>
                 <div>
-                  <label className={labelCls}>Scheme Type *</label>
-                  <select required value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={inputCls}>
+                  <label htmlFor="schemes-scheme-type" className={labelCls}>Scheme Type *</label>
+                  <select id="schemes-scheme-type" required value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={inputCls}>
                     {schemeTypes.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Applicable To *</label>
-                  <select required value={form.applicableTo} onChange={e => setForm(f => ({ ...f, applicableTo: e.target.value }))} className={inputCls}>
+                  <label htmlFor="schemes-applicable-to" className={labelCls}>Applicable To *</label>
+                  <select id="schemes-applicable-to" required value={form.applicableTo} onChange={e => setForm(f => ({ ...f, applicableTo: e.target.value }))} className={inputCls}>
                     {APPLICABLE_TO.map(a => <option key={a} value={a} className="bg-brand-primary">{a}</option>)}
                   </select>
                 </div>
@@ -370,8 +370,8 @@ export default function Schemes() {
                   </div>
                 </div>
                 <div>
-                  <label className={labelCls}>Status</label>
-                  <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
+                  <label htmlFor="schemes-status" className={labelCls}>Status</label>
+                  <select id="schemes-status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
                     <option value="Active" className="bg-brand-primary">Active</option>
                     <option value="Inactive" className="bg-brand-primary">Inactive</option>
                   </select>
