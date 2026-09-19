@@ -179,8 +179,8 @@ export default function TeamMembers() {
                 <button onClick={() => setIsUserModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
               </div>
               <form onSubmit={handleUserSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
-                <div><label className={labelCls}>Full Name *</label><input required type="text" value={userForm.name} onChange={e => setUserForm({ ...userForm, name: e.target.value })} placeholder="e.g. Rahul Sharma" className={inputCls} /></div>
-                <div><label className={labelCls}>Email Address *</label><input required type="email" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="rahul@prismora.com" className={inputCls} /></div>
+                <div><label htmlFor="teammembers-full-name" className={labelCls}>Full Name *</label><input id="teammembers-full-name" required type="text" value={userForm.name} onChange={e => setUserForm({ ...userForm, name: e.target.value })} placeholder="e.g. Rahul Sharma" className={inputCls} /></div>
+                <div><label htmlFor="teammembers-email-address" className={labelCls}>Email Address *</label><input id="teammembers-email-address" required type="email" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="rahul@prismora.com" className={inputCls} /></div>
                 <div><label className={labelCls}>{editingUser ? 'New Password (optional)' : 'Password *'}</label><input required={!editingUser} type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className={inputCls} /></div>
                 <div>
                   <label htmlFor="teammembers-role" className={labelCls}>Role *</label>

@@ -401,7 +401,7 @@ export default function Dealers() {
             </div>
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2"><label className={labelCls}>Company / Business Name *</label><input required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mohan Dealers" className={inputCls} /></div>
+                <div className="sm:col-span-2"><label htmlFor="dealers-company-business-name" className={labelCls}>Company / Business Name *</label><input id="dealers-company-business-name" required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mohan Dealers" className={inputCls} /></div>
                 <div className="sm:col-span-2">
                   <label htmlFor="dealers-parent-distributor" className={labelCls}>Parent Distributor *</label>
                   <select id="dealers-parent-distributor" required value={form.parentDistributorId} onChange={e => setForm(f => ({ ...f, parentDistributorId: e.target.value }))} className={inputCls}>
@@ -409,10 +409,10 @@ export default function Dealers() {
                     {activeDistributors.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({d.territory})</option>)}
                   </select>
                 </div>
-                <div><label className={labelCls}>GSTIN</label><input type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACG..." className={inputCls} /></div>
-                <div><label className={labelCls}>Contact Person</label><input type="text" value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Phone</label><input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Email</label><input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="dealers-gstin" className={labelCls}>GSTIN</label><input id="dealers-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACG..." className={inputCls} /></div>
+                <div><label htmlFor="dealers-contact-person" className={labelCls}>Contact Person</label><input id="dealers-contact-person" type="text" value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="dealers-phone" className={labelCls}>Phone</label><input id="dealers-phone" type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="dealers-email" className={labelCls}>Email</label><input id="dealers-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></div>
                 <div>
                   <label htmlFor="dealers-state" className={labelCls}>State *</label>
                   <select id="dealers-state" required value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
@@ -420,8 +420,8 @@ export default function Dealers() {
                     {INDIAN_STATES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
                   </select>
                 </div>
-                <div><label className={labelCls}>City</label><input type="text" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Pincode *</label><input required type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /></div>
+                <div><label htmlFor="dealers-city" className={labelCls}>City</label><input id="dealers-city" type="text" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="dealers-pincode" className={labelCls}>Pincode *</label><input id="dealers-pincode" required type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /></div>
                 <div className="sm:col-span-2">
                   <label htmlFor="dealers-delivery-address" className={labelCls}>Delivery Address *</label>
                   <textarea id="dealers-delivery-address" required rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} />
@@ -447,7 +447,7 @@ export default function Dealers() {
                     </p>
                   ) : null}
                 </div>
-                <div><label className={labelCls}>Credit Limit (₹)</label><input type="number" min="0" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="dealers-credit-limit" className={labelCls}>Credit Limit (₹)</label><input id="dealers-credit-limit" type="number" min="0" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /></div>
                 <div>
                   <label htmlFor="dealers-status" className={labelCls}>Status</label>
                   <select id="dealers-status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>

@@ -343,8 +343,8 @@ export default function Complaints() {
             </div>
             <form onSubmit={handleSubmitAdd} className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className={labelCls}>Customer Name *</label><input required disabled={isParty} type="text" value={form.customerName} onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))} className={`${inputCls} ${isParty ? 'opacity-60 cursor-not-allowed' : ''}`} /></div>
-                <div><label className={labelCls}>Customer Phone</label><input type="tel" value={form.customerPhone} onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="complaints-customer-name" className={labelCls}>Customer Name *</label><input id="complaints-customer-name" required disabled={isParty} type="text" value={form.customerName} onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))} className={`${inputCls} ${isParty ? 'opacity-60 cursor-not-allowed' : ''}`} /></div>
+                <div><label htmlFor="complaints-customer-phone" className={labelCls}>Customer Phone</label><input id="complaints-customer-phone" type="tel" value={form.customerPhone} onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))} className={inputCls} /></div>
                 <div>
                   <label htmlFor="complaints-product-involved" className={labelCls}>Product Involved</label>
                   <select id="complaints-product-involved" value={form.product} onChange={e => setForm(f => ({ ...f, product: e.target.value }))} className={inputCls}>
@@ -352,7 +352,7 @@ export default function Complaints() {
                     {products.map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
                   </select>
                 </div>
-                <div><label className={labelCls}>Batch Number</label><input type="text" value={form.batchNumber} onChange={e => setForm(f => ({ ...f, batchNumber: e.target.value }))} placeholder="e.g. RBH-2025-001" className={inputCls} /></div>
+                <div><label htmlFor="complaints-batch-number" className={labelCls}>Batch Number</label><input id="complaints-batch-number" type="text" value={form.batchNumber} onChange={e => setForm(f => ({ ...f, batchNumber: e.target.value }))} placeholder="e.g. RBH-2025-001" className={inputCls} /></div>
                 <div className="sm:col-span-2">
                   <label htmlFor="complaints-complaint-type" className={labelCls}>Complaint Type *</label>
                   <select id="complaints-complaint-type" required value={form.complaintType} onChange={e => setForm(f => ({ ...f, complaintType: e.target.value }))} className={inputCls}>

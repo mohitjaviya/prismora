@@ -596,15 +596,15 @@ export default function Purchases() {
                     {products.map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
                   </select>
                 </div>
-                <div><label className={labelCls}>Quantity *</label><input required type="number" min="1" value={returnForm.quantity} onChange={e => setReturnForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Unit Cost (₹) *</label><input required type="number" min="0" value={returnForm.unitCost} onChange={e => setReturnForm(f => ({ ...f, unitCost: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="purchases-quantity" className={labelCls}>Quantity *</label><input id="purchases-quantity" required type="number" min="1" value={returnForm.quantity} onChange={e => setReturnForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="purchases-unit-cost" className={labelCls}>Unit Cost (₹) *</label><input id="purchases-unit-cost" required type="number" min="0" value={returnForm.unitCost} onChange={e => setReturnForm(f => ({ ...f, unitCost: e.target.value }))} className={inputCls} /></div>
                 <div className="col-span-2">
                   <label htmlFor="purchases-reason" className={labelCls}>Reason *</label>
                   <select id="purchases-reason" required value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className={inputCls}>
                     {['Damaged goods', 'Wrong item', 'Quality issue', 'Expired stock', 'Excess supply', 'Other'].map(r => <option key={r} value={r} className="bg-brand-primary">{r}</option>)}
                   </select>
                 </div>
-                <div className="col-span-2"><label className={labelCls}>Notes</label><textarea rows="2" value={returnForm.notes} onChange={e => setReturnForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} /></div>
+                <div className="col-span-2"><label htmlFor="purchases-notes-4" className={labelCls}>Notes</label><textarea id="purchases-notes-4" rows="2" value={returnForm.notes} onChange={e => setReturnForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} /></div>
               </div>
               <div className="bg-brand-primary-lighter/30 rounded-xl p-3 border border-white/5 text-xs text-slate-400 flex justify-between">
                 <span>Credit to vendor payable:</span>
@@ -879,12 +879,12 @@ export default function Purchases() {
             </div>
             <form onSubmit={handleSubmitVendor} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2"><label className={labelCls}>Vendor Name *</label><input required type="text" value={vendorForm.name} onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Janki Herbals" className={inputCls} /></div>
-                <div><label className={labelCls}>GSTIN</label><input type="text" value={vendorForm.gstin} onChange={e => setVendorForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className={inputCls} /></div>
-                <div><label className={labelCls}>Contact Person</label><input type="text" value={vendorForm.contactPerson} onChange={e => setVendorForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Phone</label><input type="text" value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Email</label><input type="email" value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></div>
-                <div className="col-span-2"><label className={labelCls}>Address</label><textarea rows="2" value={vendorForm.address} onChange={e => setVendorForm(f => ({ ...f, address: e.target.value }))} className={`${inputCls} resize-none`} /></div>
+                <div className="col-span-2"><label htmlFor="purchases-vendor-name" className={labelCls}>Vendor Name *</label><input id="purchases-vendor-name" required type="text" value={vendorForm.name} onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Janki Herbals" className={inputCls} /></div>
+                <div><label htmlFor="purchases-gstin" className={labelCls}>GSTIN</label><input id="purchases-gstin" type="text" value={vendorForm.gstin} onChange={e => setVendorForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className={inputCls} /></div>
+                <div><label htmlFor="purchases-contact-person" className={labelCls}>Contact Person</label><input id="purchases-contact-person" type="text" value={vendorForm.contactPerson} onChange={e => setVendorForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="purchases-phone" className={labelCls}>Phone</label><input id="purchases-phone" type="text" value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="purchases-email" className={labelCls}>Email</label><input id="purchases-email" type="email" value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></div>
+                <div className="col-span-2"><label htmlFor="purchases-address" className={labelCls}>Address</label><textarea id="purchases-address" rows="2" value={vendorForm.address} onChange={e => setVendorForm(f => ({ ...f, address: e.target.value }))} className={`${inputCls} resize-none`} /></div>
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsVendorModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>

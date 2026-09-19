@@ -171,7 +171,7 @@ export default function ProductCatalog() {
               </div>
               <form onSubmit={handleProductSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2"><label className={labelCls}>Product Name *</label><input required type="text" value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} placeholder="e.g. Brahmi Amla Shakar 200ml" className={inputCls} /></div>
+                  <div className="sm:col-span-2"><label htmlFor="productcatalog-product-name" className={labelCls}>Product Name *</label><input id="productcatalog-product-name" required type="text" value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} placeholder="e.g. Brahmi Amla Shakar 200ml" className={inputCls} /></div>
                   <div>
                     <label htmlFor="productcatalog-category" className={labelCls}>Category</label>
                     <select id="productcatalog-category" value={productForm.category} onChange={e => setProductForm({ ...productForm, category: e.target.value })} className={inputCls}>
@@ -184,24 +184,24 @@ export default function ProductCatalog() {
                       {uoms.map(u => <option key={u} value={u} className="bg-brand-primary">{u}</option>)}
                     </select>
                   </div>
-                  <div><label className={labelCls}>SKU / Barcode</label><input type="text" value={productForm.sku} onChange={e => setProductForm({ ...productForm, sku: e.target.value })} placeholder="e.g. PRM-HHO-100" className={inputCls} /></div>
+                  <div><label htmlFor="productcatalog-sku-barcode" className={labelCls}>SKU / Barcode</label><input id="productcatalog-sku-barcode" type="text" value={productForm.sku} onChange={e => setProductForm({ ...productForm, sku: e.target.value })} placeholder="e.g. PRM-HHO-100" className={inputCls} /></div>
                   <div>
                     <label htmlFor="productcatalog-lifecycle-status" className={labelCls}>Lifecycle Status</label>
                     <select id="productcatalog-lifecycle-status" value={productForm.status} onChange={e => setProductForm({ ...productForm, status: e.target.value })} className={inputCls}>
                       {productStatuses.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
                     </select>
                   </div>
-                  <div><label className={labelCls}>HSN Code *</label><input required type="text" value={productForm.hsnCode} onChange={e => setProductForm({ ...productForm, hsnCode: e.target.value })} placeholder="e.g. 30049011" className={inputCls} /></div>
+                  <div><label htmlFor="productcatalog-hsn-code" className={labelCls}>HSN Code *</label><input id="productcatalog-hsn-code" required type="text" value={productForm.hsnCode} onChange={e => setProductForm({ ...productForm, hsnCode: e.target.value })} placeholder="e.g. 30049011" className={inputCls} /></div>
                   <div>
                     <label htmlFor="productcatalog-gst-rate" className={labelCls}>GST Rate *</label>
                     <select id="productcatalog-gst-rate" value={productForm.gstPct} onChange={e => setProductForm({ ...productForm, gstPct: e.target.value })} className={inputCls}>
                       {INDIAN_TAX_RATES.map(r => <option key={r} value={r} className="bg-brand-primary">{r}% GST</option>)}
                     </select>
                   </div>
-                  <div><label className={labelCls}>MRP (Retail Price Limit) (₹)</label><input type="number" min="0" value={productForm.mrp} onChange={e => setProductForm({ ...productForm, mrp: e.target.value })} placeholder="0" className={inputCls} /></div>
-                  <div><label className={labelCls}>Distributor Base Price (₹) *</label><input required type="number" min="0" value={productForm.distributorPrice} onChange={e => setProductForm({ ...productForm, distributorPrice: e.target.value })} placeholder="0" className={inputCls} /></div>
-                  <div><label className={labelCls}>Dealer Base Price (₹) *</label><input required type="number" min="0" value={productForm.dealerPrice} onChange={e => setProductForm({ ...productForm, dealerPrice: e.target.value })} placeholder="0" className={inputCls} /></div>
-                  <div><label className={labelCls}>Retailer Base Price (₹) *</label><input required type="number" min="0" value={productForm.retailerPrice} onChange={e => setProductForm({ ...productForm, retailerPrice: e.target.value })} placeholder="0" className={inputCls} /></div>
+                  <div><label htmlFor="productcatalog-mrp-retail-price-limit" className={labelCls}>MRP (Retail Price Limit) (₹)</label><input id="productcatalog-mrp-retail-price-limit" type="number" min="0" value={productForm.mrp} onChange={e => setProductForm({ ...productForm, mrp: e.target.value })} placeholder="0" className={inputCls} /></div>
+                  <div><label htmlFor="productcatalog-distributor-base-price" className={labelCls}>Distributor Base Price (₹) *</label><input id="productcatalog-distributor-base-price" required type="number" min="0" value={productForm.distributorPrice} onChange={e => setProductForm({ ...productForm, distributorPrice: e.target.value })} placeholder="0" className={inputCls} /></div>
+                  <div><label htmlFor="productcatalog-dealer-base-price" className={labelCls}>Dealer Base Price (₹) *</label><input id="productcatalog-dealer-base-price" required type="number" min="0" value={productForm.dealerPrice} onChange={e => setProductForm({ ...productForm, dealerPrice: e.target.value })} placeholder="0" className={inputCls} /></div>
+                  <div><label htmlFor="productcatalog-retailer-base-price" className={labelCls}>Retailer Base Price (₹) *</label><input id="productcatalog-retailer-base-price" required type="number" min="0" value={productForm.retailerPrice} onChange={e => setProductForm({ ...productForm, retailerPrice: e.target.value })} placeholder="0" className={inputCls} /></div>
                 </div>
                 <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                   <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
