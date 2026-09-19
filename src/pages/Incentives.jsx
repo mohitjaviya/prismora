@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Gift, CheckCircle, Clock, Percent, Package, Wallet, Download } from 'lucide-react';
+import { Gift, CheckCircle, Clock, Package, Wallet, Download } from 'lucide-react';
 import { useToast } from '../context/DialogContext';
 import { downloadCSV } from '../utils/exportUtils';
 import { PageHeader, DataTable, Button, Badge, StatCard, Card, SearchInput } from '../components/ui';
@@ -93,14 +93,23 @@ export default function Incentives() {
       // Free goods are counted in units and everything else in rupees, so they
       // cannot share a sort. Units sort among themselves below any cash value.
       sort: i => (i.incentiveType === 'Free Goods' ? -1 : Number(i.incentiveValue) || 0),
-      render: i => (
-        <span className="inline-flex items-center gap-1 font-semibold text-white">
-          {i.incentiveType === 'Free Goods'
-            ? <Package size={12} className="text-purple-400" />
-            : <Percent size={12} className="text-brand-accent" />}
-          {i.incentiveType === 'Free Goods' ? `${i.incentiveValue} units` : formatCurrency(i.incentiveValue)}
-        </span>
-      ),
+      // A Percent icon sat in front of every incentive that was not free goods,
+      // so a flat Cash payout of 450 rupees read as "% ₹450" -- and so did a
+      // Discount one, whose percentage is on the scheme, not on this figure.
+      // There are three types; the icon only knew about two of them. The type
+      // is named underneath instead, which is what the icon was reaching for.
+      render: i => {
+        const freeGoods = i.incentiveType === 'Free Goods';
+        return (
+          <div className="leading-tight">
+            <div className="inline-flex items-center gap-1 font-semibold text-white">
+              {freeGoods && <Package size={12} className="text-purple-400" />}
+              {freeGoods ? `${i.incentiveValue} units` : formatCurrency(i.incentiveValue)}
+            </div>
+            <div className="text-[10px] text-slate-500 font-normal">{i.incentiveType || 'Cash'}</div>
+          </div>
+        );
+      },
     },
     {
       key: 'status', header: 'Status', align: 'center', sort: i => i.status || '',
