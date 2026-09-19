@@ -7,7 +7,7 @@ import {
   ArrowUpDown, Plus, Edit2, Trash2, MapPin, Globe, ChevronRight, X, Compass, Check
 } from 'lucide-react';
 import { useConfirm } from '../context/DialogContext';
-import { PageHeader } from '../components/ui';
+import { Button, PageHeader } from '../components/ui';
 import { createPortal } from 'react-dom';
 
 const INDIAN_STATES = [
@@ -259,18 +259,9 @@ export default function Geography() {
         icon={Globe}
         title="Geography & Territories"
         subtitle="Manage corporate distribution sales territories and view performance distribution."
-        actions={
-        <>
-          {activeTab === 'territories' && isAdmin && (
-          <button
-          onClick={handleOpenAdd}
-          className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold"
-          >
-          <Plus size={16} /> Add Territory
-          </button>
-          )}
-        </>
-        }
+        actions={activeTab === 'territories' && isAdmin && (
+          <Button variant="primary" icon={Plus} onClick={handleOpenAdd}>Add Territory</Button>
+        )}
       />
 
       {/* Tabs */}

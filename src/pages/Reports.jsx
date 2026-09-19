@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole } from '../context/AuthContext';
 import { BarChart3, Download, TrendingUp, Package2, Wallet, Users, Star, ChevronRight } from 'lucide-react';
-import { PageHeader } from '../components/ui';
+import { Button, PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 
 const formatCurrency = (val) =>
@@ -394,15 +394,9 @@ export default function Reports() {
         icon={BarChart3}
         title="Reports Hub"
         subtitle="20+ business reports across sales, inventory, financials, CRM, and team performance."
-        actions={
-        <>
-          {activeReport && reportData.length > 0 && (
-          <button onClick={handleExport} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-          <Download size={16} /> Export CSV
-          </button>
-          )}
-        </>
-        }
+        actions={activeReport && reportData.length > 0 && (
+          <Button variant="primary" icon={Download} onClick={handleExport}>Export CSV</Button>
+        )}
       />
 
       {/* Date Range Filter */}

@@ -14,6 +14,10 @@ const VARIANT = {
   ghost: 'bg-transparent border border-transparent text-slate-400 hover:text-white hover:bg-white/5',
   outline: 'bg-transparent border border-white/10 text-slate-300 hover:text-white hover:border-white/25',
   danger: 'bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20',
+  // A secondary action that still wants to be noticed -- File Expense beside
+  // Assign Beat. Written by hand on SFA before this existed, which is how it
+  // ended up a different height from every other button on the page.
+  accent: 'bg-brand-accent/10 border border-brand-accent/30 text-brand-accent hover:bg-brand-accent/20',
 };
 
 const SIZE = {

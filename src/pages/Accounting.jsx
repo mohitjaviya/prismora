@@ -342,34 +342,15 @@ const Accounting = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-            <PageHeader
+      <PageHeader
         icon={Wallet}
         title="Accounting Hub"
         subtitle="Monitor business income, track operational expenses, and analyze net margins."
-        actions={
-        <>
-          <div className="flex gap-3">
-          <button
-          onClick={() => setIsExpenseModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-primary-light border border-white/10 hover:border-brand-accent/50 text-slate-200 rounded-xl transition-all"
-          >
-          <Plus size={16} /> Log Expense
-          </button>
-          <button
-          onClick={() => setIsCreditModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-primary-light border border-white/10 hover:border-brand-accent/50 text-slate-200 rounded-xl transition-all"
-          >
-          <FileText size={16} /> Credit Note
-          </button>
-          <button
-          onClick={() => setIsInvoiceModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm btn-accent rounded-xl"
-          >
-          <Plus size={16} /> Generate Invoice
-          </button>
-          </div>
-        </>
-        }
+        actions={<>
+          <Button icon={Plus} onClick={() => setIsExpenseModalOpen(true)}>Log Expense</Button>
+          <Button icon={FileText} onClick={() => setIsCreditModalOpen(true)}>Credit Note</Button>
+          <Button variant="primary" icon={Plus} onClick={() => setIsInvoiceModalOpen(true)}>Generate Invoice</Button>
+        </>}
       />
 
         {missingPayouts.length > 0 && canAccess('accounting', 'full') && (

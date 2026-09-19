@@ -305,30 +305,18 @@ export default function Purchases() {
         icon={ShoppingBag}
         title="Purchase Management"
         subtitle="Purchase orders, vendor management & goods receipt from Janki Herbals."
-        actions={
-        <>
+        actions={<>
           <Button icon={Download} onClick={handleExport}>Export</Button>
-          {canManage && (
-          <div className="flex gap-3">
-          {activeTab === 'orders' && (
-          <button onClick={() => setIsPOModalOpen(true)} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-          <Plus size={16} /> Create PO
-          </button>
+          {canManage && activeTab === 'orders' && (
+            <Button variant="primary" icon={Plus} onClick={() => setIsPOModalOpen(true)}>Create PO</Button>
           )}
-          {activeTab === 'vendors' && (
-          <button onClick={openAddVendor} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-          <Plus size={16} /> Add Vendor
-          </button>
+          {canManage && activeTab === 'vendors' && (
+            <Button variant="primary" icon={Plus} onClick={openAddVendor}>Add Vendor</Button>
           )}
-          {activeTab === 'returns' && (
-          <button onClick={() => setIsReturnModalOpen(true)} className="btn-accent px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold">
-          <Plus size={16} /> Record Return
-          </button>
+          {canManage && activeTab === 'returns' && (
+            <Button variant="primary" icon={Plus} onClick={() => setIsReturnModalOpen(true)}>Record Return</Button>
           )}
-          </div>
-          )}
-        </>
-        }
+        </>}
       />
 
       {/* KPI Cards */}
