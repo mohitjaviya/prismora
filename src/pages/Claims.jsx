@@ -179,7 +179,8 @@ export default function Claims() {
           : 'Review and settle distributor, dealer and retailer scheme claims.'}
         actions={<>
           <Button icon={Download} onClick={handleExport}>Export</Button>
-          isParty ? <Button variant="primary" icon={Plus} onClick={openAdd}>Submit Claim</Button> : undefined</>}
+          {isParty && <Button variant="primary" icon={Plus} onClick={openAdd}>Submit Claim</Button>}
+        </>}
       />
 
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
