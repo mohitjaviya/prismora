@@ -4,7 +4,7 @@ import { INDIA_STATE_PATHS, INDIA_VIEWBOX } from '../utils/indiaMap';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { useAuth, isSalesRole } from '../context/AuthContext';
 import { 
-  ArrowUpDown, Plus, Edit2, Trash2, MapPin, Users, Globe, ChevronRight, X, Compass, Check
+  ArrowUpDown, Plus, Edit2, Trash2, MapPin, Globe, ChevronRight, X, Compass, Check
 } from 'lucide-react';
 import { useConfirm } from '../context/DialogContext';
 import { PageHeader } from '../components/ui';
@@ -107,6 +107,27 @@ export default function Geography() {
   // highlights that state on the map, and clicking the map opens its row.
   const [openState, setOpenState] = useState(null);
   const toggleState = (name) => setOpenState(prev => (prev === name ? null : name));
+
+  /**
+   * Clicking a state on the map.
+   *
+   * Beside the map, the row it opens is already in view and this is just
+   * toggleState. Stacked -- below lg, where the table sits under the map --
+   * the cities open off-screen and the click reads as having done nothing, so
+   * the table is brought up to meet it.
+   */
+  const REVENUE_TABLE_ID = 'revenue-by-state';
+  const selectFromMap = (name) => {
+    const opening = openState !== name;
+    toggleState(name);
+    if (opening && window.innerWidth < 1024) {
+      // after the row has actually expanded, or it scrolls to the old height
+      requestAnimationFrame(() => {
+        document.getElementById(REVENUE_TABLE_ID)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  };
 
   // Active Territory for sidebar visual mapping
   const activeTerritoryDetail = useMemo(() => {
@@ -295,13 +316,17 @@ export default function Geography() {
           if (intensity < 0.8) return '#047857';
           return '#10b981';
         };
-        const getStateOpacity = (stateName) => {
-          const rev = stateRevenue[stateName] || 0;
-          return rev > 0 ? 0.85 : 0.3;
-        };
 
+        // The map and its table belong side by side, and xl (1280px) was too
+        // late a breakpoint to deliver that: a 1440x900 laptop at Windows' usual
+        // 125% scaling reports 1152px, so the common case fell to one column and
+        // stranded the table under a map stretched to twice its useful size.
+        //
+        // items-start, so the table is as tall as its rows rather than as tall
+        // as the map beside it. Stretched, a single state left most of the card
+        // empty and read as something that had failed to load.
         return (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             {/* SVG India Map */}
             <div className="glass-panel rounded-2xl p-5 border border-white/5">
               <div className="flex items-center justify-between mb-4">
@@ -312,7 +337,11 @@ export default function Geography() {
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-slate-400/25 border border-slate-400/40 inline-block"/><span>None</span></span>
                 </div>
               </div>
-              <div className="relative w-full overflow-hidden rounded-xl bg-brand-primary-dark/50 border border-white/5">
+              {/* max-w with auto margins: an svg set to the full width of its
+                  card keeps its aspect ratio and letterboxes, so in one column
+                  the map drew at its 460px cap inside a box twice as wide with
+                  empty space either side. */}
+              <div className="relative w-full max-w-[540px] mx-auto overflow-hidden rounded-xl bg-brand-primary-dark/50 border border-white/5">
                 <svg viewBox={INDIA_VIEWBOX} className="w-full" style={{ maxHeight: '460px' }}>
                   {/* Real state outlines rather than the hand-drawn polygons that
                       were here before — those were five-point blobs that did not
@@ -329,7 +358,7 @@ export default function Geography() {
                       <path
                         key={name}
                         d={d}
-                        onClick={() => toggleState(name)}
+                        onClick={() => selectFromMap(name)}
                         fill={rev > 0 ? getStateColor(name) : '#94a3b8'}
                         fillOpacity={rev > 0 ? 0.9 : 0.22}
                         stroke={openState === name ? '#D4186C' : '#64748b'}
@@ -354,7 +383,7 @@ export default function Geography() {
             </div>
 
             {/* Revenue Table */}
-            <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
+            <div id={REVENUE_TABLE_ID} className="glass-panel rounded-2xl overflow-hidden border border-white/5 scroll-mt-4">
               <div className="p-4 border-b border-white/5 bg-brand-primary-light/20">
                 <div>
                   <span className="text-sm font-bold text-white uppercase tracking-wider">Revenue by State</span>
@@ -365,16 +394,20 @@ export default function Geography() {
                 <table className="w-full text-left text-sm border-collapse">
                   <thead>
                     <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                      <th className="p-4 cursor-pointer hover:text-white" onClick={() => requestSort('state')}>
+                      <th className="px-3 py-4 xl:px-4 cursor-pointer hover:text-white" onClick={() => requestSort('state')}>
                         <div className="flex items-center gap-1">State <ArrowUpDown size={14} /></div>
                       </th>
-                      <th className="p-4 cursor-pointer hover:text-white" onClick={() => requestSort('city')}>
+                      {/* Below xl the column does not fit beside the map, and
+                          the revenue figure was being clipped to make room for
+                          it. The count moves under the state name instead, so
+                          nothing is lost -- see the td below. */}
+                      <th className="hidden xl:table-cell px-3 py-4 xl:px-4 cursor-pointer hover:text-white" onClick={() => requestSort('city')}>
                         <div className="flex items-center gap-1">Cities <ArrowUpDown size={14} /></div>
                       </th>
-                      <th className="p-4 text-center cursor-pointer hover:text-white" onClick={() => requestSort('orders')}>
+                      <th className="px-3 py-4 xl:px-4 text-center cursor-pointer hover:text-white" onClick={() => requestSort('orders')}>
                         <div className="flex items-center gap-1 justify-center">Orders <ArrowUpDown size={14} /></div>
                       </th>
-                      <th className="p-4 text-right cursor-pointer hover:text-white" onClick={() => requestSort('revenue')}>
+                      <th className="px-3 py-4 xl:px-4 text-right cursor-pointer hover:text-white" onClick={() => requestSort('revenue')}>
                         <div className="flex items-center gap-1 justify-end">Revenue <ArrowUpDown size={14} /></div>
                       </th>
                     </tr>
@@ -389,20 +422,23 @@ export default function Geography() {
                             onClick={() => toggleState(group.state)}
                             className={`cursor-pointer transition-colors ${isOpen ? 'bg-brand-accent/5' : 'hover:bg-brand-primary-lighter/20'}`}
                           >
-                            <td className="p-4 font-semibold text-white">
+                            <td className="px-3 py-4 xl:px-4 font-semibold text-white">
                               <div className="flex items-center gap-1.5">
                                 <ChevronRight size={14} className={`text-brand-accent transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                                 {group.state}
                               </div>
+                              <span className="xl:hidden block pl-[22px] text-[10px] font-normal text-slate-400">
+                                {group.cities.length} {group.cities.length === 1 ? 'city' : 'cities'}
+                              </span>
                             </td>
-                            <td className="p-4 text-slate-400 text-xs">
+                            <td className="hidden xl:table-cell px-3 py-4 xl:px-4 text-slate-400 text-xs">
                               {group.cities.length} {group.cities.length === 1 ? 'city' : 'cities'}
                             </td>
-                            <td className="p-4 text-center font-mono">{group.orders}</td>
-                            <td className="p-4 text-right">
+                            <td className="px-3 py-4 xl:px-4 text-center font-mono">{group.orders}</td>
+                            <td className="px-3 py-4 xl:px-4 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <span className="text-[10px] text-slate-500 tabular-nums w-8 text-right">{share}%</span>
-                                <div className="w-16 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                <span className="hidden xl:inline text-[10px] text-slate-500 tabular-nums w-8 text-right">{share}%</span>
+                                <div className="hidden xl:block w-16 h-1.5 bg-white/5 rounded-full overflow-hidden">
                                   <div className="h-full bg-brand-accent rounded-full transition-all" style={{ width: `${share}%` }} />
                                 </div>
                                 <span className="font-bold text-brand-accent text-xs tabular-nums">₹{group.revenue.toLocaleString('en-IN')}</span>
@@ -414,13 +450,15 @@ export default function Geography() {
                             const cityShare = group.revenue > 0 ? Math.round((city.revenue / group.revenue) * 100) : 0;
                             return (
                               <tr key={`${group.state}-${city.city}`} className="bg-brand-primary-lighter/10">
-                                <td className="py-2.5 pl-10 pr-4 text-slate-500 text-xs">↳</td>
-                                <td className="py-2.5 px-4 text-slate-300">{city.city}</td>
-                                <td className="py-2.5 px-4 text-center font-mono text-slate-400">{city.orders}</td>
-                                <td className="py-2.5 px-4 text-right">
+                                <td className="hidden xl:table-cell py-2.5 pl-10 pr-4 text-slate-500 text-xs">↳</td>
+                                <td className="py-2.5 pl-6 pr-3 xl:px-4 text-slate-300">
+                                  <span className="xl:hidden text-slate-500 mr-1.5">↳</span>{city.city}
+                                </td>
+                                <td className="py-2.5 px-3 xl:px-4 text-center font-mono text-slate-400">{city.orders}</td>
+                                <td className="py-2.5 px-3 xl:px-4 text-right">
                                   <div className="flex items-center justify-end gap-2">
-                                    <span className="text-[10px] text-slate-600 tabular-nums w-8 text-right">{cityShare}%</span>
-                                    <div className="w-16 h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <span className="hidden xl:inline text-[10px] text-slate-600 tabular-nums w-8 text-right">{cityShare}%</span>
+                                    <div className="hidden xl:block w-16 h-1 bg-white/5 rounded-full overflow-hidden">
                                       <div className="h-full bg-brand-accent/50 rounded-full" style={{ width: `${cityShare}%` }} />
                                     </div>
                                     <span className="text-slate-300 text-xs tabular-nums">₹{city.revenue.toLocaleString('en-IN')}</span>
