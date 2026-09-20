@@ -2893,7 +2893,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributors', JSON.stringify(next));
       return next;
     });
-    await persist('distributors insert', supabase.from('distributors').insert([newDist]));
+    await persistOptional('distributors', ['territoryId'], 'the distributor',
+      (shape) => supabase.from('distributors').insert([shape(newDist)]));
     logEvent('distributor_added', `New distributor: ${distData.name} (${distData.territory})`, null, newId);
     return newId;
   };
@@ -2904,7 +2905,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributors', JSON.stringify(next));
       return next;
     });
-    await persist('distributors update', supabase.from('distributors').update(updatedData).eq('id', id));
+    await persistOptional('distributors', ['territoryId'], 'the distributor',
+      (shape) => supabase.from('distributors').update(shape(updatedData)).eq('id', id));
   };
 
   const deleteDistributor = async (id) => {
@@ -2925,7 +2927,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_dealers', JSON.stringify(next));
       return next;
     });
-    await persist('dealers insert', supabase.from('dealers').insert([newDealer]));
+    await persistOptional('dealers', ['territoryId'], 'the dealer',
+      (shape) => supabase.from('dealers').insert([shape(newDealer)]));
     logEvent('dealer_added', `New dealer: ${dealerData.name} (${dealerData.territory})`, null, newId);
     return newId;
   };
@@ -2936,7 +2939,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_dealers', JSON.stringify(next));
       return next;
     });
-    await persist('dealers update', supabase.from('dealers').update(updatedData).eq('id', id));
+    await persistOptional('dealers', ['territoryId'], 'the dealer',
+      (shape) => supabase.from('dealers').update(shape(updatedData)).eq('id', id));
   };
 
   const deleteDealer = async (id) => {
@@ -2957,7 +2961,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_retailers', JSON.stringify(next));
       return next;
     });
-    await persist('retailers insert', supabase.from('retailers').insert([newRetailer]));
+    await persistOptional('retailers', ['territoryId'], 'the retailer',
+      (shape) => supabase.from('retailers').insert([shape(newRetailer)]));
     logEvent('retailer_added', `New retailer: ${retailerData.name} (${retailerData.territory})`, null, newId);
     return newId;
   };
@@ -2968,7 +2973,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_retailers', JSON.stringify(next));
       return next;
     });
-    await persist('retailers update', supabase.from('retailers').update(updatedData).eq('id', id));
+    await persistOptional('retailers', ['territoryId'], 'the retailer',
+      (shape) => supabase.from('retailers').update(shape(updatedData)).eq('id', id));
   };
 
   const deleteRetailer = async (id) => {

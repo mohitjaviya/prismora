@@ -9,6 +9,7 @@ import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { deleteWarning } from '../utils/partyDependants';
+import { territoryFields } from '../utils/territory';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -28,7 +29,7 @@ const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white p
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
 const BLANK_FORM = {
-  name: '', gstin: '', parentDealerId: '', state: '', city: '', territory: '',
+  name: '', gstin: '', parentDealerId: '', state: '', city: '', territory: '', territoryId: '',
   phone: '', email: '', contactPerson: '', address: '', pincode: '', creditLimit: 50000, status: 'Active'
 };
 
@@ -74,7 +75,7 @@ export default function Retailers() {
   const activeDealers = dealers.filter(d => d.status === 'Active');
 
   const openAdd = () => { setEditingRetailer(null); setForm(BLANK_FORM); setIsModalOpen(true); };
-  const openEdit = (r) => { setEditingRetailer(r); setForm({ name: r.name, gstin: r.gstin || '', parentDealerId: r.parentDealerId || '', state: r.state || '', city: r.city || '', territory: r.territory || '', phone: r.phone || '', email: r.email || '', contactPerson: r.contactPerson || '', address: r.address || '', pincode: r.pincode || '', creditLimit: r.creditLimit || 50000, status: r.status || 'Active' }); setIsModalOpen(true); };
+  const openEdit = (r) => { setEditingRetailer(r); setForm({ name: r.name, gstin: r.gstin || '', parentDealerId: r.parentDealerId || '', state: r.state || '', city: r.city || '', territory: r.territory || '', territoryId: r.territoryId || '', phone: r.phone || '', email: r.email || '', contactPerson: r.contactPerson || '', address: r.address || '', pincode: r.pincode || '', creditLimit: r.creditLimit || 50000, status: r.status || 'Active' }); setIsModalOpen(true); };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -460,10 +461,10 @@ export default function Retailers() {
                       same area across beats, partners and orders, none of which
                       matched a territory record — so a partner order could not be
                       routed to the rep who owns that area. */}
-                  <select id="retailers-territory-zone" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} className={inputCls} style={{ colorScheme: 'dark' }}>
+                  <select id="retailers-territory-zone" value={form.territoryId || ''} onChange={e => setForm(f => ({ ...f, ...territoryFields(territories, e.target.value) }))} className={inputCls} style={{ colorScheme: 'dark' }}>
                     <option value="" className="bg-brand-primary">{territories.length === 0 ? 'No territories set up yet' : 'Select a territory…'}</option>
                     {territories.map(t => (
-                      <option key={t.id} value={t.name} className="bg-brand-primary">{t.name} ({t.state})</option>
+                      <option key={t.id} value={t.id} className="bg-brand-primary">{t.name} ({t.state})</option>
                     ))}
                   </select>
                   {territories.length === 0 ? (
