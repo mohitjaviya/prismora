@@ -102,3 +102,44 @@ export const unbookedPayouts = ({ expenses, incentives, claims, fieldExpenses } 
 
 /** What a reconcile would add to expenses, for saying so before doing it. */
 export const unbookedTotal = (rows) => (rows || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
+/**
+ * The expense row a payout books, and whether it needs booking at all.
+ *
+ * Returns null when there is nothing to book, which is not a failure: an
+ * incentive paid in free goods costs stock rather than cash, and inventory
+ * already accounts for it. Booking a zero-rupee expense would put a row in the
+ * accounts that means nothing and has to be explained every month.
+ *
+ * The id is derived from what it is about, so booking the same payout twice
+ * writes the same row and the primary key refuses the second. Nothing has to
+ * remember whether it already ran.
+ */
+export const expenseRowFor = ({ sourceId, category, amount, description, date, assignedTo } = {},
+                              now = new Date().toISOString()) => {
+  const value = Number(amount) || 0;
+  if (value <= 0) return null;
+  if (!sourceId) return null;
+
+  return {
+    id: linkedExpenseId(sourceId),
+    category,
+    amount: value,
+    description,
+    date: date || now,
+    assignedTo: assignedTo || null,
+    createdAt: now,
+  };
+};
+
+/**
+ * Whether this payout has already been booked.
+ *
+ * Asked of the expenses rather than of the payout's status, so a status
+ * changed by some other path cannot make the answer wrong.
+ */
+export const alreadyBooked = (sourceId, expenses = []) => {
+  if (!sourceId) return false;
+  const id = linkedExpenseId(sourceId);
+  return (expenses || []).some(e => e?.id === id);
+};

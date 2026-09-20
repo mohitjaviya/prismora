@@ -1,9 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import {
-  linkedExpenseId, expenseForIncentive, expenseForClaim, expenseForFieldExpense,
-  unbookedPayouts,
-} from '../utils/payouts';
+import { linkedExpenseId, expenseForIncentive, expenseForClaim, expenseForFieldExpense, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty, invoicesSettledBy, balanceAfterPayment, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
@@ -2271,23 +2268,14 @@ export const DataProvider = ({ children }) => {
    * without a database.
    */
   const bookLinkedExpense = async ({ sourceId, category, amount, description, date, assignedTo }) => {
-    const value = Number(amount) || 0;
-    // Nothing to book is not a failure: an incentive paid in free goods costs
-    // stock, which inventory already accounts for, not cash.
-    if (value <= 0) return true;
+    // Both decisions are in utils/payouts.js, with tests: nothing to book is
+    // not a failure (free goods cost stock, which inventory accounts for), and
+    // the id is derived from the payout so booking twice writes the same row.
+    const row = expenseRowFor({ sourceId, category, amount, description, date, assignedTo });
+    if (!row) return true;
 
-    const id = linkedExpenseId(sourceId);
-    if (expenses.some(e => e.id === id)) return true;
-
-    const row = {
-      id,
-      category,
-      amount: value,
-      description,
-      date: date || new Date().toISOString(),
-      assignedTo: assignedTo || null,
-      createdAt: new Date().toISOString(),
-    };
+    const id = row.id;
+    if (alreadyBooked(sourceId, expenses)) return true;
 
     const ok = await persist(`expenses insert (${category})`, supabase.from('expenses').insert([row]));
     if (!ok) return false;

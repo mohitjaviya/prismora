@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  linkedExpenseId, incentiveCashValue, expenseForIncentive, expenseForClaim,
-  expenseForFieldExpense, unbookedPayouts, unbookedTotal,
+  alreadyBooked, expenseForClaim, expenseForFieldExpense, expenseForIncentive, expenseRowFor, incentiveCashValue, linkedExpenseId, unbookedPayouts, unbookedTotal,
 } from '../payouts';
 
 describe('linkedExpenseId - why booking twice is impossible', () => {
@@ -125,5 +124,81 @@ describe('unbookedPayouts - what the books are missing', () => {
     expect(unbookedTotal(rows)).toBe(1875 + 500 + 450);
     expect(unbookedTotal([])).toBe(0);
     expect(unbookedTotal(undefined)).toBe(0);
+  });
+});
+
+// ── What bookLinkedExpense and unbookLinkedExpense decide ───────────────
+describe('expenseRowFor', () => {
+  const PAYOUT = {
+    sourceId: 'INC-7', category: 'Scheme Incentive', amount: 450,
+    description: 'Navratri Boost on order O2', assignedTo: '1',
+  };
+
+  it('builds the row a cash payout books', () => {
+    const row = expenseRowFor(PAYOUT, '2026-09-21T00:00:00.000Z');
+    expect(row).toMatchObject({
+      id: 'EXP-INC-7', category: 'Scheme Incentive', amount: 450, assignedTo: '1',
+    });
+  });
+
+  it('derives the id from the payout, so booking twice writes the same row', () => {
+    expect(expenseRowFor(PAYOUT).id).toBe(expenseRowFor(PAYOUT).id);
+  });
+
+  it('books nothing for a payout that costs no cash', () => {
+    // Free goods cost stock, which inventory already accounts for. A
+    // zero-rupee expense is a row that means nothing and gets explained every
+    // month.
+    expect(expenseRowFor({ ...PAYOUT, amount: 0 })).toBeNull();
+    expect(expenseRowFor({ ...PAYOUT, amount: -5 })).toBeNull();
+    expect(expenseRowFor({ ...PAYOUT, amount: 'free' })).toBeNull();
+  });
+
+  it('books nothing without something to attribute it to', () => {
+    expect(expenseRowFor({ ...PAYOUT, sourceId: null })).toBeNull();
+    expect(expenseRowFor({})).toBeNull();
+    expect(expenseRowFor()).toBeNull();
+  });
+
+  it('dates it now when no date is given', () => {
+    const row = expenseRowFor(PAYOUT, '2026-09-21T00:00:00.000Z');
+    expect(row.date).toBe('2026-09-21T00:00:00.000Z');
+  });
+
+  it('keeps a date that was given', () => {
+    const row = expenseRowFor({ ...PAYOUT, date: '2026-01-01' }, '2026-09-21T00:00:00.000Z');
+    expect(row.date).toBe('2026-01-01');
+  });
+});
+
+describe('alreadyBooked', () => {
+  const EXPENSES = [{ id: 'EXP-INC-7' }, { id: 'EXP-4' }];
+
+  it('stops a payout being booked twice', () => {
+    expect(alreadyBooked('INC-7', EXPENSES)).toBe(true);
+  });
+
+  it('does not confuse it with an unrelated payout', () => {
+    expect(alreadyBooked('INC-8', EXPENSES)).toBe(false);
+    expect(alreadyBooked('CLM-9', EXPENSES)).toBe(false);
+  });
+
+  it('shares a namespace with hand-entered expenses, which nothing currently reaches', () => {
+    // linkedExpenseId('4') is EXP-4, and addExpense numbers its rows EXP-1,
+    // EXP-2 and so on. A payout whose source id were a bare number would
+    // therefore collide with a manual expense.
+    //
+    // It cannot happen today: incentives are INC-<timestamp>-<scheme>, claims
+    // and field expenses carry their own prefixes, and nothing produces a bare
+    // number. Pinned so that a future id scheme changing to plain numbers
+    // fails here rather than silently treating somebody's lunch receipt as a
+    // booked incentive.
+    expect(alreadyBooked('4', [{ id: 'EXP-4' }])).toBe(true);
+  });
+
+  it('is false for nothing to check', () => {
+    expect(alreadyBooked(null, EXPENSES)).toBe(false);
+    expect(alreadyBooked('INC-7', [])).toBe(false);
+    expect(alreadyBooked('INC-7')).toBe(false);
   });
 });
