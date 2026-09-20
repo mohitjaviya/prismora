@@ -37,10 +37,37 @@ const norm = (s) => String(s ?? '').trim().toLowerCase();
  */
 export const invoiceBelongsToParty = (invoice, party, orders = []) => {
   if (!invoice || !party?.id) return false;
+
+  // The invoice's own party id, where it has one. Nothing to resolve: an id
+  // matches one party or none, and a partner renamed tomorrow still owns the
+  // invoices raised today.
+  const own = invoice.distributorId || invoice.dealerId || invoice.retailerId;
+  if (own) return own === party.id;
+
+  // Then the order it was raised from, which is also an id.
   const order = invoice.orderId ? orders.find(o => o?.id === invoice.orderId) : null;
   const linked = order && (order.distributorId || order.dealerId || order.retailerId);
   if (linked) return linked === party.id;
+
+  // And last the spelling, for invoices raised before 025 and for anything
+  // entered by hand against a typed name. This is the ambiguous one: a name
+  // can match parties at two tiers, which is why partyForInvoice has an order
+  // of precedence at all.
   return norm(invoice.customerName) === norm(party.name);
+};
+
+/**
+ * The party id fields to write on an invoice for a given party.
+ *
+ * All three are returned, with the two that do not apply set to null, so an
+ * invoice moved from one tier to another cannot keep the old link alongside
+ * the new one.
+ */
+export const invoicePartyFields = (party, partyType) => {
+  const blank = { distributorId: null, dealerId: null, retailerId: null };
+  const field = paymentFieldFor(partyType);
+  if (!party?.id || !field) return blank;
+  return { ...blank, [field]: party.id };
 };
 
 /** The party id field that matches this kind of party record. */

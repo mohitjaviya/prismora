@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  alreadySettled, balanceAfterPayment, invoiceBelongsToParty, invoiceTotal, invoicesSettledBy, isOverpayment, partyForInvoice, paymentFieldFor, paymentIdForInvoice, settlementRowFor,
+  alreadySettled, balanceAfterPayment, invoiceBelongsToParty, invoicePartyFields, invoiceTotal, invoicesSettledBy, isOverpayment, partyForInvoice, paymentFieldFor, paymentIdForInvoice, settlementRowFor,
 } from '../settlement';
 
 describe('invoiceTotal', () => {
@@ -259,5 +259,84 @@ describe('alreadySettled', () => {
   it('is false when there are no payments at all', () => {
     expect(alreadySettled('INV-1', [])).toBe(false);
     expect(alreadySettled('INV-1')).toBe(false);
+  });
+});
+
+// ── The party id, once 025 has run ──────────────────────────────────────
+describe('invoiceBelongsToParty, with a party id on the invoice', () => {
+  const PARTY = { id: 'D1', name: 'Gujarat Super Stockist' };
+  const OTHER = { id: 'D2', name: 'Maharashtra Prime' };
+
+  it('matches on the invoice’s own id, ahead of everything else', () => {
+    expect(invoiceBelongsToParty({ distributorId: 'D1' }, PARTY)).toBe(true);
+    expect(invoiceBelongsToParty({ distributorId: 'D1' }, OTHER)).toBe(false);
+  });
+
+  it('survives the partner being renamed — the whole point of the id', () => {
+    const invoice = { distributorId: 'D1', customerName: 'Their Old Trading Name' };
+    expect(invoiceBelongsToParty(invoice, PARTY)).toBe(true);
+  });
+
+  it('does not fall back to the name when the id says somebody else', () => {
+    // Without this, a renamed partner could reclaim an invoice that had been
+    // reassigned away from them.
+    const invoice = { distributorId: 'D2', customerName: 'Gujarat Super Stockist' };
+    expect(invoiceBelongsToParty(invoice, PARTY)).toBe(false);
+  });
+
+  it('matches at any tier', () => {
+    expect(invoiceBelongsToParty({ dealerId: 'DL1' }, { id: 'DL1', name: 'x' })).toBe(true);
+    expect(invoiceBelongsToParty({ retailerId: 'R1' }, { id: 'R1', name: 'x' })).toBe(true);
+  });
+
+  it('still reads the order for invoices raised before the column existed', () => {
+    const orders = [{ id: 'O1', distributorId: 'D1' }];
+    expect(invoiceBelongsToParty({ orderId: 'O1' }, PARTY, orders)).toBe(true);
+  });
+
+  it('still reads the name for invoices with neither', () => {
+    expect(invoiceBelongsToParty({ customerName: 'Gujarat Super Stockist' }, PARTY)).toBe(true);
+  });
+
+  it('leaves a walk-in belonging to nobody', () => {
+    expect(invoiceBelongsToParty({ customerName: 'Somebody Passing' }, PARTY)).toBe(false);
+    expect(invoiceBelongsToParty({}, PARTY)).toBe(false);
+  });
+});
+
+describe('partyForInvoice, once the id is there', () => {
+  const LISTS = {
+    distributors: [{ id: 'D9', name: 'Same Name Ltd' }],
+    dealers: [{ id: 'DL9', name: 'Same Name Ltd' }],
+    retailers: [],
+    orders: [],
+  };
+
+  it('has no tie-break to make — the id picks one', () => {
+    // The same clash that needed distributor-before-dealer resolves on its own.
+    expect(partyForInvoice({ customerName: 'Same Name Ltd', dealerId: 'DL9' }, LISTS).type)
+      .toBe('Dealer');
+    expect(partyForInvoice({ customerName: 'Same Name Ltd', distributorId: 'D9' }, LISTS).type)
+      .toBe('Distributor');
+  });
+
+  it('falls back to the precedence only when there is no id', () => {
+    expect(partyForInvoice({ customerName: 'Same Name Ltd' }, LISTS).type).toBe('Distributor');
+  });
+});
+
+describe('invoicePartyFields', () => {
+  it('sets one and clears the other two, so a tier change cannot leave both', () => {
+    expect(invoicePartyFields({ id: 'D1' }, 'Distributor'))
+      .toEqual({ distributorId: 'D1', dealerId: null, retailerId: null });
+    expect(invoicePartyFields({ id: 'R1' }, 'Retailer'))
+      .toEqual({ distributorId: null, dealerId: null, retailerId: 'R1' });
+  });
+
+  it('clears all three for a walk-in', () => {
+    expect(invoicePartyFields(null, null))
+      .toEqual({ distributorId: null, dealerId: null, retailerId: null });
+    expect(invoicePartyFields({ id: 'X' }, 'Supplier'))
+      .toEqual({ distributorId: null, dealerId: null, retailerId: null });
   });
 });

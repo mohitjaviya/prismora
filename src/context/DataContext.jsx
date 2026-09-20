@@ -1336,6 +1336,11 @@ export const DataProvider = ({ children }) => {
       id: newInvoiceId,
       orderId: order.id,
       customerName: order.customerName,
+      // The order already knows whose it is, so the invoice says so directly
+      // rather than leaving it to be worked out from the spelling later.
+      distributorId: order.distributorId || null,
+      dealerId: order.dealerId || null,
+      retailerId: order.retailerId || null,
       amount: Number(order.value || 0),
       // GST was hardcoded to zero here, so every invoice raised automatically
       // on delivery went out tax-free while the ones typed in by hand on the
@@ -1359,7 +1364,9 @@ export const DataProvider = ({ children }) => {
     // Reported on the banner like every other write. This one only reached the
     // browser console, so an invoice the database refused looked identical to
     // one that saved — until it disappeared on the next load.
-    const invoiceSaved = await persist('invoices insert', supabase.from('invoices').insert([newInvoice]));
+    const invoiceSaved = await persistOptional('invoices',
+      ['distributorId', 'dealerId', 'retailerId'], 'the invoice',
+      (shape) => supabase.from('invoices').insert([shape(newInvoice)]));
     if (!invoiceSaved) {
       setInvoices(prev => {
         const next = prev.filter(i => i.id !== newInvoiceId);
@@ -1947,6 +1954,18 @@ export const DataProvider = ({ children }) => {
     }, 0);
     const draft = { ...invoiceData, createdAt: new Date().toISOString() };
     let { id: newId, saved } = await insertWithFreeId('invoices insert', 'invoices', 'INV-', maxId + 1, draft);
+
+    // 025 adds the party columns. Before it runs they are refused, which would
+    // take the whole invoice down -- so drop them and keep the invoice, the
+    // same way every other optional column is handled.
+    if (!saved) {
+      const { distributorId, dealerId, retailerId, ...withoutParty } = draft;
+      if (distributorId || dealerId || retailerId) {
+        const retry = await insertWithFreeId('invoices insert (without party id)', 'invoices', 'INV-', maxId + 1, withoutParty);
+        newId = retry.id;
+        saved = retry.saved;
+      }
+    }
 
     // Older databases are missing the `assignedTo` column, which rejects the
     // whole row. Retry once without it rather than losing the invoice.

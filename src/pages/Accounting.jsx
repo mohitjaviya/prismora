@@ -259,6 +259,11 @@ const Accounting = () => {
     let customerName = customCustomerName;
     let amount = Number(customAmount);
     let orderId = null;
+    // An invoice raised against an order inherits that order's party, which is
+    // an id and cannot be ambiguous. One typed against a name has no party --
+    // that is a walk-in, and it stays one rather than being guessed into
+    // somebody's ledger.
+    let party = { distributorId: null, dealerId: null, retailerId: null };
 
     if (selectedOrderId) {
       const order = orders.find(o => o.id === selectedOrderId);
@@ -266,6 +271,11 @@ const Accounting = () => {
         customerName = order.customerName;
         amount = Number(order.value);
         orderId = order.id;
+        party = {
+          distributorId: order.distributorId || null,
+          dealerId: order.dealerId || null,
+          retailerId: order.retailerId || null,
+        };
       }
     }
 
@@ -279,6 +289,7 @@ const Accounting = () => {
     addInvoice({
       orderId,
       customerName,
+      ...party,
       amount,
       tax: calculatedTax,
       status: 'Unpaid',
