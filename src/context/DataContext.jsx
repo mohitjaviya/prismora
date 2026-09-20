@@ -12,6 +12,7 @@ import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
 import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } from '../utils/billing';
+import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer } from '../utils/stockMoves';
 
 const DataContext = createContext();
 
@@ -356,9 +357,6 @@ const inventoryRow = shapeFor([
   'id', 'product', 'batchNumber', 'expiryDate', 'quantity', 'unitCost',
   'warehouse', 'reorderLevel', 'reserved', 'transit', 'damaged', 'createdAt',
 ]);
-
-// Batch numbers are typed, so they are compared without case or stray spaces.
-const sameBatch = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 
 export const DataProvider = ({ children }) => {
   // ── Original CRM State (hydrated from cache for instant load) ────────────
@@ -2248,7 +2246,8 @@ export const DataProvider = ({ children }) => {
   const adjustStock = async (id, adjustment, reason) => {
     const item = inventory.find(i => i.id === id);
     if (!item) return;
-    const newQty = Math.max(0, item.quantity + adjustment);
+    const newQty = quantityAfterAdjustment(item.quantity, adjustment);
+    if (newQty === null) return;
     setInventory(prev => {
       const next = prev.map(i => i.id === id ? { ...i, quantity: newQty } : i);
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
@@ -2275,8 +2274,7 @@ export const DataProvider = ({ children }) => {
     const qty = Number(quantity || 0);
     if (!product || qty <= 0) return null;
 
-    const existing = inventory.find(i => i.product?.trim().toLowerCase() === product.trim().toLowerCase()
-      && sameBatch(i.batchNumber, batchNumber));
+    const existing = batchToReceiveInto(inventory, product, batchNumber);
 
     if (existing) {
       const newQty = Number(existing.quantity || 0) + qty;
@@ -2335,11 +2333,22 @@ export const DataProvider = ({ children }) => {
   // Moves stock of a batch from its current warehouse to another. Reduces the
   // source batch and merges into a matching batch at the destination (same
   // product + batch number), creating a new destination batch if none exists.
+  /**
+   * Move stock between warehouses.
+   *
+   * Returns { ok, reason }. It used to return nothing at all on every refusal
+   * -- no batch, too many units, same warehouse -- and so did the screen
+   * calling it, so pressing Transfer with an impossible quantity closed the
+   * dialog and did nothing, with no way to tell that from success.
+   */
   const transferStock = async (batchId, toWarehouse, qty, notes) => {
     const src = inventory.find(i => i.id === batchId);
-    if (!src || qty <= 0 || qty > src.quantity || src.warehouse === toWarehouse) return;
-    const newSrcQty = src.quantity - qty;
-    const dest = inventory.find(i => i.product === src.product && i.batchNumber === src.batchNumber && i.warehouse === toWarehouse && i.id !== batchId);
+    const allowed = canTransfer(src, toWarehouse, qty);
+    if (!allowed.ok) return allowed;
+
+    const dest = destinationBatch(inventory, src, toWarehouse);
+    const moved = applyTransfer(src, dest, qty);
+    const newSrcQty = moved.from;
     const newDestItem = dest ? null : {
       ...src, id: `INV-ITEM-${Date.now()}`, warehouse: toWarehouse, quantity: qty,
       reserved: 0, transit: 0, createdAt: new Date().toISOString()
@@ -2347,16 +2356,17 @@ export const DataProvider = ({ children }) => {
 
     setInventory(prev => {
       let next = prev.map(i => i.id === batchId ? { ...i, quantity: newSrcQty } : i);
-      if (dest) next = next.map(i => i.id === dest.id ? { ...i, quantity: i.quantity + qty } : i);
+      if (dest) next = next.map(i => i.id === dest.id ? { ...i, quantity: moved.to } : i);
       else next = [newDestItem, ...next];
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
 
     await persist('inventory update', supabase.from('inventory').update({ quantity: newSrcQty }).eq('id', batchId));
-    if (dest) { await persist('inventory update', supabase.from('inventory').update({ quantity: dest.quantity + qty }).eq('id', dest.id)); }
+    if (dest) { await persist('inventory update', supabase.from('inventory').update({ quantity: moved.to }).eq('id', dest.id)); }
     else { await persist('inventory insert', supabase.from('inventory').insert([newDestItem])); }
     logEvent('stock_transfer', `Transferred ${qty} of ${src.product} from ${src.warehouse} → ${toWarehouse}${notes ? ` (${notes})` : ''}`, null, batchId);
+    return { ok: true };
   };
 
   // ── Vendors ───────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Package2, Plus, Edit2, Trash2, AlertTriangle, X, Download, RefreshCw, TrendingDown, CheckCircle, Clock, AlertCircle, ArrowUp, ArrowDown, Mail, ArrowLeftRight, ClipboardCheck, Layers, Wallet } from 'lucide-react';
-import { useConfirm } from '../context/DialogContext';
+import { useConfirm, useToast } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, Card, StatCard, SearchInput, Select } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { sendEmailAlert, templates } from '../utils/notificationUtils';
@@ -49,6 +49,7 @@ const BLANK_ADJUST = { adjustment: '', reason: '' };
 export default function Inventory() {
   const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, masters } = useData();
   const confirm = useConfirm();
+  const toast = useToast();
   // Options come from Master Lists; masterLists.js holds the fallback.
   const warehouses = optionsFor(masters, 'warehouse').map(o => o.key);
   const { canAccess } = useAuth();
@@ -123,11 +124,20 @@ export default function Inventory() {
   const openTransfer = (item) => { setTransferItem(item); setTransferForm({ toWarehouse: warehouses.find(w => w !== item.warehouse) || '', quantity: '', notes: '' }); };
   const openCount = (item) => { setCountItem(item); setCountedQty(String(item.quantity)); };
 
-  const handleTransfer = (e) => {
+  const handleTransfer = async (e) => {
     e.preventDefault();
-    const qty = Number(transferForm.quantity);
-    if (!transferItem || !transferForm.toWarehouse || qty <= 0 || qty > transferItem.quantity) return;
-    transferStock(transferItem.id, transferForm.toWarehouse, qty, transferForm.notes);
+    // Both this and transferStock used to return on the same conditions and
+    // say nothing, so an impossible transfer closed the dialog exactly as a
+    // successful one did. transferStock now gives back a reason; this shows it
+    // and keeps the dialog open so the number can be corrected.
+    const result = await transferStock(
+      transferItem?.id, transferForm.toWarehouse, Number(transferForm.quantity), transferForm.notes);
+
+    if (!result?.ok) {
+      toast(result?.reason || 'That transfer could not be made.', 'error');
+      return;
+    }
+    toast(`Moved ${transferForm.quantity} ${transferItem.product} to ${transferForm.toWarehouse}.`, 'success');
     setTransferItem(null);
   };
 
