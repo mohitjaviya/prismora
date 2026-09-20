@@ -50,3 +50,13 @@ WHERE  "incentiveType" = 'Free Goods' AND "incentiveProduct" IS NULL;
 -- Any rows here are schemes and awards made before this column existed. They
 -- keep working; they simply cannot move stock until somebody says what the
 -- goods are. Editing the scheme and naming the product is enough.
+
+
+-- ── Record that this ran ────────────────────────────────────────────────
+-- Every migration from here on ends with this. It is the whole point of
+-- migrations/000_baseline.sql: the answer to "has this been applied?" should
+-- be a query, not an audit.
+INSERT INTO public.schema_migrations (filename, note)
+VALUES ('023_add_free_goods_product.sql',
+        'schemes.freeGoodsProduct and distributor_incentives.incentiveProduct')
+ON CONFLICT (filename) DO NOTHING;
