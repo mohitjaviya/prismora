@@ -122,7 +122,17 @@ export default function Incentives() {
     ...(canManage ? [{
       key: 'actions', header: '', align: 'center', width: 'w-28',
       render: i => (i.status === 'Earned'
-        ? <Button size="sm" onClick={async () => { if (!await markIncentivePaid(i.id)) toast(PAYOUT_FAILED, 'error'); }}>Mark Paid</Button>
+        ? <Button size="sm" onClick={async () => {
+            const result = await markIncentivePaid(i.id);
+            if (!result) { toast(PAYOUT_FAILED, 'error'); return; }
+            // Free goods take units out of stock. Where there were not enough,
+            // the incentive is still paid and the difference is said out loud
+            // rather than absorbed by the floor at zero.
+            if (result.shortfall > 0) {
+              toast(`Marked paid, but stock was short by ${result.shortfall} unit(s) of ${result.product}. `
+                + 'Inventory will not match what was given away until that is corrected.', 'error');
+            }
+          }}>Mark Paid</Button>
         : null),
     }] : []),
   ];

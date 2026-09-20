@@ -34,7 +34,7 @@ const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white p
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
 const BLANK_FORM = {
-  name: '', type: 'Flat Discount', discountPct: '', freeGoodsQty: '',
+  name: '', type: 'Flat Discount', discountPct: '', freeGoodsQty: '', freeGoodsProduct: '',
   minOrderValue: '', applicableTo: 'Distributor', applicableProducts: [], validFrom: '', validTo: '',
   description: '', status: 'Active'
 };
@@ -111,7 +111,7 @@ export default function Schemes() {
     setEditingScheme(s);
     setForm({
       name: s.name, type: s.type, discountPct: s.discountPct || '',
-      freeGoodsQty: s.freeGoodsQty || '', minOrderValue: s.minOrderValue || '',
+      freeGoodsQty: s.freeGoodsQty || '', freeGoodsProduct: s.freeGoodsProduct || '', minOrderValue: s.minOrderValue || '',
       applicableTo: s.applicableTo, applicableProducts: s.applicableProducts || [], validFrom: s.validFrom ? s.validFrom.split('T')[0] : '',
       validTo: s.validTo ? s.validTo.split('T')[0] : '',
       description: s.description || '', status: s.status
@@ -134,6 +134,7 @@ export default function Schemes() {
       ...form,
       discountPct: Number(form.discountPct || 0),
       freeGoodsQty: Number(form.freeGoodsQty || 0),
+      freeGoodsProduct: form.freeGoodsProduct || null,
       minOrderValue: Number(form.minOrderValue || 0),
       validFrom: form.validFrom ? new Date(form.validFrom).toISOString() : null,
       validTo: form.validTo ? new Date(form.validTo).toISOString() : null,
@@ -357,6 +358,24 @@ export default function Schemes() {
                 </div>
                 <div><label htmlFor="schemes-discount-if-applicable" className={labelCls}>Discount % (if applicable)</label><input id="schemes-discount-if-applicable" type="number" min="0" max="100" step="0.5" value={form.discountPct} onChange={e => setForm(f => ({ ...f, discountPct: e.target.value }))} placeholder="e.g. 10" className={inputCls} /></div>
                 <div><label htmlFor="schemes-free-goods-qty-if-applicable" className={labelCls}>Free Goods Qty (if applicable)</label><input id="schemes-free-goods-qty-if-applicable" type="number" min="0" value={form.freeGoodsQty} onChange={e => setForm(f => ({ ...f, freeGoodsQty: e.target.value }))} placeholder="e.g. 5 units" className={inputCls} /></div>
+                {/* Five of what. Without this the scheme awards a quantity with
+                    no product, and nothing downstream can take the units out of
+                    stock. */}
+                <div>
+                  <label htmlFor="schemes-free-goods-product" className={labelCls}>
+                    Free Goods Product {Number(form.freeGoodsQty) > 0 ? '*' : '(if applicable)'}
+                  </label>
+                  <select
+                    id="schemes-free-goods-product"
+                    required={Number(form.freeGoodsQty) > 0}
+                    value={form.freeGoodsProduct}
+                    onChange={e => setForm(f => ({ ...f, freeGoodsProduct: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">— Select product —</option>
+                    {(productCatalog || []).map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  </select>
+                </div>
                 <div><label htmlFor="schemes-minimum-order-value" className={labelCls}>Minimum Order Value (₹)</label><input id="schemes-minimum-order-value" type="number" min="0" value={form.minOrderValue} onChange={e => setForm(f => ({ ...f, minOrderValue: e.target.value }))} placeholder="e.g. 50000" className={inputCls} /></div>
                 <div className="sm:col-span-2">
                   <span id="applicable-products-group" className={labelCls}>Applicable Products <span className="normal-case text-slate-500 font-normal">(leave all unchecked for "All Products")</span></span>

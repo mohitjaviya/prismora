@@ -1821,6 +1821,46 @@ export const DataProvider = ({ children }) => {
     return persistProduct(label, build);
   };
 
+  /**
+   * A write that survives a column the table has not got yet.
+   *
+   * The fourth table to need this -- masters, receipt evidence, products, now
+   * free goods -- so it is written once and shared. PostgREST refuses a whole
+   * statement naming a column it cannot find, so a feature that adds a column
+   * would otherwise break every write to that table until its migration ran.
+   *
+   * Refused for one of the named optional columns, the write drops it and
+   * tries again, and remembers it for the session. The record is saved; only
+   * the field the database cannot hold is lost, and it says so once.
+   */
+  const absentColumns = useRef({});
+
+  const persistOptional = async (table, optional, label, build) => {
+    if (!absentColumns.current[table]) absentColumns.current[table] = new Set();
+    const missing = absentColumns.current[table];
+
+    const shape = (row) => {
+      const copy = { ...row };
+      missing.forEach(c => delete copy[c]);
+      return copy;
+    };
+
+    const { error } = await build(shape);
+    if (!error) return true;
+
+    const message = String(error.message || '');
+    const culprit = optional.find(c => message.includes(`'${c}'`));
+    if (!culprit || missing.has(culprit)) {
+      console.error(`[Prismora] Could not save ${label}:`, message || error);
+      return false;
+    }
+
+    console.warn(`[Prismora] The ${table} table has no '${culprit}' column, so it is being left out. ` +
+      'Run the migration that adds it to stop losing that field.');
+    missing.add(culprit);
+    return persistOptional(table, optional, label, build);
+  };
+
   const addProduct = async (productData) => {
     // Callers pass either a full product object (Settings' catalog form) or just
     // a product-name string (Orders and Leads, which save custom typed products).
@@ -2949,7 +2989,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_schemes', JSON.stringify(next));
       return next;
     });
-    await persist('schemes insert', supabase.from('schemes').insert([newScheme]));
+    await persistOptional('schemes', ['freeGoodsProduct'], 'the scheme',
+      (shape) => supabase.from('schemes').insert([shape(newScheme)]));
     logEvent('scheme_created', `Scheme created: ${schemeData.name}`, null, newId);
   };
 
@@ -2959,7 +3000,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_schemes', JSON.stringify(next));
       return next;
     });
-    await persist('schemes update', supabase.from('schemes').update(updatedData).eq('id', id));
+    await persistOptional('schemes', ['freeGoodsProduct'], 'the scheme',
+      (shape) => supabase.from('schemes').update(shape(updatedData)).eq('id', id));
   };
 
   const deleteScheme = async (id) => {
@@ -3373,6 +3415,10 @@ export const DataProvider = ({ children }) => {
         orderValue: Number(order.value || 0),
         incentiveType,
         incentiveValue,
+        // Copied from the scheme rather than looked up through schemeId later:
+        // a scheme edited next quarter must not rewrite what was given away
+        // last quarter.
+        incentiveProduct: incentiveType === 'Free Goods' ? (scheme.freeGoodsProduct || null) : null,
         status: 'Earned',
         createdAt: new Date().toISOString()
       };
@@ -3381,7 +3427,8 @@ export const DataProvider = ({ children }) => {
         localStorage.setItem('prismora_distributor_incentives', JSON.stringify(next));
         return next;
       });
-      await persist('distributor_incentives insert', supabase.from('distributor_incentives').insert([newIncentive]));
+      await persistOptional('distributor_incentives', ['incentiveProduct'], 'the incentive',
+        (shape) => supabase.from('distributor_incentives').insert([shape(newIncentive)]));
       logEvent('incentive_earned', `Incentive earned on order ${order.id} via scheme ${scheme.name}`, null, newId);
     });
   };
@@ -3397,13 +3444,45 @@ export const DataProvider = ({ children }) => {
     const expense = expenseForIncentive(incentive);
     if (expense && !await bookLinkedExpense({ ...expense, date: new Date().toISOString() })) return false;
 
+    // Free goods are the one payout that moves physical stock, and the only
+    // one that never did: the units left the warehouse in real life and the
+    // system went on believing they were there. It could not do otherwise --
+    // the incentive recorded a quantity and no product.
+    //
+    // A shortfall is reported rather than swallowed. adjustStock floors at
+    // zero, so giving away more than a batch holds used to lose the difference
+    // silently, and the count would not disagree with the shelf until somebody
+    // went and looked.
+    let shortfall = 0;
+    if (incentive.incentiveType === 'Free Goods') {
+      const qty = Number(incentive.incentiveValue || 0);
+      const product = incentive.incentiveProduct;
+
+      if (qty > 0 && !product) {
+        console.warn(`[Prismora] Incentive ${id} gives away ${qty} units but does not say of what, ` +
+          'so no stock has been taken out. Name the product on the scheme to fix this for future awards.');
+      } else if (qty > 0) {
+        const batch = batchForReturn(inventory, product);
+        if (!batch) {
+          shortfall = qty;
+          console.warn(`[Prismora] No stock of ${product} to cover ${qty} free unit(s) on incentive ${id}.`);
+        } else {
+          const held = Number(batch.quantity || 0);
+          shortfall = Math.max(0, qty - held);
+          await adjustStock(batch.id, -Math.min(qty, held), `Free goods on incentive ${id}`);
+        }
+      }
+    }
+
     setDistributorIncentives(prev => {
       const next = prev.map(i => i.id === id ? { ...i, status: 'Paid' } : i);
       localStorage.setItem('prismora_distributor_incentives', JSON.stringify(next));
       return next;
     });
     await persist('distributor_incentives update', supabase.from('distributor_incentives').update({ status: 'Paid' }).eq('id', id));
-    return true;
+    return shortfall > 0
+      ? { ok: true, shortfall, product: incentive.incentiveProduct }
+      : true;
   };
 
   return (
