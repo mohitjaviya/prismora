@@ -80,10 +80,13 @@ apart deliberately, so nothing sweeps it into a sequence and runs it.
 - `wipe_test_data.sql` — **deletes business data.** Takes a backup first; read
   it before running it, ever.
 - `seed_dealers_retailers.sql` — inserts sample partners.
+- `check_territory_drop_readiness.sql` — reads only. Says whether `territory`
+  can be dropped yet, and holds the drop statements as a comment rather than
+  as a numbered file, because a numbered file reads as something to run.
 
-Neither records itself in `schema_migrations`, because neither is a migration
-and running one twice means something quite different from running a schema
-change twice.
+None of them record themselves in `schema_migrations`, because none is a
+migration and running one twice means something quite different from running a
+schema change twice.
 
 ## Adding a new one
 

@@ -9,6 +9,7 @@ import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } fro
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { balanceDrift, balanceAfterCreditNote, balanceAfterCreditNoteWithdrawn } from '../utils/ledgerWrites';
 import { splitLines, canSplit } from '../utils/fulfilment';
+import { territoryName } from '../utils/territory';
 
 const DataContext = createContext();
 
@@ -156,6 +157,11 @@ const persist = async (label, query) => {
 const ORDER_COLUMNS = [
   'id', 'customerName', 'companyName', 'product', 'quantity', 'value',
   'state', 'city', 'territory', 'deliveryAddress', 'deliveryPincode',
+  // 024_territory_id.sql. Both are listed while the contract phase runs: the
+  // name is what old rows and the signup forms still carry, the id is what
+  // survives a territory being renamed. Omitting the id here would have the
+  // dropdown look like it worked and write nothing.
+  'territoryId',
   'status', 'assignedTo', 'date', 'createdAt',
   'phone', 'email',
   'distributorId', 'dealerId', 'retailerId', 'items',
@@ -275,6 +281,8 @@ const insertWithFreeId = async (label, table, prefix, firstNumber, record, shape
 const LEAD_COLUMNS = [
   'id', 'name', 'company', 'phone', 'email', 'productInterest', 'dealValue',
   'leadSource', 'state', 'city', 'district', 'territory', 'leadType',
+  // 024_territory_id.sql — see the note on ORDER_COLUMNS.
+  'territoryId',
   'status', 'assignedTo', 'followUpDate', 'notes', 'orderCreated', 'createdAt',
 ];
 
@@ -2964,7 +2972,7 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('distributors', ['territoryId'], 'the distributor',
       (shape) => supabase.from('distributors').insert([shape(newDist)]));
-    logEvent('distributor_added', `New distributor: ${distData.name} (${distData.territory})`, null, newId);
+    logEvent('distributor_added', `New distributor: ${distData.name} (${territoryName(territories, distData)})`, null, newId);
     return newId;
   };
 
@@ -2998,7 +3006,7 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('dealers', ['territoryId'], 'the dealer',
       (shape) => supabase.from('dealers').insert([shape(newDealer)]));
-    logEvent('dealer_added', `New dealer: ${dealerData.name} (${dealerData.territory})`, null, newId);
+    logEvent('dealer_added', `New dealer: ${dealerData.name} (${territoryName(territories, dealerData)})`, null, newId);
     return newId;
   };
 
@@ -3032,7 +3040,7 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('retailers', ['territoryId'], 'the retailer',
       (shape) => supabase.from('retailers').insert([shape(newRetailer)]));
-    logEvent('retailer_added', `New retailer: ${retailerData.name} (${retailerData.territory})`, null, newId);
+    logEvent('retailer_added', `New retailer: ${retailerData.name} (${territoryName(territories, retailerData)})`, null, newId);
     return newId;
   };
 

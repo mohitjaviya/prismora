@@ -302,7 +302,11 @@ export default function SFA() {
         quantity: orderUnits,
         value: orderValue,
         state: territory?.state || matchedRetailer?.state || matchedDealer?.state || '',
-        territory: selectedBeatForVisit?.beat?.territory || territory?.name || '',
+        // The order carries the territory's id, not just its name, so a
+        // territory renamed later still reports against this order.
+        ...(territory
+          ? territoryFields(territories, territory.id)
+          : { territory: selectedBeatForVisit?.beat?.territory || '', territoryId: null }),
         city: visitForm.outletCity || matchedRetailer?.city || matchedDealer?.city || '',
         phone: visitForm.outletContact || '',
         email: visitForm.outletEmail || matchedRetailer?.email || matchedDealer?.email || '',
@@ -819,7 +823,7 @@ export default function SFA() {
                       {!isSREP ? <div className="flex items-center gap-2"><User size={13} className="text-slate-500" />{getRepName(beat.executiveId)}</div>
                         : <span className="text-brand-accent text-xs bg-brand-accent/10 border border-brand-accent/20 px-2 py-0.5 rounded">My Beat</span>}
                     </td>
-                    <td className="p-4"><div className="flex items-center gap-1 font-medium text-white"><MapPin size={12} className="text-brand-accent" />{beat.territory}</div></td>
+                    <td className="p-4"><div className="flex items-center gap-1 font-medium text-white"><MapPin size={12} className="text-brand-accent" />{territoryName(territories, beat)}</div></td>
                     <td className="p-4 text-xs font-bold text-slate-400 whitespace-nowrap">{fmtDate(beat.date)}</td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1">
@@ -1207,7 +1211,7 @@ export default function SFA() {
                       <div className="p-2 min-h-[200px] space-y-1.5">
                         {dayBeats.length > 0 ? dayBeats.map(beat => (
                           <div key={beat.id} className="bg-brand-accent/10 border border-brand-accent/20 rounded-lg p-2 space-y-1">
-                            <p className="text-[9px] font-bold text-brand-accent uppercase truncate">{beat.territory}</p>
+                            <p className="text-[9px] font-bold text-brand-accent uppercase truncate">{territoryName(territories, beat)}</p>
                             {!isSREP && <p className="text-[9px] text-slate-400 truncate">{getRepName(beat.executiveId)}</p>}
                             <p className="text-[10px] text-slate-300">{Array.isArray(beat.outlets) ? beat.outlets.length : 0} outlets</p>
                             <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold border ${beatTone(beat.status)}`}>{beat.status}</span>

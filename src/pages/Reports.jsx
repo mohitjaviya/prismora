@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
+import { territoryName } from '../utils/territory';
 import { useAuth, isSalesRole } from '../context/AuthContext';
 import { BarChart3, Download, TrendingUp, Package2, Wallet, Users, Star, ChevronRight } from 'lucide-react';
 import { Button, PageHeader } from '../components/ui';
@@ -21,7 +22,7 @@ const CATEGORIES = [
 ];
 
 export default function Reports() {
-  const { leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog } = useData();
+  const { leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories } = useData();
   const { user, users: teamUsers } = useAuth();
 
   const [activeCategory, setActiveCategory] = useState('sales');
@@ -345,7 +346,7 @@ export default function Reports() {
         label: 'Distributor Outstanding Report',
         desc: 'Outstanding amounts per distributor.',
         generate: () => distributors.map(d => ({
-          name: d.name, territory: d.territory, state: d.state,
+          name: d.name, territory: territoryName(territories, d), state: d.state,
           outstanding: d.outstandingAmount || 0, creditLimit: d.creditLimit || 0,
           utilization: d.creditLimit ? ((d.outstandingAmount || 0) / d.creditLimit * 100).toFixed(1) + '%' : 'N/A',
           status: d.status
@@ -368,14 +369,14 @@ export default function Reports() {
         labels: ['Scheme', 'Type', 'Applicable To', 'Discount', 'Free Goods', 'Min Order', 'Valid From', 'Valid To'],
       },
     ],
-  }), [leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, teamUsers, dateFrom, dateTo]);
+  }), [leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories, teamUsers, dateFrom, dateTo]);
 
   const currentReports = reports[activeCategory] || [];
   const activeReportDef = currentReports.find(r => r.key === activeReport);
   const reportData = useMemo(() => {
     if (!activeReportDef) return [];
     return activeReportDef.generate();
-  }, [activeReportDef, leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, teamUsers, dateFrom, dateTo]);
+  }, [activeReportDef, leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, territories, teamUsers, dateFrom, dateTo]);
 
   const handleExport = () => {
     if (!activeReportDef || !reportData.length) return;

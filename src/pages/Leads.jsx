@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { downloadCSV } from '../utils/exportUtils';
 import { optionsFor, colorForKey, labelForKey } from '../utils/masterLists';
+import { territoryFields, territoryName } from '../utils/territory';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
@@ -29,7 +30,7 @@ const INDIAN_STATES = [
 ];
 
 const Leads = () => {
-  const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog, masters } = useData();
+  const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog, masters, territories } = useData();
   const toast = useToast();
 
   // Statuses and sources come from Master Lists. The fallback when nothing is
@@ -84,7 +85,7 @@ const Leads = () => {
     name: '', company: '', phone: '', email: '', productInterest: [],
     leadSource: '', assignedTo: isSalesRole(user?.role) ? user.id : '',
     status: 'Lead Created', followUpDate: '', notes: '', dealValue: '',
-    state: '', city: '', district: '', territory: '', leadType: '', attachments: []
+    state: '', city: '', district: '', territory: '', territoryId: '', leadType: '', attachments: []
   });
 
   const handleOpenModal = (lead = null) => {
@@ -98,6 +99,7 @@ const Leads = () => {
         city: '',
         district: '',
         territory: '',
+        territoryId: '',
         leadType: '',
         attachments: [],
         ...lead,
@@ -112,7 +114,7 @@ const Leads = () => {
         name: '', company: '', phone: '', email: '', productInterest: [],
         leadSource: '', assignedTo: isSalesRole(user?.role) ? user.id : '',
         status: 'Lead Created', followUpDate: '', notes: '', dealValue: '',
-        state: '', city: '', district: '', territory: '', leadType: '', attachments: []
+        state: '', city: '', district: '', territory: '', territoryId: '', leadType: '', attachments: []
       });
     }
     setIsModalOpen(true);
@@ -592,8 +594,8 @@ const Leads = () => {
                           : 'Not specified'
                         }
                       </p>
-                      {selectedLeadView.territory && (
-                        <p className="text-xs text-slate-500 mt-0.5">Territory: {selectedLeadView.territory}</p>
+                      {(selectedLeadView.territoryId || selectedLeadView.territory) && (
+                        <p className="text-xs text-slate-500 mt-0.5">Territory: {territoryName(territories, selectedLeadView)}</p>
                       )}
                     </div>
                   </div>
@@ -862,13 +864,23 @@ const Leads = () => {
                 </div>
                 <div>
                   <label htmlFor="leads-territory-optional" className="block text-sm font-medium text-slate-300 mb-1.5">Territory (Optional)</label>
-                  <input id="leads-territory-optional"
-                    type="text"
-                    value={formData.territory || ''}
-                    onChange={e => setFormData({ ...formData, territory: e.target.value })}
-                    placeholder="e.g. Maharashtra West, Gujarat South..."
+                  {/* Was a free text box, which is how three distributors came
+                      to sit in a territory called "Gujrat North Hub" that no
+                      beat plan or report could find. A lead reaching the right
+                      rep depends on this naming something that exists. */}
+                  <select id="leads-territory-optional"
+                    value={formData.territoryId || ''}
+                    onChange={e => setFormData({ ...formData, ...territoryFields(territories, e.target.value) })}
                     className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
-                  />
+                  >
+                    <option value="">{(territories || []).length ? '— Select territory —' : 'No territories set up yet'}</option>
+                    {(territories || []).map(t => (
+                      <option key={t.id} value={t.id}>{t.name}{t.state ? ` (${t.state})` : ''}</option>
+                    ))}
+                  </select>
+                  {formData.territory && !formData.territoryId && (
+                    <p className="text-xs text-amber-400 mt-1">Currently &ldquo;{formData.territory}&rdquo;, which matches no territory on record. Pick one to fix it.</p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="leads-follow-up-date" className="block text-sm font-medium text-slate-300 mb-1.5">Follow Up Date</label>

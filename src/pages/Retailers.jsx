@@ -240,7 +240,7 @@ export default function Retailers() {
         subtitle="Retailers linked to dealers, territory mapping and outstanding ledger."
         actions={
           <>
-            <Button icon={Download} onClick={() => downloadCSV(filtered.map(r => ({ Name: r.name, GSTIN: r.gstin, ParentDealer: parentDealerName(r.parentDealerId), State: r.state, City: r.city, Territory: r.territory, Phone: r.phone, Email: r.email, Outstanding: r.outstandingAmount, CreditLimit: r.creditLimit, Status: r.status })), 'PRISMORA_Retailers')}>Export</Button>
+            <Button icon={Download} onClick={() => downloadCSV(filtered.map(r => ({ Name: r.name, GSTIN: r.gstin, ParentDealer: parentDealerName(r.parentDealerId), State: r.state, City: r.city, Territory: territoryName(territories, r), Phone: r.phone, Email: r.email, Outstanding: r.outstandingAmount, CreditLimit: r.creditLimit, Status: r.status })), 'PRISMORA_Retailers')}>Export</Button>
             {canManage && <Button variant="primary" icon={Plus} onClick={openAdd}>Add Retailer</Button>}
           </>
         }
@@ -434,7 +434,7 @@ export default function Retailers() {
                   <label htmlFor="retailers-parent-dealer" className={labelCls}>Parent Dealer *</label>
                   <select id="retailers-parent-dealer" required value={form.parentDealerId} onChange={e => setForm(f => ({ ...f, parentDealerId: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Dealer --</option>
-                    {activeDealers.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({d.territory})</option>)}
+                    {activeDealers.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({territoryName(territories, d)})</option>)}
                   </select>
                 </div>
                 <div><label htmlFor="retailers-gstin" className={labelCls}>GSTIN</label><input id="retailers-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACG..." className={inputCls} /></div>

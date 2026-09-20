@@ -240,7 +240,7 @@ export default function Dealers() {
         subtitle="Dealers linked to distributors, territory mapping and outstanding ledger."
         actions={
           <>
-            <Button icon={Download} onClick={() => downloadCSV(filtered.map(d => ({ Name: d.name, GSTIN: d.gstin, ParentDistributor: parentDistributorName(d.parentDistributorId), State: d.state, City: d.city, Territory: d.territory, Phone: d.phone, Email: d.email, Outstanding: d.outstandingAmount, CreditLimit: d.creditLimit, Status: d.status })), 'PRISMORA_Dealers')}>
+            <Button icon={Download} onClick={() => downloadCSV(filtered.map(d => ({ Name: d.name, GSTIN: d.gstin, ParentDistributor: parentDistributorName(d.parentDistributorId), State: d.state, City: d.city, Territory: territoryName(territories, d), Phone: d.phone, Email: d.email, Outstanding: d.outstandingAmount, CreditLimit: d.creditLimit, Status: d.status })), 'PRISMORA_Dealers')}>
               Export
             </Button>
             {canManage && <Button variant="primary" icon={Plus} onClick={openAdd}>Add Dealer</Button>}
@@ -438,7 +438,7 @@ export default function Dealers() {
                   <label htmlFor="dealers-parent-distributor" className={labelCls}>Parent Distributor *</label>
                   <select id="dealers-parent-distributor" required value={form.parentDistributorId} onChange={e => setForm(f => ({ ...f, parentDistributorId: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Distributor --</option>
-                    {activeDistributors.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({d.territory})</option>)}
+                    {activeDistributors.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({territoryName(territories, d)})</option>)}
                   </select>
                 </div>
                 <div><label htmlFor="dealers-gstin" className={labelCls}>GSTIN</label><input id="dealers-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACG..." className={inputCls} /></div>
