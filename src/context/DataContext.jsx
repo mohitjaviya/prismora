@@ -539,11 +539,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.products;
       if (error) throw error;
       fetchedCatalog = data || [];
-      if (fetchedCatalog.length === 0) {
-        const local = localStorage.getItem('prismora_product_catalog');
-        fetchedCatalog = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_product_catalog', JSON.stringify(fetchedCatalog));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -575,17 +570,26 @@ export const DataProvider = ({ children }) => {
     }, normalizedCatalog);
     localStorage.setItem('prismora_product_catalog', JSON.stringify(normalizedCatalog));
 
+    /**
+     * A table that is genuinely empty reads as empty.
+     *
+     * Every one of these fetches used to treat "the database returned no rows"
+     * as "the read must have failed" and restore the browser's cache instead.
+     * The catch block below already handles a real failure and says so in its
+     * own comment -- a failed read is not an empty table -- but the success
+     * path was quietly asserting the reverse.
+     *
+     * So an emptied database could never be shown as empty: clearing it and
+     * refreshing put every deleted row straight back on screen from
+     * localStorage, for ever. Confirmed after WIPE_TEST_DATA.sql cleared all
+     * 25 tables and the application carried on displaying the old data.
+     */
     // Fetch Invoices with fallback
     let fetchedInvoices = [];
     try {
       const { data, error } = await inflight.invoices;
       if (error) throw error;
       fetchedInvoices = data || [];
-      if (fetchedInvoices.length === 0) {
-        const local = localStorage.getItem('prismora_invoices');
-        fetchedInvoices = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_invoices', JSON.stringify(fetchedInvoices));
-      }
     } catch (err) {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -618,10 +622,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.credit_notes;
       if (error) throw error;
       fetchedCreditNotes = data || [];
-      if (fetchedCreditNotes.length === 0) {
-        const local = localStorage.getItem('prismora_credit_notes');
-        fetchedCreditNotes = local ? JSON.parse(local) : [];
-      }
     } catch {
       const local = localStorage.getItem('prismora_credit_notes');
       fetchedCreditNotes = local ? JSON.parse(local) : [];
@@ -642,11 +642,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.expenses;
       if (error) throw error;
       fetchedExpenses = data || [];
-      if (fetchedExpenses.length === 0) {
-        const local = localStorage.getItem('prismora_expenses');
-        fetchedExpenses = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_expenses', JSON.stringify(fetchedExpenses));
-      }
     } catch (err) {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -667,11 +662,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.inventory;
       if (error) throw error;
       fetchedInventory = data || [];
-      if (fetchedInventory.length === 0) {
-        const local = localStorage.getItem('prismora_inventory');
-        fetchedInventory = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_inventory', JSON.stringify(fetchedInventory));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -687,11 +677,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.vendors;
       if (error) throw error;
       fetchedVendors = data || [];
-      if (fetchedVendors.length === 0) {
-        const local = localStorage.getItem('prismora_vendors');
-        fetchedVendors = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_vendors', JSON.stringify(fetchedVendors));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -707,10 +692,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.vendor_payments;
       if (error) throw error;
       fetchedVendorPayments = data || [];
-      if (fetchedVendorPayments.length === 0) {
-        const local = localStorage.getItem('prismora_vendor_payments');
-        fetchedVendorPayments = local ? JSON.parse(local) : [];
-      }
     } catch {
       const local = localStorage.getItem('prismora_vendor_payments');
       fetchedVendorPayments = local ? JSON.parse(local) : [];
@@ -723,10 +704,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.purchase_returns;
       if (error) throw error;
       fetchedReturns = data || [];
-      if (fetchedReturns.length === 0) {
-        const local = localStorage.getItem('prismora_purchase_returns');
-        fetchedReturns = local ? JSON.parse(local) : [];
-      }
     } catch {
       const local = localStorage.getItem('prismora_purchase_returns');
       fetchedReturns = local ? JSON.parse(local) : [];
@@ -739,11 +716,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.purchase_orders;
       if (error) throw error;
       fetchedPOs = data || [];
-      if (fetchedPOs.length === 0) {
-        const local = localStorage.getItem('prismora_purchase_orders');
-        fetchedPOs = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_purchase_orders', JSON.stringify(fetchedPOs));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -759,11 +731,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.grn;
       if (error) throw error;
       fetchedGRN = data || [];
-      if (fetchedGRN.length === 0) {
-        const local = localStorage.getItem('prismora_grn');
-        fetchedGRN = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_grn', JSON.stringify(fetchedGRN));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -779,11 +746,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.distributors;
       if (error) throw error;
       fetchedDist = data || [];
-      if (fetchedDist.length === 0) {
-        const local = localStorage.getItem('prismora_distributors');
-        fetchedDist = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_distributors', JSON.stringify(fetchedDist));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -799,11 +761,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.dealers;
       if (error) throw error;
       fetchedDealers = data || [];
-      if (fetchedDealers.length === 0) {
-        const local = localStorage.getItem('prismora_dealers');
-        fetchedDealers = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_dealers', JSON.stringify(fetchedDealers));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -819,11 +776,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.retailers;
       if (error) throw error;
       fetchedRetailers = data || [];
-      if (fetchedRetailers.length === 0) {
-        const local = localStorage.getItem('prismora_retailers');
-        fetchedRetailers = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_retailers', JSON.stringify(fetchedRetailers));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -839,11 +791,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.schemes;
       if (error) throw error;
       fetchedSchemes = data || [];
-      if (fetchedSchemes.length === 0) {
-        const local = localStorage.getItem('prismora_schemes');
-        fetchedSchemes = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_schemes', JSON.stringify(fetchedSchemes));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -857,14 +804,7 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.complaints;
       if (error) throw error;
       const fetchedComplaints = data || [];
-      if (fetchedComplaints.length === 0) {
-        const local = localStorage.getItem('prismora_complaints');
-        const finalComplaints = local ? JSON.parse(local) : [];
-        applyFetched('prismora_complaints', setComplaints, finalComplaints);
-        localStorage.setItem('prismora_complaints', JSON.stringify(finalComplaints));
-      } else {
-        applyFetched('prismora_complaints', setComplaints, fetchedComplaints);
-      }
+      applyFetched('prismora_complaints', setComplaints, fetchedComplaints);
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -879,11 +819,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.territories;
       if (error) throw error;
       fetchedTerritories = data || [];
-      if (fetchedTerritories.length === 0) {
-        const local = localStorage.getItem('prismora_territories');
-        fetchedTerritories = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_territories', JSON.stringify(fetchedTerritories));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -899,11 +834,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.beat_plans;
       if (error) throw error;
       fetchedBeats = data || [];
-      if (fetchedBeats.length === 0) {
-        const local = localStorage.getItem('prismora_beat_plans');
-        fetchedBeats = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_beat_plans', JSON.stringify(fetchedBeats));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -919,11 +849,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.attendance;
       if (error) throw error;
       fetchedAttendance = data || [];
-      if (fetchedAttendance.length === 0) {
-        const local = localStorage.getItem('prismora_attendance');
-        fetchedAttendance = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_attendance', JSON.stringify(fetchedAttendance));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -939,11 +864,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.visit_reports;
       if (error) throw error;
       fetchedVisits = data || [];
-      if (fetchedVisits.length === 0) {
-        const local = localStorage.getItem('prismora_visit_reports');
-        fetchedVisits = local ? JSON.parse(local) : [];
-        localStorage.setItem('prismora_visit_reports', JSON.stringify(fetchedVisits));
-      }
     } catch {
       // A failed read is not an empty table — fall back to what this browser
       // cached, and to nothing else. Sample rows used to be seeded here, which
@@ -959,10 +879,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.distributor_payments;
       if (error) throw error;
       fetchedPayments = data || [];
-      if (fetchedPayments.length === 0) {
-        const local = localStorage.getItem('prismora_distributor_payments');
-        fetchedPayments = local ? JSON.parse(local) : [];
-      }
     } catch {
       const local = localStorage.getItem('prismora_distributor_payments');
       fetchedPayments = local ? JSON.parse(local) : [];
@@ -975,10 +891,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.scheme_claims;
       if (error) throw error;
       fetchedClaims = data || [];
-      if (fetchedClaims.length === 0) {
-        const local = localStorage.getItem('prismora_scheme_claims');
-        fetchedClaims = local ? JSON.parse(local) : [];
-      }
     } catch {
       const local = localStorage.getItem('prismora_scheme_claims');
       fetchedClaims = local ? JSON.parse(local) : [];
@@ -991,10 +903,6 @@ export const DataProvider = ({ children }) => {
       const { data, error } = await inflight.distributor_incentives;
       if (error) throw error;
       fetchedIncentives = data || [];
-      if (fetchedIncentives.length === 0) {
-        const local = localStorage.getItem('prismora_distributor_incentives');
-        fetchedIncentives = local ? JSON.parse(local) : [];
-      }
     } catch {
       const local = localStorage.getItem('prismora_distributor_incentives');
       fetchedIncentives = local ? JSON.parse(local) : [];
