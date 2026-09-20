@@ -60,7 +60,13 @@ AS $$ SELECT role FROM public.users WHERE id = user_id $$;
 -- ── 2. Every business table: signed-in only ─────────────────────────────
 -- Looped over the catalogue rather than a written-out list, so a table added
 -- later cannot be quietly left open the way sfa_expenses was left closed.
--- `users` is excluded and handled separately below.
+--
+-- `users` and `roles` are excluded. Both decide who may do what, so a policy
+-- letting any signed-in session write them hands out administrator rights:
+-- accessFor() grants every module to any role whose level is 'admin', so one
+-- PATCH of `roles` was enough. `users` is handled in section 3 below; `roles`
+-- in SECURE_ROLES_TABLE.sql. Leaving them in this loop would undo both the
+-- next time this file is run.
 DO $$
 DECLARE t record;
 BEGIN
@@ -69,7 +75,7 @@ BEGIN
     FROM   pg_class c
     WHERE  c.relnamespace = 'public'::regnamespace
       AND  c.relkind = 'r'
-      AND  c.relname <> 'users'
+      AND  c.relname NOT IN ('users', 'roles')
   LOOP
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.relname);
     EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t.relname || '_signed_in', t.relname);
