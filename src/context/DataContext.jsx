@@ -2058,6 +2058,63 @@ export const DataProvider = ({ children }) => {
   // ── Credit Notes (sales returns / adjustments) ────────────────────────────
   // A credit note reduces what a customer owes us — the sales-side mirror of a
   // purchase return. Reduces the matching channel partner's outstanding balance.
+  /**
+   * Withdraw a credit note, and the credit it gave.
+   *
+   * There was no way to undo one. A credit note issued for the wrong amount,
+   * or against the wrong customer, was permanent -- the row could not be
+   * removed from any screen and the balance it moved stayed moved. Clearing
+   * six test rows earlier needed SQL written by hand.
+   *
+   * The balance is put back before the row goes, so a refused restore leaves
+   * the note in place rather than deleting the only record of a credit that
+   * has already been applied.
+   */
+  const deleteCreditNote = async (id) => {
+    const note = creditNotes.find(n => n.id === id);
+    if (!note) return { ok: false, error: 'That credit note no longer exists.' };
+
+    const amount = Number(note.amount || 0);
+    const name = String(note.customerName || '').toLowerCase();
+
+    const restore = async (list, setter, table) => {
+      const match = list.find(p => String(p.name || '').toLowerCase() === name);
+      if (!match) return false;
+      // The mirror of addCreditNote: it subtracted, so this adds back.
+      const restored = balanceAfterCharge(match.outstandingAmount, amount);
+      const { error } = await supabase.from(table).update({ outstandingAmount: restored }).eq('id', match.id);
+      if (error) {
+        console.error(`[Prismora] Could not restore the ${table} balance, so the credit note has been left alone:`, error);
+        return null;
+      }
+      const next = list.map(p => p.id === match.id ? { ...p, outstandingAmount: restored } : p);
+      setter(next);
+      localStorage.setItem(`prismora_${table}`, JSON.stringify(next));
+      return true;
+    };
+
+    if (amount > 0 && name) {
+      const outcome = await restore(distributors, setDistributors, 'distributors')
+        ?? await restore(dealers, setDealers, 'dealers')
+        ?? await restore(retailers, setRetailers, 'retailers');
+      if (outcome === null) return { ok: false, error: 'The balance could not be put back, so nothing was deleted.' };
+    }
+
+    const { error } = await supabase.from('credit_notes').delete().eq('id', id);
+    if (error) {
+      console.error('[Prismora] Could not delete the credit note:', error);
+      return { ok: false, error: 'The credit note could not be deleted.' };
+    }
+
+    setCreditNotes(prev => {
+      const next = prev.filter(n => n.id !== id);
+      localStorage.setItem('prismora_credit_notes', JSON.stringify(next));
+      return next;
+    });
+    logEvent('credit_note_deleted', `Credit note ${id} for ${note.customerName} withdrawn — ₹${amount} put back`, null, id);
+    return { ok: true };
+  };
+
   const addCreditNote = async (cnData) => {
     const newId = `CN-${Date.now()}`;
     const newCN = { ...cnData, id: newId, createdAt: new Date().toISOString() };
@@ -3225,7 +3282,7 @@ export const DataProvider = ({ children }) => {
       addOrder, updateOrder, deleteOrder, confirmOrderReceipt, recordOrderReceipt, clearOrderReceipt, splitOrder, deliverPartial,
       addProduct, updateProduct, deleteProduct,
       addInvoice, updateInvoiceStatus, deleteInvoice,
-      creditNotes, addCreditNote,
+      creditNotes, addCreditNote, deleteCreditNote,
       addExpense, deleteExpense, reconcilePayouts, correctPartyBalance,
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,

@@ -4,8 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Wallet, TrendingUp, Plus, Trash2, FileText, CheckCircle, Clock, AlertCircle, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
-import { useToast } from '../context/DialogContext';
-import { Button, Card, PageHeader } from '../components/ui';
+import { useToast, useConfirm } from '../context/DialogContext';
+import { Button, Card, IconButton, PageHeader } from '../components/ui';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, Legend, PieChart, Pie, Cell 
@@ -19,11 +19,12 @@ import { sendWhatsAppAlert, sendEmailAlert } from '../utils/notificationUtils';
 const Accounting = () => {
   const { user, users, canAccessData, canAccess } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
    const {
     orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, leads, productCatalog, distributors,
     distributorIncentives, schemeClaims, sfaExpenses, reconcilePayouts,
     addInvoice, updateInvoiceStatus, deleteInvoice,
-    addExpense, deleteExpense, creditNotes, addCreditNote,
+    addExpense, deleteExpense, creditNotes, addCreditNote, deleteCreditNote,
     grn, vendors, purchaseReturns
   } = useData();
 
@@ -323,6 +324,21 @@ const Accounting = () => {
     if (invoiceFilter === 'All') return true;
     return inv.status === invoiceFilter;
   });
+
+  const handleDeleteCreditNote = async (cn) => {
+    const ok = await confirm({
+      title: 'Withdraw this credit note?',
+      body: `${cn.id} gave ${cn.customerName} a credit of ${formatCurrency(cn.amount)}. `
+        + 'Withdrawing it deletes the note and puts that amount back on their balance.',
+      confirmLabel: 'Withdraw',
+      danger: true,
+    });
+    if (!ok) return;
+
+    const result = await deleteCreditNote(cn.id);
+    if (result?.ok) toast(`Credit note ${cn.id} withdrawn and ${formatCurrency(cn.amount)} put back.`, 'success');
+    else toast(result?.error || 'The credit note could not be withdrawn.', 'error');
+  };
 
   const handleCreditSubmit = (e) => {
     e.preventDefault();
@@ -908,6 +924,7 @@ const Accounting = () => {
                   <th className="p-4">Reason</th>
                   <th className="p-4 text-right">Amount</th>
                   <th className="p-4">Date</th>
+                  <th className="p-4 text-right w-12"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-sm text-slate-300">
@@ -919,9 +936,20 @@ const Accounting = () => {
                     <td className="p-4"><span className="text-xs bg-rose-500/10 text-rose-300 border border-rose-500/20 px-2 py-0.5 rounded-full">{cn.reason}</span></td>
                     <td className="p-4 text-right font-bold text-emerald-400">{formatCurrency(cn.amount)}</td>
                     <td className="p-4 text-slate-400">{formatDate(cn.createdAt)}</td>
+                    <td className="p-4 text-right">
+                      {/* A credit note issued for the wrong amount, or against
+                          the wrong customer, used to be permanent. */}
+                      <IconButton
+                        icon={Trash2}
+                        title="Withdraw this credit note"
+                        size="sm"
+                        tone="danger"
+                        onClick={() => handleDeleteCreditNote(cn)}
+                      />
+                    </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="6" className="p-8 text-center text-slate-500">
+                  <tr><td colSpan="7" className="p-8 text-center text-slate-500">
                     No credit notes issued yet. Use "Credit Note" above to record a sales return or adjustment.
                   </td></tr>
                 )}
