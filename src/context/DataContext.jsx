@@ -2353,7 +2353,13 @@ export const DataProvider = ({ children }) => {
     const drift = Math.round(derived - stored);
     if (drift === 0) return { changed: false, from: stored, to: derived, drift: 0 };
 
-    await writePartyOutstanding(partyType, party, derived);
+    // Reported changed: true whatever happened. A refused write left the drift
+    // in place and told the user it had been fixed, which is worse than the
+    // drift: they stop looking.
+    const written = await writePartyOutstanding(partyType, party, derived);
+    if (written === false) {
+      return { changed: false, from: stored, to: derived, drift, error: 'The balance could not be corrected.' };
+    }
     logEvent('balance_corrected',
       `${party.name}: outstanding corrected from ${stored} to ${derived} to match the ledger`,
       null, party.id);
@@ -2366,7 +2372,10 @@ export const DataProvider = ({ children }) => {
       return !isNaN(num) && num > max ? num : max;
     }, 0);
     const draft = { ...expenseData, createdAt: new Date().toISOString() };
-    const { id: newId } = await insertWithFreeId('expenses insert', 'expenses', 'EXP-', maxId + 1, draft);
+    // addGRN checks this same flag; this did not. A refused expense stayed on
+    // screen and in the month's totals, and was gone on the next refresh.
+    const { id: newId, saved } = await insertWithFreeId('expenses insert', 'expenses', 'EXP-', maxId + 1, draft);
+    if (!saved) return null;
     const newExpense = { ...draft, id: newId };
     setExpenses(prev => [newExpense, ...prev]);
     const local = localStorage.getItem('prismora_expenses');
@@ -2414,8 +2423,20 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('inventory').insert([newItem]); }
-    catch { /* table may not exist yet */ }
+    // supabase-js returns { error }; it does not throw, so the catch that used
+    // to be here never ran and "table may not exist yet" swallowed every
+    // refusal equally. A batch added and not stored looks identical to one
+    // that was, until it is gone on the next refresh.
+    const { error } = await supabase.from('inventory').insert([newItem]);
+    if (error) {
+      console.error('[Prismora] The stock batch was not stored:', error.message || error);
+      setInventory(prev => {
+        const next = prev.filter(i => i.id !== newId);
+        localStorage.setItem('prismora_inventory', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
     logEvent('inventory_added', `Stock added: ${itemData.product} Batch:${itemData.batchNumber || 'N/A'}`, null, newId);
   };
 
