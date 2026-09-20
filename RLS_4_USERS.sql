@@ -48,11 +48,32 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS users_read ON public.users;
 
+-- ── Why this asks for a role and not just "is not a partner" ────────────
+--
+-- The first version of this policy read:
+--
+--     NOT public.is_partner() OR lower(email) = public.current_app_email()
+--
+-- and it leaked the whole table to an account that had no row here at all.
+--
+-- Signing in is Supabase Auth; having a role is this table. Nothing ties the
+-- two together, so an auth account can outlive its row -- which is exactly
+-- what happened to dist@prismora.com. is_partner() reads the level from a row
+-- that is not there, gets NULL, and answers false. "Not a partner" then reads
+-- as "therefore staff", and the account saw all five colleagues.
+--
+-- Everywhere else that phrase appears it is joined to can_view(...), which
+-- returns 'none' for an account with no role, so those policies already fail
+-- closed. This was the one place it granted on its own.
+--
+-- Now: you always see yourself, and you see everybody only if the database can
+-- say what you are. An account with no role sees nothing, which is the right
+-- answer to "who is this?" when there is no answer.
 CREATE POLICY users_read ON public.users
   FOR SELECT TO authenticated
   USING (
-    NOT public.is_partner()
-    OR lower(email) = public.current_app_email()
+    lower(email) = public.current_app_email()
+    OR (public.my_role_name() IS NOT NULL AND NOT public.is_partner())
   );
 
 
