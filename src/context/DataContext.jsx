@@ -10,6 +10,7 @@ import {
 } from '../utils/settlement';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
+import { returnValue as computeReturnValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
 
 const DataContext = createContext();
 
@@ -2631,7 +2632,7 @@ export const DataProvider = ({ children }) => {
   // vendor ledger) and takes the returned units back out of inventory.
   const addPurchaseReturn = async (returnData) => {
     const newId = `PR-${Date.now()}`;
-    const returnValue = (returnData.items || []).reduce((s, i) => s + (Number(i.quantity || 0) * Number(i.unitCost || 0)), 0);
+    const returnValue = computeReturnValue(returnData.items);
     const newReturn = purchaseReturnRow({ ...returnData, id: newId, value: returnValue, createdAt: new Date().toISOString() });
     setPurchaseReturns(prev => {
       const next = [newReturn, ...prev];
@@ -2654,7 +2655,11 @@ export const DataProvider = ({ children }) => {
     // Credit the vendor payable (we owe them less now)
     const vendor = vendors.find(v => v.id === returnData.vendorId);
     if (vendor && returnValue > 0) {
-      const newOutstanding = Math.max(0, (vendor.outstandingAmount || 0) - returnValue);
+      // Was Math.max(0, ...). settlement.js already carries the note on why
+      // that is wrong: it discards the excess. Returning more than you owe
+      // leaves the vendor owing you, and a negative balance is how a ledger
+      // says so.
+      const newOutstanding = vendorBalanceAfterReturn(vendor.outstandingAmount, returnValue);
       const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: newOutstanding } : v);
       setVendors(nextVendors);
       localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
@@ -2665,7 +2670,7 @@ export const DataProvider = ({ children }) => {
     (returnData.items || []).forEach(item => {
       const qty = Number(item.quantity || 0);
       if (qty <= 0) return;
-      const invItem = inventory.find(inv => inv.product?.toLowerCase() === item.product?.toLowerCase() && inv.quantity > 0);
+      const invItem = batchForReturn(inventory, item.product);
       if (invItem) adjustStock(invItem.id, -qty, `Purchase return to ${vendor?.name || returnData.vendorName || 'vendor'}`);
     });
 
