@@ -8,6 +8,7 @@ import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, Searc
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
+import { deleteWarning } from '../utils/partyDependants';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -32,7 +33,8 @@ const BLANK_FORM = {
 };
 
 export default function Dealers() {
-  const { dealers, addDealer, updateDealer, deleteDealer, distributors, invoices, distributorPayments, addDealerPayment, orders, territories } = useData();
+  const { dealers, addDealer, updateDealer, deleteDealer, distributors, invoices, distributorPayments, addDealerPayment, orders, territories,
+    distributorIncentives, schemeClaims, complaints, retailers } = useData();
   const confirm = useConfirm();
   const { user, users, updateUser, deleteUser, canAccess } = useAuth();
 
@@ -93,6 +95,35 @@ export default function Dealers() {
     const linkedUser = users.find(u => u.dealerId === d.id);
     if (linkedUser) deleteUser(linkedUser.id);
     deleteDealer(d.id);
+  };
+
+  /**
+   * Deleting a partner, with what is attached said first.
+   *
+   * Foreign keys refuse to remove a party that orders or money point at, and
+   * deleteDealer does not inspect the error -- so the screen used to ask a
+   * plain question, accept the answer, and then fail with nothing to explain
+   * it. Now it counts what is in the way and either says so or says what will
+   * be unlinked.
+   */
+  const handleDelete = async (d) => {
+    const warning = deleteWarning(d, {
+      orders, invoices, distributorPayments, distributorIncentives, schemeClaims,
+      complaints, retailers,
+    });
+
+    if (warning && !warning.canDelete) {
+      await confirm({ title: warning.title, body: warning.body, confirmLabel: 'Close', danger: true });
+      return;
+    }
+
+    const ok = await confirm({
+      title: warning?.title || `Delete ${d.name}?`,
+      body: warning?.body || 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (ok) deleteDealer(d.id);
   };
 
   const ledgerEntries = useMemo(() => viewingDealer ? buildLedgerEntries(viewingDealer, invoices, distributorPayments, orders) : [], [viewingDealer, invoices, distributorPayments, orders]);
@@ -192,7 +223,7 @@ export default function Dealers() {
             <>
               <IconButton icon={Edit2} title="Edit dealer" size="sm" tone="accent" onClick={() => openEdit(d)} />
               <IconButton icon={Trash2} title="Delete dealer" size="sm" tone="danger"
-                onClick={async () => { if (await confirm({ title: 'Delete this dealer?', danger: true, confirmLabel: 'Delete' })) deleteDealer(d.id); }} />
+                onClick={() => handleDelete(d)} />
             </>
           )}
         </div>
