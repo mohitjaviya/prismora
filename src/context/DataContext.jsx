@@ -11,6 +11,7 @@ import {
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
+import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } from '../utils/billing';
 
 const DataContext = createContext();
 
@@ -1356,17 +1357,10 @@ export const DataProvider = ({ children }) => {
    * whole value. A product that is not in the catalogue contributes no tax
    * rather than a guessed rate.
    */
-  const gstForOrder = (order) => {
-    const rateFor = (name) => {
-      const p = (productCatalog || []).find(x => x.name === name);
-      return p ? Number(p.gstPct || 0) / 100 : 0;
-    };
-    if (Array.isArray(order.items) && order.items.length > 0) {
-      return Math.round(order.items.reduce((sum, i) =>
-        sum + (Number(i.total ?? (Number(i.quantity || 0) * Number(i.unitPrice || 0))) * rateFor(i.name)), 0));
-    }
-    return Math.round(Number(order.value || 0) * rateFor(order.product));
-  };
+  // The arithmetic is in utils/billing.js, with 21 tests. It was here, inside
+  // this provider, where nothing could reach it -- which is how the drift on
+  // Gujarat Super Stockist went unnoticed until somebody added the ledger up.
+  const gstForOrder = (order) => computeGst(order, productCatalog);
 
   // Generates an invoice for a delivered order and, where the order is linked
   // to a partner record, adds its value to that party's Outstanding balance —
@@ -1465,11 +1459,11 @@ export const DataProvider = ({ children }) => {
     // pay, while this used to add only the order value. Every invoiced order
     // therefore pushed the two figures apart by exactly the GST on it, which
     // is a drift nobody caused and nobody could see without opening the ledger.
-    const owed = Number(order.value || 0) + gstForOrder(order);
+    const owed = amountOwedForOrder(order, productCatalog);
     if (order.distributorId) {
       const dist = distributors.find(d => d.id === order.distributorId);
       if (dist) {
-        const newOutstanding = (dist.outstandingAmount || 0) + owed;
+        const newOutstanding = balanceAfterCharge(dist.outstandingAmount, owed);
         const nextDist = distributors.map(d => d.id === dist.id ? { ...d, outstandingAmount: newOutstanding } : d);
         setDistributors(nextDist);
         localStorage.setItem('prismora_distributors', JSON.stringify(nextDist));
@@ -1478,7 +1472,7 @@ export const DataProvider = ({ children }) => {
     } else if (order.dealerId) {
       const dealer = dealers.find(d => d.id === order.dealerId);
       if (dealer) {
-        const newOutstanding = (dealer.outstandingAmount || 0) + owed;
+        const newOutstanding = balanceAfterCharge(dealer.outstandingAmount, owed);
         const nextDealers = dealers.map(d => d.id === dealer.id ? { ...d, outstandingAmount: newOutstanding } : d);
         setDealers(nextDealers);
         localStorage.setItem('prismora_dealers', JSON.stringify(nextDealers));
@@ -1487,7 +1481,7 @@ export const DataProvider = ({ children }) => {
     } else if (order.retailerId) {
       const retailer = retailers.find(r => r.id === order.retailerId);
       if (retailer) {
-        const newOutstanding = (retailer.outstandingAmount || 0) + owed;
+        const newOutstanding = balanceAfterCharge(retailer.outstandingAmount, owed);
         const nextRetailers = retailers.map(r => r.id === retailer.id ? { ...r, outstandingAmount: newOutstanding } : r);
         setRetailers(nextRetailers);
         localStorage.setItem('prismora_retailers', JSON.stringify(nextRetailers));
