@@ -8,7 +8,7 @@ import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterRe
 import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } from '../utils/billing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { balanceDrift, balanceAfterCreditNote, balanceAfterCreditNoteWithdrawn } from '../utils/ledgerWrites';
-import { splitLines, canSplit } from '../utils/fulfilment';
+import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryName } from '../utils/territory';
 
 const DataContext = createContext();
@@ -1238,24 +1238,29 @@ export const DataProvider = ({ children }) => {
     const order = orders.find(o => o.id === id);
     if (!order || deliverQty <= 0) return { ok: false, error: 'Invalid order or quantity.' };
     const totalQty = Number(order.quantity || 0);
-    const already = Number(order.deliveredQty || 0);
-    const newDelivered = Math.min(totalQty, already + Number(deliverQty));
-    const actualNow = newDelivered - already;
-    if (actualNow <= 0) return { ok: false, error: 'Nothing left to deliver on this order.' };
 
-    // You can't deliver stock you don't physically hold. The modal's `max` attribute
-    // isn't enforced (the input sits outside a <form>), so a typed-in quantity must
-    // be validated here or the order gets marked Delivered and the customer billed
-    // for goods that never left the warehouse.
+    // You can't deliver stock you don't physically hold. The modal's `max`
+    // attribute isn't enforced (the input sits outside a <form>), so a typed-in
+    // quantity must be validated here or the order gets marked Delivered and
+    // the customer billed for goods that never left the warehouse.
     const availableNow = inventory
       .filter(b => b.product === order.product)
       .reduce((sum, b) => sum + Math.max(0, (b.quantity || 0) - (b.reserved || 0)), 0);
-    if (actualNow > availableNow) {
-      return { ok: false, error: `Only ${availableNow} unit(s) of ${order.product} in stock — cannot deliver ${actualNow}.` };
-    }
 
-    const fullyDone = newDelivered >= totalQty;
-    const updatedData = { deliveredQty: newDelivered, status: fullyDone ? 'Delivered' : 'Partially Delivered' };
+    // The arithmetic is in utils/fulfilment.js, with tests that check units are
+    // conserved: what moves plus what remains equals what was outstanding.
+    const plan = planPartialDelivery({
+      ordered: totalQty,
+      alreadyDelivered: order.deliveredQty,
+      deliverNow: deliverQty,
+      available: availableNow,
+      product: order.product,
+    });
+    if (!plan.ok) return { ok: false, error: plan.reason };
+
+    const { moving: actualNow, deliveredQty: newDelivered, status } = plan;
+    const fullyDone = status === 'Delivered';
+    const updatedData = { deliveredQty: newDelivered, status };
 
     const next = orders.map(o => o.id === id ? { ...o, ...updatedData } : o);
     setOrders(next);

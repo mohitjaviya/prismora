@@ -120,6 +120,13 @@ describe('planPartialDelivery', () => {
     expect(r.reason).toMatch(/only 20/i);
   });
 
+  it('names the product in the refusal when it knows it', () => {
+    // The message reaches an activity log as well as a screen. "Only 3 in
+    // stock" is clear beside one order and meaningless a week later.
+    const r = planPartialDelivery({ ordered: 100, deliverNow: 50, available: 20, product: 'Herbal Hair Oil 100ml' });
+    expect(r.reason).toBe('Only 20 unit(s) of Herbal Hair Oil 100ml in stock — cannot deliver 50.');
+  });
+
   it('refuses when the order is already fully delivered', () => {
     const r = planPartialDelivery({ ordered: 100, alreadyDelivered: 100, deliverNow: 10, available: 500 });
     expect(r.ok).toBe(false);

@@ -74,7 +74,7 @@ export function canSplit({ keep, split } = {}) {
  * which the screen's `max` attribute does not prevent -- the input sits
  * outside a form, so the number can be typed past it.
  */
-export function planPartialDelivery({ ordered, alreadyDelivered = 0, deliverNow, available = Infinity } = {}) {
+export function planPartialDelivery({ ordered, alreadyDelivered = 0, deliverNow, available = Infinity, product = '' } = {}) {
   const total = Number(ordered) || 0;
   const done = Number(alreadyDelivered) || 0;
   const asked = Number(deliverNow);
@@ -90,7 +90,10 @@ export function planPartialDelivery({ ordered, alreadyDelivered = 0, deliverNow,
     return { ok: false, reason: 'Nothing left to deliver on this order.' };
   }
   if (moving > available) {
-    return { ok: false, reason: `Only ${available} unit(s) in stock — cannot deliver ${moving}.` };
+    // Names the product when it is known. "Only 3 in stock" on a screen
+    // showing one order is clear enough; in a log a week later it is not.
+    const what = product ? ` of ${product}` : '';
+    return { ok: false, reason: `Only ${available} unit(s)${what} in stock — cannot deliver ${moving}.` };
   }
 
   return {
