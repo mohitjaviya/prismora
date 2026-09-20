@@ -496,11 +496,28 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (error) {
+        // supabase-js reports every non-2xx as the same sentence -- "Edge
+        // Function returned a non-2xx status code" -- and puts the response
+        // itself on error.context. The function answers with a real reason
+        // ("Only a Super Admin can create an administrator", "The password
+        // must be at least 8 characters") and none of it reached the screen.
+        let detail = '';
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const body = await error.context.json();
+            detail = String(body?.error || '');
+          }
+        } catch {
+          // A non-JSON body means the function crashed before answering.
+          // Falling through to the generic message is right; inventing a
+          // reason is not.
+        }
+
         const message = String(error.message || error);
         // Not deployed, rather than refused. Worth telling apart: one is a
         // setup step the administrator can take, the other is a real refusal.
         const needsDeploy = /not found|404|failed to fetch|failed to send/i.test(message);
-        return { ok: false, error: message, needsDeploy };
+        return { ok: false, error: detail || message, needsDeploy };
       }
       if (data?.error) return { ok: false, error: data.error };
 
