@@ -10,6 +10,7 @@ import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
 import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } from '../utils/billing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
+import { balanceDrift, balanceAfterCreditNote, balanceAfterCreditNoteWithdrawn } from '../utils/ledgerWrites';
 
 const DataContext = createContext();
 
@@ -2161,7 +2162,7 @@ export const DataProvider = ({ children }) => {
       const match = list.find(p => String(p.name || '').toLowerCase() === name);
       if (!match) return false;
       // The mirror of addCreditNote: it subtracted, so this adds back.
-      const restored = balanceAfterCharge(match.outstandingAmount, amount);
+      const restored = balanceAfterCreditNoteWithdrawn(match.outstandingAmount, amount);
       const { error } = await supabase.from(table).update({ outstandingAmount: restored }).eq('id', match.id);
       if (error) {
         console.error(`[Prismora] Could not restore the ${table} balance, so the credit note has been left alone:`, error);
@@ -2223,7 +2224,7 @@ export const DataProvider = ({ children }) => {
       if (!match) return false;
       // Not floored at zero: a credit note larger than the balance leaves the
       // partner in credit, which is money the business owes them.
-      const newOutstanding = balanceAfterPayment(match.outstandingAmount, amount);
+      const newOutstanding = balanceAfterCreditNote(match.outstandingAmount, amount);
       const next = list.map(p => p.id === match.id ? { ...p, outstandingAmount: newOutstanding } : p);
       setter(next);
       localStorage.setItem(`prismora_${table}`, JSON.stringify(next));
@@ -2367,9 +2368,10 @@ export const DataProvider = ({ children }) => {
     if (!party?.id || !partyType) return null;
 
     const entries = buildLedgerEntries(party, invoices, distributorPayments, orders);
-    const derived = entries.length ? entries[entries.length - 1].balance : 0;
-    const stored = Number(party.outstandingAmount || 0);
-    const drift = Math.round(derived - stored);
+    // The drift measurement is in utils/ledgerWrites.js, with tests -- including
+    // the one that stops half a paisa of float noise being offered as a
+    // correction worth making.
+    const { derived, stored, drift } = balanceDrift(party.outstandingAmount, entries);
     if (drift === 0) return { changed: false, from: stored, to: derived, drift: 0 };
 
     // Reported changed: true whatever happened. A refused write left the drift
