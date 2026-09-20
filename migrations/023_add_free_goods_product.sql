@@ -56,6 +56,22 @@ WHERE  "incentiveType" = 'Free Goods' AND "incentiveProduct" IS NULL;
 -- Every migration from here on ends with this. It is the whole point of
 -- migrations/000_baseline.sql: the answer to "has this been applied?" should
 -- be a query, not an audit.
+--
+-- The table is created here if it is missing rather than assumed. Running this
+-- file before the baseline used to fail on the INSERT with
+--
+--     42P01: relation "public.schema_migrations" does not exist
+--
+-- after the ALTER TABLEs above had already succeeded -- so the change was made
+-- and not recorded, which is precisely the state this whole scheme exists to
+-- prevent. A migration must not depend on being run in the right order to be
+-- able to say that it ran.
+CREATE TABLE IF NOT EXISTS public.schema_migrations (
+  filename    text PRIMARY KEY,
+  applied_at  timestamptz NOT NULL DEFAULT now(),
+  note        text
+);
+
 INSERT INTO public.schema_migrations (filename, note)
 VALUES ('023_add_free_goods_product.sql',
         'schemes.freeGoodsProduct and distributor_incentives.incentiveProduct')

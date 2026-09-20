@@ -90,9 +90,18 @@ change twice.
 1. Next number, lower-case name: `024_what_it_does.sql`
 2. Say at the top what is broken without it, and how that was established
 3. Make it safe to run twice
-4. End with the recording insert:
+4. End with the recording block. It creates the table if it is missing, so the
+   file works whether or not the baseline has been run — a migration that
+   applies its change and then fails to record it is the exact state this is
+   meant to prevent:
 
 ```sql
+CREATE TABLE IF NOT EXISTS public.schema_migrations (
+  filename    text PRIMARY KEY,
+  applied_at  timestamptz NOT NULL DEFAULT now(),
+  note        text
+);
+
 INSERT INTO public.schema_migrations (filename, note)
 VALUES ('024_what_it_does.sql', 'one line on what changed')
 ON CONFLICT (filename) DO NOTHING;
