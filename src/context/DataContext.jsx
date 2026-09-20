@@ -2625,6 +2625,47 @@ export const DataProvider = ({ children }) => {
   };
 
   // ── Vendor Payments ───────────────────────────────────────────────────────
+  /**
+   * Undo a payment recorded against a vendor.
+   *
+   * The balance goes back before the row goes, for the same reason the credit
+   * note does it that way: a refused restore then leaves the payment on file
+   * rather than putting money back on the vendor's account with nothing left
+   * to explain where it came from.
+   */
+  const deleteVendorPayment = async (id) => {
+    const payment = vendorPayments.find(p => p.id === id);
+    if (!payment) return { ok: false, error: 'That payment no longer exists.' };
+
+    const vendor = vendors.find(v => v.id === payment.vendorId);
+    if (vendor) {
+      const restored = balanceAfterCharge(vendor.outstandingAmount, payment.amount);
+      const { error } = await supabase.from('vendors').update({ outstandingAmount: restored }).eq('id', vendor.id);
+      if (error) {
+        console.error('[Prismora] Could not restore the vendor balance, so the payment has been left alone:', error);
+        return { ok: false, error: 'The vendor balance could not be put back, so nothing was deleted.' };
+      }
+      const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: restored } : v);
+      setVendors(nextVendors);
+      localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
+    }
+
+    const { error } = await supabase.from('vendor_payments').delete().eq('id', id);
+    if (error) {
+      console.error('[Prismora] Could not delete the vendor payment:', error);
+      return { ok: false, error: 'The payment could not be deleted.' };
+    }
+
+    setVendorPayments(prev => {
+      const next = prev.filter(p => p.id !== id);
+      localStorage.setItem('prismora_vendor_payments', JSON.stringify(next));
+      return next;
+    });
+    logEvent('vendor_payment_deleted',
+      `Payment ${id} of ₹${payment.amount} to ${vendor?.name || payment.vendorId} withdrawn`, null, id);
+    return { ok: true };
+  };
+
   const addVendorPayment = async (paymentData) => {
     const newId = `VPAY-${Date.now()}`;
     const newPayment = vendorPaymentRow({ ...paymentData, id: newId, createdAt: new Date().toISOString() });
@@ -2663,10 +2704,101 @@ export const DataProvider = ({ children }) => {
   // ── Purchase Returns ──────────────────────────────────────────────────────
   // Returning goods to a vendor reduces what we owe them (a credit on the
   // vendor ledger) and takes the returned units back out of inventory.
+  /**
+   * Withdraw a purchase return: the money and the goods.
+   *
+   * The hardest of the three to undo, because a return does two things. It
+   * credits the vendor, and it takes units out of a batch. Putting only one of
+   * them back would leave the books and the shelf disagreeing, which is worse
+   * than leaving the mistake alone.
+   *
+   * Order matters and is the same as the others: everything that can be put
+   * back goes first, and the row is deleted last. A row that survives a failed
+   * restore is a record of something that happened; a deleted row whose
+   * effects are still in place is not.
+   *
+   * Lines recorded before this existed carry no batchId. Those are returned to
+   * whichever batch of that product currently holds stock, which is the best
+   * available answer and may not be the batch they left — so it says so.
+   */
+  const deletePurchaseReturn = async (id) => {
+    const ret = purchaseReturns.find(r => r.id === id);
+    if (!ret) return { ok: false, error: 'That return no longer exists.' };
+
+    const vendor = vendors.find(v => v.id === ret.vendorId);
+    const value = Number(ret.value || 0);
+
+    if (vendor && value > 0) {
+      const restored = balanceAfterCharge(vendor.outstandingAmount, value);
+      const { error } = await supabase.from('vendors').update({ outstandingAmount: restored }).eq('id', vendor.id);
+      if (error) {
+        console.error('[Prismora] Could not restore the vendor balance, so the return has been left alone:', error);
+        return { ok: false, error: 'The vendor balance could not be put back, so nothing was deleted.' };
+      }
+      const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: restored } : v);
+      setVendors(nextVendors);
+      localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
+    }
+
+    let guessedBatch = false;
+    for (const line of (ret.items || [])) {
+      const qty = Number(line.quantity || 0);
+      if (qty <= 0) continue;
+
+      let batchId = line.batchId;
+      if (!batchId) {
+        const fallback = batchToReceiveInto(inventory, line.product, line.batchNumber);
+        batchId = fallback ? fallback.id : null;
+        guessedBatch = true;
+      }
+      if (!batchId) {
+        console.warn(`[Prismora] ${qty} of ${line.product} could not be put back: no batch to return them to.`);
+        continue;
+      }
+      await adjustStock(batchId, qty, `Purchase return ${id} withdrawn`);
+    }
+
+    const { error } = await supabase.from('purchase_returns').delete().eq('id', id);
+    if (error) {
+      console.error('[Prismora] Could not delete the purchase return:', error);
+      return { ok: false, error: 'The stock and balance were put back, but the return could not be deleted. It will need removing by hand.' };
+    }
+
+    setPurchaseReturns(prev => {
+      const next = prev.filter(r => r.id !== id);
+      localStorage.setItem('prismora_purchase_returns', JSON.stringify(next));
+      return next;
+    });
+    logEvent('purchase_return_deleted',
+      `Return ${id} to ${vendor?.name || ret.vendorName} withdrawn — ₹${value} and the units put back`, null, id);
+
+    return {
+      ok: true,
+      guessedBatch,
+      note: guessedBatch
+        ? 'This return predates batch tracking, so the units went back to the current batch of each product rather than the one they left.'
+        : null,
+    };
+  };
+
   const addPurchaseReturn = async (returnData) => {
     const newId = `PR-${Date.now()}`;
     const returnValue = computeReturnValue(returnData.items);
-    const newReturn = purchaseReturnRow({ ...returnData, id: newId, value: returnValue, createdAt: new Date().toISOString() });
+
+    // Which batch each line leaves, worked out before anything is written and
+    // recorded on the line itself. Without it a return knows how many units of
+    // a product went back but not where they came from, so withdrawing one
+    // later could only guess a batch — and guess a different one than it took
+    // the units from. `items` is jsonb, so this costs no migration.
+    const lines = (returnData.items || []).map(item => {
+      const qty = Number(item.quantity || 0);
+      const batch = qty > 0 ? batchForReturn(inventory, item.product) : null;
+      return { ...item, batchId: batch ? batch.id : null };
+    });
+
+    const newReturn = purchaseReturnRow({
+      ...returnData, items: lines, id: newId, value: returnValue, createdAt: new Date().toISOString(),
+    });
     setPurchaseReturns(prev => {
       const next = [newReturn, ...prev];
       localStorage.setItem('prismora_purchase_returns', JSON.stringify(next));
@@ -2700,12 +2832,13 @@ export const DataProvider = ({ children }) => {
     }
 
     // Remove the returned units from inventory (goods physically leave)
-    (returnData.items || []).forEach(item => {
-      const qty = Number(item.quantity || 0);
-      if (qty <= 0) return;
-      const invItem = batchForReturn(inventory, item.product);
-      if (invItem) adjustStock(invItem.id, -qty, `Purchase return to ${vendor?.name || returnData.vendorName || 'vendor'}`);
-    });
+    // Awaited in turn. These were fired off unawaited, so a failure here was
+    // unobservable and the function reported success regardless.
+    for (const line of lines) {
+      const qty = Number(line.quantity || 0);
+      if (qty <= 0 || !line.batchId) continue;
+      await adjustStock(line.batchId, -qty, `Purchase return to ${vendor?.name || returnData.vendorName || 'vendor'}`);
+    }
 
     logEvent('purchase_return', `Return ${newId} to ${vendor?.name || returnData.vendorName} — ₹${returnValue}`, returnData.recordedBy, newId);
     return newId;
@@ -3289,8 +3422,8 @@ export const DataProvider = ({ children }) => {
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, receiveStock,
       masters, addMasterOption, updateMasterOption, deleteMasterOption,
       addVendor, updateVendor, deleteVendor,
-      vendorPayments, addVendorPayment,
-      purchaseReturns, addPurchaseReturn,
+      vendorPayments, addVendorPayment, deleteVendorPayment,
+      purchaseReturns, addPurchaseReturn, deletePurchaseReturn,
       addPurchaseOrder, updatePurchaseOrderStatus, cancelPurchaseOrder, deletePurchaseOrder,
       addGRN,
       addDistributor, updateDistributor, deleteDistributor,

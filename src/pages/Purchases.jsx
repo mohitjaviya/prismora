@@ -8,8 +8,8 @@ import {
   CheckCircle, Clock, Truck, FileText, User, Edit2,
   ChevronRight, Package2, AlertCircle, Eye, Wallet, IndianRupee, ArrowUpCircle, ArrowDownCircle
 } from 'lucide-react';
-import { useConfirm } from '../context/DialogContext';
-import { Button, PageHeader } from '../components/ui';
+import { useConfirm, useToast } from '../context/DialogContext';
+import { Button, IconButton, PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildVendorLedger } from '../utils/distributorUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
@@ -36,8 +36,9 @@ const BLANK_LINE = { product: '', quantity: '', unitCost: '', batchNumber: '', e
 export default function Purchases() {
   const { purchaseOrders, vendors, grn, products, vendorPayments, purchaseReturns,
     addPurchaseOrder, updatePurchaseOrderStatus, cancelPurchaseOrder, deletePurchaseOrder,
-    addVendor, updateVendor, deleteVendor, addGRN, receiveStock, addVendorPayment, addPurchaseReturn, masters } = useData();
+    addVendor, updateVendor, deleteVendor, addGRN, receiveStock, addVendorPayment, deleteVendorPayment, addPurchaseReturn, deletePurchaseReturn, masters } = useData();
   const confirm = useConfirm();
+  const toast = useToast();
   // statusConfig below is keyed on the stored value, so the filter uses keys.
   const poStatusOptions = optionsFor(masters, 'po_status');
   // statusConfig below only knows the statuses that existed when it was
@@ -115,6 +116,37 @@ export default function Purchases() {
   }), [purchaseOrders, vendors]);
 
   const ledgerEntries = useMemo(() => viewingVendor ? buildVendorLedger(viewingVendor, grn, vendorPayments, purchaseReturns) : [], [viewingVendor, grn, vendorPayments, purchaseReturns]);
+
+  const handleDeletePayment = async (row) => {
+    const ok = await confirm({
+      title: 'Withdraw this payment?',
+      body: `${formatCurrency(row.credit)} was recorded as paid to ${viewingVendor?.name}. `
+        + 'Withdrawing it deletes the payment and puts that amount back on what you owe them.',
+      confirmLabel: 'Withdraw',
+      danger: true,
+    });
+    if (!ok) return;
+
+    const result = await deleteVendorPayment(row.id);
+    if (result?.ok) toast(`Payment withdrawn and ${formatCurrency(row.credit)} put back.`, 'success');
+    else toast(result?.error || 'The payment could not be withdrawn.', 'error');
+  };
+
+  const handleDeleteReturn = async (r) => {
+    const ok = await confirm({
+      title: 'Withdraw this return?',
+      body: `${r.id} sent ${(r.items || []).reduce((s, i) => s + Number(i.quantity || 0), 0)} unit(s) back to `
+        + `${r.vendorName} and credited ${formatCurrency(r.value)}. Withdrawing it puts both the stock and the money back.`,
+      confirmLabel: 'Withdraw',
+      danger: true,
+    });
+    if (!ok) return;
+
+    const result = await deletePurchaseReturn(r.id);
+    if (!result?.ok) { toast(result?.error || 'The return could not be withdrawn.', 'error'); return; }
+    toast(result.note ? `Return ${r.id} withdrawn. ${result.note}` : `Return ${r.id} withdrawn.`,
+      result.guessedBatch ? 'info' : 'success');
+  };
 
   const handleSubmitReturn = (e) => {
     e.preventDefault();
@@ -533,6 +565,7 @@ export default function Purchases() {
                   <th className="p-4">Reason</th>
                   <th className="p-4 text-right">Credit Value</th>
                   <th className="p-4">Date</th>
+                  <th className="p-4 text-right w-12"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-300">
@@ -545,9 +578,15 @@ export default function Purchases() {
                     <td className="p-4"><span className="text-xs bg-rose-500/10 text-rose-300 border border-rose-500/20 px-2 py-0.5 rounded-full">{r.reason}</span></td>
                     <td className="p-4 text-right font-bold text-emerald-400">{formatCurrency(r.value)}</td>
                     <td className="p-4 text-slate-400">{formatDate(r.date || r.createdAt)}</td>
+                    <td className="p-4 text-right">
+                      {canManage && (
+                        <IconButton icon={Trash2} title="Withdraw this return" size="sm" tone="danger"
+                          onClick={() => handleDeleteReturn(r)} />
+                      )}
+                    </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="7" className="p-12 text-center text-slate-500">
+                  <tr><td colSpan="8" className="p-12 text-center text-slate-500">
                     <ShoppingBag size={32} className="mx-auto mb-3 opacity-20" />
                     <p>No purchase returns recorded.</p>
                     {canManage && <button onClick={() => setIsReturnModalOpen(true)} className="mt-4 text-brand-accent hover:underline text-sm">+ Record your first return</button>}
@@ -790,11 +829,19 @@ export default function Purchases() {
                           <p className="text-[10px] text-slate-500">{formatDate(row.date)}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <span className={`font-semibold ${row.debit > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          {row.debit > 0 ? `+${formatCurrency(row.debit)}` : `-${formatCurrency(row.credit)}`}
-                        </span>
-                        <p className="text-[10px] text-slate-500">Bal: {formatCurrency(row.balance)}</p>
+                      <div className="flex items-center gap-1">
+                        <div className="text-right">
+                          <span className={`font-semibold ${row.debit > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {row.debit > 0 ? `+${formatCurrency(row.debit)}` : `-${formatCurrency(row.credit)}`}
+                          </span>
+                          <p className="text-[10px] text-slate-500">Bal: {formatCurrency(row.balance)}</p>
+                        </div>
+                        {/* Only a payment. A GRN line comes from goods received
+                            and a return has its own row on the Returns tab. */}
+                        {canManage && String(row.id).startsWith('VPAY-') && (
+                          <IconButton icon={Trash2} title="Withdraw this payment" size="sm" tone="danger"
+                            onClick={() => handleDeletePayment(row)} />
+                        )}
                       </div>
                     </div>
                   ))}
