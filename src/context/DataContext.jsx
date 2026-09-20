@@ -493,23 +493,25 @@ export const DataProvider = ({ children }) => {
       if (error) throw error;
       fetchedLeads = data || [];
     } catch (err) {
+      // The merge belongs here and nowhere else.
+      //
+      // It used to run on every load, so any lead this browser held that the
+      // server did not return was added back — which cannot tell "the write
+      // failed" from "somebody deleted it". A deleted lead therefore came back
+      // on the next refresh and stayed until the cache was cleared, which is
+      // exactly what happened after the database was emptied.
+      //
+      // The protection it was added for is real, but it only applies when the
+      // read itself failed. A read that succeeds and returns nothing is the
+      // server saying there are no leads, and that answer is the true one.
       console.warn("Supabase fetch leads failed, using local fallback.", err);
-    }
-    // Rows this browser has that the server did not return are added back.
-    // That covers what matters -- a read that failed, or a row written while
-    // the network was down -- but it cannot tell those apart from a row
-    // deleted on another device, which will reappear here until this
-    // browser's cache is cleared.
-    //
-    // Left this way on purpose. Trusting the server absolutely instead would
-    // hide a row whose write failed, which is the failure this fallback was
-    // added to stop.
-    const localLeadsStr = localStorage.getItem('prismora_leads');
-    if (localLeadsStr) {
-      const localLeads = JSON.parse(localLeadsStr);
-      const remoteIds = new Set(fetchedLeads.map(l => l.id));
-      const localOnly = localLeads.filter(l => !remoteIds.has(l.id));
-      fetchedLeads = [...localOnly, ...fetchedLeads];
+      const localLeadsStr = localStorage.getItem('prismora_leads');
+      if (localLeadsStr) {
+        const localLeads = JSON.parse(localLeadsStr);
+        const remoteIds = new Set(fetchedLeads.map(l => l.id));
+        const localOnly = localLeads.filter(l => !remoteIds.has(l.id));
+        fetchedLeads = [...localOnly, ...fetchedLeads];
+      }
     }
     applyFetched('prismora_leads', setLeads, fetchedLeads);
 
@@ -520,14 +522,18 @@ export const DataProvider = ({ children }) => {
       if (error) throw error;
       fetchedOrders = data || [];
     } catch (err) {
+      // Same merge as leads, and it belongs in the same place: only a read that
+      // actually failed should have the browser's copy added back. Running it
+      // on every load meant an order deleted anywhere else reappeared here, and
+      // was written back to the cache to reappear again next time.
       console.warn("Supabase fetch orders failed, using local fallback.", err);
-    }
-    const localOrdersStr = localStorage.getItem('prismora_orders');
-    if (localOrdersStr) {
-      const localOrders = JSON.parse(localOrdersStr);
-      const remoteIds = new Set(fetchedOrders.map(o => o.id));
-      const localOnly = localOrders.filter(o => !remoteIds.has(o.id));
-      fetchedOrders = [...localOnly, ...fetchedOrders];
+      const localOrdersStr = localStorage.getItem('prismora_orders');
+      if (localOrdersStr) {
+        const localOrders = JSON.parse(localOrdersStr);
+        const remoteIds = new Set(fetchedOrders.map(o => o.id));
+        const localOnly = localOrders.filter(o => !remoteIds.has(o.id));
+        fetchedOrders = [...localOnly, ...fetchedOrders];
+      }
     }
     applyFetched('prismora_orders', setOrders, fetchedOrders);
 
