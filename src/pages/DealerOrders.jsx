@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
+import { territoryFor, territoryFields } from '../utils/territory';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { ShoppingCart, Plus, Trash2, X, Package, Tag, Truck, CheckCircle, Clock, PackageCheck, UserX } from 'lucide-react';
@@ -74,7 +75,7 @@ export default function DealerOrders() {
     // Routed by the partner's own territory, so a state can hold more than
     // one. Matching on state alone gave whichever territory happened to be
     // found first, and a second territory in the same state was unreachable.
-    const territory = territories.find(t => t.name === dealer.territory)
+    const territory = territoryFor(territories, dealer)
       || territories.find(t => t.state === dealer.state);
     addOrder({
       customerName: dealer.name,
@@ -87,7 +88,9 @@ export default function DealerOrders() {
       city: dealer.city,
       status: 'Pending',
       assignedTo: territory?.executiveId || '',
-      territory: territory?.name || dealer.territory || '',
+      // Both, so the order carries the link and stays readable to the
+      // sites that still show a name.
+      ...territoryFields(territories, territory?.id),
       deliveryAddress: dealer.address || '',
       deliveryPincode: dealer.pincode || '',
       dealerId: dealer.id,

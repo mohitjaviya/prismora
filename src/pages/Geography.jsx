@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useConfirm } from '../context/DialogContext';
 import { Button, PageHeader } from '../components/ui';
+import { territoryFor } from '../utils/territory';
 import { createPortal } from 'react-dom';
 
 const INDIAN_STATES = [
@@ -164,7 +165,7 @@ export default function Geography() {
     // cover. This is the case worth surfacing: the order is being credited to
     // a supervisor who is not responsible for that ground.
     const outsideZone = visibleOrders.filter(
-      o => norm(o.territory) === norm(t.name) && !covered.has(norm(o.city))
+      o => territoryFor(territories, o)?.id === t.id && !covered.has(norm(o.city))
     );
 
     return {
@@ -172,7 +173,7 @@ export default function Geography() {
       stateRevenue: sum(inState), stateCount: inState.length,
       outsideZone,
     };
-  }, [activeTerritoryDetail, visibleOrders]);
+  }, [activeTerritoryDetail, visibleOrders, territories]);
 
   // Handlers
   const requestSort = (key) => {

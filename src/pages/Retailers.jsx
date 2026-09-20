@@ -9,7 +9,7 @@ import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { deleteWarning } from '../utils/partyDependants';
-import { territoryFields } from '../utils/territory';
+import { territoryFields, territoryName } from '../utils/territory';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -64,12 +64,12 @@ export default function Retailers() {
   const filtered = useMemo(() => retailers.filter(r => {
     const matchSearch = !search ||
       r.name.toLowerCase().includes(search.toLowerCase()) ||
-      (r.territory || '').toLowerCase().includes(search.toLowerCase()) ||
+      territoryName(territories, r).toLowerCase().includes(search.toLowerCase()) ||
       (r.contactPerson || '').toLowerCase().includes(search.toLowerCase());
     const matchState = !stateFilter || r.state === stateFilter;
     const matchStatus = statusFilter === 'All' || r.status === statusFilter;
     return matchSearch && matchState && matchStatus;
-  }), [retailers, search, stateFilter, statusFilter]);
+  }), [retailers, territories, search, stateFilter, statusFilter]);
 
   const allStates = [...new Set(retailers.map(r => r.state).filter(Boolean))].sort();
   const activeDealers = dealers.filter(d => d.status === 'Active');
@@ -166,10 +166,10 @@ export default function Retailers() {
       ),
     },
     {
-      key: 'territory', header: 'Territory / State', hideBelow: 'md', sort: r => r.territory || '',
+      key: 'territory', header: 'Territory / State', hideBelow: 'md', sort: r => territoryName(territories, r),
       render: r => (
         <>
-          <div>{r.territory || '—'}</div>
+          <div>{territoryName(territories, r)}</div>
           <div className="text-[11px] text-slate-500">{r.state || '—'}</div>
         </>
       ),
@@ -317,7 +317,7 @@ export default function Retailers() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <InfoRow icon={<CreditCard size={14} />} label="GSTIN" value={viewingRetailer.gstin || 'N/A'} />
                 <InfoRow icon={<Network size={14} />} label="Parent Dealer" value={parentDealerName(viewingRetailer.parentDealerId)} />
-                <InfoRow icon={<MapPin size={14} />} label="Territory" value={viewingRetailer.territory || 'N/A'} />
+                <InfoRow icon={<MapPin size={14} />} label="Territory" value={territoryName(territories, viewingRetailer)} />
                 <InfoRow icon={<MapPin size={14} />} label="City / State" value={`${viewingRetailer.city || ''}, ${viewingRetailer.state || ''}`.trim() || 'N/A'} />
                 <InfoRow icon={<Phone size={14} />} label="Phone" value={viewingRetailer.phone || 'N/A'} />
                 <InfoRow icon={<Mail size={14} />} label="Email" value={viewingRetailer.email || 'N/A'} />

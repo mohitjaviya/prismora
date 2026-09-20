@@ -14,6 +14,7 @@ import { Button, PageHeader, StatCard } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { optionsFor } from '../utils/masterLists';
 import { shiftDuration } from '../utils/attendance';
+import { territoryFor, territoryFields, territoryName } from '../utils/territory';
 
 
 /**
@@ -71,7 +72,7 @@ export default function SFA() {
 
   // ── Forms ───────────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0];
-  const [beatForm, setBeatForm] = useState({ executiveId: '', date: todayStr, territory: '', outlets: '' });
+  const [beatForm, setBeatForm] = useState({ executiveId: '', date: todayStr, territoryId: '', outlets: '' });
   const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, orderItems: [], outletCompany: '', outletCity: '', outletEmail: '', outletAddress: '', outletPincode: '', nextFollowUp: '', notes: '', outcome: 'Visited', notVisitedReason: '' });
   const [punchNotes, setPunchNotes] = useState('');
   const [expenseForm, setExpenseForm] = useState({ date: todayStr, category: 'Travel', amount: '', description: '', receiptName: '', receiptData: '' });
@@ -182,8 +183,9 @@ export default function SFA() {
   const handleCreateBeat = (e) => {
     e.preventDefault();
     const outletsList = beatForm.outlets.split(',').map(o => o.trim()).filter(Boolean);
-    addBeatPlan({ executiveId: beatForm.executiveId || user.id, date: beatForm.date, territory: beatForm.territory, outlets: outletsList });
-    setBeatForm({ executiveId: '', date: todayStr, territory: '', outlets: '' });
+    addBeatPlan({ executiveId: beatForm.executiveId || user.id, date: beatForm.date,
+      ...territoryFields(territories, beatForm.territoryId), outlets: outletsList });
+    setBeatForm({ executiveId: '', date: todayStr, territoryId: '', outlets: '' });
     setIsBeatModalOpen(false);
   };
 
@@ -214,7 +216,7 @@ export default function SFA() {
     orderItems: prev.orderItems.filter((_, i) => i !== idx),
   }));
 
-  const visitTerritory = territories.find(t => t.name === selectedBeatForVisit?.beat?.territory);
+  const visitTerritory = territoryFor(territories, selectedBeatForVisit?.beat);
 
   // The territory's own districts come first because they are the likely ones,
   // followed by the rest of that state so a rep is never blocked by a district
@@ -247,7 +249,7 @@ export default function SFA() {
   const handleOpenVisit = (beat, outlet, outcome = 'Visited') => {
     setSelectedBeatForVisit({ beat, outlet });
     const known = matchOutlet(outlet);
-    const territory = territories.find(t => t.name === beat?.territory);
+    const territory = territoryFor(territories, beat);
     setVisitForm({
       outletName: outlet,
       outletContact: known?.phone || '',
@@ -285,7 +287,7 @@ export default function SFA() {
       // city "Field Beat", and the beat's territory put in the state field —
       // which meant every field order landed in Orders needing to be corrected
       // by hand. Everything below is either known or left empty.
-      const territory = territories.find(t => t.name === selectedBeatForVisit?.beat?.territory);
+      const territory = territoryFor(territories, selectedBeatForVisit?.beat);
       const outletKey = visitForm.outletName.trim().toLowerCase();
       const matchedRetailer = retailers?.find(r => r.name?.trim().toLowerCase() === outletKey);
       const matchedDealer = !matchedRetailer && dealers?.find(d => d.name?.trim().toLowerCase() === outletKey);
@@ -1226,7 +1228,7 @@ export default function SFA() {
             </div>
             <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {territories.length > 0 ? territories.map(territory => {
-                const tBeats = filteredBeats.filter(b => b.territory === territory.name);
+                const tBeats = filteredBeats.filter(b => territoryFor(territories, b)?.id === territory.id);
                 const visited = tBeats.filter(beatCovered).length;
                 const totalOutlets = tBeats.reduce((sum, b) => sum + (Array.isArray(b.outlets) ? b.outlets.length : 0), 0);
                 const pct = tBeats.length > 0 ? Math.round((visited / tBeats.length) * 100) : 0;
@@ -1283,7 +1285,7 @@ export default function SFA() {
                         {beatPlans.filter(b => b.executiveId === user.id).map(beat => (
                           <div key={beat.id} className="space-y-1.5">
                             <div className="flex justify-between text-xs">
-                              <span className="text-slate-300 font-medium">{beat.territory} <span className="text-slate-600 font-normal">— {fmtDate(beat.date)}</span></span>
+                              <span className="text-slate-300 font-medium">{territoryName(territories, beat)} <span className="text-slate-600 font-normal">— {fmtDate(beat.date)}</span></span>
                               <span className={`font-bold ${beatCovered(beat) ? 'text-emerald-400' : beat.status === 'Not Visited' ? 'text-rose-400' : 'text-yellow-400'}`}>{beat.status}</span>
                             </div>
                             <div className="w-full bg-brand-primary rounded-full h-1.5">
@@ -1394,9 +1396,9 @@ export default function SFA() {
               </div>
               <div>
                 <label htmlFor="sfa-territory-zone" className={lbl}>Territory Zone *</label>
-                <select id="sfa-territory-zone" required value={beatForm.territory} onChange={e => setBeatForm({ ...beatForm, territory: e.target.value })} className={inp} disabled={territories.length === 0}>
+                <select id="sfa-territory-zone" required value={beatForm.territoryId} onChange={e => setBeatForm({ ...beatForm, territoryId: e.target.value })} className={inp} disabled={territories.length === 0}>
                   <option value="" className="bg-brand-primary">{territories.length === 0 ? 'No territories set up yet' : 'Select Territory'}</option>
-                  {territories.map(t => <option key={t.id} value={t.name} className="bg-brand-primary">{t.name} ({t.state})</option>)}
+                  {territories.map(t => <option key={t.id} value={t.id} className="bg-brand-primary">{t.name} ({t.state})</option>)}
                 </select>
                 {/* An empty dropdown reads as a broken control. Say what is
                     missing and where it is created, rather than leaving the

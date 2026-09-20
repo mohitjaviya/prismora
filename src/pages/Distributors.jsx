@@ -9,7 +9,7 @@ import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { deleteWarning } from '../utils/partyDependants';
-import { territoryFields } from '../utils/territory';
+import { territoryFields, territoryName } from '../utils/territory';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -62,12 +62,12 @@ export default function Distributors() {
   const filtered = useMemo(() => distributors.filter(d => {
     const matchSearch = !search ||
       d.name.toLowerCase().includes(search.toLowerCase()) ||
-      (d.territory || '').toLowerCase().includes(search.toLowerCase()) ||
+      territoryName(territories, d).toLowerCase().includes(search.toLowerCase()) ||
       (d.contactPerson || '').toLowerCase().includes(search.toLowerCase());
     const matchState = !stateFilter || d.state === stateFilter;
     const matchStatus = statusFilter === 'All' || d.status === statusFilter;
     return matchSearch && matchState && matchStatus;
-  }), [distributors, search, stateFilter, statusFilter]);
+  }), [distributors, territories, search, stateFilter, statusFilter]);
 
   const allStates = [...new Set(distributors.map(d => d.state).filter(Boolean))].sort();
 
@@ -153,10 +153,10 @@ export default function Distributors() {
       ),
     },
     {
-      key: 'territory', header: 'Territory / State', hideBelow: 'md', sort: d => d.territory || '',
+      key: 'territory', header: 'Territory / State', hideBelow: 'md', sort: d => territoryName(territories, d),
       render: d => (
         <>
-          <div>{d.territory || '—'}</div>
+          <div>{territoryName(territories, d)}</div>
           <div className="text-[11px] text-slate-500">{d.state || '—'}</div>
         </>
       ),
@@ -303,7 +303,7 @@ export default function Distributors() {
               )}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <InfoRow icon={<CreditCard size={14} />} label="GSTIN" value={viewingDist.gstin || 'N/A'} />
-                <InfoRow icon={<MapPin size={14} />} label="Territory" value={viewingDist.territory || 'N/A'} />
+                <InfoRow icon={<MapPin size={14} />} label="Territory" value={territoryName(territories, viewingDist)} />
                 <InfoRow icon={<MapPin size={14} />} label="City / State" value={`${viewingDist.city || ''}, ${viewingDist.state || ''}`.trim() || 'N/A'} />
                 <InfoRow icon={<Phone size={14} />} label="Phone" value={viewingDist.phone || 'N/A'} />
                 <InfoRow icon={<Mail size={14} />} label="Email" value={viewingDist.email || 'N/A'} />
