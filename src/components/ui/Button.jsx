@@ -64,6 +64,7 @@ export function IconButton({ icon: Icon, title, tone = 'default', size = 'md', c
     default: 'text-slate-400 hover:text-white hover:bg-white/10',
     accent: 'text-brand-accent hover:bg-brand-accent/10',
     danger: 'text-rose-400 hover:bg-rose-500/10',
+    success: 'text-emerald-400 hover:bg-emerald-500/10',
   };
   const box = size === 'sm' ? 'w-7 h-7 rounded-lg' : 'w-9 h-9 rounded-xl';
   return (

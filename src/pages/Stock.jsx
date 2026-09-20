@@ -172,8 +172,14 @@ export default function Stock() {
                 </p>
                 <p className="text-[10px] text-slate-500 uppercase tracking-wide mt-1.5">Received to date</p>
                 {pr.unconfirmed > 0 && (
+                  // Staff saw the same line as the customer and were told to
+                  // confirm it in My Orders -- a page only a party login opens.
+                  // For a customer with no portal that made it unconfirmable,
+                  // and the instruction impossible for either of them to follow.
                   <p className="text-[11px] text-amber-400 mt-2 leading-snug">
-                    {pr.unconfirmed.toLocaleString('en-IN')} {pr.uom} not yet confirmed — confirm in My Orders.
+                    {pr.unconfirmed.toLocaleString('en-IN')} {pr.uom} not yet confirmed — {isParty
+                      ? 'confirm in My Orders.'
+                      : 'record receipt on the order.'}
                   </p>
                 )}
               </div>

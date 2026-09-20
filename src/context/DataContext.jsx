@@ -161,6 +161,10 @@ const ORDER_COLUMNS = [
   'phone', 'email',
   'distributorId', 'dealerId', 'retailerId', 'items',
   'receivedByDistributor', 'receivedAt',
+  // ADD_RECEIPT_EVIDENCE.sql. Absent until it is run, and a write naming a
+  // column the table lacks is rejected whole, so recordOrderReceipt drops
+  // these and says so rather than losing the tick along with the proof.
+  'receiptSource', 'receiptRecordedBy', 'receiptEvidence', 'receiptNote',
   'splitFromOrderId', 'splitIntoOrderId',
   'deliveredQty', 'fulfilledAt',
   'leadId',
@@ -1647,14 +1651,136 @@ export const DataProvider = ({ children }) => {
 
   // Lets a distributor self-acknowledge physical receipt of an order —
   // separate from internal staff marking it "Delivered".
+  /**
+   * Columns ADD_RECEIPT_EVIDENCE.sql adds, which the table may not have yet.
+   *
+   * PostgREST does not ignore an unknown key -- it refuses the whole statement
+   * with PGRST204 -- so naming one of these before the migration has run would
+   * lose the receipt itself, not just the evidence. A refused write is retried
+   * without the column it was refused for, and the caller is told what went
+   * missing so it can be said on screen.
+   */
+  const RECEIPT_PROOF_COLUMNS = ['receiptSource', 'receiptRecordedBy', 'receiptEvidence', 'receiptNote'];
+  const absentReceiptColumns = useRef(new Set());
+
+  /**
+   * Whether the table can hold the proof, asked once and remembered.
+   *
+   * This is checked before a staff receipt is written rather than after,
+   * because there is no safe way to write one without it. receiptSource is
+   * what separates "the customer said it arrived" from "an employee said the
+   * customer told them it arrived", and with the column missing a staff entry
+   * is indistinguishable from the customer's own -- it would be displayed as
+   * the customer's. Recording a weaker claim under a stronger one's name is
+   * worse than refusing, so it refuses and says what to run.
+   */
+  const receiptProofReady = useRef(null);
+
+  const canStoreReceiptProof = async () => {
+    if (receiptProofReady.current !== null) return receiptProofReady.current;
+    const { error } = await supabase.from('orders').select('receiptSource').limit(1);
+    receiptProofReady.current = !error;
+    if (error) {
+      console.warn('[Prismora] The orders table has no receipt-evidence columns. ' +
+        'Run ADD_RECEIPT_EVIDENCE.sql before staff can record receipts for customers.');
+    }
+    return receiptProofReady.current;
+  };
+
+  const writeReceipt = async (id, patch, dropped = []) => {
+    const row = { ...patch };
+    absentReceiptColumns.current.forEach(c => delete row[c]);
+
+    const { error } = await supabase.from('orders').update(row).eq('id', id);
+    if (!error) return { ok: true, dropped };
+
+    const message = String(error.message || '');
+    const culprit = RECEIPT_PROOF_COLUMNS.find(c => message.includes(`'${c}'`));
+    if (!culprit || absentReceiptColumns.current.has(culprit)) {
+      console.error('[Prismora] Could not save the receipt:', message || error);
+      return { ok: false, dropped };
+    }
+
+    console.warn(
+      `[Prismora] The orders table has no '${culprit}' column, so it is being left out. ` +
+      'Run ADD_RECEIPT_EVIDENCE.sql to keep the proof alongside the receipt.');
+    absentReceiptColumns.current.add(culprit);
+    return writeReceipt(id, patch, [...dropped, culprit]);
+  };
+
   const confirmOrderReceipt = async (id) => {
     const order = orders.find(o => o.id === id);
     const receivedAt = new Date().toISOString();
-    const next = orders.map(o => o.id === id ? { ...o, receivedByDistributor: true, receivedAt } : o);
+    const patch = { receivedByDistributor: true, receivedAt, receiptSource: 'partner' };
+    const next = orders.map(o => o.id === id ? { ...o, ...patch } : o);
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    await persist('orders update', supabase.from('orders').update({ receivedByDistributor: true, receivedAt }).eq('id', id));
+    await writeReceipt(id, patch);
     if (order) logEvent('order_receipt_confirmed', `${order.customerName} confirmed receipt of order ${id}`, order.assignedTo, id);
+  };
+
+  /**
+   * Staff recording receipt for a customer who has no portal to confirm it in.
+   *
+   * Kept apart from the customer's own confirmation by receiptSource, because
+   * "they told me it arrived" is a weaker claim than "it arrived" and the
+   * difference is the whole reason the evidence is captured.
+   *
+   * Returns { ok, proofSaved } -- proofSaved is false when the table has not
+   * had ADD_RECEIPT_EVIDENCE.sql run against it, so the caller can say that
+   * out loud instead of letting the evidence disappear silently.
+   */
+  /**
+   * Undoing a receipt an employee recorded by mistake.
+   *
+   * Only one they recorded. A customer's own confirmation in their portal is
+   * theirs, and staff erasing it would be staff deciding that the customer did
+   * not say what they said.
+   */
+  const clearOrderReceipt = async (id) => {
+    const order = orders.find(o => o.id === id);
+    if (!order || order.receiptSource !== 'staff') return false;
+
+    const patch = {
+      receivedByDistributor: false,
+      receivedAt: null,
+      receiptSource: null,
+      receiptRecordedBy: null,
+      receiptEvidence: null,
+      receiptNote: null,
+    };
+    const next = orders.map(o => o.id === id ? { ...o, ...patch } : o);
+    setOrders(next);
+    localStorage.setItem('prismora_orders', JSON.stringify(next));
+
+    const { ok } = await writeReceipt(id, patch);
+    logEvent('order_receipt_cleared', `Receipt recorded against order ${id} was withdrawn`, order.assignedTo, id);
+    return ok;
+  };
+
+  const recordOrderReceipt = async (id, { evidence, note, recordedBy } = {}) => {
+    const order = orders.find(o => o.id === id);
+    if (!order) return { ok: false, proofSaved: false };
+    if (!await canStoreReceiptProof()) return { ok: false, proofSaved: false, needsMigration: true };
+
+    const receivedAt = new Date().toISOString();
+    const patch = {
+      receivedByDistributor: true,
+      receivedAt,
+      receiptSource: 'staff',
+      receiptRecordedBy: recordedBy || '',
+      receiptEvidence: evidence || '',
+      receiptNote: String(note || '').trim(),
+    };
+    const next = orders.map(o => o.id === id ? { ...o, ...patch } : o);
+    setOrders(next);
+    localStorage.setItem('prismora_orders', JSON.stringify(next));
+
+    const { ok, dropped } = await writeReceipt(id, patch);
+    logEvent('order_receipt_recorded',
+      `${recordedBy || 'Staff'} recorded receipt of order ${id} for ${order.customerName} (${evidence || 'no evidence given'})`,
+      order.assignedTo, id);
+    return { ok, proofSaved: ok && dropped.length === 0 };
   };
 
   // Splits an order when there isn't enough stock to fulfill it in full:
@@ -3115,7 +3241,7 @@ export const DataProvider = ({ children }) => {
       leads, orders, eventLog, products, productCatalog, invoices, expenses,
       schemaError, dismissSchemaError: () => setSchemaError(null),
       addLead, updateLead, deleteLead, convertLeadToOrder,
-      addOrder, updateOrder, deleteOrder, confirmOrderReceipt, splitOrder, deliverPartial,
+      addOrder, updateOrder, deleteOrder, confirmOrderReceipt, recordOrderReceipt, clearOrderReceipt, splitOrder, deliverPartial,
       addProduct, updateProduct, deleteProduct,
       addInvoice, updateInvoiceStatus, deleteInvoice,
       creditNotes, addCreditNote,

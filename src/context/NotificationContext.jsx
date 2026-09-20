@@ -255,6 +255,39 @@ export const NotificationProvider = ({ children }) => {
       });
     }
 
+    // Trigger 8b: Staff — deliveries nobody has acknowledged.
+    //
+    // Trigger 8 below only fires for a portal login, so a delivery to a
+    // customer who has no portal was chased by nobody: it simply sat unconfirmed
+    // for ever. Staff can record it on their behalf, so staff are told.
+    //
+    // Only after a week, and only the ten oldest. A delivery confirmed the next
+    // day is not a problem worth a notification, and an inbox of forty of these
+    // is one nobody reads.
+    const isPortalUser = Boolean(user.distributorId || user.dealerId || user.retailerId);
+    if (!isPortalUser) {
+      const aWeekAgo = Date.now() - 7 * 86400000;
+      (orders || [])
+        .filter(o => o.status === 'Delivered' && !o.receivedByDistributor)
+        .filter(o => {
+          const when = new Date(o.fulfilledAt || o.date || o.createdAt || 0).getTime();
+          return Number.isFinite(when) && when > 0 && when < aWeekAgo;
+        })
+        .sort((a, b) => new Date(a.fulfilledAt || a.date || a.createdAt || 0) - new Date(b.fulfilledAt || b.date || b.createdAt || 0))
+        .slice(0, 10)
+        .forEach(o => {
+          newSystemNotifications.push({
+            id: `sys-unreceipted-${o.id}`,
+            type: 'warning',
+            title: 'Delivery Not Acknowledged',
+            message: `Order ${o.id} (${o.customerName}) was delivered over a week ago and nobody has confirmed receipt — record it if you know it arrived.`,
+            link: `/orders?searchId=${o.id}`,
+            isRead: false,
+            timestamp: o.fulfilledAt || o.createdAt || new Date().toISOString()
+          });
+        });
+    }
+
     // Trigger 8: Portal users — delivered orders awaiting their receipt confirmation
     const myPartyId = user.distributorId || user.dealerId || user.retailerId;
     if (myPartyId) {

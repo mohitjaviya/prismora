@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
 import { format } from 'date-fns';
-import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart } from 'lucide-react';
+import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart, ClipboardCheck, Undo2, X } from 'lucide-react';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { downloadCSV } from '../utils/exportUtils';
@@ -10,6 +10,8 @@ import { allParties } from '../utils/distributorUtils';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
+import { canRecordReceipt, describeReceipt, receiptSourceOf, validateReceipt, RECEIPT_EVIDENCE } from '../utils/receipts';
+import { useToast, useConfirm } from '../context/DialogContext';
 
 
 // Which role "owns" moving an order into a given status — enforces the
@@ -41,7 +43,7 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, distributors, dealers, retailers, productCatalog, masters } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters } = useData();
   // From Master Lists. The stepper and the dropdown show the label; every
   // check in this file — STATUS_OWNERS, the stock guards, the delivery
   // branches — still compares the stored key, which cannot be renamed.
@@ -59,6 +61,62 @@ const Orders = () => {
   const [salespersonFilter, setSalespersonFilter] = useState('');
   const [statusError, setStatusError] = useState('');
   const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+
+  // Recording a receipt on a customer's behalf. Staff only: a party signed into
+  // their own portal confirms it themselves, and that is the stronger claim.
+  const toast = useToast();
+  const confirm = useConfirm();
+  const canStaffRecordReceipt = !['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
+  const [receiptOrder, setReceiptOrder] = useState(null);
+  const [receiptForm, setReceiptForm] = useState({ evidence: '', note: '' });
+  const [savingReceipt, setSavingReceipt] = useState(false);
+
+  const openReceipt = (order) => {
+    setReceiptOrder(order);
+    setReceiptForm({ evidence: '', note: '' });
+  };
+
+  const withdrawReceipt = async (order) => {
+    const ok = await confirm({
+      title: 'Withdraw this receipt?',
+      body: `${describeReceipt(order)}. Withdrawing it puts order ${order.id} back to awaiting acknowledgement, and the evidence is removed.`,
+      confirmLabel: 'Withdraw',
+      danger: true,
+    });
+    if (!ok) return;
+    if (await clearOrderReceipt(order.id)) toast(`Receipt withdrawn from ${order.id}.`, 'success');
+    else toast('The receipt could not be withdrawn. The reason is in the browser console.', 'error');
+  };
+
+  const submitReceipt = async (e) => {
+    e.preventDefault();
+    const check = validateReceipt(receiptForm);
+    if (!check.ok) { toast(check.error, 'error'); return; }
+
+    setSavingReceipt(true);
+    const { ok, proofSaved, needsMigration } = await recordOrderReceipt(receiptOrder.id, {
+      evidence: receiptForm.evidence,
+      note: receiptForm.note,
+      recordedBy: user?.name || 'Staff',
+    });
+    setSavingReceipt(false);
+
+    if (needsMigration) {
+      toast('The database cannot yet record who confirmed a delivery, so this would be filed as the customer’s own confirmation rather than yours. Run ADD_RECEIPT_EVIDENCE.sql first. Nothing has been changed.', 'error');
+      return;
+    }
+    if (!ok) {
+      toast('The receipt could not be saved, so nothing has been recorded. The reason is in the browser console.', 'error');
+      return;
+    }
+    setReceiptOrder(null);
+    // Saying it out loud rather than letting the evidence vanish quietly: the
+    // tick is on an existing column and survives, the proof needs the migration.
+    toast(proofSaved
+      ? `Receipt recorded for ${receiptOrder.customerName}.`
+      : 'Receipt recorded, but the evidence could not be saved — run ADD_RECEIPT_EVIDENCE.sql to keep it.',
+      proofSaved ? 'success' : 'error');
+  };
   const [splitQuantities, setSplitQuantities] = useState({});
   const [isPartialModalOpen, setIsPartialModalOpen] = useState(false);
   const [partialQty, setPartialQty] = useState('');
@@ -608,8 +666,15 @@ const Orders = () => {
             </div>
           )}
           {o.receivedByDistributor && (
-            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
-              <CheckCircle size={10} /> Receipt confirmed
+            // Who confirmed it matters: the customer saying "it arrived" and an
+            // employee saying "they told me it arrived" are different claims.
+            <div
+              className={`mt-1.5 flex items-center gap-1 text-[10px] font-semibold ${
+                receiptSourceOf(o) === 'staff' ? 'text-amber-400' : 'text-emerald-400'}`}
+              title={describeReceipt(o) || undefined}
+            >
+              <CheckCircle size={10} />
+              {receiptSourceOf(o) === 'staff' ? 'Receipt recorded by staff' : 'Receipt confirmed'}
             </div>
           )}
         </>
@@ -619,6 +684,16 @@ const Orders = () => {
       key: 'actions', header: '', align: 'right', width: 'w-24',
       render: o => (
         <div className="flex items-center justify-end gap-0.5">
+          {/* A customer created by staff has no portal, so nobody could ever
+              record that their delivery landed. */}
+          {canStaffRecordReceipt && canRecordReceipt(o) && (
+            <IconButton icon={ClipboardCheck} title="Record receipt" size="sm" tone="success"
+              onClick={e => { e.stopPropagation(); openReceipt(o); }} />
+          )}
+          {canStaffRecordReceipt && receiptSourceOf(o) === 'staff' && (
+            <IconButton icon={Undo2} title="Withdraw the receipt you recorded" size="sm"
+              onClick={e => { e.stopPropagation(); withdrawReceipt(o); }} />
+          )}
           <IconButton icon={Edit2} title="Edit order" size="sm" tone="accent"
             onClick={e => { e.stopPropagation(); handleOpenModal(o); }} />
           <IconButton icon={Trash2} title="Delete order" size="sm" tone="danger"
@@ -1205,6 +1280,49 @@ const Orders = () => {
           </div>
         </div>, document.body
       )}
+
+      {receiptOrder && createPortal(
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setReceiptOrder(null)} />
+          <form onSubmit={submitReceipt} className="relative bg-brand-primary-light border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg z-10">
+            <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold text-white">Record receipt</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{receiptOrder.id} — {receiptOrder.customerName}</p>
+              </div>
+              <IconButton icon={X} title="Close" onClick={() => setReceiptOrder(null)} />
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-400">
+                For a customer who has no portal to confirm it in. This is recorded as
+                your word that the delivery arrived, not theirs, so say how you know.
+              </p>
+              <div>
+                <label htmlFor="receipt-evidence" className="block text-xs font-semibold text-slate-400 mb-1.5">How do you know? *</label>
+                <Select id="receipt-evidence" required value={receiptForm.evidence}
+                  onChange={e => setReceiptForm(f => ({ ...f, evidence: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {RECEIPT_EVIDENCE.map(x => <option key={x} value={x}>{x}</option>)}
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="receipt-note" className="block text-xs font-semibold text-slate-400 mb-1.5">
+                  Detail {receiptForm.evidence === 'Other' ? '*' : '(optional)'}
+                </label>
+                <textarea id="receipt-note" rows="2" value={receiptForm.note}
+                  onChange={e => setReceiptForm(f => ({ ...f, note: e.target.value }))}
+                  placeholder="e.g. spoke to Mr Patel, all 12 cartons accounted for"
+                  className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-700 flex gap-3 justify-end">
+              <Button variant="secondary" onClick={() => setReceiptOrder(null)}>Cancel</Button>
+              <Button type="submit" variant="primary" disabled={savingReceipt}>
+                {savingReceipt ? 'Recording…' : 'Record receipt'}
+              </Button>
+            </div>
+          </form>
+        </div>, document.body)}
 
       {isSplitModalOpen && editingOrder && createPortal(
         <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
