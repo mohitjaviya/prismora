@@ -4,10 +4,7 @@ import {
   linkedExpenseId, expenseForIncentive, expenseForClaim, expenseForFieldExpense,
   unbookedPayouts,
 } from '../utils/payouts';
-import {
-  invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty,
-  invoicesSettledBy, balanceAfterPayment,
-} from '../utils/settlement';
+import { invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty, invoicesSettledBy, balanceAfterPayment, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
@@ -1974,13 +1971,11 @@ export const DataProvider = ({ children }) => {
   };
 
   /** The distributor, dealer or retailer an invoice was raised against. */
-  const partyForInvoice = (invoice) => {
-    for (const [list, type] of [[distributors, 'Distributor'], [dealers, 'Dealer'], [retailers, 'Retailer']]) {
-      const found = (list || []).find(party => invoiceBelongsToParty(invoice, party, orders));
-      if (found) return { party: found, type };
-    }
-    return { party: null, type: null };
-  };
+  // The tier search is in utils/settlement.js, with tests. Which of three
+  // lists an invoice matches decides whose ledger moves, and the first-match
+  // order was written down nowhere.
+  const partyForInvoice = (invoice) =>
+    resolveInvoiceParty(invoice, { distributors, dealers, retailers, orders });
 
   const writePartyOutstanding = async (type, party, value) => {
     const patch = { outstandingAmount: value };
@@ -2008,21 +2003,11 @@ export const DataProvider = ({ children }) => {
     const total = invoiceTotal(invoice);
     if (total <= 0) return true;
 
-    const payId = paymentIdForInvoice(invoice.id);
-    if (distributorPayments.some(x => x.id === payId)) return true;
+    if (alreadySettled(invoice.id, distributorPayments)) return true;
 
-    const field = type === 'Distributor' ? 'distributorId' : type === 'Dealer' ? 'dealerId' : 'retailerId';
-    const row = {
-      id: payId,
-      [field]: party.id,
-      amount: total,
-      method: 'Invoice settled',
-      reference: invoice.id,
-      date: new Date().toISOString(),
-      notes: `Recorded automatically when invoice ${invoice.id} was marked paid.`,
-      recordedBy: null,
-      createdAt: new Date().toISOString(),
-    };
+    const row = settlementRowFor(invoice, party, type);
+    if (!row) return false;
+    const payId = row.id;
     const ok = await persist('distributor_payments insert (invoice settled)',
       supabase.from('distributor_payments').insert([row]));
     if (!ok) return false;

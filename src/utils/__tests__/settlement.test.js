@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty, paymentFieldFor,
-  invoicesSettledBy, balanceAfterPayment, isOverpayment,
+  alreadySettled, balanceAfterPayment, invoiceBelongsToParty, invoiceTotal, invoicesSettledBy, isOverpayment, partyForInvoice, paymentFieldFor, paymentIdForInvoice, settlementRowFor,
 } from '../settlement';
 
 describe('invoiceTotal', () => {
@@ -155,5 +154,110 @@ describe('isOverpayment', () => {
 
   it('flags any payment against a cleared account', () => {
     expect(isOverpayment(0, 1)).toBe(true);
+  });
+});
+
+// ── The decisions settleInvoiceAsPayment makes ──────────────────────────
+// These lived in the provider and nothing could reach them. Between them they
+// decide whose ledger an invoice credits and by how much, which is the pair
+// that drifted apart by exactly the GST for every invoice in this database.
+
+describe('partyForInvoice', () => {
+  const DISTRIBUTORS = [{ id: 'D1', name: 'Gujarat Super Stockist' }];
+  const DEALERS = [{ id: 'DL1', name: 'Shree Ayur Agencies' }];
+  const RETAILERS = [{ id: 'R1', name: 'Krishna Pharma' }];
+  const LISTS = { distributors: DISTRIBUTORS, dealers: DEALERS, retailers: RETAILERS, orders: [] };
+
+  it('finds the party at each tier', () => {
+    expect(partyForInvoice({ customerName: 'Gujarat Super Stockist' }, LISTS))
+      .toEqual({ party: DISTRIBUTORS[0], type: 'Distributor' });
+    expect(partyForInvoice({ customerName: 'Shree Ayur Agencies' }, LISTS))
+      .toEqual({ party: DEALERS[0], type: 'Dealer' });
+    expect(partyForInvoice({ customerName: 'Krishna Pharma' }, LISTS))
+      .toEqual({ party: RETAILERS[0], type: 'Retailer' });
+  });
+
+  it('credits the higher tier when a name matches at two', () => {
+    // Undocumented anywhere else, and it decides whose ledger moves.
+    const clash = {
+      distributors: [{ id: 'D9', name: 'Same Name Ltd' }],
+      dealers: [{ id: 'DL9', name: 'Same Name Ltd' }],
+      retailers: [],
+      orders: [],
+    };
+    expect(partyForInvoice({ customerName: 'Same Name Ltd' }, clash).type).toBe('Distributor');
+  });
+
+  it('finds the party through the order when the name does not match', () => {
+    const orders = [{ id: 'O1', distributorId: 'D1' }];
+    expect(partyForInvoice({ customerName: 'Typed Differently', orderId: 'O1' },
+      { ...LISTS, orders }).type).toBe('Distributor');
+  });
+
+  it('is null for a walk-in, which has no ledger to credit', () => {
+    expect(partyForInvoice({ customerName: 'Somebody Passing' }, LISTS))
+      .toEqual({ party: null, type: null });
+  });
+
+  it('is null rather than throwing when the lists are missing', () => {
+    expect(partyForInvoice({ customerName: 'X' }, {})).toEqual({ party: null, type: null });
+    expect(partyForInvoice({ customerName: 'X' })).toEqual({ party: null, type: null });
+  });
+});
+
+describe('settlementRowFor', () => {
+  const INVOICE = { id: 'INV-1', amount: 10000, tax: 1800, customerName: 'Gujarat Super Stockist' };
+  const PARTY = { id: 'D1', name: 'Gujarat Super Stockist' };
+
+  it('records the billed total, not the net — the drift this caused was the GST', () => {
+    expect(settlementRowFor(INVOICE, PARTY, 'Distributor').amount).toBe(11800);
+  });
+
+  it('puts the party in the column for its tier', () => {
+    expect(settlementRowFor(INVOICE, PARTY, 'Distributor').distributorId).toBe('D1');
+    expect(settlementRowFor(INVOICE, PARTY, 'Dealer').dealerId).toBe('D1');
+    expect(settlementRowFor(INVOICE, PARTY, 'Retailer').retailerId).toBe('D1');
+  });
+
+  it('derives the id from the invoice, so a second attempt is the same row', () => {
+    const a = settlementRowFor(INVOICE, PARTY, 'Distributor');
+    const b = settlementRowFor(INVOICE, PARTY, 'Distributor');
+    expect(a.id).toBe(b.id);
+    expect(a.id).toBe('PAY-INV-INV-1');
+  });
+
+  it('points back at the invoice it came from', () => {
+    const row = settlementRowFor(INVOICE, PARTY, 'Distributor');
+    expect(row.reference).toBe('INV-1');
+    expect(row.notes).toMatch(/INV-1/);
+  });
+
+  it('is null when there is nothing to write a payment for', () => {
+    expect(settlementRowFor(null, PARTY, 'Distributor')).toBeNull();
+    expect(settlementRowFor(INVOICE, null, 'Distributor')).toBeNull();
+    expect(settlementRowFor(INVOICE, PARTY, null)).toBeNull();
+    expect(settlementRowFor(INVOICE, PARTY, 'Supplier')).toBeNull();
+  });
+
+  it('bills nothing for an invoice of nothing', () => {
+    expect(settlementRowFor({ id: 'INV-0' }, PARTY, 'Distributor').amount).toBe(0);
+  });
+});
+
+describe('alreadySettled', () => {
+  const PAYMENTS = [{ id: 'PAY-INV-INV-1' }, { id: 'VPAY-123' }];
+
+  it('recognises an invoice that has already been settled', () => {
+    expect(alreadySettled('INV-1', PAYMENTS)).toBe(true);
+  });
+
+  it('does not confuse it with an unrelated payment', () => {
+    expect(alreadySettled('INV-2', PAYMENTS)).toBe(false);
+    expect(alreadySettled('123', PAYMENTS)).toBe(false);
+  });
+
+  it('is false when there are no payments at all', () => {
+    expect(alreadySettled('INV-1', [])).toBe(false);
+    expect(alreadySettled('INV-1')).toBe(false);
   });
 });

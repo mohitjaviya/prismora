@@ -94,3 +94,66 @@ export const balanceAfterPayment = (outstanding, amount) =>
 /** True when a payment is for more than the party currently owes. */
 export const isOverpayment = (outstanding, amount) =>
   (Number(amount) || 0) > (Number(outstanding) || 0);
+
+/**
+ * Which party an invoice was raised against, and at which tier.
+ *
+ * Searched distributor, then dealer, then retailer, and the first match wins.
+ * That order is not arbitrary and is not documented anywhere else: an invoice
+ * whose customer name matches parties at two tiers is credited to the one
+ * higher up the chain, and the other is never considered.
+ *
+ * Returns { party: null, type: null } for a walk-in sale, which has no ledger
+ * to credit and must not be made to have one.
+ */
+export const partyForInvoice = (invoice, { distributors, dealers, retailers, orders } = {}) => {
+  const tiers = [
+    [distributors, 'Distributor'],
+    [dealers, 'Dealer'],
+    [retailers, 'Retailer'],
+  ];
+  for (const [list, type] of tiers) {
+    const found = (list || []).find(party => invoiceBelongsToParty(invoice, party, orders || []));
+    if (found) return { party: found, type };
+  }
+  return { party: null, type: null };
+};
+
+/**
+ * The payment row written when an invoice is marked paid.
+ *
+ * `amount` is the invoice total -- goods plus tax -- because that is what the
+ * partner was billed and what they will pay. Recording the net here is what
+ * put the stored balance and the ledger out of step by exactly the GST, once
+ * per invoice, and nobody could see it without adding the column up by hand.
+ *
+ * The id is derived from the invoice, so a second attempt writes the same row
+ * rather than a second payment. The primary key refuses the duplicate; nothing
+ * has to remember whether it already ran.
+ */
+export const settlementRowFor = (invoice, party, partyType, now = new Date().toISOString()) => {
+  if (!invoice || !party || !partyType) return null;
+  const field = paymentFieldFor(partyType);
+  if (!field) return null;
+
+  return {
+    id: paymentIdForInvoice(invoice.id),
+    [field]: party.id,
+    amount: invoiceTotal(invoice),
+    method: 'Invoice settled',
+    reference: invoice.id,
+    date: now,
+    notes: `Recorded automatically when invoice ${invoice.id} was marked paid.`,
+    recordedBy: null,
+    createdAt: now,
+  };
+};
+
+/**
+ * Whether this invoice has already been settled into a payment.
+ *
+ * Asked of the payments themselves rather than of the invoice's status, so
+ * that a status changed by some other path cannot make this answer wrong.
+ */
+export const alreadySettled = (invoiceId, payments = []) =>
+  (payments || []).some(p => p?.id === paymentIdForInvoice(invoiceId));
