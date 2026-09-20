@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  returnValue, vendorBalanceAfterReturn, isOverReturn, batchForReturn, stockAfterAdjustment,
+  batchForReturn, isOverReturn, lineItemsValue, returnValue, stockAfterAdjustment, vendorBalanceAfterReturn,
 } from '../purchasing';
 
 describe('returnValue', () => {
@@ -105,5 +105,26 @@ describe('stockAfterAdjustment', () => {
     expect(stockAfterAdjustment(undefined, -1)).toBeNull();
     expect(stockAfterAdjustment(10, 'three')).toBeNull();
     expect(stockAfterAdjustment(NaN, 1)).toBeNull();
+  });
+});
+
+// ── Shared with goods receipts ──────────────────────────────────────────
+describe('lineItemsValue, as addGRN uses it', () => {
+  it('values a receipt the same way it values a return', () => {
+    const lines = [{ quantity: 10, unitCost: 150 }, { quantity: 4, unitCost: 25 }];
+    expect(lineItemsValue(lines)).toBe(1600);
+    expect(lineItemsValue(lines)).toBe(returnValue(lines));
+  });
+
+  it('does not let one unreadable line turn the whole receipt into NaN', () => {
+    // addGRN had its own reduce and this became NaN, which was then added to
+    // the vendor's outstanding balance and written to the database.
+    const lines = [{ quantity: 'ten', unitCost: 150 }, { quantity: 4, unitCost: 25 }];
+    expect(lineItemsValue(lines)).toBe(100);
+    expect(Number.isNaN(lineItemsValue(lines))).toBe(false);
+  });
+
+  it('rounds to paise rather than carrying float noise into a balance', () => {
+    expect(lineItemsValue([{ quantity: 3, unitCost: 33.333 }])).toBe(100);
   });
 });

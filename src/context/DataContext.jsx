@@ -7,7 +7,7 @@ import {
 import { invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty, invoicesSettledBy, balanceAfterPayment, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
-import { returnValue as computeReturnValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
+import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
 import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } from '../utils/billing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer } from '../utils/stockMoves';
 
@@ -2063,6 +2063,21 @@ export const DataProvider = ({ children }) => {
     // owing for an invoice that no longer exists -- and the ledger below their
     // balance stops adding up to it.
     const invoice = invoices.find(inv => inv.id === id);
+
+    // The row goes first, and nothing else happens if it will not go.
+    //
+    // This used to reduce the balance, drop the invoice from state and
+    // localStorage, and only then attempt the delete -- inside a try/catch
+    // that could not fire, because supabase returns { error } rather than
+    // throwing. So a refused delete was ignored completely: the invoice
+    // vanished from the screen, the partner's balance was reduced for a bill
+    // that still existed, and the bill came back on the next refresh.
+    const { error } = await supabase.from('invoices').delete().eq('id', id);
+    if (error) {
+      console.error('[Prismora] Could not delete the invoice, so nothing has been changed:', error);
+      return { ok: false, error: 'The invoice could not be deleted.' };
+    }
+
     if (invoice) {
       if (invoice.status === 'Paid') await reverseInvoiceSettlement(invoice);
       const { party, type } = partyForInvoice(invoice);
@@ -2071,13 +2086,13 @@ export const DataProvider = ({ children }) => {
           balanceAfterPayment(party.outstandingAmount, invoiceTotal(invoice)));
       }
     }
+
     setInvoices(prev => prev.filter(inv => inv.id !== id));
-    try { await supabase.from('invoices').delete().eq('id', id); }
-    catch (err) { console.warn('Failed to delete invoice from Supabase.', err); }
     const local = localStorage.getItem('prismora_invoices');
     if (local) {
       localStorage.setItem('prismora_invoices', JSON.stringify(JSON.parse(local).filter(inv => inv.id !== id)));
     }
+    return { ok: true };
   };
 
   // ── Credit Notes (sales returns / adjustments) ────────────────────────────
@@ -2634,12 +2649,14 @@ export const DataProvider = ({ children }) => {
     // Receiving goods creates money owed to the vendor — bump their outstanding
     // balance by the received value so it shows up as a payable, mirroring how a
     // delivered customer order bills the distributor/dealer/retailer.
-    const grnValue = (grnData.items || []).reduce((s, i) => s + (Number(i.quantity || 0) * Number(i.unitCost || 0)), 0);
+    // Was its own reduce: unrounded, and one unreadable line turned the sum
+    // into NaN, which was then added to the vendor's balance and written.
+    const grnValue = lineItemsValue(grnData.items);
     const linkedPO = purchaseOrders.find(p => p.id === grnData.poId);
     const vendor = vendors.find(v => v.id === (linkedPO?.vendorId)) ||
       vendors.find(v => v.name?.toLowerCase() === grnData.vendorName?.toLowerCase());
     if (vendor && grnValue > 0) {
-      const newOutstanding = (vendor.outstandingAmount || 0) + grnValue;
+      const newOutstanding = balanceAfterCharge(vendor.outstandingAmount, grnValue);
       const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: newOutstanding } : v);
       setVendors(nextVendors);
       localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));

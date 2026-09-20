@@ -832,7 +832,10 @@ const Accounting = () => {
                               </button>
                               <button
                                 onClick={async () => {
-                                  if (await confirm({ title: "Delete this invoice?", danger: true, confirmLabel: 'Delete' })) deleteInvoice(inv.id);
+                                  if (await confirm({ title: "Delete this invoice?", danger: true, confirmLabel: 'Delete' })) {
+                                    const result = await deleteInvoice(inv.id);
+                                    if (!result?.ok) toast(result?.error || 'The invoice could not be deleted.', 'error');
+                                  }
                                 }}
                                 className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                                 title="Delete Invoice"

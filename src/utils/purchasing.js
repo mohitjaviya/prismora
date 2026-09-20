@@ -11,8 +11,15 @@
  * vendorBalanceAfterReturn.
  */
 
-/** What the returned goods are worth, to the paise. */
-export function returnValue(items = []) {
+/**
+ * What a list of line items is worth, to the paise.
+ *
+ * Shared because a return and a goods receipt value their lines identically,
+ * and addGRN had its own copy which was neither rounded nor safe: one line
+ * with an unreadable quantity turned the sum into NaN, and that NaN was then
+ * added to the vendor's balance and written to the database.
+ */
+export function lineItemsValue(items = []) {
   if (!Array.isArray(items)) return 0;
   const total = items.reduce((sum, item) => {
     const qty = Number(item?.quantity);
@@ -36,6 +43,9 @@ export function returnValue(items = []) {
  * Negative is meaningful and kept: it is the vendor owing you, which is exactly
  * what an over-return is.
  */
+/** The value of goods going back. Same arithmetic, named for the caller. */
+export const returnValue = lineItemsValue;
+
 export function vendorBalanceAfterReturn(outstanding, value) {
   return Math.round(((Number(outstanding) || 0) - (Number(value) || 0)) * 100) / 100;
 }
