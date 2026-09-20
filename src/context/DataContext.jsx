@@ -9,7 +9,7 @@ import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
 import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } from '../utils/billing';
-import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer } from '../utils/stockMoves';
+import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 
 const DataContext = createContext();
 
@@ -2508,16 +2508,14 @@ export const DataProvider = ({ children }) => {
    */
   const receiveStock = async ({ product, batchNumber, expiryDate, unitCost, quantity, warehouse, reason }) => {
     const qty = Number(quantity || 0);
-    if (!product || qty <= 0) return null;
+    if (!canReceive({ product, quantity }).ok) return null;
 
     const existing = batchToReceiveInto(inventory, product, batchNumber);
 
     if (existing) {
-      const newQty = Number(existing.quantity || 0) + qty;
-      const patch = { quantity: newQty };
-      // Fill in what the batch was missing rather than overwriting what it has.
-      if (expiryDate && !existing.expiryDate) patch.expiryDate = expiryDate;
-      if (unitCost && !existing.unitCost) patch.unitCost = Number(unitCost);
+      // Which fields a receipt may fill in and which it must leave alone is in
+      // utils/stockMoves.js, with tests.
+      const patch = receiptPatchFor(existing, { quantity: qty, expiryDate, unitCost });
       setInventory(prev => {
         const next = prev.map(i => i.id === existing.id ? { ...i, ...patch } : i);
         localStorage.setItem('prismora_inventory', JSON.stringify(next));

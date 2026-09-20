@@ -110,3 +110,42 @@ export function applyTransfer(source, destination, qty) {
     to: (Number(destination?.quantity) || 0) + amount,
   };
 }
+
+/**
+ * What changes on an existing batch when more of it arrives.
+ *
+ * The quantity always. Expiry and unit cost only where the batch has none:
+ * goods arriving must not overwrite what a batch already knows about itself,
+ * because the second delivery's paperwork is not more authoritative than the
+ * first's -- but a batch created without an expiry should get one when it
+ * becomes available.
+ */
+export function receiptPatchFor(existing, { quantity, expiryDate, unitCost } = {}) {
+  if (!existing) return null;
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+
+  const patch = { quantity: (Number(existing.quantity) || 0) + qty };
+  if (expiryDate && !existing.expiryDate) patch.expiryDate = expiryDate;
+  if (unitCost && !existing.unitCost) patch.unitCost = Number(unitCost);
+  return patch;
+}
+
+/**
+ * Whether a receipt has enough to act on.
+ *
+ * A product and a positive quantity. Everything else -- batch number, expiry,
+ * cost, warehouse -- is optional, because goods do turn up without complete
+ * paperwork and refusing to record them is how stock counts stop matching the
+ * shelf.
+ */
+export function canReceive({ product, quantity } = {}) {
+  const name = String(product ?? '').trim();
+  if (!name) return { ok: false, reason: 'Say which product arrived.' };
+
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) {
+    return { ok: false, reason: 'Enter how many units arrived.' };
+  }
+  return { ok: true };
+}

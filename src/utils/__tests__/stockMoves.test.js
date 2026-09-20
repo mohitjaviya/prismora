@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  quantityAfterAdjustment, sameBatchNumber, batchToReceiveInto,
-  canTransfer, destinationBatch, applyTransfer,
+  applyTransfer, batchToReceiveInto, canReceive, canTransfer, destinationBatch, quantityAfterAdjustment, receiptPatchFor, sameBatchNumber,
 } from '../stockMoves';
 
 const STOCK = [
@@ -144,5 +143,70 @@ describe('applyTransfer', () => {
   it('treats unreadable quantities as zero rather than NaN', () => {
     expect(applyTransfer({}, {}, 5)).toEqual({ from: -5, to: 5 });
     expect(applyTransfer({ quantity: 10 }, { quantity: 0 }, 'x')).toEqual({ from: 10, to: 0 });
+  });
+});
+
+// ── Goods arriving ──────────────────────────────────────────────────────
+describe('receiptPatchFor', () => {
+  const BATCH = { id: 'A', quantity: 40, expiryDate: '2027-01-01', unitCost: 100 };
+
+  it('adds the arriving units to what is already there', () => {
+    expect(receiptPatchFor(BATCH, { quantity: 10 }).quantity).toBe(50);
+  });
+
+  it('does not overwrite an expiry the batch already has', () => {
+    // The second delivery's paperwork is not more authoritative than the first's.
+    const patch = receiptPatchFor(BATCH, { quantity: 10, expiryDate: '2028-06-01' });
+    expect(patch.expiryDate).toBeUndefined();
+  });
+
+  it('does not overwrite a unit cost the batch already has', () => {
+    const patch = receiptPatchFor(BATCH, { quantity: 10, unitCost: 250 });
+    expect(patch.unitCost).toBeUndefined();
+  });
+
+  it('fills in what the batch is missing', () => {
+    const bare = { id: 'B', quantity: 5 };
+    const patch = receiptPatchFor(bare, { quantity: 5, expiryDate: '2027-01-01', unitCost: 120 });
+    expect(patch).toEqual({ quantity: 10, expiryDate: '2027-01-01', unitCost: 120 });
+  });
+
+  it('is null when there is nothing to receive into, or nothing to receive', () => {
+    expect(receiptPatchFor(null, { quantity: 10 })).toBeNull();
+    expect(receiptPatchFor(BATCH, { quantity: 0 })).toBeNull();
+    expect(receiptPatchFor(BATCH, { quantity: -5 })).toBeNull();
+    expect(receiptPatchFor(BATCH, { quantity: 'ten' })).toBeNull();
+    expect(receiptPatchFor(BATCH, {})).toBeNull();
+  });
+
+  it('treats a batch with an unreadable quantity as holding nothing', () => {
+    expect(receiptPatchFor({ id: 'C' }, { quantity: 10 }).quantity).toBe(10);
+  });
+});
+
+describe('canReceive', () => {
+  it('needs a product and a positive quantity, and nothing else', () => {
+    expect(canReceive({ product: 'Herbal Hair Oil 100ml', quantity: 10 })).toEqual({ ok: true });
+  });
+
+  it('accepts goods that arrive without complete paperwork', () => {
+    // Refusing these is how a stock count stops matching the shelf.
+    expect(canReceive({ product: 'X', quantity: 1 }).ok).toBe(true);
+  });
+
+  it('refuses a receipt with no product', () => {
+    expect(canReceive({ quantity: 10 }).ok).toBe(false);
+    expect(canReceive({ product: '   ', quantity: 10 }).ok).toBe(false);
+  });
+
+  it('refuses a quantity that is not a positive number', () => {
+    [0, -1, 'ten', null, undefined, NaN].forEach(q => {
+      expect(canReceive({ product: 'X', quantity: q }).ok).toBe(false);
+    });
+  });
+
+  it('gives a reason for every refusal', () => {
+    expect(canReceive({}).reason).toBeTruthy();
+    expect(canReceive({ product: 'X', quantity: 0 }).reason).toBeTruthy();
   });
 });
