@@ -329,6 +329,28 @@ const shapeFor = (columns) => (record) => {
   return row;
 };
 
+/**
+ * The columns `products` actually has.
+ *
+ * The Product Catalogue form collects sku and status; the table did not have
+ * either, and PostgREST refuses a whole statement naming a column it cannot
+ * find. So every product save failed with PGRST204 while the screen showed it
+ * as saved -- the same way Master Lists failed until ADD_MASTER_COLOURS.sql.
+ *
+ * ADD_PRODUCT_COLUMNS.sql adds them. They stay in this list either way: a row
+ * shaped through here only carries what the caller actually set, and the retry
+ * below drops whichever of the two is still missing rather than losing the
+ * whole edit.
+ */
+const PRODUCT_COLUMNS = [
+  'id', 'name', 'category', 'hsnCode', 'gstPct', 'mrp',
+  'distributorPrice', 'dealerPrice', 'retailerPrice', 'uom', 'createdAt',
+  'sku', 'status',
+];
+const productRow = shapeFor(PRODUCT_COLUMNS);
+
+const OPTIONAL_PRODUCT_COLUMNS = ['sku', 'status'];
+
 // The purchase tables. None of these had a shaper: they happen to match their
 // forms today, so nothing is broken by it yet — but this is the fault that
 // silently destroyed every lead and every check-in, and it only takes one new
@@ -1765,6 +1787,40 @@ export const DataProvider = ({ children }) => {
   };
 
   // ── Products ─────────────────────────────────────────────────────────────
+  /**
+   * A products write that survives the migration not having been run.
+   *
+   * Refused for a column the table lacks, it drops that column and tries
+   * again, remembering it for the rest of the session. The edit is kept; only
+   * the field the database cannot hold is lost, and it says so once in the
+   * console rather than silently discarding the whole change.
+   */
+  const absentProductColumns = useRef(new Set());
+
+  const persistProduct = async (label, build) => {
+    const shape = (row) => {
+      const copy = productRow(row);
+      absentProductColumns.current.forEach(c => delete copy[c]);
+      return copy;
+    };
+
+    const { error } = await build(shape);
+    if (!error) return true;
+
+    const message = String(error.message || '');
+    const culprit = OPTIONAL_PRODUCT_COLUMNS.find(c => message.includes(`'${c}'`));
+    if (!culprit || absentProductColumns.current.has(culprit)) {
+      console.error(`[Prismora] Could not save ${label}:`, message || error);
+      return false;
+    }
+
+    console.warn(
+      `[Prismora] The products table has no '${culprit}' column, so it is being left out. ` +
+      'Run ADD_PRODUCT_COLUMNS.sql to keep SKUs and statuses.');
+    absentProductColumns.current.add(culprit);
+    return persistProduct(label, build);
+  };
+
   const addProduct = async (productData) => {
     // Callers pass either a full product object (Settings' catalog form) or just
     // a product-name string (Orders and Leads, which save custom typed products).
@@ -1789,7 +1845,8 @@ export const DataProvider = ({ children }) => {
 
     setProducts(prev => (prev.includes(name) ? prev : [...prev, name]));
 
-    await persist('products insert', supabase.from('products').insert([newProduct]));
+    await persistProduct('the new product',
+      (shape) => supabase.from('products').insert([shape(newProduct)]));
     logEvent('product_added', `Added product: ${name}`, null, newId);
   };
 
@@ -1805,7 +1862,8 @@ export const DataProvider = ({ children }) => {
       setProducts(prev => prev.map(name => name === oldProd.name ? updatedData.name : name));
     }
 
-    await persist('products update', supabase.from('products').update(updatedData).eq('id', id));
+    await persistProduct('the product',
+      (shape) => supabase.from('products').update(shape(updatedData)).eq('id', id));
   };
 
   const deleteProduct = async (id) => {
