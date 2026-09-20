@@ -11,6 +11,7 @@ import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterRe
 import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } from '../utils/billing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { balanceDrift, balanceAfterCreditNote, balanceAfterCreditNoteWithdrawn } from '../utils/ledgerWrites';
+import { splitLines, canSplit } from '../utils/fulfilment';
 
 const DataContext = createContext();
 
@@ -1736,22 +1737,19 @@ export const DataProvider = ({ children }) => {
       .filter(b => b.product === productName)
       .reduce((sum, b) => sum + Math.max(0, (b.quantity || 0) - (b.reserved || 0)), 0);
 
-    const keepItems = [];
-    const splitItems = [];
-    rawLineItems.forEach(item => {
-      if (!item.name || item.quantity <= 0) return;
-      const manualQty = shipNowQuantities && shipNowQuantities[item.name] !== undefined
-        ? Number(shipNowQuantities[item.name])
-        : null;
-      const requestedKeep = manualQty !== null ? manualQty : getAvailableQty(item.name);
-      const keepQty = Math.min(item.quantity, Math.max(0, requestedKeep));
-      const splitQty = item.quantity - keepQty;
-      const unitPrice = item.unitPrice || (item.quantity ? (item.total || 0) / item.quantity : 0);
-      if (keepQty > 0) keepItems.push({ ...item, quantity: keepQty, total: unitPrice * keepQty });
-      if (splitQty > 0) splitItems.push({ ...item, quantity: splitQty, total: unitPrice * splitQty });
-    });
+    // The division is in utils/fulfilment.js, with tests -- including the one
+    // that checks every unit is accounted for on both sides, which is the
+    // failure worth catching rather than reasoning about.
+    const { keep: keepItems, split: splitItems, conserved } =
+      splitLines(rawLineItems, shipNowQuantities, getAvailableQty);
 
-    if (splitItems.length === 0 || keepItems.length === 0) return;
+    if (!conserved) {
+      console.error(`[Prismora] Splitting ${id} did not account for every unit, so nothing was split.`);
+      return { ok: false, error: 'The split did not add up, so nothing was changed.' };
+    }
+
+    const allowed = canSplit({ keep: keepItems, split: splitItems });
+    if (!allowed.ok) return { ok: false, error: allowed.reason };
 
     const maxId = orders.reduce((max, o) => {
       const num = parseInt(o.id.replace('O', ''), 10);
