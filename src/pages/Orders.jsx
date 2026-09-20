@@ -241,9 +241,14 @@ const Orders = () => {
     setIsSplitModalOpen(true);
   };
 
-  const confirmSplitOrder = () => {
+  const confirmSplitOrder = async () => {
     if (!editingOrder) return;
-    splitOrder(editingOrder.id, splitQuantities);
+    // A refused split used to close both dialogs as though it had worked.
+    const result = await splitOrder(editingOrder.id, splitQuantities);
+    if (result && !result.ok) {
+      toast(result.error || 'The order could not be split.', 'error');
+      return;
+    }
     setIsSplitModalOpen(false);
     closeModal();
   };

@@ -1775,12 +1775,33 @@ export const DataProvider = ({ children }) => {
       splitIntoOrderId: newOrderId
     };
 
+    // The backorder is created before the original is cut down, and neither
+    // result was checked.
+    //
+    // A split takes units off one order and puts them on another. If the insert
+    // was refused and the update went through, the original shrank and the
+    // remainder existed nowhere: the customer's order quietly lost the units
+    // they were still waiting for, with nothing on file to say so.
+    const created = await persist('orders insert', supabase.from('orders').insert([orderRow(splitOrderObj)]));
+    if (!created) {
+      console.error(`[Prismora] The backorder for ${id} could not be created, so the order has been left whole.`);
+      return { ok: false, error: 'The backorder could not be created, so nothing was split.' };
+    }
+
+    const reduced = await persist('orders update', supabase.from('orders').update(orderRow(updatedOriginal)).eq('id', id));
+    if (!reduced) {
+      // The units are on two orders at once now. Take the new one back rather
+      // than leaving them counted twice.
+      await supabase.from('orders').delete().eq('id', newOrderId);
+      console.error(`[Prismora] ${id} could not be reduced, so the backorder was withdrawn and nothing split.`);
+      return { ok: false, error: 'The original order could not be updated, so nothing was split.' };
+    }
+
     const next = [splitOrderObj, ...orders.map(o => o.id === id ? { ...o, ...updatedOriginal } : o)];
     setOrders(next);
     localStorage.setItem('prismora_orders', JSON.stringify(next));
-    await persist('orders insert', supabase.from('orders').insert([orderRow(splitOrderObj)]));
-    await persist('orders update', supabase.from('orders').update(orderRow(updatedOriginal)).eq('id', id));
     logEvent('order_split', `Order ${id} split — ${updatedOriginal.quantity} unit(s) proceeding now, ${splitOrderObj.quantity} unit(s) moved to new order ${newOrderId} pending restock`, order.assignedTo, id);
+    return { ok: true, newOrderId };
   };
 
   // ── Products ─────────────────────────────────────────────────────────────
@@ -2163,7 +2184,18 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_credit_notes', JSON.stringify(next));
       return next;
     });
-    await persist('credit_notes insert', supabase.from('credit_notes').insert([newCN]));
+    // Checked. The balance change below is a separate statement that would go
+    // through on its own, so a refused credit note used to reduce what the
+    // customer owed with no note on file to say why.
+    const saved = await persist('credit_notes insert', supabase.from('credit_notes').insert([newCN]));
+    if (!saved) {
+      setCreditNotes(prev => {
+        const next = prev.filter(n => n.id !== newId);
+        localStorage.setItem('prismora_credit_notes', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
 
     const amount = Number(cnData.amount || 0);
     const name = (cnData.customerName || '').toLowerCase();
@@ -2344,13 +2376,22 @@ export const DataProvider = ({ children }) => {
   };
 
   const deleteExpense = async (id) => {
+    // supabase-js returns { error }; it does not throw. The try/catch here
+    // could never fire, so a refused delete removed the expense from the
+    // screen and left it in the books -- and it came back on the next refresh,
+    // by which time the accounting totals had been read without it.
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) {
+      console.error('[Prismora] Could not delete the expense, so nothing has been changed:', error);
+      return { ok: false, error: 'The expense could not be deleted.' };
+    }
+
     setExpenses(prev => prev.filter(exp => exp.id !== id));
-    try { await supabase.from('expenses').delete().eq('id', id); }
-    catch (err) { console.warn('Failed to delete expense from Supabase.', err); }
     const local = localStorage.getItem('prismora_expenses');
     if (local) {
       localStorage.setItem('prismora_expenses', JSON.stringify(JSON.parse(local).filter(exp => exp.id !== id)));
     }
+    return { ok: true };
   };
 
   // ════════════════════════════════════════════════════════════════
@@ -3262,7 +3303,21 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
-    await persist('distributor_payments insert', supabase.from('distributor_payments').insert([newPayment]));
+    // Checked, the way addVendorPayment already checks it. The balance change
+    // and the invoice settlements below are separate statements that would go
+    // through on their own, so a refused payment used to reduce what the
+    // partner owed and mark their invoices Paid -- money moving off the back of
+    // a record that does not exist, and no payment left to explain it.
+    const saved = await persist('distributor_payments insert',
+      supabase.from('distributor_payments').insert([newPayment]));
+    if (!saved) {
+      setDistributorPayments(prev => {
+        const next = prev.filter(p => p.id !== newId);
+        localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
 
     const dist = distributors.find(d => d.id === paymentData.distributorId);
     if (dist) {
@@ -3296,7 +3351,21 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
-    await persist('distributor_payments insert', supabase.from('distributor_payments').insert([newPayment]));
+    // Checked, the way addVendorPayment already checks it. The balance change
+    // and the invoice settlements below are separate statements that would go
+    // through on their own, so a refused payment used to reduce what the
+    // partner owed and mark their invoices Paid -- money moving off the back of
+    // a record that does not exist, and no payment left to explain it.
+    const saved = await persist('distributor_payments insert',
+      supabase.from('distributor_payments').insert([newPayment]));
+    if (!saved) {
+      setDistributorPayments(prev => {
+        const next = prev.filter(p => p.id !== newId);
+        localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
 
     const dealer = dealers.find(d => d.id === paymentData.dealerId);
     if (dealer) {
@@ -3330,7 +3399,21 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
-    await persist('distributor_payments insert', supabase.from('distributor_payments').insert([newPayment]));
+    // Checked, the way addVendorPayment already checks it. The balance change
+    // and the invoice settlements below are separate statements that would go
+    // through on their own, so a refused payment used to reduce what the
+    // partner owed and mark their invoices Paid -- money moving off the back of
+    // a record that does not exist, and no payment left to explain it.
+    const saved = await persist('distributor_payments insert',
+      supabase.from('distributor_payments').insert([newPayment]));
+    if (!saved) {
+      setDistributorPayments(prev => {
+        const next = prev.filter(p => p.id !== newId);
+        localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
 
     const retailer = retailers.find(r => r.id === paymentData.retailerId);
     if (retailer) {
