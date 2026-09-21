@@ -11,6 +11,7 @@ import { balanceDrift, balanceAfterCreditNote, balanceAfterCreditNoteWithdrawn }
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
 import { blankIdsToNull } from '../utils/dbRow';
+import { explainForeignKey } from '../utils/writeErrors';
 
 // The bracketed territory on a "new partner" log line. On a signup page the
 // visitor is anonymous and the territories list is empty, so there is no name
@@ -114,7 +115,7 @@ const setSchemaErrorReporter = (fn) => { reportSchemaError = fn; };
 // a beat assigned to a user id that no longer exists — is rejected just as
 // hard, is just as invisible, and leaves exactly the same ghost row that
 // disappears on the next load.
-const writeComplaint = (err) => {
+const writeComplaint = (err, row) => {
   const code = err?.code;
   const message = err?.message || '';
   const detail = err?.details ? ` ${err.details}` : '';
@@ -124,6 +125,13 @@ const writeComplaint = (err) => {
     return { text: message, cause: 'A pending database migration is the usual cause.' };
   }
   if (code === '23503') {
+    // PostgreSQL names the offending value -- Key (territoryId)=(T-123) -- but
+    // redacts it through PostgREST when the role cannot read the table being
+    // referenced, leaving "Key is not present in table" with the one useful
+    // fact removed. It is not recoverable from the error, so it comes from the
+    // payload that was sent.
+    const named = explainForeignKey(err, row);
+    if (named) return { text: message + detail, cause: named.text };
     return { text: message + detail, cause: 'It refers to a record that no longer exists — often a user who has been removed.' };
   }
   if (code === '23505') {
@@ -132,12 +140,12 @@ const writeComplaint = (err) => {
   return { text: message + detail, cause: '' };
 };
 
-const persist = async (label, query) => {
+const persist = async (label, query, row) => {
   try {
     const { error } = await query;
     if (error) {
       console.error(`[Prismora] Could not save ${label} — this change will be lost on refresh:`, error.message || error);
-      const complaint = writeComplaint(error);
+      const complaint = writeComplaint(error, row);
       if (complaint) reportSchemaError({ label, detail: complaint.text, cause: complaint.cause });
       return false;
     }
@@ -242,11 +250,17 @@ const insertWithFreeId = async (label, table, prefix, firstNumber, record, rawSh
   for (let i = 0; i < attempts; i++) {
     const id = `${prefix}${number}`;
     try {
-      const { error } = await supabase.from(table).insert([shape({ ...record, id })]);
+      const sent = shape({ ...record, id });
+      const { error } = await supabase.from(table).insert([sent]);
       if (!error) return { id, saved: true };
       if (error.code !== '23505') {
-        console.error(`[Prismora] Could not save ${label} — this change will be lost on refresh:`, error.message || error);
-        const complaint = writeComplaint(error);
+        // The row as it actually went over the wire, with the references
+        // singled out. Guessing at this from the form is how the last one took
+        // two attempts to find.
+        const refs = Object.fromEntries(Object.entries(sent).filter(([k]) => /[a-z0-9]Id$/.test(k)));
+        console.error(`[Prismora] Could not save ${label} — this change will be lost on refresh:`, error.message || error,
+          'references sent:', refs);
+        const complaint = writeComplaint(error, sent);
         if (complaint) reportSchemaError({ label, detail: complaint.text, cause: complaint.cause });
         return { id, saved: false };
       }
