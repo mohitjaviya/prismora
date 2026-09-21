@@ -6,11 +6,12 @@ import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { usePublicDirectory } from '../hooks/usePublicDirectory';
 import { emailCheckVerdict } from '../utils/signupChecks';
 import { validateSignup, successMessage } from '../utils/partnerSignup';
-import { PUBLIC_VIEWS, territoryLabel, partnerLabel, directoryMessage } from '../utils/publicDirectory';
+import { PUBLIC_VIEWS, partnerLabel, directoryMessage } from '../utils/publicDirectory';
+import { territoryForPlace } from '../utils/territory';
 
 const BLANK_FORM = {
   name: '', gstin: '', contactPerson: '', phone: '', email: '', password: '',
-  state: '', city: '', territoryId: '', parentDealerId: '',
+  state: '', city: '', parentDealerId: '',
   // Honeypot — see the field in the form below.
   website: ''
 };
@@ -191,19 +192,33 @@ const RetailerSignup = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="retailersignup-territory-zone-optional" className={labelCls}>Territory / Zone (optional)</label>
-                  {/* Was a free text box because an anonymous visitor could not
-                      read the territories table and there was nothing to offer.
-                      026 adds a three-column view they can read. */}
-                  <select id="retailersignup-territory-zone-optional" value={form.territoryId} onChange={e => setForm(f => ({ ...f, territoryId: e.target.value }))} className="w-full glass-input h-11 px-3.5 text-sm">
-                    <option value="" className="bg-brand-primary text-slate-500">
-                      {directoryMessage({ loading: territoryList.loading, failed: territoryList.failed, count: territoryList.rows.length, what: 'territories' })}
-                    </option>
-                    {territoryList.rows.map(t => (
-                      <option key={t.id} value={t.id} className="bg-brand-primary">{territoryLabel(t)}</option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-slate-500 mt-1">Our team confirms this on approval.</p>
+                  <label className={labelCls}>Territory / Zone</label>
+                  {/* Not asked for any more. A distributor in Pune knows they
+                      are in Pune; "Maharashtra Mega Zone" is an internal name
+                      for how the sales team is organised. A territory already
+                      lists the districts it covers and the form already asks
+                      for the city, from the same list — so this is worked out
+                      rather than guessed at by somebody who cannot know. */}
+                  {(() => {
+                    if (!form.state || !form.city) {
+                      return <p className="text-sm text-slate-500 h-11 flex items-center">Choose a state and city first.</p>;
+                    }
+                    const { territory, ambiguous } = territoryForPlace(territoryList.rows, form);
+                    if (territory) {
+                      return (
+                        <p className="text-sm text-emerald-400 h-11 flex items-center gap-1.5">
+                          <MapPin size={14} />{form.city} is in {territory.name}
+                        </p>
+                      );
+                    }
+                    return (
+                      <p className="text-xs text-amber-400 min-h-11 flex items-center">
+                        {ambiguous
+                          ? `More than one territory covers ${form.city}. Our team will confirm which on approval.`
+                          : `${form.city} is not inside a territory yet. Our team will assign one on approval.`}
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div>

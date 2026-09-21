@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
 import { attributionFor } from '../utils/attribution';
+import { isUnassigned } from '../utils/orderRouting';
 import { format } from 'date-fns';
 import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart, ClipboardCheck, Undo2, X } from 'lucide-react';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
@@ -653,7 +654,11 @@ const Orders = () => {
     ...(isSalesRole(user?.role) ? [] : [{
       key: 'salesperson', header: 'Salesperson', hideBelow: 'lg',
       sort: o => getSalespersonName(o.assignedTo) || '',
-      render: o => <span className="text-slate-400">{getSalespersonName(o.assignedTo)}</span>,
+      render: o => (isUnassigned(o)
+        // Nobody owns it. Without saying so it reads as a blank cell, and an
+        // order nobody can see is an order nobody works.
+        ? <span className="text-amber-400 font-semibold text-xs">Unassigned</span>
+        : <span className="text-slate-400">{getSalespersonName(o.assignedTo)}</span>),
     }, {
       // Not the same column as Salesperson. That is who owns the order; this is
       // who raised it — which on a portal order is the partner themselves, and

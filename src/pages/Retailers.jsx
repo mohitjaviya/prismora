@@ -11,7 +11,7 @@ import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadCSV } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { deleteWarning } from '../utils/partyDependants';
-import { territoryFields, territoryName } from '../utils/territory';
+import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -476,9 +476,30 @@ export default function Retailers() {
                       <option key={t.id} value={t.id} className="bg-brand-primary">{t.name} ({t.state})</option>
                     ))}
                   </select>
+                  {/* Suggested from the city rather than left to memory. An
+                      administrator knows the zone names; they should still not
+                      have to hold which districts are in which. Suggestion
+                      only — the dropdown above stays the decision. */}
                   {territories.length === 0 ? (
                     <p className="text-[10px] text-amber-400 mt-1">Create territories under Geography → Territories first — orders from this partner cannot be routed to a rep without one.</p>
-                  ) : null}
+                  ) : (() => {
+                    const { territory: suggested, ambiguous } = territoryForPlace(territories, form);
+                    if (ambiguous) {
+                      return <p className="text-[10px] text-amber-400 mt-1">More than one territory covers {form.city}. Worth fixing under Geography → Territories.</p>;
+                    }
+                    if (suggested && suggested.id !== form.territoryId) {
+                      return (
+                        <button type="button" onClick={() => setForm(f => ({ ...f, ...territoryFields(territories, suggested.id) }))}
+                          className="text-[10px] text-brand-accent hover:underline mt-1">
+                          {form.city} is in {suggested.name} — use it
+                        </button>
+                      );
+                    }
+                    if (!suggested && form.city) {
+                      return <p className="text-[10px] text-slate-500 mt-1">No territory covers {form.city} yet.</p>;
+                    }
+                    return null;
+                  })()}
                 </div>
                 <div><label htmlFor="retailers-credit-limit" className={labelCls}>Credit Limit (₹)</label><input id="retailers-credit-limit" type="number" min="0" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /></div>
                 <div>

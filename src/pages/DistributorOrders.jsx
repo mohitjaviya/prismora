@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import { territoryFor, territoryFields } from '../utils/territory';
+import { territoryFor, territoryFields, territoryForPlace } from '../utils/territory';
+import { assigneeForPortalOrder } from '../utils/orderRouting';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { ShoppingCart, Plus, Trash2, X, Package, Tag, Truck, CheckCircle, Clock, PackageCheck, UserX } from 'lucide-react';
@@ -76,7 +77,15 @@ export default function DistributorOrders() {
     // one. Matching on state alone gave whichever territory happened to be
     // found first, and a second territory in the same state was unreachable.
     const territory = territoryFor(territories, distributor)
-      || territories.find(t => t.state === distributor.state);
+      // Falls back to working it out from their city, which is exact,
+      // rather than to any territory in the same state, which was
+      // whichever one happened to be found first.
+      || territoryForPlace(territories, distributor).territory;
+
+    // A distributor buys from us, so there is nobody above them to fall to.
+    // An empty assignedTo is invisible to every sales role and every manager,
+    // so an order used to land where only an administrator would ever see it.
+    const routing = assigneeForPortalOrder([distributor], territories);
     addOrder({
       customerName: distributor.name,
       companyName: distributor.name,
@@ -87,7 +96,7 @@ export default function DistributorOrders() {
       state: distributor.state,
       city: distributor.city,
       status: 'Pending',
-      assignedTo: territory?.executiveId || '',
+      assignedTo: routing.assignedTo,
       // Both, so the order carries the link and stays readable to the
       // sites that still show a name.
       ...territoryFields(territories, territory?.id),

@@ -76,9 +76,20 @@ describe('signupPayload', () => {
     expect(signupPayload('distributor', FORM)).not.toHaveProperty('parentDistributorId');
   });
 
-  it('sends null rather than an empty territory', () => {
-    expect(signupPayload('distributor', { ...FORM, territoryId: '' }).territoryId).toBeNull();
-    expect(signupPayload('distributor', { ...FORM, territoryId: undefined }).territoryId).toBeNull();
+  it('does not send a territory at all', () => {
+    // The form stopped asking. A distributor in Pune knows they are in Pune,
+    // not that they are in "Maharashtra Mega Zone", and the function works it
+    // out from state and city — so sending one would be a claim about
+    // something derivable.
+    expect(signupPayload('distributor', FORM)).not.toHaveProperty('territoryId');
+    expect(signupPayload('distributor', { ...FORM, territoryId: 'T-someone-elses' }))
+      .not.toHaveProperty('territoryId');
+  });
+
+  it('still sends the state and city it is derived from', () => {
+    const p = signupPayload('distributor', FORM);
+    expect(p.state).toBe('Gujarat');
+    expect(p.city).toBe('Ahmedabad');
   });
 
   it('gives back nothing for a kind it does not know', () => {

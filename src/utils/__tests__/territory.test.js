@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  territoryFor, territoryName, hasDanglingTerritory, territoryFields, recordsInTerritory,
+  territoryFor, territoryName, hasDanglingTerritory, territoryFields, territoryForPlace, recordsInTerritory,
 } from '../territory';
 
 const TERRITORIES = [
@@ -137,5 +137,59 @@ describe('recordsInTerritory', () => {
     expect(recordsInTerritory(PARTNERS, null)).toEqual([]);
     expect(recordsInTerritory([], TERRITORIES[0])).toEqual([]);
     expect(recordsInTerritory(undefined, TERRITORIES[0])).toEqual([]);
+  });
+});
+
+describe('territoryForPlace', () => {
+  const TERRITORIES = [
+    { id: 'T-1', name: 'Gujarat North', state: 'Gujarat', districts: ['Ahmedabad', 'Gandhinagar'] },
+    { id: 'T-2', name: 'Maharashtra Mega Zone', state: 'Maharashtra', districts: ['Pune', 'Nagpur'] },
+    { id: 'T-3', name: 'Gujarat South', state: 'Gujarat', districts: ['Surat'] },
+  ];
+
+  it('works out the territory from a state and a city', () => {
+    // A distributor in Pune knows they are in Pune. They do not know they are
+    // in "Maharashtra Mega Zone" — that is an internal name for how the sales
+    // team is organised.
+    expect(territoryForPlace(TERRITORIES, { state: 'Maharashtra', city: 'Pune' }).territory.id).toBe('T-2');
+    expect(territoryForPlace(TERRITORIES, { state: 'Gujarat', city: 'Ahmedabad' }).territory.id).toBe('T-1');
+  });
+
+  it('ignores case and stray spacing on both sides', () => {
+    expect(territoryForPlace(TERRITORIES, { state: ' gujarat ', city: 'AHMEDABAD' }).territory.id).toBe('T-1');
+  });
+
+  it('will not match a city to a territory in another state', () => {
+    // Two states can have a district of the same name.
+    expect(territoryForPlace(TERRITORIES, { state: 'Gujarat', city: 'Pune' }).territory).toBeNull();
+  });
+
+  it('says nothing covers a place rather than guessing', () => {
+    const r = territoryForPlace(TERRITORIES, { state: 'Maharashtra', city: 'Nashik' });
+    expect(r.territory).toBeNull();
+    expect(r.ambiguous).toBe(false);
+    expect(r.candidates).toEqual([]);
+  });
+
+  it('refuses to choose when two territories claim the same place', () => {
+    // Two zones covering Pune is a mistake in the territory map. Picking the
+    // first would hide it and route half the orders wrongly.
+    const overlapping = [...TERRITORIES, { id: 'T-4', name: 'Pune Special', state: 'Maharashtra', districts: ['Pune'] }];
+    const r = territoryForPlace(overlapping, { state: 'Maharashtra', city: 'Pune' });
+    expect(r.territory).toBeNull();
+    expect(r.ambiguous).toBe(true);
+    expect(r.candidates.map(t => t.id)).toEqual(['T-2', 'T-4']);
+  });
+
+  it('needs both halves of the answer', () => {
+    expect(territoryForPlace(TERRITORIES, { state: 'Maharashtra' }).territory).toBeNull();
+    expect(territoryForPlace(TERRITORIES, { city: 'Pune' }).territory).toBeNull();
+    expect(territoryForPlace(TERRITORIES, {}).territory).toBeNull();
+    expect(territoryForPlace(TERRITORIES).territory).toBeNull();
+  });
+
+  it('copes with a territory that has no districts recorded', () => {
+    expect(territoryForPlace([{ id: 'T-9', state: 'Gujarat' }], { state: 'Gujarat', city: 'Rajkot' }).territory).toBeNull();
+    expect(territoryForPlace(null, { state: 'Gujarat', city: 'Rajkot' }).territory).toBeNull();
   });
 });

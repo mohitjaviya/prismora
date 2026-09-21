@@ -23,7 +23,8 @@
 //
 //   · status is 'Pending' on both rows, set here, never read from the request.
 //   · the parent distributor / dealer must exist and be Active.
-//   · a territory, if given, must exist.
+//   · the territory is worked out from state and city here, not taken from
+//     the request — the form no longer asks for something only we know.
 //   · credit limit, outstanding balance and role are set here, not sent.
 //   · either all three records exist afterwards, or none do.
 //   · a rate limit per address and an hourly ceiling overall, plus a honeypot
@@ -205,7 +206,6 @@ Deno.serve(async (req) => {
   const state = str(body.state);
   const city = str(body.city);
   const gstin = str(body.gstin).toUpperCase();
-  const territoryId = str(body.territoryId) || null;
   const parentId = spec.parentField ? str(body[spec.parentField]) : '';
 
   /**
@@ -311,11 +311,38 @@ Deno.serve(async (req) => {
     }
   }
 
-  if (territoryId) {
-    const { data: territory, error: territoryError } = await admin
-      .from('territories').select('id').eq('id', territoryId).maybeSingle();
-    if (territoryError) return refuse('Could not check the territory.', 500, 'territory-lookup-failed');
-    if (!territory) return refuse('That territory does not exist.', 400, 'unknown-territory');
+  // ── 3a. Which territory they are in ────────────────────────────────────
+  // Worked out here, not taken from the request. The form no longer asks: a
+  // distributor in Pune knows they are in Pune, not that they are in
+  // "Maharashtra Mega Zone". A territory already lists the districts it covers
+  // and the form already collects the city, from the same list.
+  //
+  // Anything the browser sent is ignored rather than validated. It is a claim,
+  // and this is derivable — so there is no reason to let it be claimed.
+  let resolvedTerritoryId: string | null = null;
+
+  const { data: zones, error: zonesError } = await admin
+    .from('territories').select('id, state, districts');
+
+  if (zonesError) {
+    // Not fatal. A registration is worth more than the zone it is filed under,
+    // and an administrator assigns one on approval anyway.
+    console.error('[partner-signup] Could not read territories, so none was assigned:', zonesError.message);
+  } else {
+    const wantedState = state.trim().toLowerCase();
+    const wantedCity = city.trim().toLowerCase();
+    const matches = (zones || []).filter(z =>
+      String(z.state ?? '').trim().toLowerCase() === wantedState
+      && (Array.isArray(z.districts) ? z.districts : [])
+        .some((d: unknown) => String(d ?? '').trim().toLowerCase() === wantedCity));
+
+    // Exactly one, or none. Two territories claiming Pune is a mistake in the
+    // territory map, and picking the first would hide it and route half the
+    // orders wrongly.
+    if (matches.length === 1) resolvedTerritoryId = matches[0].id;
+    else if (matches.length > 1) {
+      console.warn(`[partner-signup] ${matches.length} territories cover ${city}, ${state}. Left unassigned.`);
+    }
   }
 
   // ── 4. The login ───────────────────────────────────────────────────────
@@ -362,7 +389,7 @@ Deno.serve(async (req) => {
     gstin: gstin || null,
     state,
     city,
-    territoryId,
+    territoryId: resolvedTerritoryId,
     phone,
     email,
     contactPerson,

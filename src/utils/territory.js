@@ -13,6 +13,9 @@
  * point of keeping a cache; showing a dash where a territory used to be is not.
  */
 
+/** Trimmed, lower-cased. Geography matches districts the same way. */
+const norm = (value) => String(value ?? '').trim().toLowerCase();
+
 /** The territory a record points at, by id first and name second. */
 export function territoryFor(territories, record) {
   if (!record) return null;
@@ -84,4 +87,45 @@ export function recordsInTerritory(records, territory) {
     (r?.territoryId && r.territoryId === territory.id)
     || (!r?.territoryId && String(r?.territory || '').trim().toLowerCase() === name)
   );
+}
+
+/**
+ * The territory a place falls in, worked out rather than asked for.
+ *
+ * A distributor in Pune knows they are in Pune. They do not know they are in
+ * "Maharashtra Mega Zone" -- that is an internal name for how the sales team is
+ * organised, and asking a partner to pick one is asking them something only the
+ * business knows. It is how three distributors came to sit in a zone that did
+ * not exist.
+ *
+ * Nothing new is needed to answer it. A territory already carries a state and
+ * the districts it covers, and every form already asks for state and city --
+ * from the same STATE_DISTRICTS list the districts are picked from, so the two
+ * are the same vocabulary rather than two spellings that have to be reconciled.
+ *
+ * Returns { territory, ambiguous, candidates }:
+ *
+ *   territory   the single match, or null
+ *   ambiguous   true when more than one territory claims the place, in which
+ *               case `territory` is null. Two zones covering Pune is a mistake
+ *               in the territory map, and quietly picking the first would hide
+ *               it and route half the orders wrongly.
+ *   candidates  what matched, so a screen can name them
+ */
+export function territoryForPlace(territories, { state, city } = {}) {
+  const wantedState = norm(state);
+  const wantedCity = norm(city);
+  if (!wantedState || !wantedCity) return { territory: null, ambiguous: false, candidates: [] };
+
+  const candidates = (territories || []).filter(t => {
+    if (norm(t?.state) !== wantedState) return false;
+    const districts = Array.isArray(t?.districts) ? t.districts : [];
+    return districts.some(d => norm(d) === wantedCity);
+  });
+
+  return {
+    territory: candidates.length === 1 ? candidates[0] : null,
+    ambiguous: candidates.length > 1,
+    candidates,
+  };
 }

@@ -101,6 +101,15 @@ The other five tables that record an author — `grn`, `purchase_returns`,
 column under a different name and needed no migration at all. They needed
 somebody to read it.
 
+## One the signup pages want before they read properly
+
+`033_public_territories_districts.sql` adds `districts` to the `public_territories`
+view, so the signup forms can work out a partner's territory from the state and
+city they already give rather than asking them to pick an internal zone name.
+Until it runs, the derived line on those pages says the area is not covered yet
+— the Edge Function derives it server-side either way, so nothing is lost, it
+just is not shown.
+
 ## One that pairs with an Edge Function
 
 `029_pending_accounts_have_no_access.sql` puts the approval gate in the

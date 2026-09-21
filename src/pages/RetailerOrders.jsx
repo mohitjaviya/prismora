@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import { territoryFor, territoryFields } from '../utils/territory';
+import { territoryFor, territoryFields, territoryForPlace } from '../utils/territory';
+import { assigneeForPortalOrder } from '../utils/orderRouting';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { ShoppingCart, Plus, Trash2, X, Package, Tag, Truck, CheckCircle, Clock, PackageCheck, UserX } from 'lucide-react';
@@ -23,7 +24,7 @@ const statusConfig = {
 };
 
 export default function RetailerOrders() {
-  const { orders, addOrder, confirmOrderReceipt, productCatalog, schemes, territories, retailers } = useData();
+  const { orders, addOrder, confirmOrderReceipt, productCatalog, schemes, territories, retailers, dealers, distributors } = useData();
   const { user } = useAuth();
 
   const retailer = useMemo(() => retailers?.find(r => r.id === user?.retailerId), [retailers, user]);
@@ -76,7 +77,16 @@ export default function RetailerOrders() {
     // one. Matching on state alone gave whichever territory happened to be
     // found first, and a second territory in the same state was unreachable.
     const territory = territoryFor(territories, retailer)
-      || territories.find(t => t.state === retailer.state);
+      // Falls back to working it out from their city, which is exact,
+      // rather than to any territory in the same state, which was
+      // whichever one happened to be found first.
+      || territoryForPlace(territories, retailer).territory;
+    const parentDealer = dealers.find(d => d.id === retailer?.parentDealerId);
+
+    // Retailer, then their dealer, then that dealer's distributor.
+    // An empty assignedTo is invisible to every sales role and every manager,
+    // so an order used to land where only an administrator would ever see it.
+    const routing = assigneeForPortalOrder([retailer, parentDealer, distributors.find(d => d.id === parentDealer?.parentDistributorId)], territories);
     addOrder({
       customerName: retailer.name,
       companyName: retailer.name,
@@ -87,7 +97,7 @@ export default function RetailerOrders() {
       state: retailer.state,
       city: retailer.city,
       status: 'Pending',
-      assignedTo: territory?.executiveId || '',
+      assignedTo: routing.assignedTo,
       // Both, so the order carries the link and stays readable to the
       // sites that still show a name.
       ...territoryFields(territories, territory?.id),

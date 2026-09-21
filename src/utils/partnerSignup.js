@@ -89,8 +89,10 @@ export function signupPayload(kind, form = {}) {
     state: String(form.state ?? '').trim(),
     city: String(form.city ?? '').trim(),
     gstin: String(form.gstin ?? '').trim().toUpperCase(),
-    territoryId: String(form.territoryId ?? '').trim() || null,
   };
+  // No territoryId. The function works it out from state and city, because the
+  // form stopped asking a distributor in Pune which internal zone they are in.
+  // Sending one would be a claim about something derivable.
   if (spec.parentField) payload[spec.parentField] = String(form[spec.parentField] ?? '').trim();
   return payload;
 }
