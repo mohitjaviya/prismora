@@ -12,6 +12,8 @@ import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
 import { blankIdsToNull } from '../utils/dbRow';
 import { explainForeignKey } from '../utils/writeErrors';
+import { stampCreator } from '../utils/attribution';
+import { useAuth } from './AuthContext';
 
 // The bracketed territory on a "new partner" log line. On a signup page the
 // visitor is anonymous and the territories list is empty, so there is no name
@@ -238,7 +240,7 @@ const maxSequentialId = async (table, prefix) => {
   }
 };
 
-const insertWithFreeId = async (label, table, prefix, firstNumber, record, rawShape = (r) => r, attempts = 8) => {
+const insertWithFreeId = async (label, table, prefix, firstNumber, record, rawShape = (r) => r, attempts = 8, optional = []) => {
   // Every row that goes in through here gets its blank references turned into
   // NULL first, whatever else its own shaper does. A foreign key reads '' as an
   // id to go looking for, not as "nothing chosen", and refuses the whole
@@ -251,7 +253,24 @@ const insertWithFreeId = async (label, table, prefix, firstNumber, record, rawSh
     const id = `${prefix}${number}`;
     try {
       const sent = shape({ ...record, id });
-      const { error } = await supabase.from(table).insert([sent]);
+      let { error } = await supabase.from(table).insert([sent]);
+
+      // A column the table has not got refuses the whole statement, not just
+      // that key. `optional` names the ones a pending migration adds, so a
+      // build that runs before its migration loses the new field rather than
+      // the whole record — the same bargain persistOptional strikes.
+      if (error && optional.length) {
+        const message = String(error.message || '');
+        const culprit = optional.find(c => message.includes(`'${c}'`) || message.includes(`"${c}"`));
+        if (culprit) {
+          console.warn(`[Prismora] The ${table} table has no '${culprit}' column, so it is being left out. ` +
+            'Run the migration that adds it to stop losing that field.');
+          const without = { ...sent };
+          delete without[culprit];
+          ({ error } = await supabase.from(table).insert([without]));
+        }
+      }
+
       if (!error) return { id, saved: true };
       if (error.code !== '23505') {
         // The row as it actually went over the wire, with the references
@@ -392,7 +411,9 @@ const OPTIONAL_PRODUCT_COLUMNS = ['sku', 'status'];
 // field on a form to repeat it here, where the records are money owed.
 const purchaseOrderRow = shapeFor([
   'id', 'vendorId', 'vendorName', 'items', 'total', 'status',
-  'expectedDate', 'notes', 'assignedTo', 'createdAt',
+  // assignedTo is who owns the order. createdBy (031) is who raised it —
+  // a different question, and the one nobody could answer before.
+  'expectedDate', 'notes', 'assignedTo', 'createdBy', 'createdAt',
 ]);
 
 const grnRow = shapeFor([
@@ -416,6 +437,13 @@ const inventoryRow = shapeFor([
 ]);
 
 export const DataProvider = ({ children }) => {
+  // DataProvider sits inside AuthProvider, so the signed-in account is
+  // reachable here. Reading it centrally is the point: every screen that
+  // writes a record would otherwise have to remember to say who was at the
+  // keyboard, and four of the six that could have already did not.
+  const { user: signedInUser } = useAuth();
+  const stamp = (row) => stampCreator(row, signedInUser?.id);
+
   // ── Original CRM State (hydrated from cache for instant load) ────────────
   // Surfaced by the app shell so a rejected write is visible, not just logged.
   const [schemaError, setSchemaError] = useState(null);
@@ -2425,10 +2453,11 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(exp.id.replace('EXP-', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const draft = { ...expenseData, createdAt: new Date().toISOString() };
+    const draft = stamp({ ...expenseData, createdAt: new Date().toISOString() });
     // addGRN checks this same flag; this did not. A refused expense stayed on
     // screen and in the month's totals, and was gone on the next refresh.
-    const { id: newId, saved } = await insertWithFreeId('expenses insert', 'expenses', 'EXP-', maxId + 1, draft);
+    const { id: newId, saved } = await insertWithFreeId('expenses insert', 'expenses', 'EXP-', maxId + 1, draft,
+      (r) => r, 8, ['createdBy']);
     if (!saved) return null;
     const newExpense = { ...draft, id: newId };
     setExpenses(prev => [newExpense, ...prev]);
@@ -2675,8 +2704,9 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(po.id.replace('PO-', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const draft = { ...poData, status: 'Draft', createdAt: new Date().toISOString() };
-    const { id: newId, saved } = await insertWithFreeId('purchase_orders insert', 'purchase_orders', 'PO-', maxId + 1, draft, purchaseOrderRow);
+    const draft = stamp({ ...poData, status: 'Draft', createdAt: new Date().toISOString() });
+    const { id: newId, saved } = await insertWithFreeId('purchase_orders insert', 'purchase_orders', 'PO-', maxId + 1, draft,
+      purchaseOrderRow, 8, ['createdBy']);
     if (!saved) return null;
     const newPO = { ...purchaseOrderRow(draft), id: newId };
     setPurchaseOrders(prev => {

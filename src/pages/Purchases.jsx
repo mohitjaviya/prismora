@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
+import { attributionFor } from '../utils/attribution';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -49,7 +50,7 @@ export default function Purchases() {
     return o?.color ? badgeStyle(o.color) : null;
   };
   const poStatuses = poStatusOptions.map(o => o.key);
-  const { user, canAccess } = useAuth();
+  const { user, users, canAccess } = useAuth();
 
   // ?tab= lets another screen open this page on the right tab. Masters links
   // here for Vendors, which is master data but cannot be lifted out — the
@@ -408,6 +409,7 @@ export default function Purchases() {
                   <th className="p-4 text-right">Total</th>
                   <th className="p-4">Expected Date</th>
                   <th className="p-4">Created</th>
+                  <th className="p-4">Raised by</th>
                   <th className="p-4 text-center">Status</th>
                   {canManage && <th className="p-4 text-center">Actions</th>}
                 </tr>
@@ -423,6 +425,10 @@ export default function Purchases() {
                       <td className="p-4 text-right font-bold text-brand-accent">{formatCurrency(po.total)}</td>
                       <td className="p-4 text-slate-400">{formatDate(po.expectedDate)}</td>
                       <td className="p-4 text-slate-400">{formatDate(po.createdAt)}</td>
+                      {/* assignedTo on this table is who owns the order.
+                          createdBy (031) is who raised it — the question
+                          nobody could answer before. */}
+                      <td className="p-4 text-slate-400">{attributionFor(po, users).name}</td>
                       <td className="p-4 text-center">
                         <span style={statusStyle(po.status) || undefined} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${statusStyle(po.status) ? "" : st.cls}`}>
                           {st.icon}{po.status}
@@ -458,7 +464,7 @@ export default function Purchases() {
                     </tr>
                   );
                 }) : (
-                  <tr><td colSpan="8" className="p-12 text-center text-slate-500">
+                  <tr><td colSpan="9" className="p-12 text-center text-slate-500">
                     <ShoppingBag size={32} className="mx-auto mb-3 opacity-20" />
                     <p>No purchase orders found.</p>
                     {canManage && <button onClick={() => setIsPOModalOpen(true)} className="mt-4 text-brand-accent hover:underline text-sm">+ Create your first PO</button>}
@@ -529,6 +535,7 @@ export default function Purchases() {
                   <th className="p-4">Vendor</th>
                   <th className="p-4 text-center">Items Received</th>
                   <th className="p-4">Received Date</th>
+                  <th className="p-4">Received by</th>
                   <th className="p-4">Notes</th>
                 </tr>
               </thead>
@@ -540,10 +547,11 @@ export default function Purchases() {
                     <td className="p-4 text-white font-medium">{g.vendorName}</td>
                     <td className="p-4 text-center">{(g.items || []).length} items</td>
                     <td className="p-4 text-slate-400">{formatDate(g.receivedDate)}</td>
+                    <td className="p-4 text-slate-400">{attributionFor(g, users).name}</td>
                     <td className="p-4 text-slate-500 italic">{g.notes || '—'}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="6" className="p-12 text-center text-slate-500">No GRNs recorded yet.</td></tr>
+                  <tr><td colSpan="7" className="p-12 text-center text-slate-500">No GRNs recorded yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -565,6 +573,7 @@ export default function Purchases() {
                   <th className="p-4">Reason</th>
                   <th className="p-4 text-right">Credit Value</th>
                   <th className="p-4">Date</th>
+                  <th className="p-4">Recorded by</th>
                   <th className="p-4 text-right w-12"></th>
                 </tr>
               </thead>
@@ -578,6 +587,9 @@ export default function Purchases() {
                     <td className="p-4"><span className="text-xs bg-rose-500/10 text-rose-300 border border-rose-500/20 px-2 py-0.5 rounded-full">{r.reason}</span></td>
                     <td className="p-4 text-right font-bold text-emerald-400">{formatCurrency(r.value)}</td>
                     <td className="p-4 text-slate-400">{formatDate(r.date || r.createdAt)}</td>
+                    {/* recordedBy has been stored on this table all along and
+                        shown nowhere. */}
+                    <td className="p-4 text-slate-400">{attributionFor(r, users).name}</td>
                     <td className="p-4 text-right">
                       {canManage && (
                         <IconButton icon={Trash2} title="Withdraw this return" size="sm" tone="danger"
@@ -586,7 +598,7 @@ export default function Purchases() {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="8" className="p-12 text-center text-slate-500">
+                  <tr><td colSpan="9" className="p-12 text-center text-slate-500">
                     <ShoppingBag size={32} className="mx-auto mb-3 opacity-20" />
                     <p>No purchase returns recorded.</p>
                     {canManage && <button onClick={() => setIsReturnModalOpen(true)} className="mt-4 text-brand-accent hover:underline text-sm">+ Record your first return</button>}

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
+import { attributionFor } from '../utils/attribution';
 import { Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Wallet, TrendingUp, Plus, Trash2, FileText, CheckCircle, Clock, AlertCircle, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
@@ -884,6 +885,7 @@ const Accounting = () => {
                     <th className="p-4">Date</th>
                     <th className="p-4">Category</th>
                     <th className="p-4">Description</th>
+                    <th className="p-4">Recorded by</th>
                     <th className="p-4 text-right">Amount</th>
                     <th className="p-4 text-center">Actions</th>
                   </tr>
@@ -897,6 +899,21 @@ const Accounting = () => {
                         <td className="p-4 font-semibold text-brand-accent">{exp.category}</td>
                         <td className="p-4 text-slate-300 italic max-w-xs truncate" title={exp.description}>
                           {exp.description || 'No description provided'}
+                        </td>
+                        <td className="p-4">
+                          {/* An expense the system booked itself — a settled
+                              claim, a paid incentive — has no author, and
+                              saying "Not recorded" about one would read as
+                              data lost rather than as this working. */}
+                          {(() => {
+                            const who = attributionFor(exp, users);
+                            return (
+                              <span className={who.automatic ? 'text-slate-500 italic'
+                                : who.id ? 'text-slate-300' : 'text-slate-500 italic'}>
+                                {who.name}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="p-4 text-right font-bold text-white">{formatCurrency(exp.amount)}</td>
                         <td className="p-4 text-center">
@@ -914,7 +931,7 @@ const Accounting = () => {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="6" className="p-8 text-center text-slate-500">
+                      <td colSpan="7" className="p-8 text-center text-slate-500">
                         No expenses logged yet. Click "Log Expense" to begin.
                       </td>
                     </tr>

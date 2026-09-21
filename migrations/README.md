@@ -87,6 +87,15 @@ None of them record themselves in `schema_migrations`, because none is a
 migration and running one twice means something quite different from running a
 schema change twice.
 
+## One that can run before or after its deploy
+
+`031_created_by.sql` adds `createdBy` to `expenses` and `purchase_orders`. The
+application writes that column, but names it as optional on the insert — so a
+build that reaches production before the migration drops the field and keeps
+the record, rather than PostgREST refusing the whole statement. Run it whenever;
+nothing breaks in either order, and until it runs the two screens say
+"Not recorded".
+
 ## One that pairs with an Edge Function
 
 `029_pending_accounts_have_no_access.sql` puts the approval gate in the
