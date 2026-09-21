@@ -38,13 +38,25 @@ npx supabase functions deploy create-user
 npx supabase functions deploy partner-signup --no-verify-jwt
 ```
 
-**`--no-verify-jwt` on `partner-signup` is not optional.** The caller is a member
-of the public with no token. Without the flag the platform rejects the request
-before the function runs, and the signup pages report that registration is
-unavailable.
+**Repeat `--no-verify-jwt` on every `partner-signup` deploy.** The setting lives
+per deployment, so omitting it on a later one silently turns JWT verification
+back on.
 
-`create-user` must *not* have that flag: it checks the caller's own token to
-establish that they are an administrator.
+What it actually changes, tested against the live project: with the flag, a
+request carrying no `Authorization` header at all reaches the function. Without
+it, the platform answers `UNAUTHORIZED_NO_AUTH_HEADER` first.
+
+The browser path would survive either way — `supabase.functions.invoke` sends the
+anon key as a Bearer token even with nobody signed in, and that is a valid JWT.
+So this is not the difference between working and broken for the signup pages,
+which an earlier version of this file claimed. It is the difference between the
+function being reachable by anything and being reachable only by something that
+carries the project's public key. Keep the flag: the pages are public, and a
+caller without the key is exactly who they are for.
+
+`create-user` must *not* have that flag, and does not — a request with no header
+is refused by the platform before the function runs, which is right for
+something only an administrator may call.
 
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_ANON_KEY` are provided
 by the platform. Do not add them by hand.
