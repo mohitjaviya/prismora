@@ -28,6 +28,15 @@
 --
 --  The view still exposes four columns and no more. executiveId in particular
 --  stays out: which colleague owns a zone is nobody else's business.
+--
+--  A NOTE ON THE TYPE
+--
+--  `districts` is jsonb, not text[]. 002 and 004 both declare it
+--  JSONB DEFAULT '[]'::jsonb. The view passes it through unchanged and
+--  supabase-js hands the browser a real JavaScript array either way, so
+--  nothing in the application cares -- but SQL written against it needs
+--  jsonb_array_length and not cardinality. That mistake is what made the first
+--  version of this file fail.
 -- ════════════════════════════════════════════════════════════════════════
 
 
@@ -65,12 +74,34 @@ ORDER  BY a.attnum;
 
 SELECT has_table_privilege('anon', 'public.public_territories', 'SELECT') AS anon_can_read;
 
--- Every territory with no districts recorded. Each one is a zone the signup
--- forms cannot place anybody in, so a partner registering there will be told
--- their area is not covered yet.
+-- Every territory, and how many districts it covers. A zone with none is one
+-- the signup forms cannot place anybody in, so a partner registering there
+-- will be told their area is not covered yet.
+--
+-- `districts` is jsonb, not a native array -- 002 and 004 both declare it
+-- JSONB DEFAULT '[]'::jsonb -- so it is jsonb_array_length rather than
+-- cardinality, and CASE rather than OR. A plain OR chain does not guarantee
+-- left-to-right evaluation, and jsonb_array_length raises on anything that is
+-- not an array, so the type has to be established before the length is asked
+-- for.
+SELECT id,
+       name,
+       state,
+       jsonb_typeof(districts) AS districts_type,
+       CASE WHEN jsonb_typeof(districts) = 'array'
+            THEN jsonb_array_length(districts)
+       END AS district_count
+FROM   public.territories
+ORDER  BY district_count NULLS FIRST, name;
+
+-- The same thing as a verdict: just the territories nobody can be placed in.
 SELECT id, name, state
 FROM   public.territories
-WHERE  districts IS NULL OR cardinality(districts) = 0
+WHERE  districts IS NULL
+   OR  CASE WHEN jsonb_typeof(districts) = 'array'
+            THEN jsonb_array_length(districts) = 0
+            ELSE true          -- a jsonb scalar or object is not a district list
+       END
 ORDER  BY name;
 
 
