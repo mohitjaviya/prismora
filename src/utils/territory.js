@@ -1,15 +1,16 @@
 /**
- * Which territory a record belongs to, while two answers exist.
+ * Which territory a record belongs to.
  *
  * `territory` held a name and nothing checked it was a real one. This database
  * held three distributors on territories that did not exist, and two spellings
- * of Gujarat treated as different places.
+ * of Gujarat treated as different places. `territoryId` replaced it: 024 added
+ * the id beside the name, the sixty-one places that read the name were
+ * converted, and 027 dropped the name.
  *
- * `territoryId` is the real link now, but sixty-one places still read the name,
- * so both columns are live during the changeover. Everything here prefers the
- * id and falls back to the string, so a record written before the change and
- * one written after both resolve — and so neither has to be special-cased at
- * sixty-one call sites.
+ * The fallback to the string is still here, and is not dead. A browser that
+ * ran the previous build has rows in localStorage carrying a name and no id,
+ * and those are what it serves when a fetch fails. Reading them is the whole
+ * point of keeping a cache; showing a dash where a territory used to be is not.
  */
 
 /** The territory a record points at, by id first and name second. */
@@ -44,8 +45,10 @@ export function territoryName(territories, record) {
 /**
  * True when a record names a territory that does not exist.
  *
- * The state three of this database's distributors were in. Worth being able to
- * ask about directly rather than inferring it from a blank on a screen.
+ * The state three of this database's distributors were in. A foreign key makes
+ * it unrepresentable in the database now, so what is left to catch is a cached
+ * row from before the change — worth being able to ask about directly rather
+ * than inferring it from a blank on a screen.
  */
 export function hasDanglingTerritory(territories, record) {
   if (!record) return false;
@@ -56,18 +59,21 @@ export function hasDanglingTerritory(territories, record) {
 }
 
 /**
- * The pair of fields to write when a territory is chosen.
+ * What to write when a territory is chosen.
  *
- * Both, on purpose. The id is the link; the name is kept so the sixty-one
- * places still reading it keep working until they are converted, and so a row
- * still says something legible if its territory is later deleted.
+ * The id alone. It used to write the name beside it, which is what kept the
+ * old column fed through the changeover; 027 dropped that column, and
+ * PostgREST refuses an entire statement that names a column the table does not
+ * have — so writing it now would refuse every partner, order, lead and beat.
+ *
+ * It stays a function rather than becoming `{ territoryId: id }` at the call
+ * site because it refuses an id that matches no territory. A foreign key would
+ * refuse it too, but at the cost of the whole row — losing everything else
+ * somebody typed for the sake of one bad value in a dropdown.
  */
 export function territoryFields(territories, territoryId) {
   const match = (territories || []).find(t => t?.id === territoryId);
-  return {
-    territoryId: match ? match.id : null,
-    territory: match ? match.name : '',
-  };
+  return { territoryId: match ? match.id : null };
 }
 
 /** Records pointing at a territory, by either link. Used before deleting one. */

@@ -85,7 +85,7 @@ const Leads = () => {
     name: '', company: '', phone: '', email: '', productInterest: [],
     leadSource: '', assignedTo: isSalesRole(user?.role) ? user.id : '',
     status: 'Lead Created', followUpDate: '', notes: '', dealValue: '',
-    state: '', city: '', district: '', territory: '', territoryId: '', leadType: '', attachments: []
+    state: '', city: '', district: '', territoryId: '', leadType: '', attachments: []
   });
 
   const handleOpenModal = (lead = null) => {
@@ -98,7 +98,6 @@ const Leads = () => {
         state: '',
         city: '',
         district: '',
-        territory: '',
         territoryId: '',
         leadType: '',
         attachments: [],
@@ -114,7 +113,7 @@ const Leads = () => {
         name: '', company: '', phone: '', email: '', productInterest: [],
         leadSource: '', assignedTo: isSalesRole(user?.role) ? user.id : '',
         status: 'Lead Created', followUpDate: '', notes: '', dealValue: '',
-        state: '', city: '', district: '', territory: '', territoryId: '', leadType: '', attachments: []
+        state: '', city: '', district: '', territoryId: '', leadType: '', attachments: []
       });
     }
     setIsModalOpen(true);
@@ -594,7 +593,7 @@ const Leads = () => {
                           : 'Not specified'
                         }
                       </p>
-                      {(selectedLeadView.territoryId || selectedLeadView.territory) && (
+                      {selectedLeadView.territoryId && (
                         <p className="text-xs text-slate-500 mt-0.5">Territory: {territoryName(territories, selectedLeadView)}</p>
                       )}
                     </div>
@@ -878,9 +877,6 @@ const Leads = () => {
                       <option key={t.id} value={t.id}>{t.name}{t.state ? ` (${t.state})` : ''}</option>
                     ))}
                   </select>
-                  {formData.territory && !formData.territoryId && (
-                    <p className="text-xs text-amber-400 mt-1">Currently &ldquo;{formData.territory}&rdquo;, which matches no territory on record. Pick one to fix it.</p>
-                  )}
                 </div>
                 <div>
                   <label htmlFor="leads-follow-up-date" className="block text-sm font-medium text-slate-300 mb-1.5">Follow Up Date</label>

@@ -29,7 +29,7 @@ const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white p
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
 const BLANK_FORM = {
-  name: '', gstin: '', parentDealerId: '', state: '', city: '', territory: '', territoryId: '',
+  name: '', gstin: '', parentDealerId: '', state: '', city: '', territoryId: '',
   phone: '', email: '', contactPerson: '', address: '', pincode: '', creditLimit: 50000, status: 'Active'
 };
 
@@ -75,7 +75,7 @@ export default function Retailers() {
   const activeDealers = dealers.filter(d => d.status === 'Active');
 
   const openAdd = () => { setEditingRetailer(null); setForm(BLANK_FORM); setIsModalOpen(true); };
-  const openEdit = (r) => { setEditingRetailer(r); setForm({ name: r.name, gstin: r.gstin || '', parentDealerId: r.parentDealerId || '', state: r.state || '', city: r.city || '', territory: r.territory || '', territoryId: r.territoryId || '', phone: r.phone || '', email: r.email || '', contactPerson: r.contactPerson || '', address: r.address || '', pincode: r.pincode || '', creditLimit: r.creditLimit || 50000, status: r.status || 'Active' }); setIsModalOpen(true); };
+  const openEdit = (r) => { setEditingRetailer(r); setForm({ name: r.name, gstin: r.gstin || '', parentDealerId: r.parentDealerId || '', state: r.state || '', city: r.city || '', territoryId: r.territoryId || '', phone: r.phone || '', email: r.email || '', contactPerson: r.contactPerson || '', address: r.address || '', pincode: r.pincode || '', creditLimit: r.creditLimit || 50000, status: r.status || 'Active' }); setIsModalOpen(true); };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -469,10 +469,6 @@ export default function Retailers() {
                   </select>
                   {territories.length === 0 ? (
                     <p className="text-[10px] text-amber-400 mt-1">Create territories under Geography → Territories first — orders from this partner cannot be routed to a rep without one.</p>
-                  ) : form.territory && !territories.some(t => t.name === form.territory) ? (
-                    <p className="text-[10px] text-amber-400 mt-1">
-                      "{form.territory}" is not one of your territories, so it matches nothing. Pick one from the list.
-                    </p>
                   ) : null}
                 </div>
                 <div><label htmlFor="retailers-credit-limit" className={labelCls}>Credit Limit (₹)</label><input id="retailers-credit-limit" type="number" min="0" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /></div>

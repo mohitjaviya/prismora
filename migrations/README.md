@@ -80,13 +80,24 @@ apart deliberately, so nothing sweeps it into a sequence and runs it.
 - `wipe_test_data.sql` — **deletes business data.** Takes a backup first; read
   it before running it, ever.
 - `seed_dealers_retailers.sql` — inserts sample partners.
-- `check_territory_drop_readiness.sql` — reads only. Says whether `territory`
-  can be dropped yet, and holds the drop statements as a comment rather than
-  as a numbered file, because a numbered file reads as something to run.
+- `check_territory_drop_readiness.sql` — reads only. Lists any row that would
+  lose its territory, so you can see them before `027` refuses to run.
 
 None of them record themselves in `schema_migrations`, because none is a
 migration and running one twice means something quite different from running a
 schema change twice.
+
+## One that has to be run in an order
+
+`027_drop_territory_name.sql` is the only file here the running application
+notices immediately. PostgREST refuses an entire statement that names a column
+the table does not have, so a deployed build still writing `territory` stops
+saving partners, orders, leads and beat plans the moment it runs — silently,
+because local state is written before the request goes out.
+
+**Deploy the application, then run `026`, then `027`.** Both files check what
+they can: `027` refuses to run if `026` has not, and refuses if any row would
+lose its territory. Neither can check which build is deployed.
 
 ## Adding a new one
 

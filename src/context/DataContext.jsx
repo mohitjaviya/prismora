@@ -9,7 +9,15 @@ import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } fro
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { balanceDrift, balanceAfterCreditNote, balanceAfterCreditNoteWithdrawn } from '../utils/ledgerWrites';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
-import { territoryName } from '../utils/territory';
+import { territoryFor } from '../utils/territory';
+
+// The bracketed territory on a "new partner" log line. On a signup page the
+// visitor is anonymous and the territories list is empty, so there is no name
+// to resolve -- in which case the brackets come off rather than logging "(—)".
+const territorySuffix = (territories, record) => {
+  const name = territoryFor(territories, record)?.name;
+  return name ? ` (${name})` : '';
+};
 
 const DataContext = createContext();
 
@@ -156,11 +164,9 @@ const persist = async (label, query) => {
  */
 const ORDER_COLUMNS = [
   'id', 'customerName', 'companyName', 'product', 'quantity', 'value',
-  'state', 'city', 'territory', 'deliveryAddress', 'deliveryPincode',
-  // 024_territory_id.sql. Both are listed while the contract phase runs: the
-  // name is what old rows and the signup forms still carry, the id is what
-  // survives a territory being renamed. Omitting the id here would have the
-  // dropdown look like it worked and write nothing.
+  'state', 'city', 'deliveryAddress', 'deliveryPincode',
+  // 024_territory_id.sql added it, 027 dropped the name it replaced. A
+  // territory renamed now keeps every order pointed at it.
   'territoryId',
   'status', 'assignedTo', 'date', 'createdAt',
   'phone', 'email',
@@ -280,7 +286,7 @@ const insertWithFreeId = async (label, table, prefix, firstNumber, record, shape
  */
 const LEAD_COLUMNS = [
   'id', 'name', 'company', 'phone', 'email', 'productInterest', 'dealValue',
-  'leadSource', 'state', 'city', 'district', 'territory', 'leadType',
+  'leadSource', 'state', 'city', 'district', 'leadType',
   // 024_territory_id.sql — see the note on ORDER_COLUMNS.
   'territoryId',
   'status', 'assignedTo', 'followUpDate', 'notes', 'orderCreated', 'createdAt',
@@ -2977,7 +2983,7 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('distributors', ['territoryId'], 'the distributor',
       (shape) => supabase.from('distributors').insert([shape(newDist)]));
-    logEvent('distributor_added', `New distributor: ${distData.name} (${territoryName(territories, distData)})`, null, newId);
+    logEvent('distributor_added', `New distributor: ${distData.name}${territorySuffix(territories, distData)}`, null, newId);
     return newId;
   };
 
@@ -3011,7 +3017,7 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('dealers', ['territoryId'], 'the dealer',
       (shape) => supabase.from('dealers').insert([shape(newDealer)]));
-    logEvent('dealer_added', `New dealer: ${dealerData.name} (${territoryName(territories, dealerData)})`, null, newId);
+    logEvent('dealer_added', `New dealer: ${dealerData.name}${territorySuffix(territories, dealerData)}`, null, newId);
     return newId;
   };
 
@@ -3045,7 +3051,7 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('retailers', ['territoryId'], 'the retailer',
       (shape) => supabase.from('retailers').insert([shape(newRetailer)]));
-    logEvent('retailer_added', `New retailer: ${retailerData.name} (${territoryName(territories, retailerData)})`, null, newId);
+    logEvent('retailer_added', `New retailer: ${retailerData.name}${territorySuffix(territories, retailerData)}`, null, newId);
     return newId;
   };
 

@@ -4,15 +4,19 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { Building2, Mail, Lock, User, Phone, MapPin, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
+import { usePublicDirectory } from '../hooks/usePublicDirectory';
+import { PUBLIC_VIEWS, territoryLabel, directoryMessage } from '../utils/publicDirectory';
 
 const BLANK_FORM = {
   name: '', gstin: '', contactPerson: '', phone: '', email: '', password: '',
-  state: '', city: '', territory: ''
+  state: '', city: '', territoryId: ''
 };
 
 const DistributorSignup = () => {
   const { addUser, users } = useAuth();
   const { addDistributor } = useData();
+  // Anonymous visitor, so not from DataContext — see the hook.
+  const territoryList = usePublicDirectory(PUBLIC_VIEWS.territories);
   const navigate = useNavigate();
 
   const [form, setForm] = useState(BLANK_FORM);
@@ -38,7 +42,7 @@ const DistributorSignup = () => {
         gstin: form.gstin,
         state: form.state,
         city: form.city,
-        territory: form.territory,
+        territoryId: form.territoryId || null,
         phone: form.phone,
         email: form.email,
         contactPerson: form.contactPerson,
@@ -164,7 +168,18 @@ const DistributorSignup = () => {
 
                 <div>
                   <label htmlFor="distributorsignup-territory-zone-optional" className={labelCls}>Territory / Zone (optional)</label>
-                  <input id="distributorsignup-territory-zone-optional" type="text" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} placeholder="Admin will confirm this on approval" className="w-full glass-input h-11 px-3.5 text-sm" />
+                  {/* Was a free text box because an anonymous visitor could not
+                      read the territories table and there was nothing to offer.
+                      026 adds a three-column view they can read. */}
+                  <select id="distributorsignup-territory-zone-optional" value={form.territoryId} onChange={e => setForm(f => ({ ...f, territoryId: e.target.value }))} className="w-full glass-input h-11 px-3.5 text-sm">
+                    <option value="" className="bg-brand-primary text-slate-500">
+                      {directoryMessage({ loading: territoryList.loading, failed: territoryList.failed, count: territoryList.rows.length, what: 'territories' })}
+                    </option>
+                    {territoryList.rows.map(t => (
+                      <option key={t.id} value={t.id} className="bg-brand-primary">{territoryLabel(t)}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-500 mt-1">Our team confirms this on approval.</p>
                 </div>
 
                 <div>

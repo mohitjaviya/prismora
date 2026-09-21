@@ -302,11 +302,9 @@ export default function SFA() {
         quantity: orderUnits,
         value: orderValue,
         state: territory?.state || matchedRetailer?.state || matchedDealer?.state || '',
-        // The order carries the territory's id, not just its name, so a
-        // territory renamed later still reports against this order.
-        ...(territory
-          ? territoryFields(territories, territory.id)
-          : { territory: selectedBeatForVisit?.beat?.territory || '', territoryId: null }),
+        // The order carries the territory's id, so a territory renamed later
+        // still reports against this order.
+        ...territoryFields(territories, territory?.id),
         city: visitForm.outletCity || matchedRetailer?.city || matchedDealer?.city || '',
         phone: visitForm.outletContact || '',
         email: visitForm.outletEmail || matchedRetailer?.email || matchedDealer?.email || '',

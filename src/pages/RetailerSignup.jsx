@@ -4,15 +4,17 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { Building2, Mail, Lock, User, Phone, MapPin, Network, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
+import { usePublicDirectory } from '../hooks/usePublicDirectory';
+import { PUBLIC_VIEWS, territoryLabel, partnerLabel, directoryMessage } from '../utils/publicDirectory';
 
 const BLANK_FORM = {
   name: '', gstin: '', contactPerson: '', phone: '', email: '', password: '',
-  state: '', city: '', territory: '', parentDealerId: ''
+  state: '', city: '', territoryId: '', parentDealerId: ''
 };
 
 const RetailerSignup = () => {
   const { addUser, users } = useAuth();
-  const { addRetailer, dealers } = useData();
+  const { addRetailer } = useData();
   const navigate = useNavigate();
 
   const [form, setForm] = useState(BLANK_FORM);
@@ -21,7 +23,11 @@ const RetailerSignup = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const districts = form.state ? (STATE_DISTRICTS[form.state] || []) : [];
-  const activeDealers = dealers.filter(d => d.status === 'Active');
+  // Not from DataContext: it reads the dealers table, which returns zero rows
+  // to a visitor who has no account -- so this dropdown was empty on a
+  // required field for every real signup. The view filters to Active itself.
+  const dealerList = usePublicDirectory(PUBLIC_VIEWS.dealers);
+  const territoryList = usePublicDirectory(PUBLIC_VIEWS.territories);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,7 +45,7 @@ const RetailerSignup = () => {
         gstin: form.gstin,
         state: form.state,
         city: form.city,
-        territory: form.territory,
+        territoryId: form.territoryId || null,
         parentDealerId: form.parentDealerId,
         phone: form.phone,
         email: form.email,
@@ -118,8 +124,12 @@ const RetailerSignup = () => {
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Network size={16} /></div>
                     <select id="retailersignup-parent-dealer" required value={form.parentDealerId} onChange={e => setForm(f => ({ ...f, parentDealerId: e.target.value }))} className={inputCls}>
-                      <option value="" className="bg-brand-primary text-slate-500">-- Select the Dealer you buy through --</option>
-                      {activeDealers.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({d.territory})</option>)}
+                      <option value="" className="bg-brand-primary text-slate-500">
+                        {dealerList.loading || dealerList.failed || !dealerList.rows.length
+                          ? directoryMessage({ ...dealerList, count: dealerList.rows.length, what: 'dealers' })
+                          : '-- Select the Dealer you buy through --'}
+                      </option>
+                      {dealerList.rows.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{partnerLabel(d)}</option>)}
                     </select>
                   </div>
                 </div>
@@ -177,7 +187,18 @@ const RetailerSignup = () => {
 
                 <div>
                   <label htmlFor="retailersignup-territory-zone-optional" className={labelCls}>Territory / Zone (optional)</label>
-                  <input id="retailersignup-territory-zone-optional" type="text" value={form.territory} onChange={e => setForm(f => ({ ...f, territory: e.target.value }))} placeholder="Admin will confirm this on approval" className="w-full glass-input h-11 px-3.5 text-sm" />
+                  {/* Was a free text box because an anonymous visitor could not
+                      read the territories table and there was nothing to offer.
+                      026 adds a three-column view they can read. */}
+                  <select id="retailersignup-territory-zone-optional" value={form.territoryId} onChange={e => setForm(f => ({ ...f, territoryId: e.target.value }))} className="w-full glass-input h-11 px-3.5 text-sm">
+                    <option value="" className="bg-brand-primary text-slate-500">
+                      {directoryMessage({ loading: territoryList.loading, failed: territoryList.failed, count: territoryList.rows.length, what: 'territories' })}
+                    </option>
+                    {territoryList.rows.map(t => (
+                      <option key={t.id} value={t.id} className="bg-brand-primary">{territoryLabel(t)}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-500 mt-1">Our team confirms this on approval.</p>
                 </div>
 
                 <div>

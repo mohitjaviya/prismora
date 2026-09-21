@@ -84,18 +84,29 @@ describe('hasDanglingTerritory', () => {
 });
 
 describe('territoryFields', () => {
-  it('writes both, so old readers and the new link both work', () => {
-    expect(territoryFields(TERRITORIES, 'TER-1'))
-      .toEqual({ territoryId: 'TER-1', territory: 'Gujarat North Hub' });
+  it('writes the id and nothing else', () => {
+    // It used to write the name beside it, which is what kept the old column
+    // fed during the expand phase. 027 dropped that column, and a payload
+    // naming a column the table does not have is refused whole by PostgREST —
+    // so still writing it would refuse every partner, order, lead and beat.
+    expect(territoryFields(TERRITORIES, 'TER-1')).toEqual({ territoryId: 'TER-1' });
   });
 
-  it('clears both when nothing is chosen', () => {
-    expect(territoryFields(TERRITORIES, '')).toEqual({ territoryId: null, territory: '' });
-    expect(territoryFields(TERRITORIES, null)).toEqual({ territoryId: null, territory: '' });
+  it('clears the link when nothing is chosen', () => {
+    expect(territoryFields(TERRITORIES, '')).toEqual({ territoryId: null });
+    expect(territoryFields(TERRITORIES, null)).toEqual({ territoryId: null });
+    expect(territoryFields(TERRITORIES, undefined)).toEqual({ territoryId: null });
   });
 
-  it('refuses to invent a name for an id it does not know', () => {
-    expect(territoryFields(TERRITORIES, 'TER-99')).toEqual({ territoryId: null, territory: '' });
+  it('refuses an id it does not know rather than storing it', () => {
+    // A foreign key would refuse it anyway, and refusing the whole row for one
+    // bad id loses the rest of what somebody typed.
+    expect(territoryFields(TERRITORIES, 'TER-99')).toEqual({ territoryId: null });
+  });
+
+  it('never names a column the table no longer has', () => {
+    const shapes = [territoryFields(TERRITORIES, 'TER-1'), territoryFields([], 'TER-1'), territoryFields(null, null)];
+    shapes.forEach(shape => expect(Object.keys(shape)).toEqual(['territoryId']));
   });
 });
 
