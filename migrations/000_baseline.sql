@@ -78,11 +78,17 @@ INSERT INTO public.schema_migrations (filename, note) VALUES
 ON CONFLICT (filename) DO NOTHING;
 
 
--- ── What is still outstanding ───────────────────────────────────────────
+-- ── What is in the ledger ───────────────────────────────────────────────
 SELECT 'applied' AS state, count(*) AS files FROM public.schema_migrations;
 
 SELECT filename, applied_at::date AS applied, note
 FROM   public.schema_migrations
 ORDER  BY filename;
--- 023_add_free_goods_product.sql is deliberately not in the list above: it has
--- not been run. It will record itself when it is.
+-- The list above stops at 022 on purpose. Everything from 023 onward records
+-- itself as its last statement, so this file never needs touching again --
+-- 023 through 028 were run after this baseline and are in the table by their
+-- own hand.
+--
+-- 000 has no row of its own, which is the one absence that cannot mislead: the
+-- table is the thing this file makes, so if you can run this query at all, it
+-- has been applied.
