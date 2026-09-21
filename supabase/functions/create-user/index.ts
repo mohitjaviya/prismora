@@ -19,6 +19,18 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const ADMIN_ROLES = ['Super Admin', 'Director', 'Admin'];
 
+// A partner role is only meaningful with a record behind it. Every portal
+// screen finds its partner with distributors.find(d => d.id === user.distributorId),
+// and my_distributor_id() does the same in the row-level policies -- so a
+// 'Distributor' profile with no distributorId is an account that signs in to an
+// empty screen and can read nothing. Settings could make exactly that before
+// this function accepted the link.
+const PARTNER_ROLES: Record<string, { column: string; table: string }> = {
+  Distributor: { column: 'distributorId', table: 'distributors' },
+  Dealer: { column: 'dealerId', table: 'dealers' },
+  Retailer: { column: 'retailerId', table: 'retailers' },
+};
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -84,6 +96,40 @@ Deno.serve(async (req) => {
     return json({ error: 'Only a Super Admin can create an administrator.' }, 403);
   }
 
+  // ── 2a. A partner role needs the record it belongs to ──────────────────
+  const partner = PARTNER_ROLES[role];
+  const linkId = partner ? String(body[partner.column] ?? '').trim() : '';
+
+  if (partner) {
+    if (!linkId) {
+      return json({ error: `A ${role} account has to be attached to a ${role.toLowerCase()} record. Create it from that record's own screen.` }, 400);
+    }
+
+    const { data: record, error: recordError } = await admin
+      .from(partner.table).select('id, status').eq('id', linkId).maybeSingle();
+
+    if (recordError) return json({ error: `Could not check the ${role.toLowerCase()} record.` }, 500);
+    if (!record) return json({ error: `That ${role.toLowerCase()} record does not exist.` }, 400);
+    if (record.status !== 'Active') {
+      // 029 blocks a Pending or Rejected account from reading anything, so the
+      // login would exist and not work. Refused here rather than handed over
+      // as a password that fails.
+      return json({ error: `That ${role.toLowerCase()} is ${String(record.status).toLowerCase()}. Approve it first, then create the login.` }, 400);
+    }
+
+    // One partner, one login. A second would mean two accounts able to place
+    // orders as the same business with no way to tell them apart afterwards.
+    const { data: taken } = await admin
+      .from('users').select('id, email').eq(partner.column, linkId).maybeSingle();
+    if (taken) {
+      return json({ error: `${taken.email} can already sign in for that ${role.toLowerCase()}.` }, 409);
+    }
+  } else if (Object.values(PARTNER_ROLES).some(p => body[p.column])) {
+    // A staff role arriving with a partner link is a mistake somewhere, and
+    // storing it would scope their access to that partner's rows.
+    return json({ error: 'A staff account cannot be attached to a partner record.' }, 400);
+  }
+
   // ── 3. Create the login ────────────────────────────────────────────────
   // Confirmed immediately: there is no inbox to check for a colleague whose
   // account you are setting up, and an unconfirmed account cannot sign in.
@@ -93,14 +139,20 @@ Deno.serve(async (req) => {
   if (createError) return json({ error: createError.message }, 400);
 
   // ── 4. And the profile that gives it a role ────────────────────────────
-  const profile = {
+  const profile: Record<string, unknown> = {
     id: `U${Date.now()}`,
     name,
     email,
     role,
     managedUsers: Array.isArray(body.managedUsers) ? body.managedUsers : [],
+    // Set here, never read from the request. An administrator creating an
+    // account is the approval, so it is Active — unlike the public signup,
+    // where nobody has vouched for anybody.
     status: 'Active',
   };
+  // The link. Without it a partner signs in to an empty portal, which is what
+  // this whole function change is for.
+  if (partner) profile[partner.column] = linkId;
 
   const { error: profileError } = await admin.from('users').insert([profile]);
   if (profileError) {
@@ -110,5 +162,5 @@ Deno.serve(async (req) => {
     return json({ error: 'Account created but the profile failed, so it was undone: ' + profileError.message }, 500);
   }
 
-  return json({ ok: true, id: profile.id, email });
+  return json({ ok: true, id: profile.id, email, linkedTo: partner ? linkId : null });
 });

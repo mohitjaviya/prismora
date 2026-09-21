@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, ArrowUpCircle, ArrowDownCircle, Truck, Clock, AlertTriangle } from 'lucide-react';
 import { useConfirm } from '../context/DialogContext';
+import PartnerLoginAction from '../components/PartnerLoginAction';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadCSV } from '../utils/exportUtils';
@@ -222,6 +223,7 @@ export default function Dealers() {
           <IconButton icon={Eye} title="View details" size="sm" onClick={() => setViewingDealer(d)} />
           {canManage && (
             <>
+              <PartnerLoginAction kind="dealer" partner={d} canManage={canManage} />
               <IconButton icon={Edit2} title="Edit dealer" size="sm" tone="accent" onClick={() => openEdit(d)} />
               <IconButton icon={Trash2} title="Delete dealer" size="sm" tone="danger"
                 onClick={() => handleDelete(d)} />

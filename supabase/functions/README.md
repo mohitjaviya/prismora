@@ -7,8 +7,26 @@ opened the site could take it and make themselves an administrator.
 
 | Function | Who may call it | What it does |
 |---|---|---|
-| `create-user` | a signed-in administrator | creates a colleague's login and profile |
+| `create-user` | a signed-in administrator | creates a colleague's login, or a partner's portal login attached to their record |
 | `partner-signup` | anyone, no account | registers a Distributor, Dealer or Retailer as **Pending** |
+
+### Partner logins through `create-user`
+
+A `Distributor`, `Dealer` or `Retailer` account is only meaningful attached to a
+partner record. Every portal screen finds its partner with
+`distributors.find(d => d.id === user.distributorId)`, and `my_distributor_id()`
+does the same inside the row-level policies — so a partner profile without that
+link signs in to an empty screen and can read nothing.
+
+The function therefore requires `distributorId`, `dealerId` or `retailerId`
+alongside a partner role, checks the record exists and is **Active**, and
+refuses a second login for a partner who already has one. A staff role arriving
+with a partner link is refused too: storing it would scope that colleague's
+access to one partner's rows.
+
+Callers come from the key button on the Distributors, Dealers and Retailers
+screens. The Team Members form no longer offers the three partner roles, because
+it has nowhere to say which record.
 
 ## Deploying
 

@@ -24,6 +24,16 @@ const passwordPolicyError = (pw) => {
   return null;
 };
 
+// Distributor, Dealer and Retailer are missing on purpose. A partner account
+// is only meaningful attached to a partner record — every portal screen finds
+// its partner with distributors.find(d => d.id === user.distributorId), and the
+// row-level policies do the same — and this form has nowhere to say which
+// record. Offering the role here produced accounts that signed in to an empty
+// screen. They are created from the partner's own row instead, by the key
+// button on Distributors, Dealers and Retailers.
+const PARTNER_ROLES = ['Distributor', 'Dealer', 'Retailer'];
+const selectableRoles = USER_ROLES.filter(r => !PARTNER_ROLES.includes(r));
+
 const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
@@ -185,7 +195,7 @@ export default function TeamMembers() {
                 <div>
                   <label htmlFor="teammembers-role" className={labelCls}>Role *</label>
                   <select id="teammembers-role" value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })} className={inputCls}>
-                    {USER_ROLES.map(role => (
+                    {selectableRoles.map(role => (
                       <option key={role} value={role} className="bg-brand-primary">{role}</option>
                     ))}
                   </select>

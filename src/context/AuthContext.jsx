@@ -561,14 +561,21 @@ export const AuthProvider = ({ children }) => {
    * the administrator to add the account in the Supabase dashboard rather than
    * pretending the person can sign in.
    */
-  const createUserAccount = async ({ name, email, password, role, managedUsers }) => {
+  const createUserAccount = async ({ name, email, password, role, managedUsers,
+                                    distributorId, dealerId, retailerId }) => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) return { ok: false, error: 'Your session has expired — sign in again.' };
 
       const { data, error } = await supabase.functions.invoke('create-user', {
-        body: { name, email, password, role, managedUsers },
+        // The three link ids are only meaningful for a partner role, and the
+        // function refuses them on a staff one. Sent as undefined otherwise so
+        // the body does not carry three nulls to be reasoned about.
+        body: { name, email, password, role, managedUsers,
+                distributorId: distributorId || undefined,
+                dealerId: dealerId || undefined,
+                retailerId: retailerId || undefined },
       });
 
       if (error) {
