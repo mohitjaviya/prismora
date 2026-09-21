@@ -87,6 +87,22 @@ None of them record themselves in `schema_migrations`, because none is a
 migration and running one twice means something quite different from running a
 schema change twice.
 
+## One that pairs with an Edge Function
+
+`029_pending_accounts_have_no_access.sql` puts the approval gate in the
+database. Until it runs, an unapproved partner who authenticates against the
+REST API directly — bypassing the sign-in screen, which is where the only check
+used to live — has the access of an approved one.
+
+It pairs with `supabase/functions/partner-signup`, which is what creates those
+Pending accounts in the first place. Deploy the function and run `029`; neither
+is much use without the other. See `supabase/functions/README.md`.
+
+`029` prints every status in the `users` table and every account it has just cut
+off, before you rely on it. It blocks `Pending` and `Rejected` only — a
+blocklist, not a whitelist, so an account with an unexpected or missing status
+keeps working rather than an unknown spelling locking an administrator out.
+
 ## Two that need the application deployed first
 
 `026`, `027` and `028` all pair with application code. `028` is the gentlest:

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase, isConfigured, missingEnvVars } from '../supabaseClient';
 import { accessFor, levelFor } from '../utils/roleUtils';
 import { checkEmailTaken } from '../utils/signupChecks';
+import { signupPayload, signupOutcome } from '../utils/partnerSignup';
 
 export const USER_ROLES = [
   'Super Admin',
@@ -441,6 +442,53 @@ export const AuthProvider = ({ children }) => {
    */
   const isEmailTaken = async (email) => checkEmailTaken(supabase, email);
 
+  /**
+   * Register a channel partner from one of the three public signup pages.
+   *
+   * Everything used to happen in the browser: insert the partner row, then
+   * signUp. A visitor filling in a signup form has no account, so both went out
+   * as `anon`, and no policy grants anon INSERT -- Postgres refused the partner
+   * row and the page said "Registration submitted" anyway, because neither call
+   * throws on failure.
+   *
+   * It is one call to the partner-signup Edge Function now. That function holds
+   * the service key, sets `status: 'Pending'` itself rather than believing the
+   * request, and either leaves all three records behind or none.
+   *
+   * Note what it does not do: sign anybody in. The old signUp did, which put a
+   * visitor into a session as an unapproved partner the instant they registered.
+   */
+  const registerPartner = async (kind, form) => {
+    const body = signupPayload(kind, form);
+    if (!body) return { ok: false, error: 'Unknown registration type.' };
+
+    try {
+      const { data, error } = await supabase.functions.invoke('partner-signup', { body });
+
+      // supabase-js reports every non-2xx as the same sentence and puts the
+      // response itself on error.context, so the reason the function actually
+      // gave has to be dug out -- the same unwrapping createUserAccount does.
+      let detail = '';
+      if (error?.context && typeof error.context.json === 'function') {
+        try {
+          const payload = await error.context.json();
+          detail = String(payload?.error || '');
+        } catch {
+          // A non-JSON body means it crashed before answering. Falling through
+          // to the generic message is right; inventing a reason is not.
+        }
+      }
+
+      const outcome = signupOutcome({ data, error, detail });
+      if (!outcome.ok && outcome.needsDeploy) {
+        console.error('[Prismora] partner-signup is not deployed. Run: supabase functions deploy partner-signup --no-verify-jwt');
+      }
+      return outcome;
+    } catch (err) {
+      return { ok: false, needsDeploy: true, error: err?.message || String(err) };
+    }
+  };
+
   const addUser = async (userData) => {
     const newId = `U${Date.now()}`;
     // No default password. Every caller (Settings, and the three signup forms)
@@ -661,7 +709,7 @@ export const AuthProvider = ({ children }) => {
   const isSales = user ? isSalesRole(user.role) : false;
 
   return (
-    <AuthContext.Provider value={{ user, users, roles, rolesError, fetchRoles, authReady, isConfigured, missingEnvVars, login, logout, addUser, isEmailTaken, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, verifyCurrentPassword, isAdmin, isManager, isSales }}>
+    <AuthContext.Provider value={{ user, users, roles, rolesError, fetchRoles, authReady, isConfigured, missingEnvVars, login, logout, addUser, isEmailTaken, registerPartner, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, verifyCurrentPassword, isAdmin, isManager, isSales }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
 import { Building2, Mail, Lock, User, Phone, MapPin, Truck, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { usePublicDirectory } from '../hooks/usePublicDirectory';
 import { emailCheckVerdict } from '../utils/signupChecks';
+import { validateSignup, successMessage } from '../utils/partnerSignup';
 import { PUBLIC_VIEWS, territoryLabel, partnerLabel, directoryMessage } from '../utils/publicDirectory';
 
 const BLANK_FORM = {
@@ -14,13 +14,13 @@ const BLANK_FORM = {
 };
 
 const DealerSignup = () => {
-  const { addUser, isEmailTaken } = useAuth();
-  const { addDealer } = useData();
+  const { registerPartner, isEmailTaken } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState(BLANK_FORM);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [confirmationNeeded, setConfirmationNeeded] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const districts = form.state ? (STATE_DISTRICTS[form.state] || []) : [];
@@ -39,6 +39,16 @@ const DealerSignup = () => {
     // starts a second signup for the same person.
     setSubmitting(true);
 
+    // Refused here only to save a round-trip on a form somebody has visibly
+    // not finished. The Edge Function validates all of it again, because
+    // anything the browser decides can be skipped by not using the browser.
+    const complete = validateSignup('dealer', form);
+    if (!complete.ok) {
+      setError(complete.error);
+      setSubmitting(false);
+      return;
+    }
+
     // Asked of the database, not of a list. `users` is empty for a visitor
     // with no account, so this check used to pass for every address ever
     // typed — including ones that were already registered.
@@ -48,38 +58,23 @@ const DealerSignup = () => {
       setSubmitting(false);
       return;
     }
-    try {
-      const dealId = await addDealer({
-        name: form.name,
-        gstin: form.gstin,
-        state: form.state,
-        city: form.city,
-        territoryId: form.territoryId || null,
-        parentDistributorId: form.parentDistributorId,
-        phone: form.phone,
-        email: form.email,
-        contactPerson: form.contactPerson,
-        outstandingAmount: 0,
-        creditLimit: 100000,
-        status: 'Pending'
-      });
+    // One call. It creates the login, the partner record and the profile, or
+    // it creates none of them — the browser cannot do any of it, because no
+    // policy grants an anonymous visitor INSERT on those tables.
+    const result = await registerPartner('dealer', form);
 
-      await addUser({
-        name: form.contactPerson,
-        email: form.email,
-        password: form.password,
-        role: 'Dealer',
-        status: 'Pending',
-        dealerId: dealId,
-        managedUsers: []
-      });
-
-      setSubmitted(true);
-    } catch {
-      setError('Something went wrong submitting your registration. Please try again.');
-    } finally {
+    // The whole point of this rewrite. This used to be setSubmitted(true) with
+    // nothing in front of it, so a write refused by row-level security showed
+    // the same thank-you screen as one that saved.
+    if (!result.ok) {
+      setError(result.error || 'Something went wrong submitting your registration. Please try again.');
       setSubmitting(false);
+      return;
     }
+
+    setConfirmationNeeded(result.emailConfirmationRequired);
+    setSubmitted(true);
+    setSubmitting(false);
   };
 
   const inputCls = "w-full glass-input rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500";
@@ -104,8 +99,7 @@ const DealerSignup = () => {
               </div>
               <h2 className="text-xl font-semibold text-white mb-2">Registration submitted</h2>
               <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                Thanks — your dealer account for <strong className="text-white">{form.name}</strong> is now under review.
-                You'll be able to sign in once an administrator approves it.
+                {successMessage(form.name, { emailConfirmationRequired: confirmationNeeded })}
               </p>
               <button
                 onClick={() => navigate('/login')}
