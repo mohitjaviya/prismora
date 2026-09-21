@@ -705,6 +705,7 @@ const Accounting = () => {
                     <th className="p-4">Order ID</th>
                     <th className="p-4">Created Date</th>
                     <th className="p-4">Due Date</th>
+                    <th className="p-4">Raised by</th>
                     <th className="p-4 text-right">Base Amt</th>
                     <th className="p-4 text-right">Tax (GST)</th>
                     <th className="p-4 text-right">Total</th>
@@ -723,6 +724,10 @@ const Accounting = () => {
                           <td className="p-4 text-slate-400 font-mono text-xs">{inv.orderId || 'Custom'}</td>
                           <td className="p-4 text-slate-400">{formatDate(inv.createdAt)}</td>
                           <td className="p-4 text-slate-400">{formatDate(inv.dueDate)}</td>
+                          {/* Most invoices are raised by delivery rather than
+                              by a person, and those read "Not recorded" — which
+                              is the truth: nobody typed them. */}
+                          <td className="p-4 text-slate-400">{attributionFor(inv, users).name}</td>
                           <td className="p-4 text-right">{formatCurrency(inv.amount)}</td>
                           <td className="p-4 text-right text-slate-400">{formatCurrency(inv.tax)}</td>
                           <td className="p-4 text-right font-bold text-white">{formatCurrency(totalValue)}</td>
@@ -861,7 +866,7 @@ const Accounting = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan="10" className="p-8 text-center text-slate-500">
+                      <td colSpan="11" className="p-8 text-center text-slate-500">
                         No invoices match this filter criteria.
                       </td>
                     </tr>
@@ -955,6 +960,7 @@ const Accounting = () => {
                   <th className="p-4">Reason</th>
                   <th className="p-4 text-right">Amount</th>
                   <th className="p-4">Date</th>
+                  <th className="p-4">Recorded by</th>
                   <th className="p-4 text-right w-12"></th>
                 </tr>
               </thead>
@@ -967,6 +973,9 @@ const Accounting = () => {
                     <td className="p-4"><span className="text-xs bg-rose-500/10 text-rose-300 border border-rose-500/20 px-2 py-0.5 rounded-full">{cn.reason}</span></td>
                     <td className="p-4 text-right font-bold text-emerald-400">{formatCurrency(cn.amount)}</td>
                     <td className="p-4 text-slate-400">{formatDate(cn.createdAt)}</td>
+                    {/* recordedBy has been stored here since credit notes
+                        existed, and shown nowhere. */}
+                    <td className="p-4 text-slate-400">{attributionFor(cn, users).name}</td>
                     <td className="p-4 text-right">
                       {/* A credit note issued for the wrong amount, or against
                           the wrong customer, used to be permanent. */}
@@ -980,7 +989,7 @@ const Accounting = () => {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="7" className="p-8 text-center text-slate-500">
+                  <tr><td colSpan="8" className="p-8 text-center text-slate-500">
                     No credit notes issued yet. Use "Credit Note" above to record a sales return or adjustment.
                   </td></tr>
                 )}

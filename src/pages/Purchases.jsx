@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { attributionFor } from '../utils/attribution';
+import { attributionFor, personName } from '../utils/attribution';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -838,7 +838,13 @@ export default function Purchases() {
                         {row.debit > 0 ? <ArrowUpCircle size={13} className="text-rose-400 flex-shrink-0" /> : <ArrowDownCircle size={13} className="text-emerald-400 flex-shrink-0" />}
                         <div>
                           <p className="text-slate-300">{row.description}</p>
-                          <p className="text-[10px] text-slate-500">{formatDate(row.date)}</p>
+                          {/* Who put this line in the ledger. Blank for
+                              an invoice raised by delivery, which nobody
+                              typed. */}
+                          <p className="text-[10px] text-slate-500">
+                            {formatDate(row.date)}
+                            {row.recordedBy && <> &middot; {personName(users, row.recordedBy)}</>}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">

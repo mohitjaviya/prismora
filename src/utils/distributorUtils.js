@@ -1,3 +1,4 @@
+import { recordedById } from './attribution';
 // Every distributor, dealer and retailer as one selectable list, each tagged
 // with the tier it came from.
 //
@@ -40,7 +41,11 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
       ref: inv.id,
       description: `Invoice ${inv.id}${inv.status === 'Overdue' ? ' (Overdue)' : ''}`,
       debit: Number(inv.amount || 0) + Number(inv.tax || 0),
-      credit: 0
+      credit: 0,
+      // Carried through so a ledger can say who put each line there. Most
+      // invoices are raised by delivery rather than by a person, and those
+      // stay null.
+      recordedBy: recordedById(inv),
     }));
 
   const creditRows = payments
@@ -52,7 +57,8 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
       ref: p.id,
       description: `Payment received${p.method ? ` via ${p.method}` : ''}${p.reference ? ` (Ref: ${p.reference})` : ''}`,
       debit: 0,
-      credit: Number(p.amount || 0)
+      credit: Number(p.amount || 0),
+      recordedBy: recordedById(p),
     }));
 
   const rows = [...debitRows, ...creditRows].sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -91,7 +97,8 @@ export const buildVendorLedger = (vendor, grns = [], vendorPayments = [], purcha
       ref: p.id,
       description: `Payment made${p.method ? ` via ${p.method}` : ''}${p.reference ? ` (Ref: ${p.reference})` : ''}`,
       debit: 0,
-      credit: Number(p.amount || 0)
+      credit: Number(p.amount || 0),
+      recordedBy: recordedById(p),
     }));
 
   const returnRows = purchaseReturns

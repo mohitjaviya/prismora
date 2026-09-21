@@ -107,3 +107,45 @@ describe('buildVendorLedger — what we owe a supplier', () => {
     expect(buildVendorLedger(vendor, grns, [], [])[0].debit).toBe(130);
   });
 });
+
+describe('ledger attribution', () => {
+  const PARTY = { id: 'DIST-1', name: 'Shree Ayur Agencies' };
+
+  it('carries who recorded each payment onto its ledger line', () => {
+    // vendor_payments and distributor_payments have stored recordedBy since
+    // they existed, and no screen ever read it. The ledger is where it belongs:
+    // "who put this line here" is the question a disputed balance starts with.
+    const rows = buildLedgerEntries(PARTY, [], [
+      { id: 'PAY-1', distributorId: 'DIST-1', amount: 5000, date: '2026-01-02', recordedBy: 'U1' },
+    ], []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].recordedBy).toBe('U1');
+  });
+
+  it('carries it onto an invoice line, and leaves it null when nobody typed it', () => {
+    // Most invoices are raised by delivery rather than by a person.
+    const rows = buildLedgerEntries(PARTY, [
+      { id: 'INV-1', customerName: 'Shree Ayur Agencies', amount: 1000, tax: 180, createdAt: '2026-01-01', createdBy: 'U2' },
+      { id: 'INV-2', customerName: 'Shree Ayur Agencies', amount: 500, tax: 90, createdAt: '2026-01-03' },
+    ], [], []);
+    expect(rows.find(r => r.ref === 'INV-1').recordedBy).toBe('U2');
+    expect(rows.find(r => r.ref === 'INV-2').recordedBy).toBeNull();
+  });
+
+  it('does not let assignedTo masquerade as the author', () => {
+    // On an invoice assignedTo is who it is filed under, not who raised it.
+    const rows = buildLedgerEntries(PARTY, [
+      { id: 'INV-3', customerName: 'Shree Ayur Agencies', amount: 100, createdAt: '2026-01-01', assignedTo: 'U9' },
+    ], [], []);
+    expect(rows[0].recordedBy).toBeNull();
+  });
+
+  it('keeps the running balance untouched by any of this', () => {
+    const rows = buildLedgerEntries(PARTY, [
+      { id: 'INV-1', customerName: 'Shree Ayur Agencies', amount: 1000, tax: 0, createdAt: '2026-01-01', createdBy: 'U2' },
+    ], [
+      { id: 'PAY-1', distributorId: 'DIST-1', amount: 400, date: '2026-01-02', recordedBy: 'U1' },
+    ], []);
+    expect(rows[rows.length - 1].balance).toBe(600);
+  });
+});

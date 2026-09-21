@@ -9,6 +9,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { downloadCSV } from '../utils/exportUtils';
 import { optionsFor, colorForKey, labelForKey } from '../utils/masterLists';
 import { territoryFields, territoryName } from '../utils/territory';
+import { attributionFor } from '../utils/attribution';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
@@ -580,6 +581,16 @@ const Leads = () => {
                       <p className="text-white font-medium">
                         {mockUsers.find(u => u.id === selectedLeadView.assignedTo)?.name || 'Unassigned'}
                       </p>
+                      {/* A lead can be taken by whoever answered the telephone
+                          and assigned to somebody else in the same breath. Only
+                          shown when the two differ — repeating one name twice
+                          reads as a mistake. */}
+                      {attributionFor(selectedLeadView, mockUsers).id
+                        && attributionFor(selectedLeadView, mockUsers).id !== selectedLeadView.assignedTo && (
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Entered by {attributionFor(selectedLeadView, mockUsers).name}
+                        </p>
+                      )}
                     </div>
                   </div>
 

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
+import { attributionFor } from '../utils/attribution';
 import { format } from 'date-fns';
 import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart, ClipboardCheck, Undo2, X } from 'lucide-react';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
@@ -653,6 +654,13 @@ const Orders = () => {
       key: 'salesperson', header: 'Salesperson', hideBelow: 'lg',
       sort: o => getSalespersonName(o.assignedTo) || '',
       render: o => <span className="text-slate-400">{getSalespersonName(o.assignedTo)}</span>,
+    }, {
+      // Not the same column as Salesperson. That is who owns the order; this is
+      // who raised it — which on a portal order is the partner themselves, and
+      // is what tells a self-service order from one keyed in over the phone.
+      key: 'raisedBy', header: 'Raised by', hideBelow: 'lg',
+      sort: o => attributionFor(o, mockUsers).name,
+      render: o => <span className="text-slate-400">{attributionFor(o, mockUsers).name}</span>,
     }]),
     {
       key: 'status', header: 'Status', sort: o => o.status || '',

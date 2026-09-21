@@ -179,6 +179,9 @@ const ORDER_COLUMNS = [
   // 024_territory_id.sql added it, 027 dropped the name it replaced. A
   // territory renamed now keeps every order pointed at it.
   'territoryId',
+  // 032. assignedTo above is the rep who owns the order; this is whoever
+  // raised it, which on a portal order is the partner themselves.
+  'createdBy',
   'status', 'assignedTo', 'date', 'createdAt',
   'phone', 'email',
   'distributorId', 'dealerId', 'retailerId', 'items',
@@ -330,6 +333,8 @@ const LEAD_COLUMNS = [
   'leadSource', 'state', 'city', 'district', 'leadType',
   // 024_territory_id.sql — see the note on ORDER_COLUMNS.
   'territoryId',
+  // 032 — who entered the lead, as against assignedTo, who works it.
+  'createdBy',
   'status', 'assignedTo', 'followUpDate', 'notes', 'orderCreated', 'createdAt',
 ];
 
@@ -1046,12 +1051,13 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(l.id.replace('L', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const draft = { ...lead, createdAt: new Date().toISOString() };
+    const draft = stamp({ ...lead, createdAt: new Date().toISOString() });
     // Shaped by leadRow, the way orders are shaped by orderRow. This was the
     // one add function that sent the raw form straight to the database, and
     // the form carries five fields no column matched — so PostgREST refused
     // every statement and not one lead was ever stored.
-    const { id: newId, saved } = await insertWithFreeId('leads insert', 'leads', 'L', maxId + 1, draft, leadRow);
+    const { id: newId, saved } = await insertWithFreeId('leads insert', 'leads', 'L', maxId + 1, draft,
+      leadRow, 8, ['createdBy']);
     if (!saved) {
       // insertWithFreeId has already raised the banner explaining why. Putting
       // the lead on screen regardless is what hid this for so long: it looked
@@ -1182,8 +1188,9 @@ export const DataProvider = ({ children }) => {
     }, 0);
     // The id is settled by the insert, so a clash with another user's order is
     // resolved before it ever reaches local state.
-    const draft = { ...order, createdAt: new Date().toISOString() };
-    const { id: newId } = await insertWithFreeId('orders insert', 'orders', 'O', maxId + 1, draft, orderRow);
+    const draft = stamp({ ...order, createdAt: new Date().toISOString() });
+    const { id: newId } = await insertWithFreeId('orders insert', 'orders', 'O', maxId + 1, draft,
+      orderRow, 8, ['createdBy']);
     const newOrder = { ...draft, id: newId };
     const next = [newOrder, ...orders];
     setOrders(next);
@@ -2023,8 +2030,9 @@ export const DataProvider = ({ children }) => {
       const num = parseInt(inv.id.replace('INV-', ''), 10);
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    const draft = { ...invoiceData, createdAt: new Date().toISOString() };
-    let { id: newId, saved } = await insertWithFreeId('invoices insert', 'invoices', 'INV-', maxId + 1, draft);
+    const draft = stamp({ ...invoiceData, createdAt: new Date().toISOString() });
+    let { id: newId, saved } = await insertWithFreeId('invoices insert', 'invoices', 'INV-', maxId + 1, draft,
+      (r) => r, 8, ['createdBy']);
 
     // 025 adds the party columns. Before it runs they are refused, which would
     // take the whole invoice down -- so drop them and keep the invoice, the

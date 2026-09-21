@@ -87,14 +87,19 @@ None of them record themselves in `schema_migrations`, because none is a
 migration and running one twice means something quite different from running a
 schema change twice.
 
-## One that can run before or after its deploy
+## Two that can run before or after their deploy
 
-`031_created_by.sql` adds `createdBy` to `expenses` and `purchase_orders`. The
-application writes that column, but names it as optional on the insert — so a
-build that reaches production before the migration drops the field and keeps
-the record, rather than PostgREST refusing the whole statement. Run it whenever;
-nothing breaks in either order, and until it runs the two screens say
-"Not recorded".
+`031_created_by.sql` and `032_created_by_part_two.sql` add `createdBy` to
+`expenses`, `purchase_orders`, `orders`, `invoices` and `leads`. The application
+writes that column, but names it as optional on the insert — so a build that
+reaches production before the migration drops the field and keeps the record,
+rather than PostgREST refusing the whole statement. Run them whenever; nothing
+breaks in either order, and until they run the screens say "Not recorded".
+
+The other five tables that record an author — `grn`, `purchase_returns`,
+`vendor_payments`, `credit_notes`, `distributor_payments` — already had the
+column under a different name and needed no migration at all. They needed
+somebody to read it.
 
 ## One that pairs with an Edge Function
 
