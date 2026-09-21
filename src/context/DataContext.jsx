@@ -10,6 +10,7 @@ import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBa
 import { balanceDrift, balanceAfterCreditNote, balanceAfterCreditNoteWithdrawn } from '../utils/ledgerWrites';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
+import { blankIdsToNull } from '../utils/dbRow';
 
 // The bracketed territory on a "new partner" log line. On a signup page the
 // visitor is anonymous and the territories list is empty, so there is no name
@@ -188,7 +189,9 @@ const orderRow = (order) => {
   for (const key of ORDER_COLUMNS) {
     if (order[key] !== undefined) row[key] = order[key];
   }
-  return row;
+  // See leadRow: an unchosen optional reference is NULL, not ''. orders
+  // carries five of them — territoryId and the three party ids, plus leadId.
+  return blankIdsToNull(row);
 };
 
 
@@ -227,7 +230,12 @@ const maxSequentialId = async (table, prefix) => {
   }
 };
 
-const insertWithFreeId = async (label, table, prefix, firstNumber, record, shape = (r) => r, attempts = 8) => {
+const insertWithFreeId = async (label, table, prefix, firstNumber, record, rawShape = (r) => r, attempts = 8) => {
+  // Every row that goes in through here gets its blank references turned into
+  // NULL first, whatever else its own shaper does. A foreign key reads '' as an
+  // id to go looking for, not as "nothing chosen", and refuses the whole
+  // statement when it cannot find it.
+  const shape = (r) => blankIdsToNull(rawShape(r));
   let number = firstNumber;
   let askedDatabase = false;
 
@@ -297,7 +305,10 @@ const leadRow = (lead) => {
   for (const key of LEAD_COLUMNS) {
     if (lead[key] !== undefined) row[key] = lead[key];
   }
-  return row;
+  // An unchosen dropdown holds '', and a foreign key reads that as an id to go
+  // looking for rather than as "nothing". Saving a lead with no territory was
+  // refused whole: fk_leads_territoryid, key not present in territories.
+  return blankIdsToNull(row);
 };
 
 /**
@@ -1882,7 +1893,10 @@ export const DataProvider = ({ children }) => {
     const shape = (row) => {
       const copy = { ...row };
       missing.forEach(c => delete copy[c]);
-      return copy;
+      // The partner forms hold territoryId as '' until somebody picks one, and
+      // a foreign key will not read that as "none". Every write that comes
+      // through here carries at least one optional reference.
+      return blankIdsToNull(copy);
     };
 
     const { error } = await build(shape);
@@ -2472,7 +2486,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-    await persist('inventory update', supabase.from('inventory').update(updatedData).eq('id', id));
+    await persist('inventory update', supabase.from('inventory').update(blankIdsToNull(updatedData)).eq('id', id));
   };
 
   const deleteInventoryItem = async (id) => {
@@ -2629,7 +2643,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_vendors', JSON.stringify(next));
       return next;
     });
-    await persist('vendors update', supabase.from('vendors').update(updatedData).eq('id', id));
+    await persist('vendors update', supabase.from('vendors').update(blankIdsToNull(updatedData)).eq('id', id));
   };
 
   const deleteVendor = async (id) => {
@@ -3162,7 +3176,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_territories', JSON.stringify(next));
       return next;
     });
-    await persist('territories update', supabase.from('territories').update(updatedData).eq('id', id));
+    await persist('territories update', supabase.from('territories').update(blankIdsToNull(updatedData)).eq('id', id));
   };
 
   const deleteTerritory = async (id) => {
@@ -3183,7 +3197,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
       return next;
     });
-    const saved = await persist('beat_plans insert', supabase.from('beat_plans').insert([newBeat]));
+    const saved = await persist('beat_plans insert', supabase.from('beat_plans').insert([blankIdsToNull(newBeat)]));
     if (!saved) {
       // Keeping a row the database refused is what made a new beat appear for a
       // few seconds and then vanish on the next load. Take it back now, while
@@ -3301,7 +3315,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_visit_reports', JSON.stringify(next));
       return next;
     });
-    await persist('visit_reports insert', supabase.from('visit_reports').insert([newReport]));
+    await persist('visit_reports insert', supabase.from('visit_reports').insert([blankIdsToNull(newReport)]));
     logEvent('visit_submitted', `Visit report logged for outlet: ${visitData.outletName}`, visitData.executiveId, newId);
     return newId;
   };
@@ -3315,7 +3329,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_sfa_expenses', JSON.stringify(next));
       return next;
     });
-    await persist('sfa_expenses insert', supabase.from('sfa_expenses').insert([newExp]));
+    await persist('sfa_expenses insert', supabase.from('sfa_expenses').insert([blankIdsToNull(newExp)]));
   };
 
   const updateSFAExpense = async (id, updatedData) => {
@@ -3335,7 +3349,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_sfa_expenses', JSON.stringify(next));
       return next;
     });
-    await persist('sfa_expenses update', supabase.from('sfa_expenses').update(updatedData).eq('id', id));
+    await persist('sfa_expenses update', supabase.from('sfa_expenses').update(blankIdsToNull(updatedData)).eq('id', id));
     return true;
   };
 
@@ -3493,7 +3507,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_scheme_claims', JSON.stringify(next));
       return next;
     });
-    await persist('scheme_claims insert', supabase.from('scheme_claims').insert([newClaim]));
+    await persist('scheme_claims insert', supabase.from('scheme_claims').insert([blankIdsToNull(newClaim)]));
     logEvent('scheme_claim_submitted', `Scheme claim submitted for ${claimData.schemeName}`, null, newId);
   };
 
