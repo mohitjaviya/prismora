@@ -87,6 +87,12 @@ None of them record themselves in `schema_migrations`, because none is a
 migration and running one twice means something quite different from running a
 schema change twice.
 
+## Two that need the application deployed first
+
+`026`, `027` and `028` all pair with application code. `028` is the gentlest:
+the RPC it creates is called with a failure treated as "carry on", so a build
+that has it before the migration runs behaves exactly as it did before.
+
 ## One that has to be run in an order
 
 `027_drop_territory_name.sql` is the only file here the running application

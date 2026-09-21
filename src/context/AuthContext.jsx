@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase, isConfigured, missingEnvVars } from '../supabaseClient';
 import { accessFor, levelFor } from '../utils/roleUtils';
+import { checkEmailTaken } from '../utils/signupChecks';
 
 export const USER_ROLES = [
   'Super Admin',
@@ -426,6 +427,20 @@ export const AuthProvider = ({ children }) => {
     clearSession();
   };
 
+  /**
+   * Whether an account already exists for this address.
+   *
+   * The signup pages used to answer this from the `users` list, which is empty
+   * for a visitor who has no account -- so the check passed for every address
+   * including registered ones. 028 makes it a question the database answers
+   * with one boolean, without publishing the list of addresses to do it.
+   *
+   * Returns { taken, failed }. A failed check does not block: signUp refuses a
+   * duplicate anyway, and a form nobody can submit is worse than a clumsy
+   * error message.
+   */
+  const isEmailTaken = async (email) => checkEmailTaken(supabase, email);
+
   const addUser = async (userData) => {
     const newId = `U${Date.now()}`;
     // No default password. Every caller (Settings, and the three signup forms)
@@ -468,7 +483,20 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('prismora_users', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('users').insert([newUser]); } catch { /* ok */ }
+    // supabase-js returns { error }, it does not throw, so the try/catch that
+    // used to be here could never fire -- a profile row that failed to save
+    // was silent. That is the exact state email_taken() has to reason about:
+    // an auth account whose profile is missing, where the address is taken but
+    // `users` says it is free. The account itself already exists at this point
+    // and cannot be unmade from the browser, so this reports rather than
+    // rolls back.
+    const { error: profileError } = await supabase.from('users').insert([newUser]);
+    if (profileError) {
+      console.error(
+        `[Prismora] Sign-in account created for ${newUser.email}, but its profile row did not save. ` +
+        'The account exists and the address is taken; the profile has to be added by hand.',
+        profileError.message || profileError);
+    }
     return newId;
   };
 
@@ -633,7 +661,7 @@ export const AuthProvider = ({ children }) => {
   const isSales = user ? isSalesRole(user.role) : false;
 
   return (
-    <AuthContext.Provider value={{ user, users, roles, rolesError, fetchRoles, authReady, isConfigured, missingEnvVars, login, logout, addUser, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, verifyCurrentPassword, isAdmin, isManager, isSales }}>
+    <AuthContext.Provider value={{ user, users, roles, rolesError, fetchRoles, authReady, isConfigured, missingEnvVars, login, logout, addUser, isEmailTaken, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, verifyCurrentPassword, isAdmin, isManager, isSales }}>
       {children}
     </AuthContext.Provider>
   );

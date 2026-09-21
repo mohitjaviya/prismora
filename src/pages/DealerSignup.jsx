@@ -5,6 +5,7 @@ import { useData } from '../context/DataContext';
 import { Building2, Mail, Lock, User, Phone, MapPin, Truck, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { usePublicDirectory } from '../hooks/usePublicDirectory';
+import { emailCheckVerdict } from '../utils/signupChecks';
 import { PUBLIC_VIEWS, territoryLabel, partnerLabel, directoryMessage } from '../utils/publicDirectory';
 
 const BLANK_FORM = {
@@ -13,7 +14,7 @@ const BLANK_FORM = {
 };
 
 const DealerSignup = () => {
-  const { addUser, users } = useAuth();
+  const { addUser, isEmailTaken } = useAuth();
   const { addDealer } = useData();
   const navigate = useNavigate();
 
@@ -33,12 +34,20 @@ const DealerSignup = () => {
     e.preventDefault();
     setError('');
 
-    if (users.some(u => u.email.toLowerCase() === form.email.toLowerCase())) {
-      setError('An account with this email already exists.');
+    // Disabled before the round-trip, not after it. The check is a network
+    // call now, and a live Submit button during it means a second click
+    // starts a second signup for the same person.
+    setSubmitting(true);
+
+    // Asked of the database, not of a list. `users` is empty for a visitor
+    // with no account, so this check used to pass for every address ever
+    // typed — including ones that were already registered.
+    const { block, error: takenError } = emailCheckVerdict(await isEmailTaken(form.email));
+    if (block) {
+      setError(takenError);
+      setSubmitting(false);
       return;
     }
-
-    setSubmitting(true);
     try {
       const dealId = await addDealer({
         name: form.name,
