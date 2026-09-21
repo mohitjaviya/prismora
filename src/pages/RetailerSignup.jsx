@@ -10,7 +10,9 @@ import { PUBLIC_VIEWS, territoryLabel, partnerLabel, directoryMessage } from '..
 
 const BLANK_FORM = {
   name: '', gstin: '', contactPerson: '', phone: '', email: '', password: '',
-  state: '', city: '', territoryId: '', parentDealerId: ''
+  state: '', city: '', territoryId: '', parentDealerId: '',
+  // Honeypot — see the field in the form below.
+  website: ''
 };
 
 const RetailerSignup = () => {
@@ -225,6 +227,28 @@ const RetailerSignup = () => {
                 <Link to="/login" className="flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors pt-1">
                   <ArrowLeft size={12} /> Back to Sign In
                 </Link>
+                {/* Honeypot. Off-screen, unlabelled, not focusable and never
+                    autofilled, so nothing a person does puts anything in it —
+                    automated form-fillers populate every input they find. The
+                    Edge Function answers a filled one with an ordinary-looking
+                    success and creates nothing. aria-hidden keeps it away from
+                    a screen reader, which is a person.
+
+                    Last child, not first: `space-y-4` margins every child after
+                    the first, so putting it at the top pushed the real first
+                    field down by a rem. Positioned inline rather than by class
+                    so no ancestor's layout and no CSS purge can bring it back
+                    on screen. */}
+                <input
+                  type="text"
+                  name="website"
+                  value={form.website}
+                  onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0 }}
+                />
               </form>
             </>
           )}

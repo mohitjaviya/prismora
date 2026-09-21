@@ -95,8 +95,14 @@ REST API directly — bypassing the sign-in screen, which is where the only chec
 used to live — has the access of an approved one.
 
 It pairs with `supabase/functions/partner-signup`, which is what creates those
-Pending accounts in the first place. Deploy the function and run `029`; neither
-is much use without the other. See `supabase/functions/README.md`.
+Pending accounts in the first place. Deploy the function and run `029` and
+`030`; none of the three is much use without the others. See
+`supabase/functions/README.md`.
+
+`030_signup_attempts.sql` gives that function somewhere to count from, for its
+rate limit. Without it the function still works — the counts fail, the throttle
+finds no reason to refuse anybody, and a line goes in the log. That table has
+RLS on and deliberately **no policies**, so nothing reaches it through the API.
 
 `029` prints every status in the `users` table and every account it has just cut
 off, before you rely on it. It blocks `Pending` and `Rejected` only — a

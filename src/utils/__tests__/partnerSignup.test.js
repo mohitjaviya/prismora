@@ -84,6 +84,24 @@ describe('signupPayload', () => {
   it('gives back nothing for a kind it does not know', () => {
     expect(signupPayload('wholesaler', FORM)).toBeNull();
   });
+
+  it('always carries the honeypot, empty or not', () => {
+    // The server decides what a filled one means. If the field were only sent
+    // when filled, its absence would itself be the tell.
+    expect(signupPayload('distributor', FORM)).toHaveProperty('website', '');
+    expect(signupPayload('distributor', { ...FORM, website: 'http://spam.example' }))
+      .toHaveProperty('website', 'http://spam.example');
+  });
+});
+
+describe("the honeypot is not the browser's business", () => {
+  it('does not refuse a filled one in the page', () => {
+    // Refusing here would tell whatever filled it exactly which field to leave
+    // alone next time, and the message would only ever be read by a person —
+    // who never fills it. The function answers those with a success shape and
+    // creates nothing.
+    expect(validateSignup('distributor', { ...FORM, website: 'http://spam.example' }).ok).toBe(true);
+  });
 });
 
 describe('signupOutcome', () => {
@@ -126,6 +144,19 @@ describe('signupOutcome', () => {
 
     const refused = signupOutcome({ error: { message: 'boom' }, detail: 'The password must be at least 8 characters.' });
     expect(refused.needsDeploy).toBe(false);
+  });
+
+  it("passes the rate limit's own sentence through rather than rewriting it", () => {
+    // A 429 arrives as an error with the reason on error.context, unwrapped
+    // into `detail` by the caller. The function has already phrased it for
+    // somebody who is probably not the person being throttled.
+    const r = signupOutcome({
+      error: { message: 'Edge Function returned a non-2xx status code' },
+      detail: 'Too many registration attempts from here. Please wait an hour and try again, or contact us directly.',
+    });
+    expect(r.ok).toBe(false);
+    expect(r.needsDeploy).toBe(false);
+    expect(r.error).toMatch(/wait an hour/i);
   });
 
   it('assumes confirmation is needed unless told otherwise', () => {

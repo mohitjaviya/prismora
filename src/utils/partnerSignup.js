@@ -30,6 +30,12 @@ export const SIGNUP_KINDS = {
  * Not a security check -- the function validates everything again, because
  * anything the browser decides can be skipped by not using the browser. This
  * only saves a round-trip on a form somebody has visibly not finished.
+ *
+ * The honeypot is deliberately not checked here. A filled one means the caller
+ * is not a person, and a person is who these messages are written for; refusing
+ * in the page would also tell whatever filled it exactly which field to leave
+ * alone next time. The function answers those with an ordinary-looking success
+ * and creates nothing.
  */
 export function validateSignup(kind, form = {}) {
   const spec = SIGNUP_KINDS[kind];
@@ -69,6 +75,12 @@ export function signupPayload(kind, form = {}) {
 
   const payload = {
     kind,
+    // The honeypot, sent whatever it holds. It is rendered off-screen with no
+    // label and no tab stop, so a person never fills it; an automated
+    // form-filler populates every input it finds. The function decides what to
+    // do about it -- the browser deliberately does not, because a check the
+    // page performs is a check a script can skip by not using the page.
+    website: String(form.website ?? ''),
     name: String(form.name ?? '').trim(),
     contactPerson: String(form.contactPerson ?? '').trim(),
     email: normaliseEmail(form.email),
@@ -115,7 +127,9 @@ export function signupOutcome({ data, error, detail } = {}) {
   if (data?.error) return { ok: false, needsDeploy: false, error: String(data.error) };
 
   // A 200 with no `ok` is not success. It is a shape nobody planned for, and
-  // treating it as success is exactly the failure being fixed.
+  // treating it as success is exactly the failure being fixed. (A rate-limited
+  // caller does not arrive here: 429 lands on the `error` branch above, with a
+  // sentence the function has already written.)
   if (!data?.ok) {
     return { ok: false, needsDeploy: false, error: 'Registration did not complete. Please try again.' };
   }
