@@ -1,13 +1,18 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth, isAdminRole, isManagerRole } from './AuthContext';
+import { useAuth, isAdminRole, isManagerRole, roleLevel } from './AuthContext';
 import { useData } from './DataContext';
 import { isToday } from 'date-fns';
+import { isOpenLead } from '../utils/leadStatus';
+import { localDateStr, canDecideRequest } from '../utils/beatDates';
 
 const NotificationContext = createContext();
 
 export const NotificationProvider = ({ children }) => {
-  const { user } = useAuth();
-  const { inventory, invoices, complaints, leads, distributors, dealers, retailers, orders, schemes, visitReports } = useData();
+  const { user, users, canAccess } = useAuth();
+  // A boolean, not the function: canAccess is new on every render, and as an
+  // effect dependency it would rebuild the notifications on every render.
+  const canEditSfa = Boolean(user) && canAccess('sfa', 'full');
+  const { inventory, invoices, complaints, leads, distributors, dealers, retailers, orders, schemes, visitReports, beatPlans, beatCheckinRequests } = useData();
   const [notifications, setNotifications] = useState([]);
 
   // Load user-specific notifications from localStorage
@@ -148,7 +153,7 @@ export const NotificationProvider = ({ children }) => {
     // Trigger 4: Leads follow-up due today (Sales role gets their own leads only)
     leads.forEach(lead => {
       if (lead.assignedTo === user.id && lead.followUpDate) {
-        if (isToday(new Date(lead.followUpDate)) && lead.status !== 'Converted' && lead.status !== 'Lost') {
+        if (isToday(new Date(lead.followUpDate)) && isOpenLead(lead)) {
           newSystemNotifications.push({
             id: `sys-lead-${lead.id}`,
             type: 'lead_assigned',
@@ -205,6 +210,45 @@ export const NotificationProvider = ({ children }) => {
             timestamp: x.createdAt || new Date().toISOString()
           });
         });
+      });
+    }
+
+    // Trigger 5b: Early check-in requests. Approvers see the ones they can
+    // decide, in the bell like partner signups rather than a queue of their
+    // own; the rep hears back once theirs is decided. Only today's count --
+    // a request lapses at midnight, decided or not.
+    {
+      const today = localDateStr();
+      const beatFor = (id) => (beatPlans || []).find(b => b.id === id);
+      const nameOf = (id) => (users || []).find(u => u.id === id)?.name || 'A rep';
+      const level = roleLevel(user.role);
+      (beatCheckinRequests || []).forEach(r => {
+        if (r.requestedFor !== today) return;
+        const beat = beatFor(r.beatId);
+        const where = beat ? `the beat on ${beat.date}${Array.isArray(beat.outlets) && beat.outlets.length ? ` (${beat.outlets.join(', ')})` : ''}` : 'a beat';
+        if (canDecideRequest({ approver: user, approverLevel: level, canEditSfa, request: r, today })) {
+          newSystemNotifications.push({
+            id: `sys-early-checkin-${r.id}`,
+            type: 'lead_assigned',
+            title: 'Early Check-in Request',
+            message: `${nameOf(r.requestedBy)} wants to check in today on ${where}: "${r.reason}"`,
+            link: '/sfa?tab=beats',
+            isRead: false,
+            timestamp: r.createdAt || new Date().toISOString(),
+          });
+        } else if (r.requestedBy === user.id && r.status !== 'Pending') {
+          newSystemNotifications.push({
+            id: `sys-early-checkin-${r.id}-${r.status}`,
+            type: 'lead_assigned',
+            title: r.status === 'Approved' ? 'Early Check-in Approved' : 'Early Check-in Declined',
+            message: r.status === 'Approved'
+              ? `You can check in today on ${where}.`
+              : `Your request for ${where} was declined${r.decisionNote ? `: ${r.decisionNote}` : '.'}`,
+            link: '/sfa?tab=beats',
+            isRead: false,
+            timestamp: r.decidedAt || r.createdAt || new Date().toISOString(),
+          });
+        }
       });
     }
 
@@ -325,7 +369,7 @@ export const NotificationProvider = ({ children }) => {
       return all;
     });
 
-  }, [inventory, invoices, complaints, leads, distributors, dealers, retailers, orders, schemes, visitReports, user]);
+  }, [inventory, invoices, complaints, leads, distributors, dealers, retailers, orders, schemes, visitReports, beatPlans, beatCheckinRequests, users, canEditSfa, user]);
 
   // Special markRead wrapper to remember read status of system alerts
   const markSystemRead = (id) => {

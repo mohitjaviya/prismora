@@ -13,12 +13,13 @@ import { attributionFor } from '../utils/attribution';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
+import { isConvertedStatus, isOpenLead } from '../utils/leadStatus';
+import { missingDelivery } from '../utils/delivery';
 
-// Moving a lead into any of these means the customer has committed, which is
-// when an order is raised. Kept in one place because the drag handler and the
-// edit form both have to recognise it.
-const CONVERSION_STATUSES = ['Converted', 'First Order', 'Active'];
-const isConversion = (status) => CONVERSION_STATUSES.includes(status);
+// Moving a lead into a conversion status means the customer has committed,
+// which is when an order is raised. The drag handler and the edit form both
+// have to recognise it.
+const isConversion = isConvertedStatus;
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -132,6 +133,9 @@ const Leads = () => {
   const [convertingLead, setConvertingLead] = useState(null);
   const [convertStatus, setConvertStatus] = useState('First Order');
   const [convertItems, setConvertItems] = useState([]);
+  // Where the order goes. State and city start from the lead; the street and
+  // pincode are asked for here so the order is not stopped at Pending for them.
+  const [convertDelivery, setConvertDelivery] = useState({ state: '', city: '', deliveryAddress: '', deliveryPincode: '' });
   const [convertError, setConvertError] = useState('');
   const [isConverting, setIsConverting] = useState(false);
 
@@ -147,6 +151,7 @@ const Leads = () => {
     const rows = interest.filter(Boolean).map(name => ({ name, quantity: '', unitPrice: priceFor(name) }));
     setConvertItems(rows.length > 0 ? rows : [{ name: '', quantity: '', unitPrice: 0 }]);
     setConvertStatus(targetStatus);
+    setConvertDelivery({ state: lead.state || '', city: lead.city || '', deliveryAddress: '', deliveryPincode: '' });
     setConvertError('');
     setConvertingLead(lead);
   };
@@ -165,13 +170,15 @@ const Leads = () => {
     (sum, i) => sum + (Number(i.quantity || 0) * Number(i.unitPrice || 0)), 0
   );
   const convertUnits = convertItems.reduce((sum, i) => sum + Number(i.quantity || 0), 0);
+  // Asked as if the order were leaving Pending, which is where it would stop.
+  const convertMissingDelivery = missingDelivery(convertDelivery, 'Processing');
 
   const confirmConversion = async () => {
     if (!convertingLead || isConverting) return;
     setIsConverting(true);
     setConvertError('');
     try {
-      const result = await convertLeadToOrder(convertingLead, convertItems, convertStatus);
+      const result = await convertLeadToOrder(convertingLead, convertItems, convertStatus, convertDelivery);
       if (result && !result.ok) { setConvertError(result.error || 'Could not raise the order.'); return; }
       setConvertingLead(null);
     } finally {
@@ -363,7 +370,7 @@ const Leads = () => {
                   >
                     {columnLeads.map((lead, index) => {
                       const daysUntilFollowUp = lead.followUpDate ? differenceInDays(new Date(lead.followUpDate), new Date()) : null;
-                      const isDueSoon = daysUntilFollowUp !== null && daysUntilFollowUp <= 2 && lead.status !== 'Converted' && lead.status !== 'Lost';
+                      const isDueSoon = daysUntilFollowUp !== null && daysUntilFollowUp <= 2 && isOpenLead(lead);
 
                       return (
                         <Draggable key={lead.id} draggableId={lead.id} index={index}>
@@ -1017,6 +1024,59 @@ const Leads = () => {
               >
                 + Add another product
               </button>
+
+              <div className="pt-4 border-t border-white/5 space-y-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Delivery address</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Dispatch cannot deliver to a city alone.</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label htmlFor="leads-convert-state" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">State</label>
+                    <select id="leads-convert-state"
+                      value={convertDelivery.state}
+                      onChange={e => setConvertDelivery(d => ({ ...d, state: e.target.value }))}
+                      className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
+                      style={{ colorScheme: 'dark' }}
+                    >
+                      <option value="" className="bg-brand-primary">Select a state…</option>
+                      {INDIAN_STATES.map(st => <option key={st} value={st} className="bg-brand-primary">{st}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="leads-convert-city" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">City</label>
+                    <input id="leads-convert-city"
+                      type="text" value={convertDelivery.city}
+                      onChange={e => setConvertDelivery(d => ({ ...d, city: e.target.value }))}
+                      className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="leads-convert-pincode" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Pincode</label>
+                    <input id="leads-convert-pincode"
+                      type="text" inputMode="numeric" maxLength={6} value={convertDelivery.deliveryPincode}
+                      onChange={e => setConvertDelivery(d => ({ ...d, deliveryPincode: e.target.value.replace(/\D/g, '') }))}
+                      placeholder="e.g. 388001"
+                      className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="leads-convert-address" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Street address</label>
+                  <textarea id="leads-convert-address"
+                    rows="2" value={convertDelivery.deliveryAddress}
+                    onChange={e => setConvertDelivery(d => ({ ...d, deliveryAddress: e.target.value }))}
+                    placeholder="Building, street, area — where this consignment should be delivered"
+                    className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white resize-none"
+                  />
+                </div>
+                {convertMissingDelivery && (
+                  <p className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    You can create the order without {convertMissingDelivery}, but it will stay at <strong>Pending</strong> until
+                    someone adds it on the order. Whoever carries it would otherwise have only {convertDelivery.city || 'a city'}{convertDelivery.state ? `, ${convertDelivery.state}` : ''} to go on.
+                  </p>
+                )}
+              </div>
 
               <div className="pt-4 border-t border-white/5 flex flex-wrap gap-4 justify-between items-end">
                 <div className="text-xs text-slate-500">

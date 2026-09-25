@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { useAuth } from '../context/AuthContext';
-import { isSalesRole } from '../context/AuthContext';
+import { isSalesRole, roleLevel } from '../context/AuthContext';
+import { canSeeOwner, visibleTo } from '../utils/sfaVisibility';
 import {
   Plus, CalendarCheck, MapPin, User, LogIn, LogOut, CheckCircle2,
   Clipboard, Smartphone, ShoppingCart, Check, X, FileText,
@@ -15,6 +16,10 @@ import { createPortal } from 'react-dom';
 import { optionsFor } from '../utils/masterLists';
 import { shiftDuration } from '../utils/attendance';
 import { territoryFor, territoryFields, territoryName } from '../utils/territory';
+import { submitOutletVisit } from '../utils/beatVisits';
+import VisitReportsTable from '../components/sfa/VisitReportsTable';
+import { localDateStr, checkInState, isOpenRequest, isMissedBeat, beatDisplayStatus, canDecideRequest } from '../utils/beatDates';
+import { useSearchParams } from 'react-router-dom';
 
 
 /**
@@ -41,18 +46,21 @@ const fmtDate = (value) => {
 const PAYOUT_FAILED = 'The payout could not be recorded as an expense, so the status has been left unchanged rather than showing money as paid that the books do not have. The reason is in the browser console; try again once it is resolved.';
 
 export default function SFA() {
-  const { user, users: allUsers, isAdmin, isManager, isSales } = useAuth();
+  const { user, users: allUsers, isAdmin, isManager, isSales, canAccess } = useAuth();
   const toast = useToast();
   const {
-    beatPlans, addBeatPlan, recordOutletOutcome,
-    attendance, addAttendanceRecord, updateAttendanceRecord,
-    visitReports, addVisitReport,
-    sfaExpenses, addSFAExpense, updateSFAExpense,
+    beatPlans: allBeatPlans, addBeatPlan, recordOutletOutcome,
+    attendance: allAttendance, addAttendanceRecord, updateAttendanceRecord,
+    visitReports: allVisitReports, addVisitReport,
+    beatCheckinRequests, requestEarlyCheckin, decideEarlyCheckin,
+    sfaExpenses: allSfaExpenses, addSFAExpense, updateSFAExpense,
     addOrder, productCatalog, territories, retailers, dealers, masters } = useData();
   // Options come from Master Lists; masterLists.js holds the fallback.
   const expenseCategories = optionsFor(masters, 'expense_category').map(o => o.key);
 
-  const [activeTab, setActiveTab] = useState('attendance');
+  // The bell links here with ?tab=beats for an early check-in request.
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => (searchParams.get('tab') === 'beats' ? 'beats' : 'attendance'));
 
   // Role checks
   const isSREP = isSales || user?.role === 'Sales Executive';
@@ -71,7 +79,9 @@ export default function SFA() {
   const [selectedBeatForVisit, setSelectedBeatForVisit] = useState(null);
 
   // ── Forms ───────────────────────────────────────────────────────────────
-  const todayStr = new Date().toISOString().split('T')[0];
+  // The device's own date, not UTC's -- which in India is still yesterday
+  // until 5:30 am, and would put a beat for today one day in the future.
+  const todayStr = localDateStr();
   const [beatForm, setBeatForm] = useState({ executiveId: '', date: todayStr, territoryId: '', outlets: '' });
   const [visitForm, setVisitForm] = useState({ outletName: '', outletContact: '', productsShown: [], orderPlaced: false, orderItems: [], outletCompany: '', outletCity: '', outletEmail: '', outletAddress: '', outletPincode: '', nextFollowUp: '', notes: '', outcome: 'Visited', notVisitedReason: '' });
   const [punchNotes, setPunchNotes] = useState('');
@@ -83,6 +93,10 @@ export default function SFA() {
   // an impatient second click files the whole lot again: three reports for the
   // same outlet were recorded seconds apart.
   const [isSubmittingVisit, setIsSubmittingVisit] = useState(false);
+  const [visitError, setVisitError] = useState('');
+  // What an earlier attempt at this visit already saved, so a retry after a
+  // refusal neither raises the order twice nor files the report twice.
+  const visitAttempt = useRef({ orderId: null, visitId: null });
 
   // ── Derived Data ────────────────────────────────────────────────────────
   // The planner used to bucket beats by weekday name alone, with no dates and no
@@ -107,18 +121,60 @@ export default function SFA() {
   const beatCovered = (b) => b.status === 'Completed' || b.status === 'Visited';
   const beatTone = (status) => (
     status === 'Completed' || status === 'Visited' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-      : status === 'Not Visited' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+      : status === 'Not Visited' || status === 'Missed' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
         : status === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
           : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
   );
 
-  const salesReps = useMemo(() => allUsers.filter(u => isSalesRole(u.role) || u.role === 'Sales Executive'), [allUsers]);
-  const myAttendanceToday = useMemo(() => attendance.find(a => a.userId === user?.id && a.date === todayStr), [attendance, user, todayStr]);
-  const filteredBeats = useMemo(() => isSREP ? beatPlans.filter(b => b.executiveId === user?.id) : beatPlans, [beatPlans, isSREP, user]);
-  const myExpenses = useMemo(() => {
-    if (!sfaExpenses) return [];
-    return isManagerOrAbove ? sfaExpenses : sfaExpenses.filter(e => e.userId === user?.id);
-  }, [sfaExpenses, isManagerOrAbove, user]);
+  // Everything below reads these, never the full lists: a Sales Executive sees
+  // only their own field records, a manager their team's, an admin everyone's.
+  // Visit reports used to skip this and showed every rep's to every rep.
+  const viewerLevel = user ? roleLevel(user.role) : null;
+  const beatPlans = useMemo(() => visibleTo(allBeatPlans, 'executiveId', user, viewerLevel), [allBeatPlans, user, viewerLevel]);
+  const attendance = useMemo(() => visibleTo(allAttendance, 'userId', user, viewerLevel), [allAttendance, user, viewerLevel]);
+  const visitReports = useMemo(() => visibleTo(allVisitReports, 'executiveId', user, viewerLevel), [allVisitReports, user, viewerLevel]);
+  const sfaExpenses = useMemo(() => visibleTo(allSfaExpenses, 'userId', user, viewerLevel), [allSfaExpenses, user, viewerLevel]);
+  const salesReps = useMemo(
+    () => allUsers.filter(u => (isSalesRole(u.role) || u.role === 'Sales Executive') && canSeeOwner(user, viewerLevel, u.id)),
+    [allUsers, user, viewerLevel],
+  );
+  // Early check-in: what the signed-in rep may do on a beat today, and whether
+  // the signed-in user may decide a request. See utils/beatDates.
+  const canEditSfa = canAccess('sfa', 'full');
+  const checkInFor = (beat) => checkInState({ beat, today: todayStr, requests: beatCheckinRequests, userId: user?.id });
+  const openRequestFor = (beat) => (beatCheckinRequests || [])
+    .find(r => r.beatId === beat.id && isOpenRequest(r, todayStr));
+  const [earlyRequestBeat, setEarlyRequestBeat] = useState(null);
+  const [earlyReason, setEarlyReason] = useState('');
+  const [earlyError, setEarlyError] = useState('');
+  const [isSubmittingEarly, setIsSubmittingEarly] = useState(false);
+  const [decidingId, setDecidingId] = useState(null);
+  const submitEarlyRequest = async (e) => {
+    e.preventDefault();
+    if (!earlyRequestBeat || isSubmittingEarly) return;
+    if (!earlyReason.trim()) { setEarlyError('Say why you need to check in early.'); return; }
+    setIsSubmittingEarly(true);
+    try {
+      const id = await requestEarlyCheckin(earlyRequestBeat.id, earlyReason);
+      if (!id) { setEarlyError('The request could not be sent. Try again.'); return; }
+      setEarlyRequestBeat(null);
+      toast('Request sent. You can check in once it is approved.', 'success');
+    } finally {
+      setIsSubmittingEarly(false);
+    }
+  };
+  const decide = async (request, decision) => {
+    setDecidingId(request.id);
+    try {
+      if (!await decideEarlyCheckin(request.id, decision)) {
+        toast('That decision could not be saved. The request may have lapsed or been decided already.', 'error');
+      }
+    } finally {
+      setDecidingId(null);
+    }
+  };
+
+  const myAttendanceToday = attendance.find(a => a.userId === user?.id && a.date === todayStr);
 
   const getRepName = (id) => allUsers.find(u => u.id === id)?.name || 'Unknown';
 
@@ -247,6 +303,9 @@ export default function SFA() {
   };
 
   const handleOpenVisit = (beat, outlet, outcome = 'Visited') => {
+    // The buttons are only offered when this is true; the database refuses the
+    // visit otherwise, so this just keeps the form from opening onto that.
+    if (!checkInFor(beat).canCheckIn) return;
     setSelectedBeatForVisit({ beat, outlet });
     const known = matchOutlet(outlet);
     const territory = territoryFor(territories, beat);
@@ -269,6 +328,8 @@ export default function SFA() {
       notVisitedReason: '',
     });
     setCityIsOther(false);
+    setVisitError('');
+    visitAttempt.current = { orderId: null, visitId: null };
     setIsVisitModalOpen(true);
   };
   const handleVisitSubmit = async (e) => {
@@ -281,7 +342,7 @@ export default function SFA() {
     // An outlet that could not be worked still gets a report, so coverage shows
     // it was attempted rather than leaving it indistinguishable from one that
     // was never reached. No order is raised for it.
-    let autoOrderId = null;
+    let order = null;
     if (!notVisited && visitForm.orderPlaced && orderLines.length > 0) {
       // The order used to be filled with placeholders — company "Retail Outlet",
       // city "Field Beat", and the beat's territory put in the state field —
@@ -292,9 +353,7 @@ export default function SFA() {
       const matchedRetailer = retailers?.find(r => r.name?.trim().toLowerCase() === outletKey);
       const matchedDealer = !matchedRetailer && dealers?.find(d => d.name?.trim().toLowerCase() === outletKey);
 
-      // Use the real id addOrder assigns so the visit report links to an order
-      // that actually exists (addOrder overrides any id passed to it).
-      autoOrderId = await addOrder({
+      order = {
         customerName: visitForm.outletName,
         companyName: visitForm.outletCompany || matchedRetailer?.name || matchedDealer?.name || '',
         product: orderLines.length === 1 ? orderLines[0].name : `${orderLines[0].name} +${orderLines.length - 1} more item${orderLines.length > 2 ? 's' : ''}`,
@@ -315,10 +374,10 @@ export default function SFA() {
         status: 'Pending',
         assignedTo: user.id,
         date: new Date().toISOString(),
-      });
+      };
     }
 
-    const visitId = await addVisitReport({
+    const report = {
       executiveId: user.id,
       beatId: selectedBeatForVisit?.beat?.id || null,
       outletName: visitForm.outletName,
@@ -328,18 +387,26 @@ export default function SFA() {
       notVisitedReason: notVisited ? visitForm.notVisitedReason : '',
       productsShown: notVisited ? [] : visitForm.productsShown,
       orderPlaced: notVisited ? false : visitForm.orderPlaced,
-      orderId: autoOrderId,
       nextFollowUp: visitForm.nextFollowUp || null,
       notes: visitForm.notes,
-    });
+    };
 
-    // The outcome is recorded against this outlet, not the whole route, so the
-    // rest of the beat stays workable.
-    if (selectedBeatForVisit) {
-      await recordOutletOutcome(selectedBeatForVisit.beat.id, selectedBeatForVisit.outlet, visitForm.outcome, {
-        visitId: visitId || null,
-        reason: notVisited ? visitForm.notVisitedReason : undefined,
-      });
+    // Order, then report, then the outlet on the beat — each only once the one
+    // before it is saved. The outcome is recorded against this outlet, not the
+    // whole route, so the rest of the beat stays workable.
+    const result = await submitOutletVisit({ addOrder, addVisitReport, recordOutletOutcome }, {
+      order,
+      report,
+      beatId: selectedBeatForVisit?.beat?.id,
+      outlet: selectedBeatForVisit?.outlet,
+      reason: notVisited ? visitForm.notVisitedReason : undefined,
+      savedOrderId: visitAttempt.current.orderId,
+      savedVisitId: visitAttempt.current.visitId,
+    });
+    visitAttempt.current = { orderId: result.orderId, visitId: result.visitId };
+    if (!result.ok) {
+      setVisitError(result.orderId ? `${result.error} Order ${result.orderId} was raised and will not be raised again.` : result.error);
+      return;
     }
     setIsVisitModalOpen(false);
     } finally {
@@ -376,7 +443,7 @@ export default function SFA() {
     let currentStreak = 0;
     const check = new Date();
     for (let i = 0; i < 365; i++) {
-      const ds = check.toISOString().split('T')[0];
+      const ds = localDateStr(check);
       const dayOfWeek = check.getDay();
       if (dayOfWeek !== 0) { // skip Sunday
         const rec = userRecords.find(r => r.date === ds);
@@ -627,7 +694,7 @@ export default function SFA() {
                                 </span>
                                 <span className="text-[9px] text-slate-500">by {att.approvedBy || 'Admin'}</span>
                               </div>
-                            ) : att.checkInTime ? (
+                            ) : att.checkInTime && canEditSfa ? (
                               <button
                                 onClick={() => updateAttendanceRecord(att.id, { approved: true, approvedBy: user.name })}
                                 className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold transition-all flex items-center gap-1 mx-auto"
@@ -802,7 +869,7 @@ export default function SFA() {
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
           <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex justify-between items-center">
             <span className="text-sm font-bold text-white uppercase tracking-wider">Beat Plan</span>
-            <span className="text-xs text-slate-400">{filteredBeats.length} {filteredBeats.length === 1 ? 'beat' : 'beats'}</span>
+            <span className="text-xs text-slate-400">{beatPlans.length} {beatPlans.length === 1 ? 'beat' : 'beats'}</span>
           </div>
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left text-sm border-collapse">
@@ -815,7 +882,7 @@ export default function SFA() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-300">
-                {filteredBeats.length > 0 ? filteredBeats.map(beat => (
+                {beatPlans.length > 0 ? beatPlans.map(beat => (
                   <tr key={beat.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
                     <td className="p-4 font-semibold text-white">
                       {!isSREP ? <div className="flex items-center gap-2"><User size={13} className="text-slate-500" />{getRepName(beat.executiveId)}</div>
@@ -843,7 +910,7 @@ export default function SFA() {
                             >
                               {outlet}
                               {done && <span className="font-bold">{skipped ? '✕' : '✓'}</span>}
-                              {!done && isSREP && (
+                              {!done && isSREP && checkInFor(beat).canCheckIn && (
                                 <>
                                   <button onClick={() => handleOpenVisit(beat, outlet, 'Visited')} className="ml-1 text-brand-accent hover:underline font-bold">Check in</button>
                                   <button onClick={() => handleOpenVisit(beat, outlet, 'Not Visited')} className="ml-1 text-slate-400 hover:text-rose-400 hover:underline">Not visited</button>
@@ -853,9 +920,58 @@ export default function SFA() {
                           );
                         })}
                       </div>
+                      {(() => {
+                        const outlets = Array.isArray(beat.outlets) ? beat.outlets : [];
+                        if (!outlets.some(o => !(beat.outletVisits || {})[o])) return null;
+                        const note = 'mt-2 text-[11px] leading-relaxed';
+                        if (isSREP && beat.executiveId === user?.id) {
+                          const c = checkInFor(beat);
+                          if (c.state === 'missed') return <p className={`${note} text-rose-300`}>Missed — this beat was on {fmtDate(beat.date)}.</p>;
+                          if (c.state === 'approved') return <p className={`${note} text-emerald-300`}>Early check-in approved for today.</p>;
+                          if (c.state === 'pending') return <p className={`${note} text-yellow-300`}>Early check-in requested — waiting for approval.</p>;
+                          if (c.state === 'early' || c.state === 'rejected') {
+                            return (
+                              <p className={`${note} text-slate-400`}>
+                                {c.state === 'rejected'
+                                  ? <>Early check-in declined{c.request?.decisionNote ? ` — ${c.request.decisionNote}` : ''}. </>
+                                  : <>Opens on {fmtDate(beat.date)}. </>}
+                                <button
+                                  type="button"
+                                  onClick={() => { setEarlyRequestBeat(beat); setEarlyReason(''); setEarlyError(''); }}
+                                  className="text-brand-accent hover:underline font-bold"
+                                >
+                                  {c.state === 'rejected' ? 'Ask again' : 'Request early check-in'}
+                                </button>
+                              </p>
+                            );
+                          }
+                          return null;
+                        }
+                        // Everyone else who can see the beat: what is waiting, and the
+                        // decision for those who may make it.
+                        const req = openRequestFor(beat);
+                        if (!req) return isMissedBeat(beat, todayStr)
+                          ? <p className={`${note} text-rose-300`}>Missed — this beat was on {fmtDate(beat.date)}.</p>
+                          : null;
+                        const mayDecide = canDecideRequest({ approver: user, approverLevel: roleLevel(user?.role), canEditSfa, request: req, today: todayStr });
+                        return (
+                          <div className={`${note} rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-2.5 py-1.5`}>
+                            <p className="text-yellow-300 font-semibold">Early check-in requested for today</p>
+                            <p className="text-slate-300 mt-0.5">“{req.reason}”</p>
+                            {mayDecide ? (
+                              <div className="flex gap-2 mt-1.5">
+                                <button type="button" disabled={decidingId === req.id} onClick={() => decide(req, 'Approved')} className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 font-bold disabled:opacity-50">Approve</button>
+                                <button type="button" disabled={decidingId === req.id} onClick={() => decide(req, 'Rejected')} className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 font-bold disabled:opacity-50">Reject</button>
+                              </div>
+                            ) : (
+                              <p className="text-slate-500 mt-1">Waiting for an admin or the rep’s manager.</p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-4 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${beatTone(beat.status)}`}>{beat.status}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${beatTone(beatDisplayStatus(beat, todayStr))}`}>{beatDisplayStatus(beat, todayStr)}</span>
                     </td>
                     <td className="p-4 text-right">
                       {(() => {
@@ -1006,84 +1122,7 @@ export default function SFA() {
       {/* TAB: Visit Reports                                                 */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'visits' && (
-        <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-          {/* Every other table on this page names itself and says how much it
-              holds. This one opened straight onto a header row, so it read as
-              a fragment of a page rather than a section of one. */}
-          <div className="px-3 py-4 border-b border-white/5 bg-brand-primary-light/20 flex justify-between items-center">
-            <span className="text-sm font-bold text-white uppercase tracking-wider">Visit Reports</span>
-            <span className="text-xs text-slate-400">{visitReports.length} {visitReports.length === 1 ? 'report' : 'reports'}</span>
-          </div>
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
-                  <th className="px-3 py-4">Outlet</th><th className="px-3 py-4">Rep</th><th className="px-3 py-4">Date</th>
-                  <th className="px-3 py-4 text-center">Outcome</th><th className="px-3 py-4">Products Pitched</th>
-                  <th className="px-3 py-4 text-center">Order</th><th className="px-3 py-4">Follow-up</th><th className="px-3 py-4">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5 text-slate-300">
-                {visitReports.length > 0 ? visitReports.map(vr => (
-                  <tr key={vr.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                    <td className="px-3 py-4"><div className="font-semibold text-white">{vr.outletName}</div><div className="text-[10px] text-slate-500 mt-0.5">{vr.outletContact || 'No contact'}</div></td>
-                    <td className="px-3 py-4 text-sm text-slate-300">{getRepName(vr.executiveId)}</td>
-                    <td className="px-3 py-4 text-xs text-slate-400 whitespace-nowrap">{fmtDate(vr.visitDate)}</td>
-                    <td className="px-3 py-4 text-center">
-                      {vr.outcome === 'Not Visited'
-                        ? <span className="inline-flex items-center gap-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[10px] font-bold" title={vr.notVisitedReason || ''}>Not visited</span>
-                        : <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold">Visited</span>}
-                      {vr.outcome === 'Not Visited' && vr.notVisitedReason && (
-                        <div className="text-[10px] text-slate-500 mt-1 max-w-[9rem] truncate mx-auto" title={vr.notVisitedReason}>{vr.notVisitedReason}</div>
-                      )}
-                    </td>
-                    <td className="px-3 py-4">
-                      <div className="flex flex-wrap gap-1">
-                        {/* Three, then a count. Every product pitched was
-                            listed, so one row with eight of them stood four
-                            times taller than its neighbours. The rest are in
-                            the tooltip. */}
-                        {Array.isArray(vr.productsShown) && vr.productsShown.length > 0 ? (
-                          <>
-                            {vr.productsShown.slice(0, 3).map((p, i) => (
-                              <span key={i} className="bg-brand-accent/10 border border-brand-accent/20 text-brand-accent text-[10px] px-1.5 py-0.5 rounded">{p}</span>
-                            ))}
-                            {vr.productsShown.length > 3 && (
-                              <span className="text-[10px] text-slate-500 px-1 py-0.5" title={vr.productsShown.join(', ')}>
-                                +{vr.productsShown.length - 3} more
-                              </span>
-                            )}
-                          </>
-                        ) : <span className="text-xs text-slate-600 italic">None</span>}
-                      </div>
-                    </td>
-                    <td className="px-3 py-4 text-center">
-                      {vr.orderPlaced
-                        ? <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold"><ShoppingCart size={10} />Order Placed</span>
-                        : <span className="text-[10px] text-slate-500 italic">Pitched Only</span>}
-                    </td>
-                    <td className="px-3 py-4">
-                      {(() => {
-                        if (!vr.nextFollowUp) return <span className="text-[11px] text-slate-600 italic">None set</span>;
-                        const due = new Date(vr.nextFollowUp);
-                        const days = Math.ceil((due - new Date(new Date().toDateString())) / 86400000);
-                        const tone = days < 0 ? 'text-rose-400' : days === 0 ? 'text-amber-400' : 'text-slate-300';
-                        const when = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Today' : `in ${days}d`;
-                        return (
-                          <div>
-                            <div className={`text-xs font-bold whitespace-nowrap ${tone}`}>{fmtDate(vr.nextFollowUp)}</div>
-                            <div className={`text-[10px] ${tone}`}>{when}</div>
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-3 py-4 text-xs text-slate-400 italic max-w-xs truncate" title={vr.notes}>{vr.notes || '—'}</td>
-                  </tr>
-                )) : <tr><td colSpan="8" className="p-8 text-center text-slate-500">No visit reports yet.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <VisitReportsTable reports={visitReports} getRepName={getRepName} fmtDate={fmtDate} />
       )}
 
       {/* ══════════════════════════════════════════════════════════════════ */}
@@ -1096,10 +1135,10 @@ export default function SFA() {
               none of them matched the StatCard the rest of the application uses. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: 'Total Claimed', value: `₹${myExpenses.reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('en-IN')}`, icon: Receipt, tone: 'accent' },
-              { label: 'Approved', value: `₹${myExpenses.filter(e => e.status === 'Approved').reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('en-IN')}`, icon: CheckCircle2, tone: 'success' },
-              { label: 'Pending', value: myExpenses.filter(e => e.status === 'Pending').length, icon: Clock, tone: 'warning' },
-              { label: 'Rejected', value: myExpenses.filter(e => e.status === 'Rejected').length, icon: XSquare, tone: 'danger' },
+              { label: 'Total Claimed', value: `₹${sfaExpenses.reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('en-IN')}`, icon: Receipt, tone: 'accent' },
+              { label: 'Approved', value: `₹${sfaExpenses.filter(e => e.status === 'Approved').reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('en-IN')}`, icon: CheckCircle2, tone: 'success' },
+              { label: 'Pending', value: sfaExpenses.filter(e => e.status === 'Pending').length, icon: Clock, tone: 'warning' },
+              { label: 'Rejected', value: sfaExpenses.filter(e => e.status === 'Rejected').length, icon: XSquare, tone: 'danger' },
             ].map((s, i) => (
               <StatCard key={i} label={s.label} value={s.value} icon={s.icon} tone={s.tone} />
             ))}
@@ -1123,7 +1162,7 @@ export default function SFA() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-slate-300">
-                  {myExpenses.length > 0 ? myExpenses.map(exp => (
+                  {sfaExpenses.length > 0 ? sfaExpenses.map(exp => (
                     <tr key={exp.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
                       {isManagerOrAbove && <td className="p-4 text-xs font-semibold text-white">{getRepName(exp.userId)}</td>}
                       <td className="p-4 text-xs text-slate-400 whitespace-nowrap">{fmtDate(exp.date)}</td>
@@ -1140,7 +1179,7 @@ export default function SFA() {
                       </td>
                       {isManagerOrAbove && (
                         <td className="p-4 text-center">
-                          {exp.status === 'Pending' ? (
+                          {exp.status === 'Pending' && canEditSfa ? (
                             <div className="flex items-center justify-center gap-1.5">
                               <button onClick={async () => { if (!await updateSFAExpense(exp.id, { status: 'Approved' })) toast(PAYOUT_FAILED, 'error'); }} className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-400 transition-colors" title="Approve"><CheckSquare size={14} /></button>
                               <button onClick={() => updateSFAExpense(exp.id, { status: 'Rejected' })} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 transition-colors" title="Reject"><XSquare size={14} /></button>
@@ -1181,7 +1220,7 @@ export default function SFA() {
             </div>
             {(() => {
               const shown = new Set(weekDays.map(dayKey));
-              const elsewhere = filteredBeats.filter(b => !shown.has(String(b.date).slice(0, 10))).length;
+              const elsewhere = beatPlans.filter(b => !shown.has(String(b.date).slice(0, 10))).length;
               if (elsewhere === 0) return null;
               return (
                 <p className="px-4 py-2 text-[11px] text-amber-300 bg-amber-500/10 border-b border-amber-500/20">
@@ -1194,7 +1233,7 @@ export default function SFA() {
                 {weekDays.map(date => {
                   const key = dayKey(date);
                   // Matched on the actual date, not the weekday name.
-                  const dayBeats = filteredBeats.filter(b => String(b.date).slice(0, 10) === key);
+                  const dayBeats = beatPlans.filter(b => String(b.date).slice(0, 10) === key);
                   const isToday = key === dayKey(new Date());
                   return (
                     <div key={key} className="border-r border-white/5 last:border-0">
@@ -1230,7 +1269,7 @@ export default function SFA() {
             </div>
             <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {territories.length > 0 ? territories.map(territory => {
-                const tBeats = filteredBeats.filter(b => territoryFor(territories, b)?.id === territory.id);
+                const tBeats = beatPlans.filter(b => territoryFor(territories, b)?.id === territory.id);
                 const visited = tBeats.filter(beatCovered).length;
                 const totalOutlets = tBeats.reduce((sum, b) => sum + (Array.isArray(b.outlets) ? b.outlets.length : 0), 0);
                 const pct = tBeats.length > 0 ? Math.round((visited / tBeats.length) * 100) : 0;
@@ -1430,6 +1469,35 @@ export default function SFA() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* MODAL: Log Field Visit                                             */}
       {/* ══════════════════════════════════════════════════════════════════ */}
+      {earlyRequestBeat && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !isSubmittingEarly && setEarlyRequestBeat(null)} />
+          <form onSubmit={submitEarlyRequest} className="relative glass-panel bg-brand-primary w-full max-w-md rounded-2xl shadow-2xl border border-brand-accent/30 z-10 p-6 space-y-4">
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">Request early check-in</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  This beat is for {fmtDate(earlyRequestBeat.date)}. Your manager or an admin decides; if approved, you can
+                  check in today only.
+                </p>
+              </div>
+              <button type="button" onClick={() => setEarlyRequestBeat(null)} className="p-1 text-slate-400 hover:text-white"><X size={20} /></button>
+            </div>
+            <div>
+              <label htmlFor="sfa-early-reason" className={lbl}>Why today?</label>
+              <textarea id="sfa-early-reason" rows="3" required value={earlyReason} onChange={e => setEarlyReason(e.target.value)}
+                placeholder="e.g. I am near this outlet today and can cover it now"
+                className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
+            </div>
+            {earlyError && <p role="alert" className="text-sm font-medium text-red-400">⚠️ {earlyError}</p>}
+            <div className="flex gap-3 justify-end">
+              <Button variant="secondary" onClick={() => setEarlyRequestBeat(null)}>Cancel</Button>
+              <Button type="submit" variant="primary" disabled={isSubmittingEarly}>{isSubmittingEarly ? 'Sending…' : 'Send request'}</Button>
+            </div>
+          </form>
+        </div>
+        , document.body)}
+
       {isVisitModalOpen && createPortal(
         <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-[6vh]">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsVisitModalOpen(false)} />
@@ -1636,6 +1704,7 @@ export default function SFA() {
                   <textarea id="sfa-visit-notes" rows="3" placeholder="Retailer feedback, interest level, next steps…" value={visitForm.notes} onChange={e => setVisitForm({ ...visitForm, notes: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
                 </div>
               </div>
+              {visitError && <p role="alert" className="text-sm font-medium text-red-400">⚠️ {visitError}</p>}
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                 <Button variant="secondary" onClick={() => setIsVisitModalOpen(false)}>Cancel</Button>
                 <Button type="submit" variant="primary" disabled={isSubmittingVisit}>{isSubmittingVisit ? 'Saving…' : 'Submit Visit Report'}</Button>

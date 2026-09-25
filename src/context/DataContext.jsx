@@ -5,15 +5,20 @@ import { invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty, invoicesSettl
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
-import { gstForOrder as computeGst, amountOwedForOrder, balanceAfterCharge } from '../utils/billing';
+import { balanceAfterCharge } from '../utils/billing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { balanceDrift, balanceAfterCreditNote, balanceAfterCreditNoteWithdrawn } from '../utils/ledgerWrites';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
 import { blankIdsToNull } from '../utils/dbRow';
-import { explainForeignKey } from '../utils/writeErrors';
+import { explainForeignKey, plainDatabaseError } from '../utils/writeErrors';
 import { stampCreator } from '../utils/attribution';
 import { useAuth } from './AuthContext';
+import { isConvertedStatus } from '../utils/leadStatus';
+import { leadOrderDraft } from '../utils/leadConversion';
+import { beatStatusFor } from '../utils/beatVisits';
+import { localDateStr } from '../utils/beatDates';
+import { shouldFetchData, dataCacheKeysToClear } from '../utils/dataSession';
 
 // The bracketed territory on a "new partner" log line. On a signup page the
 // visitor is anonymous and the territories list is empty, so there is no name
@@ -79,6 +84,7 @@ const CACHE_KEYS_BY_TABLE = {
   vendors: 'prismora_vendors',
   masters: 'prismora_masters',
   visit_reports: 'prismora_visit_reports',
+  beat_checkin_requests: 'prismora_beat_checkin_requests',
 };
 
 const lsInit = (key) => {
@@ -138,6 +144,9 @@ const writeComplaint = (err, row) => {
   }
   if (code === '23505') {
     return { text: message + detail, cause: 'Something with that id already exists.' };
+  }
+  if (code === '42501' || /row-level security/i.test(message)) {
+    return { text: message + detail, cause: 'Your role is not allowed to make this change. An admin can grant it in the permissions for that role.' };
   }
   return { text: message + detail, cause: '' };
 };
@@ -446,8 +455,23 @@ export const DataProvider = ({ children }) => {
   // reachable here. Reading it centrally is the point: every screen that
   // writes a record would otherwise have to remember to say who was at the
   // keyboard, and four of the six that could have already did not.
-  const { user: signedInUser } = useAuth();
+  const { user: signedInUser, authReady } = useAuth();
   const stamp = (row) => stampCreator(row, signedInUser?.id);
+
+  // 'loading' until the first fetch for this user lands. App mounts this
+  // provider afresh for each signed-in user (see dataSessionKey), so this is
+  // per user, not per page load.
+  const [dataStatus, setDataStatus] = useState(() =>
+    shouldFetchData({ authReady, user: signedInUser }) ? 'loading' : 'idle');
+  // Whether there was a cached copy to show while that fetch runs.
+  const [hadCache] = useState(() => {
+    try {
+      return Object.values(CACHE_KEYS_BY_TABLE).some(k => {
+        const v = localStorage.getItem(k);
+        return v && v !== '[]';
+      });
+    } catch { return false; }
+  });
 
   // ── Original CRM State (hydrated from cache for instant load) ────────────
   // Surfaced by the app shell so a rejected write is visible, not just logged.
@@ -478,6 +502,7 @@ export const DataProvider = ({ children }) => {
   const [beatPlans, setBeatPlans] = useState(() => lsInit('prismora_beat_plans'));
   const [attendance, setAttendance] = useState(() => lsInit('prismora_attendance'));
   const [visitReports, setVisitReports] = useState(() => lsInit('prismora_visit_reports'));
+  const [beatCheckinRequests, setBeatCheckinRequests] = useState(() => lsInit('prismora_beat_checkin_requests'));
   const [masters, setMasters] = useState(() => lsInit('prismora_masters'));
   const [sfaExpenses, setSfaExpenses] = useState(() => lsInit('prismora_sfa_expenses'));
   const [vendorPayments, setVendorPayments] = useState(() => lsInit('prismora_vendor_payments'));
@@ -568,6 +593,7 @@ export const DataProvider = ({ children }) => {
       beat_plans: begin(supabase.from('beat_plans').select('*').order('date', { ascending: false })),
       attendance: begin(supabase.from('attendance').select('*').order('date', { ascending: false })),
       visit_reports: begin(supabase.from('visit_reports').select('*').order('visitDate', { ascending: false })),
+      beat_checkin_requests: begin(supabase.from('beat_checkin_requests').select('*').order('createdAt', { ascending: false })),
       distributor_payments: begin(supabase.from('distributor_payments').select('*').order('createdAt', { ascending: false })),
       scheme_claims: begin(supabase.from('scheme_claims').select('*').order('createdAt', { ascending: false })),
       distributor_incentives: begin(supabase.from('distributor_incentives').select('*').order('createdAt', { ascending: false })),
@@ -967,6 +993,19 @@ export const DataProvider = ({ children }) => {
     }
     applyFetched('prismora_visit_reports', setVisitReports, fetchedVisits);
 
+    // ── Early check-in requests ──
+    let fetchedCheckinRequests = [];
+    try {
+      const { data, error } = await inflight.beat_checkin_requests;
+      if (error) throw error;
+      fetchedCheckinRequests = data || [];
+    } catch {
+      // 037 not run yet, or a failed read: keep what this browser had.
+      const local = localStorage.getItem('prismora_beat_checkin_requests');
+      fetchedCheckinRequests = local ? JSON.parse(local) : [];
+    }
+    applyFetched('prismora_beat_checkin_requests', setBeatCheckinRequests, fetchedCheckinRequests);
+
     // ── Distributor Payments ──
     let fetchedPayments = [];
     try {
@@ -1022,8 +1061,26 @@ export const DataProvider = ({ children }) => {
   // Declared after fetchData deliberately. An effect body runs after the
   // component body, so calling it from above worked -- but it read as using
   // a value before it exists, and the linter was right to say so.
+  //
+  // Only with a signed-in session: fetched on the login page, every table
+  // reads as empty and that emptiness was cached. Nobody signed in means the
+  // last person's cached tables are dropped, so the next person does not start
+  // from them.
   useEffect(() => {
-    fetchData();
+    if (!shouldFetchData({ authReady, user: signedInUser })) {
+      if (authReady && !signedInUser) {
+        try {
+          dataCacheKeysToClear(Object.keys(localStorage)).forEach(k => localStorage.removeItem(k));
+        } catch { /* storage blocked — nothing cached to clear */ }
+      }
+      return;
+    }
+    let live = true;
+    fetchData().finally(() => { if (live) setDataStatus('ready'); });
+    return () => { live = false; };
+    // Mounted once per user by App (keyed on dataSessionKey), so this runs
+    // once per sign-in by design.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A backfill used to run here, uploading records that existed only in this
@@ -1082,9 +1139,8 @@ export const DataProvider = ({ children }) => {
     let shouldCancelOrder = false;
 
     if (oldLead && oldLead.status !== updatedData.status) {
-      const isConversionStatus = (s) => ['Converted', 'First Order', 'Active'].includes(s);
-      const wasConverted = isConversionStatus(oldLead.status);
-      const isConvertedNow = isConversionStatus(updatedData.status);
+      const wasConverted = isConvertedStatus(oldLead.status);
+      const isConvertedNow = isConvertedStatus(updatedData.status);
 
       // Converting no longer raises the order from here. A lead records which
       // products a customer is interested in, not how many of each, so this
@@ -1129,9 +1185,10 @@ export const DataProvider = ({ children }) => {
    *
    * Takes the line items rather than deriving them, because the lead genuinely
    * does not hold quantities — asking is the only honest way to get them. Also
-   * records `leadId` on the order so a rollback can find it again.
+   * records `leadId` on the order so a rollback can find it again. `delivery`
+   * carries the address the convert step asked for; see leadOrderDraft.
    */
-  const convertLeadToOrder = async (lead, lineItems, newStatus = 'First Order') => {
+  const convertLeadToOrder = async (lead, lineItems, newStatus = 'First Order', delivery = {}) => {
     if (!lead) return { ok: false, error: 'Lead not found.' };
     if (lead.orderCreated) return { ok: false, error: 'An order has already been raised for this lead.' };
 
@@ -1147,26 +1204,9 @@ export const DataProvider = ({ children }) => {
     if (items.length === 0) return { ok: false, error: 'Enter a quantity for at least one product.' };
 
     const totalUnits = items.reduce((sum, i) => sum + i.quantity, 0);
-    const totalValue = items.reduce((sum, i) => sum + i.total, 0);
-
-    const newOrderId = await addOrder({
-      customerName: lead.name,
-      companyName: lead.company || '',
-      // A single-product order leaves `items` unset: partial delivery is only
-      // tracked for those, and setting items would opt it out.
-      product: items.length === 1 ? items[0].name : `${items[0].name} +${items.length - 1} more item${items.length > 2 ? 's' : ''}`,
-      items: items.length > 1 ? items : undefined,
-      quantity: totalUnits,
-      value: totalValue || Number(lead.dealValue || 0),
-      state: lead.state || '',
-      city: lead.city || '',
-      status: 'Pending',
-      assignedTo: lead.assignedTo || '',
-      leadId: lead.id,
-      phone: lead.phone || '',
-      email: lead.email || '',
-      date: new Date().toISOString(),
-    });
+    const newOrderId = await addOrder(leadOrderDraft(lead, items, delivery));
+    // Leave the lead unconverted if the order was refused, so it can be retried.
+    if (!newOrderId) return { ok: false, error: 'The order could not be saved, so the lead was not converted.' };
 
     await updateLead(lead.id, { status: newStatus, orderCreated: true });
     logEvent('lead_converted', `Lead ${lead.id} converted — order ${newOrderId} raised for ${totalUnits} unit(s)`, lead.assignedTo, newOrderId);
@@ -1182,118 +1222,130 @@ export const DataProvider = ({ children }) => {
 
   // ── Orders ───────────────────────────────────────────────────────────────
   const addOrder = async (order) => {
-    const maxId = orders.reduce((max, o) => {
-      const num = parseInt(o.id.replace('O', ''), 10);
-      return !isNaN(num) && num > max ? num : max;
-    }, 0);
-    // The id is settled by the insert, so a clash with another user's order is
-    // resolved before it ever reaches local state.
+    // The database numbers the order and says which number it chose. It used
+    // to be "highest this browser knows + 1", so a deleted or refused order's
+    // number was handed out again — O1 was issued three times. 039 draws it
+    // from a sequence, which never gives a number back.
     const draft = stamp({ ...order, createdAt: new Date().toISOString() });
-    const { id: newId } = await insertWithFreeId('orders insert', 'orders', 'O', maxId + 1, draft,
-      orderRow, 8, ['createdBy']);
+    const row = orderRow(draft);
+    delete row.id;
+    const { data, error } = await supabase.from('orders').insert([row]).select('id').single();
+    // A refused insert used to come back with an id all the same, so the order
+    // appeared on screen and anything that recorded that id — a field visit's
+    // report — then pointed at an order the database never had.
+    if (error || !data?.id) {
+      await persist('orders insert', Promise.resolve({ error: error || { message: 'The database did not return the new order.' } }), row);
+      return null;
+    }
+    const newId = data.id;
     const newOrder = { ...draft, id: newId };
-    const next = [newOrder, ...orders];
-    setOrders(next);
-    localStorage.setItem('prismora_orders', JSON.stringify(next));
+    setOrders(prev => {
+      const next = [newOrder, ...prev];
+      localStorage.setItem('prismora_orders', JSON.stringify(next));
+      return next;
+    });
     if (newOrder.distributorId || newOrder.dealerId || newOrder.retailerId) generateIncentivesForOrder(newOrder);
     return newId;
   };
 
-  // Deducts an order's product quantity from inventory batches (earliest-expiry-first)
-  // when the order is marked Delivered — keeps Stock Availability truthful.
-  const deductInventoryForOrder = async (order) => {
-    const lineItems = Array.isArray(order.items) && order.items.length > 0
-      ? order.items.map(i => ({ name: i.name, quantity: Number(i.quantity || 0) }))
-      : [{ name: order.product, quantity: Number(order.quantity || 0) }];
+  /**
+   * Reload rows the database changed on its own.
+   *
+   * A delivery now takes stock, raises the invoice and charges the partner
+   * inside the database (039), so this browser learns of those changes by
+   * asking for the rows afterwards. Rows this user may not read simply do
+   * not come back, and are left as they were.
+   */
+  const reloadRows = async (table, setter, cacheKey, column, values) => {
+    const wanted = [...new Set((values || []).filter(Boolean))];
+    if (wanted.length === 0) return;
+    const { data, error } = await supabase.from(table).select('*').in(column, wanted);
+    if (error || !data) return;
+    setter(prev => {
+      const byId = new Map(data.map(r => [r.id, r]));
+      const kept = prev.map(r => (byId.has(r.id) ? byId.get(r.id) : r));
+      const added = data.filter(r => !prev.some(x => x.id === r.id));
+      const next = [...added, ...kept];
+      try { localStorage.setItem(cacheKey, JSON.stringify(next)); } catch { /* storage full */ }
+      return next;
+    });
+  };
 
-    for (const { name, quantity } of lineItems) {
-      if (!name || quantity <= 0) continue;
-      let remaining = quantity;
-      const batches = inventory
-        .filter(b => b.product === name && b.quantity > 0)
-        // FEFO: soonest expiry first. Batches with no expiry date are consumed
-        // LAST — `new Date(undefined || 0)` would put them at the epoch, draining
-        // non-expiring stock before genuinely near-expiry stock and inverting FEFO.
-        .sort((a, b) => {
-          const ax = a.expiryDate ? new Date(a.expiryDate).getTime() : Infinity;
-          const bx = b.expiryDate ? new Date(b.expiryDate).getTime() : Infinity;
-          return ax - bx;
-        });
+  // What a delivery touched: the order, its stock, its invoice, its partner.
+  const refreshAfterDelivery = async (order) => {
+    const products = Array.isArray(order.items) && order.items.length > 0
+      ? order.items.map(i => i.name)
+      : [order.product];
+    await Promise.all([
+      reloadRows('orders', setOrders, 'prismora_orders', 'id', [order.id]),
+      reloadRows('inventory', setInventory, 'prismora_inventory', 'product', products),
+      reloadRows('invoices', setInvoices, 'prismora_invoices', 'orderId', [order.id]),
+      reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [order.distributorId]),
+      reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [order.dealerId]),
+      reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [order.retailerId]),
+    ]);
+  };
 
-      for (const batch of batches) {
-        if (remaining <= 0) break;
-        const deduct = Math.min(remaining, batch.quantity);
-        remaining -= deduct;
-        const newQty = batch.quantity - deduct;
-        setInventory(prev => {
-          const nextInv = prev.map(b => b.id === batch.id ? { ...b, quantity: newQty } : b);
-          localStorage.setItem('prismora_inventory', JSON.stringify(nextInv));
-          return nextInv;
-        });
-        await persist('inventory update', supabase.from('inventory').update({ quantity: newQty }).eq('id', batch.id));
-      }
-
-      if (remaining > 0) {
-        logEvent('stock_shortfall', `Delivered order ${order.id} needed ${quantity} of ${name} but only ${quantity - remaining} were available in stock`, null, order.id);
-      }
+  /**
+   * Save an order update that delivers stock, and learn what it set off.
+   *
+   * The database takes the stock, raises the proforma invoice and charges the
+   * partner in the same transaction as the status change, or refuses all of it
+   * — so the change is not shown as saved until it has been. On refusal the
+   * order is put back and the reason comes back in words Dispatch can act on.
+   */
+  const saveDelivery = async (id, patch, before) => {
+    const { data, error } = await supabase.from('orders').update(patch).eq('id', id).select('*');
+    if (error || !data || data.length === 0) {
+      setOrders(prev => {
+        const next = prev.map(o => (o.id === id ? before : o));
+        localStorage.setItem('prismora_orders', JSON.stringify(next));
+        return next;
+      });
+      return {
+        ok: false,
+        error: error
+          ? plainDatabaseError(error, 'mark this order Delivered')
+          : 'The order could not be updated — it may have been changed or removed elsewhere. Reload and try again.',
+      };
     }
+    await refreshAfterDelivery(data[0]);
+    return { ok: true, order: data[0] };
   };
 
   const updateOrder = async (id, updatedData) => {
     const oldOrder = orders.find(o => o.id === id);
-    const next = orders.map(o => o.id === id ? { ...o, ...updatedData } : o);
-    setOrders(next);
-    localStorage.setItem('prismora_orders', JSON.stringify(next));
-    await persist('orders update', supabase.from('orders').update(orderRow(updatedData)).eq('id', id));
-    if (oldOrder && oldOrder.status !== updatedData.status) {
-      if (updatedData.status === 'Processing') {
-        logEvent('order_processing', `Order Processing: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
-      } else if (updatedData.status === 'Ready for Dispatch') {
-        logEvent('order_ready_for_dispatch', `Order Ready for Dispatch: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
-      } else if (updatedData.status === 'Shipped') {
-        logEvent('order_shipped', `Order Shipped: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
-      } else if (updatedData.status === 'Delivered') {
-        // Guard against re-delivering an order that was already fulfilled once
-        // (e.g. Delivered -> Cancelled -> Delivered). Without this, stock is
-        // deducted a second time and a duplicate invoice is raised against the
-        // party, silently inflating both consumption and receivables.
-        if (oldOrder.fulfilledAt) {
-          logEvent('order_delivered', `Order re-marked Delivered (already fulfilled ${oldOrder.fulfilledAt}) — stock and billing skipped: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
-          return;
-        }
-        logEvent('order_delivered', `Order Delivered: ${updatedData.customerName || oldOrder.customerName}`, updatedData.assignedTo || oldOrder.assignedTo, id);
-        const finalOrder = { ...oldOrder, ...updatedData, id };
-        // If earlier partial deliveries already deducted some of this order's
-        // stock, only deduct what's left now — otherwise this double-counts
-        // the units already taken out of inventory. Doesn't apply to
-        // multi-item orders, which don't support partial delivery.
-        const alreadyDelivered = Number(oldOrder.deliveredQty || 0);
-        const deductionOrder = alreadyDelivered > 0 && !(Array.isArray(finalOrder.items) && finalOrder.items.length > 0)
-          ? { ...finalOrder, quantity: Number(finalOrder.quantity || 0) - alreadyDelivered }
-          : finalOrder;
-        await deductInventoryForOrder(deductionOrder);
-        // Billed whether or not the order is linked to a partner record. The
-        // link used to be the condition, so an order raised from a field visit
-        // — where the shop has no retailer record yet — was delivered and then
-        // never invoiced at all. It simply vanished from the accounts. Only the
-        // balance update below needs a party; the invoice does not.
-        await billPartyForOrder(finalOrder);
-        await markOrderFulfilled(id);
-      }
-    }
-  };
-
-  // Stamps the order as having had its stock deducted and its invoice raised, so
-  // a later status change back to "Delivered" can't trigger either a second time.
-  const markOrderFulfilled = async (id) => {
-    const fulfilledAt = new Date().toISOString();
+    const delivering = Boolean(oldOrder) && updatedData.status === 'Delivered' && oldOrder.status !== 'Delivered';
     setOrders(prev => {
-      const next = prev.map(o => o.id === id ? { ...o, fulfilledAt } : o);
+      const next = prev.map(o => o.id === id ? { ...o, ...updatedData } : o);
       localStorage.setItem('prismora_orders', JSON.stringify(next));
       return next;
     });
-    const { error } = await supabase.from('orders').update({ fulfilledAt }).eq('id', id);
-    if (error) console.error(`Failed to record fulfilment stamp for order ${id} — a repeat "Delivered" could double-bill:`, error);
+
+    if (delivering) {
+      // Stock, invoice and balance happen in the database with the status
+      // change (039), whoever clicks — Dispatch included, which has no access
+      // to either. They used to be three browser writes under the clicker's
+      // own permissions, so a Dispatch delivery saved while its stock and its
+      // invoice were both refused.
+      const result = await saveDelivery(id, orderRow(updatedData), oldOrder);
+      if (!result.ok) return result;
+      const who = updatedData.customerName || oldOrder.customerName;
+      logEvent('order_delivered', oldOrder.fulfilledAt
+        ? `Order re-marked Delivered (already fulfilled ${oldOrder.fulfilledAt}) — stock and billing not repeated: ${who}`
+        : `Order Delivered: ${who}`, updatedData.assignedTo || oldOrder.assignedTo, id);
+      return result;
+    }
+
+    const saved = await persist('orders update', supabase.from('orders').update(orderRow(updatedData)).eq('id', id));
+    if (saved && oldOrder && oldOrder.status !== updatedData.status) {
+      const who = updatedData.customerName || oldOrder.customerName;
+      const owner = updatedData.assignedTo || oldOrder.assignedTo;
+      if (updatedData.status === 'Processing') logEvent('order_processing', `Order Processing: ${who}`, owner, id);
+      else if (updatedData.status === 'Ready for Dispatch') logEvent('order_ready_for_dispatch', `Order Ready for Dispatch: ${who}`, owner, id);
+      else if (updatedData.status === 'Shipped') logEvent('order_shipped', `Order Shipped: ${who}`, owner, id);
+    }
+    return { ok: saved, error: saved ? null : 'The change could not be saved.' };
   };
 
   // Partial delivery: record that `deliverQty` more units of a (single-product)
@@ -1328,183 +1380,27 @@ export const DataProvider = ({ children }) => {
     const fullyDone = status === 'Delivered';
     const updatedData = { deliveredQty: newDelivered, status };
 
-    const next = orders.map(o => o.id === id ? { ...o, ...updatedData } : o);
-    setOrders(next);
-    localStorage.setItem('prismora_orders', JSON.stringify(next));
-    // `.select()` makes the matched rows come back, so a write that targeted a
-    // row Supabase doesn't have can be detected. Without it an .update() whose
-    // filter matches nothing resolves with error: null — indistinguishable from
-    // a real save. That is how delivery progress could look saved locally while
-    // the database still held deliveredQty = 0, and the order came back showing
-    // the full quantity outstanding on the next load.
-    const { data: updatedRows, error: partialErr } = await supabase
-      .from('orders').update(orderRow(updatedData)).eq('id', id).select('id');
-    if (partialErr) {
-      console.error('[Prismora] Could not save partial delivery — this change will be lost on refresh:', partialErr.message || partialErr);
-    } else if (!updatedRows || updatedRows.length === 0) {
-      console.warn(`[Prismora] Partial delivery for ${id} was not stored: no such order in the database. It exists only in this browser, so the progress will not survive a cache clear or appear on another device.`);
-    }
-
-    // Deduct only the units delivered in this instalment (single product)
-    await deductInventoryForOrder({ ...order, items: undefined, product: order.product, quantity: actualNow, id });
+    setOrders(prev => {
+      const next = prev.map(o => o.id === id ? { ...o, ...updatedData } : o);
+      localStorage.setItem('prismora_orders', JSON.stringify(next));
+      return next;
+    });
+    // This instalment's units leave stock in the database, in the same
+    // transaction as the progress; the last instalment also raises the
+    // proforma invoice and charges the partner (039). Refused, nothing moves.
+    const result = await saveDelivery(id, orderRow(updatedData), order);
+    if (!result.ok) return result;
     logEvent('order_partial_delivery', `Order ${id}: delivered ${actualNow} of ${totalQty} (${newDelivered}/${totalQty} cumulative)`, order.assignedTo, id);
-
-    // Bill only once fully delivered (avoids partial-invoice complexity), and
-    // regardless of whether a partner record is linked — see billPartyForOrder.
-    if (fullyDone) {
-      await billPartyForOrder({ ...order, ...updatedData });
-    }
-    if (fullyDone) await markOrderFulfilled(id);
+    if (fullyDone) logEvent('order_delivered', `Order Delivered: ${order.customerName}`, order.assignedTo, id);
     return { ok: true };
   };
 
-  /**
-   * GST on an order, taken from the rate held against each product.
-   *
-   * A multi-item order is taxed line by line, because the rates differ — the
-   * catalogue carries 5%, 12% and 18%. A single-product order is taxed on its
-   * whole value. A product that is not in the catalogue contributes no tax
-   * rather than a guessed rate.
-   */
-  // The arithmetic is in utils/billing.js, with 21 tests. It was here, inside
-  // this provider, where nothing could reach it -- which is how the drift on
-  // Gujarat Super Stockist went unnoticed until somebody added the ledger up.
-  const gstForOrder = (order) => computeGst(order, productCatalog);
-
-  // Generates an invoice for a delivered order and, where the order is linked
-  // to a partner record, adds its value to that party's Outstanding balance —
-  // without this, orders never show up as money owed anywhere in the app.
-  /**
-   * The invoice already raised for an order, if there is one.
-   *
-   * Asked of the database rather than local state, which a concurrent delivery
-   * can leave stale. A failed read falls back to what this browser holds — on
-   * a network blip the safe answer is "possibly already invoiced", because a
-   * duplicate bill is worse than a missing one that can be raised by hand.
-   */
-  const findInvoiceForOrder = async (orderId) => {
-    const { data, error } = await supabase
-      .from('invoices').select('id').eq('orderId', orderId).limit(1);
-    if (error) return invoices.find(i => i.orderId === orderId)?.id || null;
-    return data && data.length > 0 ? data[0].id : null;
-  };
-
-  const billPartyForOrder = async (order) => {
-    // An order can already have been invoiced by hand from the Accounting
-    // screen — nothing there stops you billing an order that has not shipped
-    // yet. Delivery then raised a second invoice for the same order, so the
-    // customer was billed twice and a linked partner's balance went up twice.
-    // Asked of the database rather than local state, which a concurrent
-    // delivery can leave stale.
-    const existingId = await findInvoiceForOrder(order.id);
-    if (existingId) {
-      logEvent('invoice_skipped', `Order ${order.id} delivered — already invoiced as ${existingId}, no second bill raised`, order.assignedTo, existingId);
-      return existingId;
-    }
-
-    // react-hooks/purity flags Date.now() as unsafe to call while rendering.
-    // This runs from a delivery handler, never during render, and the clock is
-    // the point: the id and the dates are when the invoice was actually
-    // raised. Twenty-odd other Date.now() calls in this file are identical and
-    // unflagged — the rule only reaches this one now that the early return
-    // above made the function analysable.
-    /* eslint-disable react-hooks/purity */
-    const newInvoiceId = `INV-${Date.now()}`;
-    const newInvoice = {
-      id: newInvoiceId,
-      orderId: order.id,
-      customerName: order.customerName,
-      // The order already knows whose it is, so the invoice says so directly
-      // rather than leaving it to be worked out from the spelling later.
-      distributorId: order.distributorId || null,
-      dealerId: order.dealerId || null,
-      retailerId: order.retailerId || null,
-      amount: Number(order.value || 0),
-      // GST was hardcoded to zero here, so every invoice raised automatically
-      // on delivery went out tax-free while the ones typed in by hand on the
-      // Accounting screen carried it. The rate lives on the product, exactly
-      // as the manual path reads it.
-      tax: gstForOrder(order),
-      status: 'Unpaid',
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      assignedTo: order.assignedTo,
-      createdAt: new Date().toISOString()
-    };
-    /* eslint-enable react-hooks/purity */
-    // Persist from the functional update, not the closed-over `invoices` — two
-    // deliveries billing back-to-back both read the same stale array and the
-    // second write would drop the first invoice from the cache entirely.
-    setInvoices(prev => {
-      const next = [newInvoice, ...prev];
-      localStorage.setItem('prismora_invoices', JSON.stringify(next));
-      return next;
-    });
-    // Reported on the banner like every other write. This one only reached the
-    // browser console, so an invoice the database refused looked identical to
-    // one that saved — until it disappeared on the next load.
-    const invoiceSaved = await persistOptional('invoices',
-      ['distributorId', 'dealerId', 'retailerId'], 'the invoice',
-      (shape) => supabase.from('invoices').insert([shape(newInvoice)]));
-    if (!invoiceSaved) {
-      setInvoices(prev => {
-        const next = prev.filter(i => i.id !== newInvoiceId);
-        localStorage.setItem('prismora_invoices', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
-    logEvent('invoice_new', `Invoice generated for ${order.customerName}: ${newInvoiceId}`, order.assignedTo, newInvoiceId);
-
-    await chargePartyForOrder(order);
-    return newInvoiceId;
-  };
-
-  /**
-   * Add an order's value to whichever partner it belongs to.
-   *
-   * Split out of billPartyForOrder so an invoice raised by hand does the same
-   * thing. It did not: a manual invoice for a linked distributor produced a
-   * bill that never became a receivable on their account, so the Accounting
-   * screen and the partner's outstanding balance disagreed.
-   */
-  const chargePartyForOrder = async (order) => {
-    if (!order) return;
-
-    // The tax belongs on the balance. The ledger counts an invoice as amount
-    // plus tax, because that is what the partner is billed and what they will
-    // pay, while this used to add only the order value. Every invoiced order
-    // therefore pushed the two figures apart by exactly the GST on it, which
-    // is a drift nobody caused and nobody could see without opening the ledger.
-    const owed = amountOwedForOrder(order, productCatalog);
-    if (order.distributorId) {
-      const dist = distributors.find(d => d.id === order.distributorId);
-      if (dist) {
-        const newOutstanding = balanceAfterCharge(dist.outstandingAmount, owed);
-        const nextDist = distributors.map(d => d.id === dist.id ? { ...d, outstandingAmount: newOutstanding } : d);
-        setDistributors(nextDist);
-        localStorage.setItem('prismora_distributors', JSON.stringify(nextDist));
-        await persist('distributors update', supabase.from('distributors').update({ outstandingAmount: newOutstanding }).eq('id', dist.id));
-      }
-    } else if (order.dealerId) {
-      const dealer = dealers.find(d => d.id === order.dealerId);
-      if (dealer) {
-        const newOutstanding = balanceAfterCharge(dealer.outstandingAmount, owed);
-        const nextDealers = dealers.map(d => d.id === dealer.id ? { ...d, outstandingAmount: newOutstanding } : d);
-        setDealers(nextDealers);
-        localStorage.setItem('prismora_dealers', JSON.stringify(nextDealers));
-        await persist('dealers update', supabase.from('dealers').update({ outstandingAmount: newOutstanding }).eq('id', dealer.id));
-      }
-    } else if (order.retailerId) {
-      const retailer = retailers.find(r => r.id === order.retailerId);
-      if (retailer) {
-        const newOutstanding = balanceAfterCharge(retailer.outstandingAmount, owed);
-        const nextRetailers = retailers.map(r => r.id === retailer.id ? { ...r, outstandingAmount: newOutstanding } : r);
-        setRetailers(nextRetailers);
-        localStorage.setItem('prismora_retailers', JSON.stringify(nextRetailers));
-        await persist('retailers update', supabase.from('retailers').update({ outstandingAmount: newOutstanding }).eq('id', retailer.id));
-      }
-    }
-  };
+  // Everything that billed and charged from the browser — gstForOrder,
+  // findInvoiceForOrder, billPartyForOrder, chargePartyForOrder — now happens
+  // in the database (039): the delivery trigger raises a proforma,
+  // create_invoice raises a manual one, convert_to_tax_invoice adds GST to a
+  // proforma. Each saves the invoice and the partner's balance together or
+  // not at all.
 
   // ── Masters ──────────────────────────────────────────────────────────────
   // The rules about locked keys live here, not only in the screen. A key the
@@ -1827,17 +1723,13 @@ export const DataProvider = ({ children }) => {
     const allowed = canSplit({ keep: keepItems, split: splitItems });
     if (!allowed.ok) return { ok: false, error: allowed.reason };
 
-    const maxId = orders.reduce((max, o) => {
-      const num = parseInt(o.id.replace('O', ''), 10);
-      return !isNaN(num) && num > max ? num : max;
-    }, 0);
-    const newOrderId = `O${maxId + 1}`;
     const hasItems = Array.isArray(order.items) && order.items.length > 0;
     const nameFor = (items) => items.length === 1 ? items[0].name : `${items[0].name} +${items.length - 1} more item${items.length > 2 ? 's' : ''}`;
 
+    // No id: the database numbers the backorder (039), and it is read back
+    // below before the original is pointed at it.
     const splitOrderObj = {
       ...order,
-      id: newOrderId,
       items: hasItems ? splitItems : undefined,
       product: nameFor(splitItems),
       quantity: splitItems.reduce((s, i) => s + i.quantity, 0),
@@ -1854,7 +1746,6 @@ export const DataProvider = ({ children }) => {
       product: nameFor(keepItems),
       quantity: keepItems.reduce((s, i) => s + i.quantity, 0),
       value: keepItems.reduce((s, i) => s + (i.total || 0), 0),
-      splitIntoOrderId: newOrderId
     };
 
     // The backorder is created before the original is cut down, and neither
@@ -1864,11 +1755,20 @@ export const DataProvider = ({ children }) => {
     // was refused and the update went through, the original shrank and the
     // remainder existed nowhere: the customer's order quietly lost the units
     // they were still waiting for, with nothing on file to say so.
-    const created = await persist('orders insert', supabase.from('orders').insert([orderRow(splitOrderObj)]));
-    if (!created) {
+    const splitRow = orderRow(splitOrderObj);
+    delete splitRow.id;
+    // A new order has not been fulfilled, whatever the original had.
+    delete splitRow.fulfilledAt;
+    splitOrderObj.fulfilledAt = null;
+    const { data: createdRow, error: createError } = await supabase.from('orders').insert([splitRow]).select('id').single();
+    if (createError || !createdRow?.id) {
+      await persist('orders insert', Promise.resolve({ error: createError || { message: 'The database did not return the backorder.' } }), splitRow);
       console.error(`[Prismora] The backorder for ${id} could not be created, so the order has been left whole.`);
       return { ok: false, error: 'The backorder could not be created, so nothing was split.' };
     }
+    const newOrderId = createdRow.id;
+    splitOrderObj.id = newOrderId;
+    updatedOriginal.splitIntoOrderId = newOrderId;
 
     const reduced = await persist('orders update', supabase.from('orders').update(orderRow(updatedOriginal)).eq('id', id));
     if (!reduced) {
@@ -2025,50 +1925,65 @@ export const DataProvider = ({ children }) => {
   };
 
   // ── Invoices ─────────────────────────────────────────────────────────────
-  const addInvoice = async (invoiceData) => {
-    const maxId = invoices.reduce((max, inv) => {
-      const num = parseInt(inv.id.replace('INV-', ''), 10);
-      return !isNaN(num) && num > max ? num : max;
-    }, 0);
-    const draft = stamp({ ...invoiceData, createdAt: new Date().toISOString() });
-    let { id: newId, saved } = await insertWithFreeId('invoices insert', 'invoices', 'INV-', maxId + 1, draft,
-      (r) => r, 8, ['createdBy']);
-
-    // 025 adds the party columns. Before it runs they are refused, which would
-    // take the whole invoice down -- so drop them and keep the invoice, the
-    // same way every other optional column is handled.
-    if (!saved) {
-      const { distributorId, dealerId, retailerId, ...withoutParty } = draft;
-      if (distributorId || dealerId || retailerId) {
-        const retry = await insertWithFreeId('invoices insert (without party id)', 'invoices', 'INV-', maxId + 1, withoutParty);
-        newId = retry.id;
-        saved = retry.saved;
+  /**
+   * Raise an invoice by hand (Accounting → Generate Invoice).
+   *
+   * Done by create_invoice in the database (039): GST line by line at each
+   * product's catalogue rate, refused rather than guessed when a product has
+   * no rate, refused when the order already has an invoice, and the partner's
+   * balance charged in the same transaction. Nothing is shown or charged here
+   * until the database says it is saved.
+   *
+   * Returns { ok, id } or { ok: false, error } with the reason in plain words.
+   */
+  const addInvoice = async ({ orderId = null, customerName = '', amount = null, withTax = true, gstPct = null, dueDate = null }) => {
+    if (orderId) {
+      const existing = invoices.find(i => i.orderId === orderId);
+      if (existing) {
+        return { ok: false, error: `Order ${orderId} is already invoiced as ${existing.id}. An order can have only one invoice.` };
       }
     }
+    const { data: newId, error } = await supabase.rpc('create_invoice', {
+      p_order_id: orderId || null,
+      p_customer_name: customerName || null,
+      p_amount: amount === null || amount === undefined ? null : Number(amount),
+      p_with_tax: Boolean(withTax),
+      p_gst_pct: gstPct === null || gstPct === undefined || gstPct === '' ? null : Number(gstPct),
+      p_due: dueDate || null,
+    });
+    if (error || !newId) return { ok: false, error: plainDatabaseError(error, 'raise this invoice') };
 
-    // Older databases are missing the `assignedTo` column, which rejects the
-    // whole row. Retry once without it rather than losing the invoice.
-    if (!saved) {
-      const { assignedTo, ...withoutAssignee } = draft;
-      const retry = await insertWithFreeId('invoices insert (without assignedTo)', 'invoices', 'INV-', maxId + 1, withoutAssignee);
-      newId = retry.id;
-    }
+    const order = orderId ? orders.find(o => o.id === orderId) : null;
+    await Promise.all([
+      reloadRows('invoices', setInvoices, 'prismora_invoices', 'id', [newId]),
+      reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [order?.distributorId]),
+      reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [order?.dealerId]),
+      reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [order?.retailerId]),
+    ]);
+    logEvent('invoice_new', `Invoice generated for ${order?.customerName || customerName}: ${newId}`, signedInUser?.id, newId);
+    return { ok: true, id: newId };
+  };
 
-    const newInvoice = { ...draft, id: newId };
-    setInvoices(prev => [newInvoice, ...prev]);
-    const local = localStorage.getItem('prismora_invoices');
-    const existing = local ? JSON.parse(local) : [];
-    localStorage.setItem('prismora_invoices', JSON.stringify([newInvoice, ...existing]));
-    logEvent('invoice_new', `Invoice generated for ${invoiceData.customerName}: ${newId}`, invoiceData.assignedTo, newId);
-
-    // Billing by hand now moves the partner's balance, exactly as billing on
-    // delivery does. Without this a manual invoice for a linked distributor
-    // was a bill that never became money owed, so Accounting and the
-    // partner's outstanding figure told two different stories.
-    if (invoiceData.orderId) {
-      await chargePartyForOrder(orders.find(o => o.id === invoiceData.orderId));
-    }
-    return newId;
+  /**
+   * Turn a proforma (raised on delivery, no GST) into a GST tax invoice.
+   *
+   * The same invoice is updated, never a second one made. GST is worked out
+   * line by line at the rate stored on each line at delivery; the partner is
+   * charged the GST in the same transaction. Refused, with the products
+   * named, when a line has no GST rate or HSN code.
+   */
+  const convertInvoice = async (invoiceId) => {
+    const { data, error } = await supabase.rpc('convert_to_tax_invoice', { p_invoice_id: invoiceId });
+    if (error) return { ok: false, error: plainDatabaseError(error, 'convert this invoice') };
+    const invoice = invoices.find(i => i.id === invoiceId);
+    await Promise.all([
+      reloadRows('invoices', setInvoices, 'prismora_invoices', 'id', [invoiceId]),
+      reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [invoice?.distributorId]),
+      reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [invoice?.dealerId]),
+      reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [invoice?.retailerId]),
+    ]);
+    logEvent('invoice_converted', `Proforma ${invoiceId} converted to a GST tax invoice (GST ₹${data?.tax ?? '?'})`, signedInUser?.id, invoiceId);
+    return { ok: true, tax: data?.tax };
   };
 
   /**
@@ -2350,11 +2265,11 @@ export const DataProvider = ({ children }) => {
    * What each payout turns into lives in utils/payouts.js, where it is tested
    * without a database.
    */
-  const bookLinkedExpense = async ({ sourceId, category, amount, description, date, assignedTo }) => {
+  const bookLinkedExpense = async ({ sourceId, category, amount, description, date, assignedTo, createdBy }) => {
     // Both decisions are in utils/payouts.js, with tests: nothing to book is
     // not a failure (free goods cost stock, which inventory accounts for), and
     // the id is derived from the payout so booking twice writes the same row.
-    const row = expenseRowFor({ sourceId, category, amount, description, date, assignedTo });
+    const row = expenseRowFor({ sourceId, category, amount, description, date, assignedTo, createdBy });
     if (!row) return true;
 
     const id = row.id;
@@ -3277,33 +3192,35 @@ export const DataProvider = ({ children }) => {
    */
   const recordOutletOutcome = async (beatId, outletName, outcome, extra = {}) => {
     const beat = beatPlans.find(b => b.id === beatId);
-    if (!beat || !outletName) return;
+    if (!beat || !outletName) return false;
 
     const outletVisits = {
       ...(beat.outletVisits || {}),
       [outletName]: { outcome, at: new Date().toISOString(), ...extra },
     };
 
-    const outlets = Array.isArray(beat.outlets) ? beat.outlets : [];
     // The status has to say what happened, not merely that the route was worked
-    // through. Marking every outlet "could not visit" and calling the beat
-    // Visited overstates coverage and reads as plainly wrong to the rep who
-    // just recorded three closed shops.
-    const done = outlets.filter(o => outletVisits[o]).length;
-    const anyVisited = outlets.some(o => outletVisits[o]?.outcome === 'Visited');
-    const status =
-      done === 0 ? 'Planned'
-        : done < outlets.length ? 'In Progress'
-          : anyVisited ? 'Completed'
-            : 'Not Visited';
+    // through — see beatStatusFor.
+    const status = beatStatusFor(beat.outlets, outletVisits);
 
     setBeatPlans(prev => {
       const next = prev.map(b => b.id === beatId ? { ...b, outletVisits, status } : b);
       localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
       return next;
     });
-    await persist('beat_plans update', supabase.from('beat_plans').update({ outletVisits, status }).eq('id', beatId));
+    const saved = await persist('beat_plans update', supabase.from('beat_plans').update({ outletVisits, status }).eq('id', beatId));
+    if (!saved) {
+      // Put the beat back as it was, so the outlet is not shown done when the
+      // database still has it open.
+      setBeatPlans(prev => {
+        const next = prev.map(b => b.id === beatId ? beat : b);
+        localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
+        return next;
+      });
+      return false;
+    }
     logEvent('outlet_outcome', `${outletName} on beat ${beatId}: ${outcome}${extra.reason ? ` — ${extra.reason}` : ''}`, beat.executiveId, beatId);
+    return true;
   };
 
   const updateBeatPlanStatus = async (id, status) => {
@@ -3367,9 +3284,82 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_visit_reports', JSON.stringify(next));
       return next;
     });
-    await persist('visit_reports insert', supabase.from('visit_reports').insert([blankIdsToNull(newReport)]));
+    const saved = await persist('visit_reports insert', supabase.from('visit_reports').insert([blankIdsToNull(newReport)]));
+    if (!saved) {
+      // The report used to stay on screen after a refusal and the outlet was
+      // marked done against its id, so the beat read "1/1 done" with no report
+      // in the database. Take it back and let the caller say so.
+      setVisitReports(prev => {
+        const next = prev.filter(v => v.id !== newId);
+        localStorage.setItem('prismora_visit_reports', JSON.stringify(next));
+        return next;
+      });
+      return null;
+    }
     logEvent('visit_submitted', `Visit report logged for outlet: ${visitData.outletName}`, visitData.executiveId, newId);
     return newId;
+  };
+
+  // ── SFA Early Check-in Requests ────────────────────────────────────────────
+  /**
+   * Ask to check in on a beat before its date. Made for today only — the
+   * database refuses one for any other day, for someone else's beat, or for a
+   * beat whose date is not still ahead. Returns the saved id, or null.
+   */
+  const requestEarlyCheckin = async (beatId, reason) => {
+    const request = {
+      id: `ECR-${Date.now()}`,
+      beatId,
+      requestedBy: signedInUser?.id,
+      requestedFor: localDateStr(),
+      reason: String(reason || '').trim(),
+      status: 'Pending',
+      createdAt: new Date().toISOString(),
+    };
+    const saved = await persist('beat_checkin_requests insert',
+      supabase.from('beat_checkin_requests').insert([request]), request);
+    if (!saved) return null;
+    setBeatCheckinRequests(prev => {
+      const next = [request, ...prev];
+      localStorage.setItem('prismora_beat_checkin_requests', JSON.stringify(next));
+      return next;
+    });
+    const beat = beatPlans.find(b => b.id === beatId);
+    logEvent('early_checkin_requested', `Early check-in requested for beat ${beatId}${beat ? ` (${beat.date})` : ''}: ${request.reason}`, signedInUser?.id, request.id);
+    return request.id;
+  };
+
+  /** Approve or reject a request. Returns whether the database took it. */
+  const decideEarlyCheckin = async (id, decision, note = '') => {
+    if (!['Approved', 'Rejected'].includes(decision)) return false;
+    const patch = {
+      status: decision,
+      decidedBy: signedInUser?.id,
+      decidedAt: new Date().toISOString(),
+      decisionNote: String(note || '').trim() || null,
+    };
+    // Asked for the row back: an update the policy filters out affects no rows
+    // and reports no error, which would otherwise read as success.
+    let ok = false;
+    try {
+      const { data, error } = await supabase.from('beat_checkin_requests').update(patch).eq('id', id).select('id');
+      if (error) {
+        await persist('beat_checkin_requests update', Promise.resolve({ error }), patch);
+      } else {
+        ok = Array.isArray(data) && data.length === 1;
+      }
+    } catch (err) {
+      console.error('[Prismora] Could not save beat_checkin_requests update:', err?.message || err);
+    }
+    if (!ok) return false;
+    setBeatCheckinRequests(prev => {
+      const next = prev.map(r => r.id === id ? { ...r, ...patch } : r);
+      localStorage.setItem('prismora_beat_checkin_requests', JSON.stringify(next));
+      return next;
+    });
+    const req = beatCheckinRequests.find(r => r.id === id);
+    logEvent('early_checkin_decided', `Early check-in ${decision.toLowerCase()} for beat ${req?.beatId || ''}`, req?.requestedBy, id);
+    return true;
   };
 
   // ── SFA Expense Claims ─────────────────────────────────────────────────────
@@ -3692,10 +3682,11 @@ export const DataProvider = ({ children }) => {
       // Original CRM
       leads, orders, eventLog, products, productCatalog, invoices, expenses,
       schemaError, dismissSchemaError: () => setSchemaError(null),
+      dataStatus, hadCache,
       addLead, updateLead, deleteLead, convertLeadToOrder,
       addOrder, updateOrder, deleteOrder, confirmOrderReceipt, recordOrderReceipt, clearOrderReceipt, splitOrder, deliverPartial,
       addProduct, updateProduct, deleteProduct,
-      addInvoice, updateInvoiceStatus, deleteInvoice,
+      addInvoice, convertInvoice, updateInvoiceStatus, deleteInvoice,
       creditNotes, addCreditNote, deleteCreditNote,
       addExpense, deleteExpense, reconcilePayouts, correctPartyBalance,
       // Phase 1 Enterprise
@@ -3717,6 +3708,7 @@ export const DataProvider = ({ children }) => {
       beatPlans, addBeatPlan, updateBeatPlanStatus, recordOutletOutcome,
       attendance, addAttendanceRecord, updateAttendanceRecord,
       visitReports, addVisitReport,
+      beatCheckinRequests, requestEarlyCheckin, decideEarlyCheckin,
       sfaExpenses, addSFAExpense, updateSFAExpense,
       // Distributor / Dealer / Retailer Portal
       distributorPayments, addDistributorPayment, addDealerPayment, addRetailerPayment,

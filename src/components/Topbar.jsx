@@ -1,13 +1,14 @@
 import { Menu, Bell, User, LogOut, Search, Sun, Moon, Activity, Package, Wallet, MessageSquareWarning, Users } from 'lucide-react';
-import { useAuth, isAdminRole } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
+import useDismiss from '../hooks/useDismiss';
 import { formatDistanceToNow } from 'date-fns';
 
 const Topbar = ({ setIsMobileMenuOpen }) => {
-  const { user, logout, canAccessData } = useAuth();
+  const { user, logout, canAccessData, canAccess } = useAuth();
   const { leads, orders } = useData();
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
   const navigate = useNavigate();
@@ -21,6 +22,11 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
   });
   const [searchResults, setSearchResults] = useState({ leads: [], orders: [] });
   const searchRef = useRef(null);
+  // Each menu closes on a click anywhere else, or on Escape.
+  const notificationsRef = useRef(null);
+  const profileRef = useRef(null);
+  useDismiss([notificationsRef], notificationsOpen, () => setNotificationsOpen(false));
+  useDismiss([profileRef], dropdownOpen, () => setDropdownOpen(false));
 
   useEffect(() => {
     const root = document.documentElement;
@@ -183,7 +189,7 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
             {isDark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
-          <div className="relative">
+          <div className="relative" ref={notificationsRef}>
             <button 
               onClick={() => { setNotificationsOpen(!notificationsOpen); setDropdownOpen(false); }}
               className={`relative transition-colors p-2 rounded-full ${notificationsOpen ? 'bg-brand-primary-lighter text-white' : 'text-slate-400 hover:text-white hover:bg-brand-primary-lighter'}`}
@@ -246,7 +252,7 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
             )}
           </div>
           
-          <div className="relative ml-2">
+          <div className="relative ml-2" ref={profileRef}>
             <button 
               onClick={() => { setDropdownOpen(!dropdownOpen); setNotificationsOpen(false); }}
               className="flex items-center gap-2 focus:outline-none transition-transform hover:scale-105"
@@ -264,11 +270,11 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
                   <p className="text-xs text-slate-500 mt-0.5">{user?.role}</p>
                 </div>
                 <button 
-                  onClick={() => { setDropdownOpen(false); navigate(isAdminRole(user?.role) ? '/settings' : '/profile'); }}
+                  onClick={() => { setDropdownOpen(false); navigate(canAccess('settings') ? '/settings' : '/profile'); }}
                   className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5"
                 >
                   <User size={16} className="text-brand-accent" />
-                  {isAdminRole(user?.role) ? 'Settings' : 'My Profile'}
+                  {canAccess('settings') ? 'Settings' : 'My Profile'}
                 </button>
                 <button 
                   onClick={handleLogout}
