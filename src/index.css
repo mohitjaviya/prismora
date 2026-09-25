@@ -49,6 +49,7 @@
 }
 .light body               { @apply text-slate-800; }
 .light .glass-panel       { @apply bg-white/85 border-pink-100 shadow-md; }
+.light .menu-panel        { @apply bg-white border-pink-100 shadow-lg; }
 .light .glass-input       { @apply bg-white border-pink-200 text-slate-900 placeholder-slate-400; }
 /* Light-theme text ramp. The dark theme reads light-to-dark (slate-200 is the
    brightest, slate-600 the most muted); light theme inverts it, so each step
@@ -169,6 +170,12 @@
   .glass-panel {
     @apply bg-brand-primary-light/80 backdrop-blur-xl border border-white/5 shadow-2xl;
     box-shadow: 0 4px 32px rgba(212,24,108,0.05), 0 1px 0 rgba(212,24,108,0.08) inset;
+  }
+
+  /* A popover menu: the glass look, but opaque, so whatever sits behind it
+     cannot show through the options. */
+  .menu-panel {
+    @apply bg-brand-primary-light border border-white/10 shadow-2xl;
   }
 
   /* The look of every form control.
