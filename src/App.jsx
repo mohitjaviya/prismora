@@ -2,6 +2,7 @@ import { Component, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
+import { dataSessionKey } from './utils/dataSession';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 const DistributorSignup = lazy(() => import('./pages/DistributorSignup'));
@@ -163,18 +164,27 @@ function AppRoutes() {
 import { NotificationProvider } from './context/NotificationContext';
 import { DialogProvider } from './context/DialogContext';
 
+// The data layer is rebuilt for each signed-in user. It used to be mounted once
+// on the login page, fetch as nobody, and keep that empty result after sign-in
+// — blank screens on a new device until a hard refresh. The router sits above
+// it so a sign-in does not lose the page it is navigating to.
+function DataForSession({ children }) {
+  const { user, authReady } = useAuth();
+  return <DataProvider key={dataSessionKey({ authReady, user })}>{children}</DataProvider>;
+}
+
 function App() {
   return (
     <AuthProvider>
-      <DataProvider>
-        <NotificationProvider>
-          <DialogProvider>
-          <Router>
-            <AppRoutes />
-          </Router>
-          </DialogProvider>
-        </NotificationProvider>
-      </DataProvider>
+      <Router>
+        <DataForSession>
+          <NotificationProvider>
+            <DialogProvider>
+              <AppRoutes />
+            </DialogProvider>
+          </NotificationProvider>
+        </DataForSession>
+      </Router>
     </AuthProvider>
   );
 }

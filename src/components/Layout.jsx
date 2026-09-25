@@ -6,11 +6,14 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import { isToday } from 'date-fns';
-import { X, CalendarClock, Sparkles, ShieldX } from 'lucide-react';
+import { X, CalendarClock, Sparkles, ShieldX, Loader2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { isOpenLead } from '../utils/leadStatus';
+import { loadingView } from '../utils/dataSession';
 
 const Layout = () => {
-  const { leads, schemaError, dismissSchemaError } = useData();
+  const { leads, schemaError, dismissSchemaError, dataStatus, hadCache } = useData();
+  const loading = loadingView({ status: dataStatus, hadCache });
   const { user, canAccessData, isAdmin, isSales } = useAuth();
   const [searchParams] = useSearchParams();
   const accessDenied = searchParams.get('denied') === '1';
@@ -43,7 +46,7 @@ const Layout = () => {
         if (!canAccessData(l.assignedTo)) return false;
         if (!l.followUpDate) return false;
         try {
-          return isToday(new Date(l.followUpDate)) && l.status !== 'Converted' && l.status !== 'Lost';
+          return isToday(new Date(l.followUpDate)) && isOpenLead(l);
         } catch(e) { return false; }
       });
       
@@ -76,7 +79,24 @@ const Layout = () => {
       >
         <Topbar setIsMobileMenuOpen={setIsMobileMenuOpen} />
         <main className="p-6 md:p-8 animate-fade-in-up">
-          <Outlet />
+          {/* Nothing cached yet — a new device, or a fresh sign-in. Empty
+              tables here would read as "you have no data", which is what sent
+              people to hard-refresh. */}
+          {loading === 'full' ? (
+            <div role="status" aria-live="polite" className="flex flex-col items-center justify-center gap-3 py-32 text-slate-400">
+              <Loader2 size={28} className="animate-spin text-brand-accent" />
+              <p className="text-sm font-medium">Loading your data…</p>
+            </div>
+          ) : (
+            <>
+              {loading === 'refreshing' && (
+                <div role="status" aria-live="polite" className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-400">
+                  <Loader2 size={12} className="animate-spin" /> Refreshing…
+                </div>
+              )}
+              <Outlet />
+            </>
+          )}
         </main>
       </div>
 
