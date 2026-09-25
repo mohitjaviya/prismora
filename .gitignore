@@ -42,3 +42,7 @@ __pycache__/
 # Data backups. These hold real customer, order and staff records, and this
 # repository is public — a backup committed once stays in the history.
 backup-*.json
+
+# Local database backups (contain data and password hashes)
+backups/
+.env.test-accounts.local
