@@ -77,3 +77,31 @@ export function explainForeignKey(error, row) {
     text: `${column} was "${String(value)}", and there is no such record. Choose it again from the list — the one that was picked has probably been deleted.`,
   };
 }
+
+/**
+ * A database refusal as one plain sentence for the person who clicked.
+ *
+ * The delivery and invoicing functions (039) raise their refusals already
+ * written for people — "Not enough stock to deliver order O6. Tulsi Cough
+ * Syrup 100ml: this order needs 100, 0 in stock." — with code P0001, so those
+ * pass through as they are. Everything else is translated rather than shown as
+ * raw SQL.
+ */
+export function plainDatabaseError(error, action = 'save this') {
+  if (!error) return `Could not ${action}.`;
+  const code = error.code;
+  const message = String(error.message || '');
+  if (code === 'P0001') return message;
+  if (code === '42501' || /row-level security/i.test(message)) {
+    return /needs full Accounting access|cannot (raise|convert) invoices/i.test(message)
+      ? message
+      : `Your role is not allowed to ${action}.`;
+  }
+  if (code === '23505' && /invoices_one_per_order/.test(message)) {
+    return 'That order already has an invoice. An order can have only one.';
+  }
+  if (/Failed to fetch|NetworkError|network/i.test(message)) {
+    return `Could not reach the database to ${action}. Check the connection and try again.`;
+  }
+  return `Could not ${action}: ${message || 'the database refused it.'}`;
+}

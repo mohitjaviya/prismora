@@ -124,3 +124,23 @@ describe('stampCreator', () => {
     expect(row).toEqual({ amount: 500 });
   });
 });
+
+describe('"Booked automatically" is only for rows nobody entered', () => {
+  const users = [{ id: 'U-abhi', name: 'abhi' }];
+
+  // The bug: an approved field expense — typed in by a rep as a claim — read
+  // "Booked automatically" because its id starts EXP-FLD-.
+  it('names the rep on a field expense they claimed', () => {
+    expect(attributionFor({ id: 'EXP-FLD-1789983207672', createdBy: 'U-abhi' }, users))
+      .toEqual({ name: 'abhi', id: 'U-abhi', automatic: false });
+  });
+
+  it('still calls a paid incentive or a settled claim automatic', () => {
+    expect(attributionFor({ id: 'EXP-INC-4' }, users).name).toBe('Booked automatically');
+    expect(attributionFor({ id: 'EXP-CLM-2' }, users).name).toBe('Booked automatically');
+  });
+
+  it('names the person on an expense typed into Accounting', () => {
+    expect(attributionFor({ id: 'EXP-12', createdBy: 'U-abhi' }, users).name).toBe('abhi');
+  });
+});

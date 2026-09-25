@@ -28,6 +28,15 @@ const WHO_COLUMNS = ['createdBy', 'recordedBy', 'receivedBy'];
 /** Rows the system books for itself rather than a person entering them. */
 const AUTOMATIC_PREFIXES = ['EXP-INC-', 'EXP-CLM-', 'EXP-FLD-'];
 
+/**
+ * Booked by the system, but from something a person typed in: an approved
+ * field expense is a rep's claim. These name that person when the row records
+ * them. Incentive and claim payouts never do — reconcilePayouts runs as
+ * whoever pressed the button, and crediting them with entering forty payouts
+ * would be wrong.
+ */
+const PERSON_ENTERED_PREFIXES = ['EXP-FLD-'];
+
 /** The user id credited with entering a record, or null. */
 export function recordedById(record) {
   if (!record) return null;
@@ -41,9 +50,13 @@ export function recordedById(record) {
 /**
  * Whether a record was booked by the system rather than entered by somebody.
  *
- * Settling a claim, paying an incentive and approving a field expense each
- * write an expense row with a derived id, and no person typed it. Showing those
- * as "Unknown" would read as data lost rather than as a thing working properly.
+ * Settling a claim and paying an incentive each write an expense row with a
+ * derived id, and no person typed it. Showing those as "Unknown" would read as
+ * data lost rather than as a thing working properly.
+ *
+ * An approved field expense also gets a derived id (EXP-FLD-), but a rep typed
+ * the claim in, and the row now carries their id. attributionFor names a
+ * recorded person before it falls back to this.
  */
 export function isAutomatic(record) {
   const id = String(record?.id ?? '');
@@ -69,11 +82,18 @@ export function personName(users, id) {
  * caller never has to decide what a blank means.
  */
 export function attributionFor(record, users = []) {
+  // "Booked automatically" is only for rows nobody entered. It used to be
+  // decided by the id's prefix alone, so a field expense a rep typed in as a
+  // claim read as if the system had made it up.
+  const id = recordedById(record);
+  const recordId = String(record?.id ?? '');
+  const personEntered = PERSON_ENTERED_PREFIXES.some(prefix => recordId.startsWith(prefix));
+  if (id && personEntered) return { name: personName(users, id), id, automatic: false };
+
   if (isAutomatic(record)) {
     return { name: 'Booked automatically', id: null, automatic: true };
   }
 
-  const id = recordedById(record);
   if (!id) {
     // Written before there was anywhere to record it. Saying so is more use
     // than an em dash, which reads as a value somebody failed to enter.

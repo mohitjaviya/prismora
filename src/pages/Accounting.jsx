@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { attributionFor } from '../utils/attribution';
 import { Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Wallet, TrendingUp, Plus, Trash2, FileText, CheckCircle, Clock, AlertCircle, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
+import { Wallet, TrendingUp, Plus, Trash2, FileText, Clock, AlertCircle, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
 import { useToast, useConfirm } from '../context/DialogContext';
 import { Button, Card, IconButton, PageHeader } from '../components/ui';
 import { 
@@ -15,6 +15,8 @@ import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, colorAt } from '../utils/chartTh
 import { MONTHS, monthKey } from '../utils/months';
 import { unbookedPayouts, unbookedTotal } from '../utils/payouts';
 import { sendWhatsAppAlert, sendEmailAlert } from '../utils/notificationUtils';
+import { gstForOrder, productsMissingGst, isProforma } from '../utils/billing';
+import InvoicesTable from '../components/accounting/InvoicesTable';
 
 
 const Accounting = () => {
@@ -24,7 +26,7 @@ const Accounting = () => {
    const {
     orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, leads, productCatalog, distributors,
     distributorIncentives, schemeClaims, sfaExpenses, reconcilePayouts,
-    addInvoice, updateInvoiceStatus, deleteInvoice,
+    addInvoice, convertInvoice, updateInvoiceStatus, deleteInvoice,
     addExpense, deleteExpense, creditNotes, addCreditNote, deleteCreditNote,
     grn, vendors, purchaseReturns
   } = useData();
@@ -68,6 +70,12 @@ const Accounting = () => {
   // Some bills go out with GST and some without — a sample, a replacement, or a
   // buyer outside GST. The choice belongs on the invoice, not in the code.
   const [invoiceWithTax, setInvoiceWithTax] = useState(true);
+  // A custom invoice has no product to take a rate from, so the rate is
+  // chosen. It used to default to 18% without asking.
+  const [customGstPct, setCustomGstPct] = useState('');
+  const [invoiceError, setInvoiceError] = useState('');
+  const [isSavingInvoice, setIsSavingInvoice] = useState(false);
+  const [convertingId, setConvertingId] = useState(null);
 
   const [expenseCategory, setExpenseCategory] = useState('Raw Materials');
   const [expenseAmount, setExpenseAmount] = useState('');
@@ -141,16 +149,34 @@ const Accounting = () => {
   const unpaidInvoices = invoices.filter(inv => inv.status === 'Unpaid' || inv.status === 'Overdue');
   const outstandingAmount = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.amount || 0) + Number(inv.tax || 0), 0);
 
-  const previewTaxRate = useMemo(() => {
+  /**
+   * What the Generate Invoice form will charge, worked out the way the
+   * database will: an order line by line at each product's catalogue rate
+   * (the same gstForOrder the rest of the app uses), a custom invoice at the
+   * rate chosen for it. A product with no rate is named, and the invoice is
+   * refused — it used to be taxed at a flat 18%.
+   */
+  const invoicePreview = useMemo(() => {
     if (selectedOrderId) {
       const order = orders.find(o => o.id === selectedOrderId);
-      if (order) {
-        const prod = productCatalog.find(p => p.name === order.product);
-        if (prod) return prod.gstPct / 100;
-      }
+      if (!order) return { base: 0, tax: 0, missing: [], rateLabel: '' };
+      const missing = invoiceWithTax ? productsMissingGst(order, productCatalog) : [];
+      const tax = invoiceWithTax && missing.length === 0 ? gstForOrder(order, productCatalog) : 0;
+      const lines = Array.isArray(order.items) && order.items.length > 0 ? order.items.map(i => i.name) : [order.product];
+      const rates = [...new Set(lines
+        .map(name => productCatalog.find(p => p.name === name)?.gstPct)
+        .filter(r => r !== undefined && r !== null && r !== '')
+        .map(Number))].sort((a, b) => a - b);
+      const rateLabel = rates.length === 1 ? `${rates[0]}%` : rates.length > 1 ? `${rates.join('% + ')}%, line by line` : '';
+      return { base: Number(order.value || 0), tax, missing, rateLabel };
     }
-    return 0.18; // default 18% custom invoice
-  }, [selectedOrderId, orders, productCatalog]);
+    const base = Number(customAmount || 0);
+    const pct = customGstPct === '' ? null : Number(customGstPct);
+    const tax = invoiceWithTax && pct !== null ? Math.round(base * pct / 100) : 0;
+    return { base, tax, missing: [], rateLabel: pct === null ? '' : `${pct}%`, needsRate: invoiceWithTax && pct === null };
+  }, [selectedOrderId, orders, productCatalog, invoiceWithTax, customAmount, customGstPct]);
+
+  const proformaCount = invoices.filter(isProforma).length;
 
   // Route Guard: anyone logged in can access, the view is filtered dynamically.
   //
@@ -254,57 +280,71 @@ const Accounting = () => {
     !invoices.some(inv => inv.orderId === order.id)
   );
 
-  const handleGenerateInvoiceSubmit = (e) => {
+  // The database raises the invoice and charges the partner together
+  // (create_invoice, 039). Nothing is shown or charged until it says the
+  // invoice is saved; a refusal keeps the form open with the reason.
+  const handleGenerateInvoiceSubmit = async (e) => {
     e.preventDefault();
-    
-    let customerName = customCustomerName;
-    let amount = Number(customAmount);
-    let orderId = null;
-    // An invoice raised against an order inherits that order's party, which is
-    // an id and cannot be ambiguous. One typed against a name has no party --
-    // that is a walk-in, and it stays one rather than being guessed into
-    // somebody's ledger.
-    let party = { distributorId: null, dealerId: null, retailerId: null };
+    if (isSavingInvoice) return;
+    setInvoiceError('');
 
-    if (selectedOrderId) {
-      const order = orders.find(o => o.id === selectedOrderId);
-      if (order) {
-        customerName = order.customerName;
-        amount = Number(order.value);
-        orderId = order.id;
-        party = {
-          distributorId: order.distributorId || null,
-          dealerId: order.dealerId || null,
-          retailerId: order.retailerId || null,
-        };
+    if (invoicePreview.missing.length > 0) {
+      setInvoiceError(`No GST rate in the catalogue for ${invoicePreview.missing.join(', ')}. Set it under Product Catalogue, or bill without GST.`);
+      return;
+    }
+    if (!selectedOrderId) {
+      const amount = Number(customAmount);
+      if (!customCustomerName.trim() || !Number.isFinite(amount) || amount <= 0) {
+        setInvoiceError('Enter the customer name and an amount above zero.');
+        return;
+      }
+      if (invoicePreview.needsRate) {
+        setInvoiceError('Choose the GST rate for this invoice.');
+        return;
       }
     }
 
-    if (!customerName || isNaN(amount) || amount <= 0) {
-      toast("Please fill in valid details.", 'error');
-      return;
+    setIsSavingInvoice(true);
+    try {
+      const result = await addInvoice({
+        orderId: selectedOrderId || null,
+        customerName: selectedOrderId ? null : customCustomerName.trim(),
+        amount: selectedOrderId ? null : Number(customAmount),
+        withTax: invoiceWithTax,
+        gstPct: selectedOrderId || !invoiceWithTax ? null : Number(customGstPct),
+        dueDate: invoiceDueDate ? new Date(invoiceDueDate).toISOString() : null,
+      });
+      if (!result.ok) {
+        setInvoiceError(result.error);
+        return;
+      }
+      toast(`Invoice ${result.id} raised.`, 'success');
+      setSelectedOrderId('');
+      setCustomCustomerName('');
+      setCustomAmount('');
+      setCustomGstPct('');
+      setInvoiceDueDate('');
+      setInvoiceWithTax(true);
+      setIsInvoiceModalOpen(false);
+    } finally {
+      setIsSavingInvoice(false);
     }
+  };
 
-    const calculatedTax = invoiceWithTax ? Math.round(amount * previewTaxRate) : 0;
-
-    addInvoice({
-      orderId,
-      customerName,
-      ...party,
-      amount,
-      tax: calculatedTax,
-      status: 'Unpaid',
-      dueDate: invoiceDueDate ? new Date(invoiceDueDate).toISOString() : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days due default
-      assignedTo: user.id
-    });
-
-    // Reset and close
-    setSelectedOrderId('');
-    setCustomCustomerName('');
-    setCustomAmount('');
-    setInvoiceDueDate('');
-    setInvoiceWithTax(true);
-    setIsInvoiceModalOpen(false);
+  const handleConvert = async (inv) => {
+    if (!await confirm({
+      title: `Convert ${inv.id} to a GST tax invoice?`,
+      body: 'GST is added line by line at each product\'s rate stored on the proforma, and the partner is charged it. The same invoice is updated; this cannot be undone here.',
+      confirmLabel: 'Convert',
+    })) return;
+    setConvertingId(inv.id);
+    try {
+      const result = await convertInvoice(inv.id);
+      if (!result.ok) toast(result.error, 'error');
+      else toast(`${inv.id} is now a GST tax invoice (GST ₹${Number(result.tax || 0).toLocaleString('en-IN')}).`, 'success');
+    } finally {
+      setConvertingId(null);
+    }
   };
 
   // Handles adding an expense
@@ -334,6 +374,7 @@ const Accounting = () => {
 
   const filteredInvoices = invoices.filter(inv => {
     if (invoiceFilter === 'All') return true;
+    if (invoiceFilter === 'Proforma') return isProforma(inv);
     return inv.status === invoiceFilter;
   });
 
@@ -366,6 +407,135 @@ const Accounting = () => {
     setCreditForm({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
     setIsCreditModalOpen(false);
   };
+
+  // What can be done with one invoice. Kept here, beside the handlers it
+  // calls; InvoicesTable only lays the row out.
+  const renderInvoiceActions = (inv) => (
+    <div className="flex items-center justify-end gap-0.5">
+      {inv.status !== 'Paid' && (() => {
+        // ── Resolve customer contact details dynamically ──────────────────────
+        const orderObj = inv.orderId ? rawOrders.find(o => o.id === inv.orderId) : null;
+        const leadObj = leads.find(l => l.name?.toLowerCase() === inv.customerName?.toLowerCase() || l.company?.toLowerCase() === inv.customerName?.toLowerCase());
+        const distObj = distributors?.find(d => d.name?.toLowerCase() === inv.customerName?.toLowerCase());
+
+        const phone = orderObj?.phone || leadObj?.phone || distObj?.phone || '9876543210';
+        const email = orderObj?.email || leadObj?.email || distObj?.email || 'accounts@prismora.com';
+        
+        const totalValue = Number(inv.amount || 0) + Number(inv.tax || 0);
+        
+        // Calculate calendar day difference
+        const dueDateObj = new Date(inv.dueDate);
+        const todayObj = new Date();
+        const todayStart = new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate());
+        const dueStart = new Date(dueDateObj.getFullYear(), dueDateObj.getMonth(), dueDateObj.getDate());
+        
+        const msDiff = todayStart.getTime() - dueStart.getTime();
+        const daysDiff = Math.round(msDiff / 86400000); // positive if overdue, negative if upcoming
+        const formattedDate = dueDateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+        
+        let statusText = '';
+        if (daysDiff > 0) {
+          statusText = `is currently overdue by ${daysDiff} day${daysDiff > 1 ? 's' : ''}`;
+        } else if (daysDiff < 0) {
+          const absDiff = Math.abs(daysDiff);
+          statusText = `is due in ${absDiff} day${absDiff > 1 ? 's' : ''} (on ${formattedDate})`;
+        } else {
+          statusText = `is due today`;
+        }
+        
+        const messageText = `Hi ${inv.customerName},\n\nThis is a payment reminder from Prismora. Invoice ${inv.id} for ₹${totalValue.toLocaleString('en-IN')} ${statusText}. Please arrange for payment at your earliest convenience.\n\nThank you,\nPrismora Finance Team`;
+
+        return (
+          <>
+            <button
+              onClick={() => sendWhatsAppAlert(phone, messageText)}
+              className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
+              title={`Send WhatsApp Reminder to ${phone}`}
+            >
+              <MessageSquare size={16} />
+            </button>
+            <button
+              onClick={() => sendEmailAlert(
+                email,
+                `Payment Reminder: Invoice ${inv.id}`,
+                messageText
+              )}
+              className="p-1 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+              title={`Send Email Reminder to ${email}`}
+            >
+              <Mail size={16} />
+            </button>
+          </>
+        );
+      })()}
+      {inv.status !== 'Paid' && (
+        <button
+          onClick={() => updateInvoiceStatus(inv.id, 'Paid')}
+          className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
+          title="Mark as Paid"
+        >
+          <Check size={16} />
+        </button>
+      )}
+      {inv.status === 'Paid' && (
+        <button
+          onClick={async () => {
+            // Marking an invoice paid now also credits the partner, so a
+            // misclick moves money. It has to be undoable.
+            if (await confirm({
+              title: 'Mark this invoice unpaid again?',
+              body: 'The payment recorded against the partner will be removed and their balance put back.',
+              confirmLabel: 'Mark unpaid',
+            })) {
+              updateInvoiceStatus(inv.id, 'Unpaid');
+            }
+          }}
+          className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors"
+          title="Mark as unpaid"
+        >
+          <Undo2 size={16} />
+        </button>
+      )}
+      {inv.status === 'Unpaid' && (
+        <button
+          onClick={() => updateInvoiceStatus(inv.id, 'Overdue')}
+          className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors"
+          title="Mark as Overdue"
+        >
+          <AlertCircle size={16} />
+        </button>
+      )}
+      {isProforma(inv) && canAccess('accounting', 'full') && (
+        <button
+          onClick={() => handleConvert(inv)}
+          disabled={convertingId === inv.id}
+          className="px-2 py-1 text-[10px] font-bold rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 transition-colors disabled:opacity-50 whitespace-nowrap"
+          title="Add GST and make this a tax invoice"
+        >
+          {convertingId === inv.id ? 'Converting…' : 'Convert'}
+        </button>
+      )}
+      <button
+        onClick={() => setPrintInvoice(inv)}
+        className="p-1 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"
+        title={isProforma(inv) ? 'Print proforma' : 'Print GST invoice'}
+      >
+        <Printer size={16} />
+      </button>
+      <button
+        onClick={async () => {
+          if (await confirm({ title: "Delete this invoice?", danger: true, confirmLabel: 'Delete' })) {
+            const result = await deleteInvoice(inv.id);
+            if (!result?.ok) toast(result?.error || 'The invoice could not be deleted.', 'error');
+          }
+        }}
+        className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+        title="Delete Invoice"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -690,191 +860,30 @@ const Accounting = () => {
                   {status}
                 </button>
               ))}
-            </div>
-            <p className="text-xs text-slate-500">{filteredInvoices.length} invoices found</p>
-          </div>
-
-          {/* Invoices Table */}
-          <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                    <th className="p-4">Invoice ID</th>
-                    <th className="p-4">Customer Name</th>
-                    <th className="p-4">Order ID</th>
-                    <th className="p-4">Created Date</th>
-                    <th className="p-4">Due Date</th>
-                    <th className="p-4">Raised by</th>
-                    <th className="p-4 text-right">Base Amt</th>
-                    <th className="p-4 text-right">Tax (GST)</th>
-                    <th className="p-4 text-right">Total</th>
-                    <th className="p-4 text-center">Status</th>
-                    <th className="p-4 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-sm text-slate-300">
-                  {filteredInvoices.length > 0 ? (
-                    filteredInvoices.map((inv) => {
-                      const totalValue = Number(inv.amount || 0) + Number(inv.tax || 0);
-                      return (
-                        <tr key={inv.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                          <td className="p-4 font-bold text-white">{inv.id}</td>
-                          <td className="p-4 font-medium">{inv.customerName}</td>
-                          <td className="p-4 text-slate-400 font-mono text-xs">{inv.orderId || 'Custom'}</td>
-                          <td className="p-4 text-slate-400">{formatDate(inv.createdAt)}</td>
-                          <td className="p-4 text-slate-400">{formatDate(inv.dueDate)}</td>
-                          {/* Most invoices are raised by delivery rather than
-                              by a person, and those read "Not recorded" — which
-                              is the truth: nobody typed them. */}
-                          <td className="p-4 text-slate-400">{attributionFor(inv, users).name}</td>
-                          <td className="p-4 text-right">{formatCurrency(inv.amount)}</td>
-                          <td className="p-4 text-right text-slate-400">{formatCurrency(inv.tax)}</td>
-                          <td className="p-4 text-right font-bold text-white">{formatCurrency(totalValue)}</td>
-                          <td className="p-4 text-center">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
-                              inv.status === 'Paid' 
-                                ? 'bg-emerald-500/10 text-emerald-400' 
-                                : inv.status === 'Unpaid' 
-                                  ? 'bg-amber-500/10 text-amber-400' 
-                                  : 'bg-rose-500/10 text-rose-400'
-                            }`}>
-                              {inv.status === 'Paid' && <CheckCircle size={12} />}
-                              {inv.status === 'Unpaid' && <Clock size={12} />}
-                              {inv.status === 'Overdue' && <AlertCircle size={12} />}
-                              {inv.status}
-                            </span>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              {inv.status !== 'Paid' && (() => {
-                                // ── Resolve customer contact details dynamically ──────────────────────
-                                const orderObj = inv.orderId ? rawOrders.find(o => o.id === inv.orderId) : null;
-                                const leadObj = leads.find(l => l.name?.toLowerCase() === inv.customerName?.toLowerCase() || l.company?.toLowerCase() === inv.customerName?.toLowerCase());
-                                const distObj = distributors?.find(d => d.name?.toLowerCase() === inv.customerName?.toLowerCase());
-
-                                const phone = orderObj?.phone || leadObj?.phone || distObj?.phone || '9876543210';
-                                const email = orderObj?.email || leadObj?.email || distObj?.email || 'accounts@prismora.com';
-                                
-                                const totalValue = Number(inv.amount || 0) + Number(inv.tax || 0);
-                                
-                                // Calculate calendar day difference
-                                const dueDateObj = new Date(inv.dueDate);
-                                const todayObj = new Date();
-                                const todayStart = new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate());
-                                const dueStart = new Date(dueDateObj.getFullYear(), dueDateObj.getMonth(), dueDateObj.getDate());
-                                
-                                const msDiff = todayStart.getTime() - dueStart.getTime();
-                                const daysDiff = Math.round(msDiff / 86400000); // positive if overdue, negative if upcoming
-                                const formattedDate = dueDateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-                                
-                                let statusText = '';
-                                if (daysDiff > 0) {
-                                  statusText = `is currently overdue by ${daysDiff} day${daysDiff > 1 ? 's' : ''}`;
-                                } else if (daysDiff < 0) {
-                                  const absDiff = Math.abs(daysDiff);
-                                  statusText = `is due in ${absDiff} day${absDiff > 1 ? 's' : ''} (on ${formattedDate})`;
-                                } else {
-                                  statusText = `is due today`;
-                                }
-                                
-                                const messageText = `Hi ${inv.customerName},\n\nThis is a payment reminder from Prismora. Invoice ${inv.id} for ₹${totalValue.toLocaleString('en-IN')} ${statusText}. Please arrange for payment at your earliest convenience.\n\nThank you,\nPrismora Finance Team`;
-
-                                return (
-                                  <>
-                                    <button
-                                      onClick={() => sendWhatsAppAlert(phone, messageText)}
-                                      className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
-                                      title={`Send WhatsApp Reminder to ${phone}`}
-                                    >
-                                      <MessageSquare size={16} />
-                                    </button>
-                                    <button
-                                      onClick={() => sendEmailAlert(
-                                        email,
-                                        `Payment Reminder: Invoice ${inv.id}`,
-                                        messageText
-                                      )}
-                                      className="p-1 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
-                                      title={`Send Email Reminder to ${email}`}
-                                    >
-                                      <Mail size={16} />
-                                    </button>
-                                  </>
-                                );
-                              })()}
-                              {inv.status !== 'Paid' && (
-                                <button
-                                  onClick={() => updateInvoiceStatus(inv.id, 'Paid')}
-                                  className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
-                                  title="Mark as Paid"
-                                >
-                                  <Check size={16} />
-                                </button>
-                              )}
-                              {inv.status === 'Paid' && (
-                                <button
-                                  onClick={async () => {
-                                    // Marking an invoice paid now also credits the partner, so a
-                                    // misclick moves money. It has to be undoable.
-                                    if (await confirm({
-                                      title: 'Mark this invoice unpaid again?',
-                                      body: 'The payment recorded against the partner will be removed and their balance put back.',
-                                      confirmLabel: 'Mark unpaid',
-                                    })) {
-                                      updateInvoiceStatus(inv.id, 'Unpaid');
-                                    }
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors"
-                                  title="Mark as unpaid"
-                                >
-                                  <Undo2 size={16} />
-                                </button>
-                              )}
-                              {inv.status === 'Unpaid' && (
-                                <button
-                                  onClick={() => updateInvoiceStatus(inv.id, 'Overdue')}
-                                  className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors"
-                                  title="Mark as Overdue"
-                                >
-                                  <AlertCircle size={16} />
-                                </button>
-                              )}
-                              <button
-                                onClick={() => setPrintInvoice(inv)}
-                                className="p-1 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"
-                                title="Print GST Invoice"
-                              >
-                                <Printer size={16} />
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (await confirm({ title: "Delete this invoice?", danger: true, confirmLabel: 'Delete' })) {
-                                    const result = await deleteInvoice(inv.id);
-                                    if (!result?.ok) toast(result?.error || 'The invoice could not be deleted.', 'error');
-                                  }
-                                }}
-                                className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                                title="Delete Invoice"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan="11" className="p-8 text-center text-slate-500">
-                        No invoices match this filter criteria.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              {/* Proformas raised on delivery carry no GST until Accounts
+                  converts them. The count is always shown so none is forgotten. */}
+              <button
+                onClick={() => setInvoiceFilter('Proforma')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  invoiceFilter === 'Proforma'
+                    ? 'bg-amber-500/15 border-amber-500 text-amber-300'
+                    : proformaCount > 0
+                      ? 'bg-amber-500/5 border-amber-500/30 text-amber-400 hover:text-amber-300'
+                      : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400 hover:text-white'
+                }`}
+              >
+                Proforma drafts not yet converted ({proformaCount})
+              </button>
             </div>
           </div>
+
+          <InvoicesTable
+            invoices={filteredInvoices}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            raisedBy={inv => attributionFor(inv, users).name}
+            renderActions={renderInvoiceActions}
+          />
         </div>
       )}
 
@@ -1204,7 +1213,7 @@ const Accounting = () => {
                           : 'bg-brand-primary-lighter/40 text-slate-400 border-white/5 hover:text-white'
                       }`}
                     >
-                      With GST ({Math.round(previewTaxRate * 100)}%)
+                      With GST{invoicePreview.rateLabel ? ` (${invoicePreview.rateLabel})` : ''}
                     </button>
                     <button
                       type="button"
@@ -1225,14 +1234,37 @@ const Accounting = () => {
                   )}
                 </div>
 
+                {/* A custom invoice has no product to take a rate from. */}
+                {!selectedOrderId && invoiceWithTax && (
+                  <div>
+                    <label htmlFor="accounting-custom-gst" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">GST rate</label>
+                    <select id="accounting-custom-gst" required value={customGstPct} onChange={e => setCustomGstPct(e.target.value)}
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
+                      <option value="" className="bg-brand-primary-light">Choose the rate…</option>
+                      {[0, 5, 12, 18, 28].map(r => <option key={r} value={r} className="bg-brand-primary-light">{r}%</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {invoicePreview.missing.length > 0 && (
+                  <div className="bg-rose-500/10 border border-rose-500/25 rounded-xl p-3">
+                    <p className="text-[11px] text-rose-300 leading-relaxed">
+                      <span className="font-semibold">No GST rate in the catalogue for {invoicePreview.missing.join(', ')}.</span>{' '}
+                      Set it under Product Catalogue before billing with GST — the rate is not guessed.
+                    </p>
+                  </div>
+                )}
+
+                {invoiceError && (
+                  <p role="alert" className="text-sm font-medium text-red-400">⚠️ {invoiceError}</p>
+                )}
+
                 {/* The preview used to appear only when an amount was typed by
                     hand, so choosing an order showed no tax at all before the
                     invoice was raised. It now covers both. */}
                 {(() => {
-                  const selected = selectedOrderId ? orders.find(o => o.id === selectedOrderId) : null;
-                  const base = selected ? Number(selected.value || 0) : Number(customAmount || 0);
+                  const { base, tax } = invoicePreview;
                   if (!base) return null;
-                  const tax = invoiceWithTax ? Math.round(base * previewTaxRate) : 0;
                   return (
                     <div className="bg-brand-primary-lighter/40 rounded-xl p-3 border border-white/5 text-xs text-slate-400 space-y-1">
                       <div className="flex justify-between">
@@ -1240,7 +1272,7 @@ const Accounting = () => {
                         <span className="font-semibold text-slate-200">{formatCurrency(base)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>GST ({invoiceWithTax ? `${Math.round(previewTaxRate * 100)}%` : 'not charged'}):</span>
+                        <span>GST ({!invoiceWithTax ? 'not charged' : invoicePreview.rateLabel || 'rate needed'}):</span>
                         <span className="font-semibold text-slate-200">{formatCurrency(tax)}</span>
                       </div>
                       <div className="border-t border-white/5 pt-1.5 flex justify-between font-bold text-white text-sm">
@@ -1263,9 +1295,10 @@ const Accounting = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm btn-accent rounded-xl"
+                  disabled={isSavingInvoice || invoicePreview.missing.length > 0}
+                  className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-50"
                 >
-                  Create Invoice
+                  {isSavingInvoice ? 'Saving…' : 'Create Invoice'}
                 </button>
               </div>
             </form>
@@ -1389,9 +1422,34 @@ const Accounting = () => {
           const sgst = isIntrastate ? Math.round(gstAmount / 2) : 0;
           const igst = !isIntrastate ? gstAmount : 0;
 
-          const productName = order?.product || 'Personal Care Products Package';
-          const quantity = order?.quantity || 1;
-          const unitPrice = Math.round(baseAmount / quantity);
+          // A proforma is a request for payment, not a tax invoice, and must
+          // never be mistaken for one — on screen or on paper.
+          const proforma = isProforma(printInvoice);
+          const title = proforma ? 'PROFORMA INVOICE' : 'TAX INVOICE';
+
+          // The invoice's own lines where it has them (every invoice since 039),
+          // each with the HSN code and GST rate it was raised with. The old
+          // template printed one line, HSN 33049910 and "9% + 9%" whatever the
+          // products actually were.
+          const storedLines = Array.isArray(printInvoice.lines) ? printInvoice.lines : [];
+          const lines = storedLines.length > 0 ? storedLines : [{
+            name: order?.product || 'Goods as per order',
+            quantity: order?.quantity || 1,
+            unitPrice: Math.round(baseAmount / (order?.quantity || 1)),
+            amount: baseAmount,
+            hsnCode: null,
+            gstPct: null,
+          }];
+          // GST grouped by rate, for the summary.
+          const byRate = {};
+          lines.forEach(l => {
+            if (l.gstPct === null || l.gstPct === undefined) return;
+            const r = Number(l.gstPct);
+            byRate[r] = byRate[r] || { taxable: 0, gst: 0 };
+            byRate[r].taxable += Number(l.amount || 0);
+            byRate[r].gst += Number(l.gstAmount ?? (Number(l.amount || 0) * r / 100));
+          });
+          const rateRows = Object.entries(byRate).sort((a, b) => Number(a[0]) - Number(b[0]));
 
           return (
             <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 overflow-y-auto bg-black/70 backdrop-blur-sm pt-[5vh] print-modal-wrapper">
@@ -1401,7 +1459,7 @@ const Accounting = () => {
                 <div className="bg-slate-100 px-6 py-4 flex justify-between items-center border-b border-slate-200 no-print flex-shrink-0">
                   <span className="font-bold text-slate-700 flex items-center gap-1.5">
                     <FileText size={18} className="text-brand-accent" />
-                    Tax Invoice Preview ({printInvoice.id})
+                    {proforma ? 'Proforma' : 'Tax Invoice'} Preview ({printInvoice.id})
                   </span>
                   <div className="flex gap-2">
                     <button
@@ -1428,10 +1486,20 @@ const Accounting = () => {
                       <p className="text-xs text-slate-500 mt-1 font-medium font-sans">PREMIUM SKIN & BODY CARE</p>
                     </div>
                     <div className="text-right font-sans">
-                      <h2 className="text-xl font-bold tracking-wider text-slate-900">TAX INVOICE</h2>
-                      <p className="text-xs text-slate-500 font-mono mt-0.5">Original for Recipient</p>
+                      <h2 className="text-xl font-bold tracking-wider text-slate-900">{title}</h2>
+                      <p className="text-xs text-slate-500 font-mono mt-0.5">{proforma ? 'Not a tax invoice' : 'Original for Recipient'}</p>
                     </div>
                   </div>
+
+                  {proforma && (
+                    <div className="mt-6 border-2 border-amber-500 rounded-xl px-4 py-3 text-center font-sans">
+                      <p className="text-base font-black tracking-wide text-amber-700">PROFORMA – NOT A TAX INVOICE</p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        No GST is charged on this document and no input tax credit can be claimed against it.
+                        A GST tax invoice will be issued in its place.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Company & Billing Details */}
                   <div className="grid grid-cols-2 gap-8 my-8 text-xs font-sans">
@@ -1448,7 +1516,9 @@ const Accounting = () => {
                     <div className="space-y-1">
                       <p className="font-bold text-slate-400 tracking-wider uppercase">Billed To:</p>
                       <p className="font-bold text-slate-950 text-sm">{printInvoice.customerName}</p>
-                      {order?.companyName && <p>{order.companyName}</p>}
+                      {printInvoice.contactName
+                        ? <p>Attn: {printInvoice.contactName}</p>
+                        : order?.companyName && order.companyName !== printInvoice.customerName && <p>{order.companyName}</p>}
                       <p>{destinationCity}, {destinationState}</p>
                       <p className="font-semibold text-slate-700">Place of Supply: {destinationState}</p>
                     </div>
@@ -1483,18 +1553,22 @@ const Accounting = () => {
                         <th className="p-3 text-center">HSN Code</th>
                         <th className="p-3 text-center">Qty</th>
                         <th className="p-3 text-right">Unit Price</th>
-                        <th className="p-3 text-right">Taxable Value</th>
+                        {!proforma && <th className="p-3 text-center">GST %</th>}
+                        <th className="p-3 text-right">{proforma ? 'Amount' : 'Taxable Value'}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="border-b border-slate-200 text-slate-800">
-                        <td className="p-3">1</td>
-                        <td className="p-3 font-semibold">{productName}</td>
-                        <td className="p-3 text-center font-mono text-[10px]">33049910</td>
-                        <td className="p-3 text-center font-semibold">{quantity}</td>
-                        <td className="p-3 text-right">{formatCurrency(unitPrice)}</td>
-                        <td className="p-3 text-right font-semibold">{formatCurrency(baseAmount)}</td>
-                      </tr>
+                      {lines.map((l, idx) => (
+                        <tr key={idx} className="border-b border-slate-200 text-slate-800">
+                          <td className="p-3">{idx + 1}</td>
+                          <td className="p-3 font-semibold">{l.name}</td>
+                          <td className="p-3 text-center font-mono text-[10px]">{l.hsnCode || '—'}</td>
+                          <td className="p-3 text-center font-semibold">{l.quantity}</td>
+                          <td className="p-3 text-right">{formatCurrency(l.unitPrice)}</td>
+                          {!proforma && <td className="p-3 text-center">{l.gstPct === null || l.gstPct === undefined ? '—' : `${l.gstPct}%`}</td>}
+                          <td className="p-3 text-right font-semibold">{formatCurrency(l.amount)}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
 
@@ -1509,52 +1583,57 @@ const Accounting = () => {
                       
                       <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-1">
                         <p className="font-bold text-slate-950 mb-1 text-[10px] uppercase tracking-wider">GST Tax Summary:</p>
-                        {isIntrastate ? (
-                          <>
-                            <div className="flex justify-between text-slate-600">
-                              <span>CGST @ 9% on {formatCurrency(baseAmount)}</span>
-                              <span>{formatCurrency(cgst)}</span>
+                        {proforma ? (
+                          <p className="text-slate-600">No GST on a proforma. GST is added when it is converted to a tax invoice.</p>
+                        ) : rateRows.length === 0 ? (
+                          <p className="text-slate-600">GST {formatCurrency(gstAmount)}.</p>
+                        ) : rateRows.map(([rate, v]) => (
+                          isIntrastate ? (
+                            <div key={rate} className="flex justify-between text-slate-600">
+                              <span>CGST {Number(rate) / 2}% + SGST {Number(rate) / 2}% on {formatCurrency(v.taxable)}</span>
+                              <span>{formatCurrency(v.gst)}</span>
                             </div>
-                            <div className="flex justify-between text-slate-600">
-                              <span>SGST @ 9% on {formatCurrency(baseAmount)}</span>
-                              <span>{formatCurrency(sgst)}</span>
+                          ) : (
+                            <div key={rate} className="flex justify-between text-slate-600">
+                              <span>IGST {rate}% on {formatCurrency(v.taxable)}</span>
+                              <span>{formatCurrency(v.gst)}</span>
                             </div>
-                          </>
-                        ) : (
-                          <div className="flex justify-between text-slate-600">
-                            <span>IGST @ 18% on {formatCurrency(baseAmount)}</span>
-                            <span>{formatCurrency(igst)}</span>
-                          </div>
-                        )}
+                          )
+                        ))}
                       </div>
                     </div>
 
                     {/* Calculations */}
                     <div className="w-full md:w-80 space-y-2 border-t pt-4 border-slate-100 md:border-t-0 md:pt-0">
                       <div className="flex justify-between text-slate-600">
-                        <span>Total Taxable Value (Base):</span>
+                        <span>{proforma ? 'Subtotal:' : 'Total Taxable Value (Base):'}</span>
                         <span>{formatCurrency(baseAmount)}</span>
                       </div>
-                      {isIntrastate ? (
+                      {proforma ? (
+                        <div className="flex justify-between text-slate-600">
+                          <span>GST:</span>
+                          <span>Not charged (proforma)</span>
+                        </div>
+                      ) : isIntrastate ? (
                         <>
                           <div className="flex justify-between text-slate-600">
-                            <span>Central Tax (CGST 9%):</span>
+                            <span>Central Tax (CGST):</span>
                             <span>{formatCurrency(cgst)}</span>
                           </div>
                           <div className="flex justify-between text-slate-600">
-                            <span>State Tax (SGST 9%):</span>
+                            <span>State Tax (SGST):</span>
                             <span>{formatCurrency(sgst)}</span>
                           </div>
                         </>
                       ) : (
                         <div className="flex justify-between text-slate-600">
-                          <span>Integrated Tax (IGST 18%):</span>
+                          <span>Integrated Tax (IGST):</span>
                           <span>{formatCurrency(igst)}</span>
                         </div>
                       )}
                       <div className="border-t border-slate-200 my-2"></div>
                       <div className="flex justify-between font-black text-slate-950 text-sm">
-                        <span>Grand Total:</span>
+                        <span>{proforma ? 'Amount due (no GST):' : 'Grand Total:'}</span>
                         <span className="text-brand-accent">{formatCurrency(grandTotal)}</span>
                       </div>
                     </div>

@@ -110,6 +110,60 @@ Until it runs, the derived line on those pages says the area is not covered yet
 — the Edge Function derives it server-side either way, so nothing is lost, it
 just is not shown.
 
+## One that sales needs before it can take an order
+
+`034_sales_raise_own_orders.sql` lets the sales roles raise an order at
+Pending — their own, or anyone's for a manager. Until it runs, "Order placed" on
+a field visit and converting a lead are refused for everyone but Admin, and the
+app now says so instead of carrying on with an order that was never saved.
+
+## One that keeps each rep to their own field records
+
+`035_sfa_own_rows.sql` (after 034) limits `visit_reports`, `attendance`,
+`beat_plans` and `sfa_expenses` to the rows a user may see — their own, their
+team's for a manager, everyone's for an admin — for reading and writing both.
+Until it runs, any rep can read, change or delete any other rep's field
+records; the SFA screen hides them, but the API does not.
+
+## One that lets the sales side see the catalogue
+
+`036_products_readable_by_sales.sql` lets anyone with leads, SFA or orders
+access read `products`. Until it runs, Sales, Sales Executive, Accounts and
+Customer Support read an empty catalogue: no products on a lead, a field
+visit, an order or a complaint, and invoices fall back to default GST and HSN.
+
+## One that holds a beat to its date
+
+`037_early_checkin_requests.sql` (after 034 and 035) adds
+`beat_checkin_requests` and the check-in window: a beat is worked on its date;
+earlier needs a request approved the same day by an admin or the rep's manager;
+after it the beat is Missed and read-only. "Today" is India's date
+(`app_today()`). Until it runs, the SFA screen's request button fails and
+nothing stops a visit being logged against any date.
+
+## One that holds every role to its own settings
+
+`038_access_follows_role_settings.sql` (after 037) makes `app_access()` return
+each role's configured access, with Super Admin the one unrestricted role, and
+makes `is_app_admin()` mean Settings = full. Until it runs, every admin-level
+role — Director included — has full access to every module and can manage users
+and roles, whatever its settings say. Admin is configured full everywhere and
+is unaffected.
+
+## One that must go live with its app code — not before
+
+`039_delivery_invoicing_in_database.sql` (after 038) moves delivery into the
+database: marking an order Delivered takes the stock, raises a proforma
+invoice (no GST, each line's catalogue rate stored) and charges the partner in
+one transaction, whoever clicks — Dispatch included. It adds
+`convert_to_tax_invoice()` and `create_invoice()` for Accounts, one invoice per
+order, and order ids from a sequence.
+
+Run it in the same release as the app code that expects it. The older app
+inserts orders with its own id, bills and deducts stock from the browser, and
+does not check whether a delivery was refused; the newer app inserts orders
+without an id and calls the two functions, which do not exist until this runs.
+
 ## One that pairs with an Edge Function
 
 `029_pending_accounts_have_no_access.sql` puts the approval gate in the

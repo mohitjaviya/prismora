@@ -14,6 +14,7 @@ import { useEffect } from 'react';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
 import { canRecordReceipt, describeReceipt, receiptSourceOf, validateReceipt, RECEIPT_EVIDENCE } from '../utils/receipts';
 import { useToast, useConfirm } from '../context/DialogContext';
+import { missingDelivery } from '../utils/delivery';
 
 
 // Which role "owns" moving an order into a given status — enforces the
@@ -173,17 +174,10 @@ const Orders = () => {
       .filter(li => li.name && li.available < li.quantity);
   };
 
-  // An order cannot leave Pending until there is somewhere to send it. Both
-  // parts are needed: a pincode without a street cannot be delivered to, and a
-  // street without a pincode will not route. Cancelled is exempt — an order
-  // being abandoned never ships.
-  const missingDeliveryFor = (target) => {
-    if (target === 'Pending' || target === 'Cancelled') return null;
-    const missing = [];
-    if (!String(formData.deliveryAddress || '').trim()) missing.push('a delivery address');
-    if (!String(formData.deliveryPincode || '').trim()) missing.push('a pincode');
-    return missing.length ? missing.join(' and ') : null;
-  };
+  // An order cannot leave Pending until there is somewhere to send it. The
+  // rule lives in utils/delivery.js; Leads' convert step asks for the same two
+  // fields up front, and this stays as the check for orders that skipped it.
+  const missingDeliveryFor = (target) => missingDelivery(formData, target);
 
   const attemptSetStatus = (targetStatus) => {
     if (!canSetOrderStatus(user?.role, targetStatus)) {
@@ -517,7 +511,7 @@ const Orders = () => {
     setStatusError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     // An order already cleared for fulfilment can have its quantity raised
@@ -554,10 +548,23 @@ const Orders = () => {
       date: formData.date ? new Date(formData.date).toISOString() : new Date().toISOString()
     };
 
+    // Awaited: delivering now takes the stock and raises the invoice in the
+    // database, and is refused whole when it cannot — not enough stock, most
+    // often. The form stays open with the reason instead of closing as though
+    // the order had gone.
     if (editingOrder) {
-      updateOrder(editingOrder.id, dataToSave);
+      const result = await updateOrder(editingOrder.id, dataToSave);
+      if (result && !result.ok) {
+        setStatusError(result.error || 'This change could not be saved.');
+        toast(result.error || 'This change could not be saved.', 'error');
+        return;
+      }
     } else {
-      addOrder(dataToSave);
+      const newId = await addOrder(dataToSave);
+      if (!newId) {
+        toast('The order could not be saved.', 'error');
+        return;
+      }
     }
     closeModal();
   };

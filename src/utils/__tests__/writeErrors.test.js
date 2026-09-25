@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { columnFromConstraint, constraintFromMessage, explainForeignKey } from '../writeErrors';
+import { columnFromConstraint, constraintFromMessage, explainForeignKey, plainDatabaseError } from '../writeErrors';
 
 const FK_ERROR = {
   code: '23503',
@@ -86,5 +86,32 @@ describe('explainForeignKey', () => {
     expect(explainForeignKey(FK_ERROR, { name: 'Lead' })).toBeNull();
     expect(explainForeignKey(FK_ERROR, {})).toBeNull();
     expect(explainForeignKey(FK_ERROR, undefined)).toBeNull();
+  });
+});
+
+describe('plainDatabaseError - what Dispatch and Accounts are told', () => {
+  it('passes a delivery refusal through as written', () => {
+    const err = { code: 'P0001', message: 'Not enough stock to deliver order O6. Tulsi Cough Syrup 100ml: this order needs 100, 0 in stock.' };
+    expect(plainDatabaseError(err, 'deliver this order')).toBe(err.message);
+  });
+
+  it('turns a permission refusal into a sentence', () => {
+    const err = { code: '42501', message: 'new row violates row-level security policy for table "orders"' };
+    expect(plainDatabaseError(err, 'mark this order Delivered')).toBe('Your role is not allowed to mark this order Delivered.');
+  });
+
+  it('keeps the accounting-access explanation from the invoice functions', () => {
+    const err = { code: '42501', message: 'Your role cannot raise invoices. It needs full Accounting access.' };
+    expect(plainDatabaseError(err, 'raise this invoice')).toBe(err.message);
+  });
+
+  it('explains the one-invoice-per-order rule', () => {
+    const err = { code: '23505', message: 'duplicate key value violates unique constraint "invoices_one_per_order"' };
+    expect(plainDatabaseError(err)).toMatch(/already has an invoice/);
+  });
+
+  it('says what could not be done when the reason is unknown', () => {
+    expect(plainDatabaseError({ code: 'XX000', message: 'boom' }, 'deliver this order')).toBe('Could not deliver this order: boom');
+    expect(plainDatabaseError(null, 'deliver this order')).toBe('Could not deliver this order.');
   });
 });

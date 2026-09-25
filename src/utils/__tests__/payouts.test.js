@@ -202,3 +202,18 @@ describe('alreadyBooked', () => {
     expect(alreadyBooked('INC-7')).toBe(false);
   });
 });
+
+describe('a field expense keeps who claimed it', () => {
+  it('records the rep as its author and its owner', () => {
+    const claim = { id: 'EXP-1789983207672', userId: 'U-abhi', amount: 450, description: 'cab', category: 'Travel' };
+    const expense = expenseForFieldExpense(claim);
+    expect(expense.createdBy).toBe('U-abhi');
+    expect(expense.assignedTo).toBe('U-abhi');
+    expect(expenseRowFor(expense)).toMatchObject({ id: 'EXP-FLD-1789983207672', createdBy: 'U-abhi', assignedTo: 'U-abhi' });
+  });
+
+  it('leaves a paid incentive without an author, so it still reads as automatic', () => {
+    const row = expenseRowFor(expenseForIncentive({ id: 'INC-1', incentiveValue: 1000, schemeName: 'Monsoon' }));
+    expect(row.createdBy).toBeUndefined();
+  });
+});

@@ -87,3 +87,43 @@ export function partyForOrder(order) {
 export function balanceAfterCharge(outstanding, owed) {
   return Math.round(((Number(outstanding) || 0) + (Number(owed) || 0)) * 100) / 100;
 }
+
+/**
+ * An order's lines: one per item on an itemised order, one for the whole
+ * order otherwise. The same shape the database gives an invoice's lines.
+ */
+export function orderLines(order) {
+  if (!order) return [];
+  if (Array.isArray(order.items) && order.items.length > 0) {
+    return order.items.map(item => ({
+      name: item?.name,
+      quantity: Number(item?.quantity || 0),
+      amount: Number(item?.total ?? (Number(item?.quantity || 0) * Number(item?.unitPrice || 0))) || 0,
+    }));
+  }
+  return [{ name: order.product, quantity: Number(order.quantity || 0), amount: Number(order.value) || 0 }];
+}
+
+/**
+ * The products on an order with no GST rate in the catalogue.
+ *
+ * gstForOrder taxes an unknown product at nothing, which is right for a
+ * preview and wrong for a GST invoice: the manual form used to fill the gap
+ * with a flat 18%, and a missing rate is now a reason to stop, not to guess.
+ */
+export function productsMissingGst(order, catalogue) {
+  const missing = orderLines(order)
+    .filter(line => {
+      const match = (catalogue || []).find(p => p?.name === line.name);
+      const pct = match ? Number(match.gstPct) : NaN;
+      return !match || match.gstPct === null || match.gstPct === '' || !Number.isFinite(pct);
+    })
+    .map(line => line.name || '(unnamed product)');
+  return [...new Set(missing)];
+}
+
+/** An invoice's type, as shown to people. A proforma is never a tax invoice. */
+export const invoiceTypeLabel = (invoice) =>
+  invoice?.invoiceType === 'auto_draft' ? 'Proforma – not a tax invoice' : 'Tax invoice';
+
+export const isProforma = (invoice) => invoice?.invoiceType === 'auto_draft';

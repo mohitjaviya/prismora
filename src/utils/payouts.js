@@ -69,7 +69,11 @@ export const expenseForFieldExpense = (exp) => {
     amount,
     description: `Field expense${exp.description ? `: ${exp.description}` : ''}`,
     date: exp.date,
-    assignedTo: exp.executiveId || exp.assignedTo || null,
+    // A person typed this claim in, so it is theirs — not "booked
+    // automatically". sfa_expenses keeps that person in userId; reading
+    // executiveId alone left both fields empty on every one.
+    assignedTo: exp.userId || exp.executiveId || exp.assignedTo || null,
+    createdBy: exp.userId || exp.executiveId || null,
   };
 };
 
@@ -115,7 +119,7 @@ export const unbookedTotal = (rows) => (rows || []).reduce((sum, r) => sum + (Nu
  * writes the same row and the primary key refuses the second. Nothing has to
  * remember whether it already ran.
  */
-export const expenseRowFor = ({ sourceId, category, amount, description, date, assignedTo } = {},
+export const expenseRowFor = ({ sourceId, category, amount, description, date, assignedTo, createdBy } = {},
                               now = new Date().toISOString()) => {
   const value = Number(amount) || 0;
   if (value <= 0) return null;
@@ -128,6 +132,9 @@ export const expenseRowFor = ({ sourceId, category, amount, description, date, a
     description,
     date: date || now,
     assignedTo: assignedTo || null,
+    // Who entered what caused it, where a person did (a field expense claim).
+    // Left off otherwise, so "Booked automatically" stays true for payouts.
+    ...(createdBy ? { createdBy } : {}),
     createdAt: now,
   };
 };

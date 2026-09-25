@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   gstRateFor, gstForOrder, amountOwedForOrder, partyForOrder, balanceAfterCharge,
+  orderLines, productsMissingGst, invoiceTypeLabel, isProforma,
 } from '../billing';
 
 const CATALOGUE = [
@@ -153,5 +154,53 @@ describe('balanceAfterCharge', () => {
     expect(balanceAfterCharge(undefined, 500)).toBe(500);
     expect(balanceAfterCharge(500, undefined)).toBe(500);
     expect(balanceAfterCharge('x', 'y')).toBe(0);
+  });
+});
+
+describe('the manual invoice form — no guessed GST (Fix 3)', () => {
+  const catalogue = [
+    { name: 'Tulsi Cough Syrup 100ml', gstPct: 5 },
+    { name: 'Aloevera Skin Gel 150g', gstPct: 12 },
+    { name: 'Unrated Oil', gstPct: null },
+  ];
+  const multi = {
+    product: 'Tulsi Cough Syrup 100ml +1 more item', value: 17000,
+    items: [
+      { name: 'Tulsi Cough Syrup 100ml', quantity: 100, unitPrice: 70, total: 7000 },
+      { name: 'Aloevera Skin Gel 150g', quantity: 100, unitPrice: 100, total: 10000 },
+    ],
+  };
+
+  // The bug: the form looked up "Tulsi Cough Syrup 100ml +1 more item", found
+  // nothing, and charged 18% on the whole order — ₹3,060 instead of ₹1,550.
+  it('taxes a multi-item order line by line, not at a flat 18%', () => {
+    expect(gstForOrder(multi, catalogue)).toBe(350 + 1200);
+    expect(gstForOrder(multi, catalogue)).not.toBe(Math.round(17000 * 0.18));
+  });
+
+  it('names every product with no rate, so the invoice is refused rather than guessed', () => {
+    expect(productsMissingGst(multi, catalogue)).toEqual([]);
+    const withUnrated = { ...multi, items: [...multi.items, { name: 'Unrated Oil', quantity: 1, total: 100 }, { name: 'Not In Catalogue', quantity: 1, total: 50 }] };
+    expect(productsMissingGst(withUnrated, catalogue)).toEqual(['Unrated Oil', 'Not In Catalogue']);
+    expect(productsMissingGst({ product: 'Not In Catalogue', value: 10 }, catalogue)).toEqual(['Not In Catalogue']);
+  });
+
+  it('gives one line per item, or one for a single-product order', () => {
+    expect(orderLines(multi)).toHaveLength(2);
+    expect(orderLines({ product: 'Tulsi Cough Syrup 100ml', quantity: 100, value: 7000 }))
+      .toEqual([{ name: 'Tulsi Cough Syrup 100ml', quantity: 100, amount: 7000 }]);
+  });
+});
+
+describe('invoice type — a proforma is never a tax invoice', () => {
+  it('labels a proforma as not a tax invoice', () => {
+    expect(isProforma({ invoiceType: 'auto_draft' })).toBe(true);
+    expect(invoiceTypeLabel({ invoiceType: 'auto_draft' })).toBe('Proforma – not a tax invoice');
+  });
+
+  it('treats everything else, including invoices from before the type existed, as a tax invoice', () => {
+    expect(invoiceTypeLabel({ invoiceType: 'tax_invoice' })).toBe('Tax invoice');
+    expect(invoiceTypeLabel({})).toBe('Tax invoice');
+    expect(isProforma({})).toBe(false);
   });
 });
