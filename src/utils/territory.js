@@ -129,3 +129,26 @@ export function territoryForPlace(territories, { state, city } = {}) {
     candidates,
   };
 }
+
+/**
+ * What still points at a territory, as "3 beat plans, 1 order".
+ *
+ * Deleting a territory is allowed — every reference to it is ON DELETE SET
+ * NULL — but each of those records then shows "—" where its territory was,
+ * with nothing left to say which it had been. A beat on the SFA screen lost
+ * its territory exactly this way. Empty string when nothing refers to it.
+ */
+export function territoryDependants(territoryId, records = {}) {
+  if (!territoryId) return '';
+  const kinds = [
+    ['beatPlans', 'beat plan'], ['orders', 'order'], ['leads', 'lead'],
+    ['distributors', 'distributor'], ['dealers', 'dealer'], ['retailers', 'retailer'],
+  ];
+  return kinds
+    .map(([key, noun]) => {
+      const n = (records[key] || []).filter(r => r?.territoryId === territoryId).length;
+      return n ? `${n} ${noun}${n === 1 ? '' : 's'}` : '';
+    })
+    .filter(Boolean)
+    .join(', ');
+}

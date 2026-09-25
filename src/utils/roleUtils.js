@@ -9,9 +9,12 @@
  *
  * Two rules keep it safe to edit:
  *
- *   · An admin-level role always has everything. The screen cannot take a
- *     permission away from Super Admin, because there would be nobody left who
- *     could give it back.
+ *   · Super Admin always has everything. The screen cannot take a permission
+ *     away from it, because there would be nobody left who could give it
+ *     back. Every other role — Admin and Director included — has exactly what
+ *     its row says. Admin level used to mean "everything" too, which gave
+ *     Director full access everywhere, Settings included, whatever its row
+ *     said; level now decides whose records a role sees, not what it may do.
  *
  *   · A role's name is its key. `users.role` stores the name, so renaming one
  *     would orphan every account holding it — the same key-and-label split the
@@ -52,15 +55,24 @@ export const MODULE_GROUPS = [...new Set(MODULES.map(m => m.group))];
 export const ACCESS_LEVELS = ['none', 'view', 'full'];
 
 export const ROLE_LEVELS = [
-  { id: 'admin', name: 'Administrator', hint: 'Everything, always. Cannot be restricted.' },
+  { id: 'admin', name: 'Administrator', hint: "Sees everyone's records. What it may do is set per module." },
   { id: 'manager', name: 'Manager', hint: 'Sees their own work and that of the people they manage.' },
   { id: 'sales', name: 'Sales', hint: 'Sees only their own work.' },
   { id: 'staff', name: 'Staff', hint: 'Sees only their own work.' },
   { id: 'partner', name: 'Partner portal', hint: 'A distributor, dealer or retailer signing in to their own account.' },
 ];
 
-/** An admin-level role is never restricted, whatever the table says. */
+/** Admin level: sees everyone's records. Not, by itself, permission to do anything. */
 export const isAdminLevel = (level) => level === 'admin';
+
+/**
+ * The one role that is never restricted, whatever its row says, so there is
+ * always an account that can undo a bad permission change. The database makes
+ * the same exception (038_access_follows_role_settings.sql).
+ */
+export const UNRESTRICTED_ROLE = 'Super Admin';
+export const isUnrestrictedRole = (role) =>
+  Boolean(role) && (role.id === UNRESTRICTED_ROLE || role.name === UNRESTRICTED_ROLE);
 
 /**
  * What a role may do with a module: 'full', 'view' or 'none'.
@@ -73,7 +85,7 @@ export const accessFor = (roles, fallback, roleName, moduleId) => {
   const row = (roles || []).find(r => r.id === roleName || r.name === roleName);
   if (row) {
     if (row.active === false) return 'none';
-    if (isAdminLevel(row.level)) return 'full';
+    if (isUnrestrictedRole(row)) return 'full';
     return row.permissions?.[moduleId] || 'none';
   }
   const fromCode = fallback?.[roleName];
@@ -91,7 +103,7 @@ export const levelFor = (roles, fallbackLevels, roleName) => {
 /** How many modules a role can reach at all — the count shown on its card. */
 export const grantedCount = (role) => {
   if (!role) return 0;
-  if (isAdminLevel(role.level)) return MODULES.length;
+  if (isUnrestrictedRole(role)) return MODULES.length;
   return Object.values(role.permissions || {}).filter(v => v && v !== 'none').length;
 };
 
@@ -104,8 +116,8 @@ export const grantedCount = (role) => {
  */
 export const rejectPermissionChange = ({ role, moduleId, access, editingOwnRole }) => {
   if (!role) return 'That role no longer exists.';
-  if (isAdminLevel(role.level)) {
-    return 'An administrator role always has everything. Change its level first if that is not what you want.';
+  if (isUnrestrictedRole(role)) {
+    return 'Super Admin always has everything, so there is always someone who can undo a change here.';
   }
   if (editingOwnRole && moduleId === 'settings' && access !== 'full') {
     return 'This is your own role. Taking away Settings would lock you out of this screen, and nobody could give it back.';

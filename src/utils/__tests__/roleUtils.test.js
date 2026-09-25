@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MODULES, accessFor, levelFor, grantedCount, isAdminLevel, rejectPermissionChange,
+  MODULES, accessFor, levelFor, grantedCount, isAdminLevel, isUnrestrictedRole, rejectPermissionChange,
   fallbackRoles, roleSummary, peopleByRole, holdersOf, orphanedRoles,
 } from '../roleUtils';
 
@@ -35,10 +35,32 @@ describe('accessFor — what a role may do', () => {
     expect(accessFor([], FALLBACK, 'Invented Role', 'orders')).toBe('none');
   });
 
-  it('gives an admin-level role everything, whatever its stored permissions say', () => {
-    const stripped = role({ id: 'Super Admin', level: 'admin', permissions: { orders: 'none' } });
+  it('gives Super Admin everything, whatever its stored permissions say', () => {
+    const stripped = role({ id: 'Super Admin', name: 'Super Admin', level: 'admin', permissions: { orders: 'none' } });
     expect(accessFor([stripped], FALLBACK, 'Super Admin', 'orders')).toBe('full');
     expect(accessFor([stripped], FALLBACK, 'Super Admin', 'anything-at-all')).toBe('full');
+  });
+
+  // The bug: admin level meant "everything", so Director -- admin level, but
+  // set to view-only in most modules and none in Settings -- got full access
+  // everywhere, and could manage users and roles.
+  it('holds Director to its settings, admin level or not', () => {
+    const director = role({
+      id: 'Director', name: 'Director', level: 'admin',
+      permissions: { orders: 'view', sfa: 'view', settings: 'none', accounting: 'full' },
+    });
+    expect(accessFor([director], FALLBACK, 'Director', 'orders')).toBe('view');
+    expect(accessFor([director], FALLBACK, 'Director', 'sfa')).toBe('view');
+    expect(accessFor([director], FALLBACK, 'Director', 'settings')).toBe('none');
+    expect(accessFor([director], FALLBACK, 'Director', 'accounting')).toBe('full');
+    expect(accessFor([director], FALLBACK, 'Director', 'ledger')).toBe('none');
+  });
+
+  it('holds Admin to its settings too', () => {
+    const admin = role({ id: 'Admin', name: 'Admin', level: 'admin', permissions: { orders: 'full', stock: 'view' } });
+    expect(accessFor([admin], FALLBACK, 'Admin', 'orders')).toBe('full');
+    expect(accessFor([admin], FALLBACK, 'Admin', 'stock')).toBe('view');
+    expect(accessFor([admin], FALLBACK, 'Admin', 'ledger')).toBe('none');
   });
 
   it('gives a switched-off role nothing', () => {
@@ -65,8 +87,12 @@ describe('grantedCount', () => {
     expect(grantedCount(role({ permissions: { orders: 'view', leads: 'full', sfa: 'none' } }))).toBe(2);
   });
 
-  it('counts everything for an admin role', () => {
-    expect(grantedCount(role({ level: 'admin', permissions: {} }))).toBe(MODULES.length);
+  it('counts everything for Super Admin', () => {
+    expect(grantedCount(role({ id: 'Super Admin', name: 'Super Admin', level: 'admin', permissions: {} }))).toBe(MODULES.length);
+  });
+
+  it('counts what another admin-level role is actually granted', () => {
+    expect(grantedCount(role({ id: 'Director', name: 'Director', level: 'admin', permissions: { orders: 'view', settings: 'none' } }))).toBe(1);
   });
 
   it('copes with a role that has no permissions object', () => {
@@ -76,9 +102,14 @@ describe('grantedCount', () => {
 });
 
 describe('rejectPermissionChange — the two ways to lock yourself out', () => {
-  it('refuses to restrict an administrator role', () => {
-    const msg = rejectPermissionChange({ role: role({ level: 'admin' }), moduleId: 'orders', access: 'none' });
-    expect(msg).toMatch(/administrator role always has everything/i);
+  it('refuses to restrict Super Admin', () => {
+    const msg = rejectPermissionChange({ role: role({ id: 'Super Admin', name: 'Super Admin', level: 'admin' }), moduleId: 'orders', access: 'none' });
+    expect(msg).toMatch(/Super Admin always has everything/i);
+  });
+
+  it('lets another admin-level role be set like any other', () => {
+    const director = role({ id: 'Director', name: 'Director', level: 'admin' });
+    expect(rejectPermissionChange({ role: director, moduleId: 'orders', access: 'view' })).toBeNull();
   });
 
   it('refuses to take Settings from your own role', () => {
@@ -113,9 +144,16 @@ describe('the module list', () => {
     expect(MODULES.every(m => m.group)).toBe(true);
   });
 
-  it('knows admin is the only unrestricted level', () => {
+  it('knows admin level, which decides whose records a role sees', () => {
     expect(isAdminLevel('admin')).toBe(true);
     expect(isAdminLevel('manager')).toBe(false);
+  });
+
+  it('treats only Super Admin as unrestricted', () => {
+    expect(isUnrestrictedRole({ id: 'Super Admin', level: 'admin' })).toBe(true);
+    expect(isUnrestrictedRole({ id: 'Admin', level: 'admin' })).toBe(false);
+    expect(isUnrestrictedRole({ id: 'Director', level: 'admin' })).toBe(false);
+    expect(isUnrestrictedRole(null)).toBe(false);
   });
 });
 

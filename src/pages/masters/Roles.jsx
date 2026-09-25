@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { PageHeader, Button, StatCard, SearchInput } from '../../components/ui';
 import {
-  MODULES, MODULE_GROUPS, ROLE_LEVELS, grantedCount, isAdminLevel, rejectPermissionChange,
+  MODULES, MODULE_GROUPS, ROLE_LEVELS, grantedCount, isUnrestrictedRole, rejectPermissionChange,
   fallbackRoles, roleSummary, peopleByRole, holdersOf, orphanedRoles,
 } from '../../utils/roleUtils';
 
@@ -18,8 +18,9 @@ import {
  * deployment.
  *
  * Two things the screen will not let you do, because there is no way back from
- * either inside the app: restrict an administrator role, and take Settings away
- * from your own role. Both are refused in roleUtils as well, so neither depends
+ * either inside the app: restrict Super Admin, and take Settings away from your
+ * own role. Every other role, Admin and Director included, is exactly what its
+ * row says — here and in the database. Both are refused in roleUtils as well, so neither depends
  * on the screen being the only way in.
  */
 
@@ -336,7 +337,7 @@ export default function Roles() {
   }
 
   // ── One role ───────────────────────────────────────────────────────────
-  const locked = isAdminLevel(role.level) || readOnly;
+  const locked = isUnrestrictedRole(role) || readOnly;
   const summary = roleSummary(role);
   const holders = holdersOf(byRole, role.id);
 
@@ -403,7 +404,7 @@ export default function Roles() {
             <span>
               {readOnly
                 ? 'This is the matrix built into the app, and it is what is being enforced right now. Run CREATE_ROLES.sql and this same role becomes editable here.'
-                : 'An administrator role has everything, and cannot be restricted — take a permission away and there would be nobody left who could give it back. Change its level below if that is not what you want.'}
+                : 'Super Admin has everything, and cannot be restricted — take a permission away and there could be nobody left who could give it back.'}
             </span>
           </p>
         </div>
@@ -448,14 +449,13 @@ export default function Roles() {
             className="w-full bg-brand-primary-lighter/30 border border-white/5 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-accent/40 disabled:opacity-40"
           >
             <option value="">Choose a role…</option>
-            {shown.filter(r => r.id !== role.id && !isAdminLevel(r.level)).map(r => (
+            {shown.filter(r => r.id !== role.id && !isUnrestrictedRole(r)).map(r => (
               <option key={r.id} value={r.id}>{r.name} — {grantedCount(r)} of {MODULES.length}</option>
             ))}
           </select>
           <p className="text-[11px] text-slate-500 mt-2">
-            Replaces all {MODULES.length} permissions below with that role&rsquo;s. Administrator roles are not
-            offered: copying one would grant everything without making this an administrator, which is not what
-            it would look like afterwards.
+            Replaces all {MODULES.length} permissions below with that role&rsquo;s. Super Admin is not offered: its
+            row is not what it is granted, so copying it would not copy what it can do.
           </p>
         </div>
       )}

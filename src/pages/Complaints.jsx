@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import { useAuth, isAdminRole } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { MessageSquareWarning, Plus, Trash2, X, Download, CheckCircle, Clock, AlertTriangle, Eye, RotateCcw } from 'lucide-react';
 import { useConfirm } from '../context/DialogContext';
@@ -171,7 +171,7 @@ export default function Complaints() {
             <IconButton icon={RotateCcw} title="Update status" size="sm"
               onClick={e => { e.stopPropagation(); openResolve(c); }} />
           )}
-          {isAdminRole(user?.role) && (
+          {canManage && (
             <IconButton icon={Trash2} title="Delete complaint" size="sm" tone="danger"
               onClick={async e => { e.stopPropagation(); if (await confirm({ title: 'Delete complaint?', danger: true, confirmLabel: 'Delete' })) deleteComplaint(c.id); }} />
           )}

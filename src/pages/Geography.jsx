@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useConfirm } from '../context/DialogContext';
 import { Button, PageHeader } from '../components/ui';
-import { territoryFor } from '../utils/territory';
+import { territoryFor, territoryDependants } from '../utils/territory';
 import { createPortal } from 'react-dom';
 
 const INDIAN_STATES = [
@@ -27,9 +27,12 @@ const BLANK_TERRITORY_FORM = { name: '', state: 'Gujarat', districts: [], execut
 const norm = (s) => String(s || '').trim().toLowerCase();
 
 export default function Geography() {
-  const { orders, territories, addTerritory, updateTerritory, deleteTerritory } = useData();
+  const { orders, territories, addTerritory, updateTerritory, deleteTerritory, beatPlans, leads, distributors, dealers, retailers } = useData();
   const confirm = useConfirm();
-  const { users: allUsers, canAccessData, isAdmin } = useAuth();
+  const { users: allUsers, canAccessData, canAccess } = useAuth();
+  // Follows the role's Geography setting, not its level: Director is admin
+  // level but set to view-only here.
+  const canEditTerritories = canAccess('geography', 'full');
   
   const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'territories'
   const [sortConfig, setSortConfig] = useState({ key: 'revenue', direction: 'desc' });
@@ -260,7 +263,7 @@ export default function Geography() {
         icon={Globe}
         title="Geography & Territories"
         subtitle="Manage corporate distribution sales territories and view performance distribution."
-        actions={activeTab === 'territories' && isAdmin && (
+        actions={activeTab === 'territories' && canEditTerritories && (
           <Button variant="primary" icon={Plus} onClick={handleOpenAdd}>Add Territory</Button>
         )}
       />
@@ -564,7 +567,7 @@ export default function Geography() {
                           })()}
                         </td>
                         <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
-                          {isAdmin ? (
+                          {canEditTerritories ? (
                             <div className="flex items-center justify-end gap-1.5">
                               <button 
                                 onClick={() => handleOpenEdit(t)} 
@@ -573,7 +576,13 @@ export default function Geography() {
                                 <Edit2 size={14} />
                               </button>
                               <button 
-                                onClick={async () => { if (await confirm({ title: 'Delete territory?', danger: true, confirmLabel: 'Delete' })) deleteTerritory(t.id); }}
+                                onClick={async () => {
+                                  const linked = territoryDependants(t.id, { beatPlans, orders, leads, distributors, dealers, retailers });
+                                  const body = linked
+                                    ? `${linked} will lose their territory and show "—" in its place. This cannot be undone.`
+                                    : 'Nothing refers to this territory.';
+                                  if (await confirm({ title: `Delete ${t.name}?`, body, danger: true, confirmLabel: 'Delete' })) deleteTerritory(t.id);
+                                }}
                                 className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                               >
                                 <Trash2 size={14} />

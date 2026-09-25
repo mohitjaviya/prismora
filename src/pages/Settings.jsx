@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth, isAdminRole } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { Settings as SettingsIcon, Lock, History } from 'lucide-react';
 import { PageHeader, DataTable, Badge } from '../components/ui';
@@ -16,7 +16,7 @@ const passwordPolicyError = (pw) => {
 };
 
 export default function Settings() {
-  const { user, updateUser, verifyCurrentPassword } = useAuth();
+  const { user, updateUser, verifyCurrentPassword, canAccess } = useAuth();
   const { eventLog } = useData();
 
   const [activeTab, setActiveTab] = useState('audit'); // 'audit' | 'password'
@@ -28,7 +28,9 @@ export default function Settings() {
   // Below the hooks on purpose: a guard that returns above a useState makes
   // every hook after it conditional, so a role change mid-session would
   // crash the page rather than redirect it.
-  if (!isAdminRole(user?.role)) return <Navigate to="/" replace />;
+  // Granted by the role's Settings permission, not by being admin level --
+  // Director is admin level and has no Settings access.
+  if (!canAccess('settings')) return <Navigate to="/" replace />;
 
   // ── Password Handlers ────────────────────────────────────────────────────
   const handlePasswordSubmit = async (e) => {
