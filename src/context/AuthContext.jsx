@@ -3,6 +3,7 @@ import { supabase, isConfigured, missingEnvVars } from '../supabaseClient';
 import { accessFor, levelFor } from '../utils/roleUtils';
 import { checkEmailTaken } from '../utils/signupChecks';
 import { signupPayload, signupOutcome } from '../utils/partnerSignup';
+import { canSeeOwner } from '../utils/sfaVisibility';
 
 export const USER_ROLES = [
   'Super Admin',
@@ -680,14 +681,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   // RBAC Helper: Check if current user can see data assigned to `ownerId`
-  const canAccessData = (ownerId) => {
-    if (!user) return false;
-    if (isAdminRole(user.role)) return true;
-    if (isManagerRole(user.role)) {
-      return user.id === ownerId || (user.managedUsers && user.managedUsers.includes(ownerId));
-    }
-    return user.id === ownerId; // Sales and other roles can only see their own
-  };
+  // Admins see everyone's, a manager their own and their team's, everyone
+  // else their own. The rule itself lives in sfaVisibility so it can be tested.
+  const canAccessData = (ownerId) => canSeeOwner(user, user ? roleLevel(user.role) : null, ownerId);
 
   // RBAC Helper: Returns list of users current user can assign data to
   const getAssignableUsers = () => {
