@@ -8,6 +8,7 @@ import {
 import { PageHeader } from '../components/ui';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
+import { isConvertedLead } from '../utils/leadStatus';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -166,7 +167,7 @@ export default function DirectorDashboard() {
     return (users || []).filter(u => isSalesRole(u.role)).map(u => {
       const uOrders = liveOrders.filter(o => o.assignedTo === u.id);
       const uLeads = leads.filter(l => l.assignedTo === u.id);
-      const converted = uLeads.filter(l => l.status === 'Converted').length;
+      const converted = uLeads.filter(isConvertedLead).length;
       return {
         name: u.name,
         revenue: uOrders.reduce((s, o) => s + Number(o.value || 0), 0),

@@ -4,6 +4,8 @@
  * score intents -> extract entities -> resolve against live data -> render answer.
  */
 
+import { isConvertedLead, isOpenLead } from './leadStatus';
+
 // ── 1. Text normalization & tokenization ────────────────────────────────────
 
 const STOPWORDS = new Set([
@@ -389,7 +391,7 @@ const HANDLERS = {
       const u = d.users.find(x => x.name === e.person);
       const myOrders = d.liveOrders.filter(o => o.assignedTo === u?.id);
       const myLeads = d.leads.filter(l => l.assignedTo === u?.id);
-      const conv = myLeads.filter(l => l.status === 'Converted').length;
+      const conv = myLeads.filter(isConvertedLead).length;
       return [
         `**${e.person}** · ${u?.role || 'Team member'}`,
         ``,
@@ -468,8 +470,8 @@ const HANDLERS = {
     if (!filters.length) {
       const byStatus = {};
       d.leads.forEach(l => { byStatus[l.status || 'Unknown'] = (byStatus[l.status || 'Unknown'] || 0) + 1; });
-      const pipeline = d.leads.filter(l => !['Converted', 'Lost'].includes(l.status)).reduce((s, l) => s + Number(l.dealValue || 0), 0);
-      const conv = byStatus['Converted'] || 0;
+      const pipeline = d.leads.filter(isOpenLead).reduce((s, l) => s + Number(l.dealValue || 0), 0);
+      const conv = d.leads.filter(isConvertedLead).length;
       return [
         `**Lead pipeline — ${d.leads.length} total**`,
         ``,
@@ -776,7 +778,7 @@ const fallback = (d, concepts) => {
     ``,
     `Here's a quick snapshot instead:`,
     `* Revenue: **${inr(d.totalRevenue)}** across **${d.liveOrders.length}** orders`,
-    `* Open leads: **${d.leads.filter(l => !['Converted', 'Lost'].includes(l.status)).length}**`,
+    `* Open leads: **${d.leads.filter(isOpenLead).length}**`,
     `* Outstanding: **${inr(d.invoices.filter(i => i.status !== 'Paid').reduce((s, i) => s + Number(i.amount || 0) + Number(i.tax || 0), 0))}**`,
     ``,
     `Try asking about **revenue**, **orders**, **leads**, **profit**, **stock**, **forecast**, or **churn risk** — or type *help*.`,

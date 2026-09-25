@@ -5,6 +5,7 @@ import { useAuth, isSalesRole } from '../context/AuthContext';
 import { BarChart3, Download, TrendingUp, Package2, Wallet, Users, Star, ChevronRight } from 'lucide-react';
 import { Button, PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
+import { isConvertedLead } from '../utils/leadStatus';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -293,7 +294,7 @@ export default function Reports() {
             const src = l.leadSource || 'Unknown';
             if (!bySource[src]) bySource[src] = { source: src, count: 0, converted: 0 };
             bySource[src].count += 1;
-            if (l.status === 'Converted') bySource[src].converted += 1;
+            if (isConvertedLead(l)) bySource[src].converted += 1;
           });
           return Object.values(bySource).map(s => ({ ...s, convRate: s.count ? ((s.converted / s.count) * 100).toFixed(1) + '%' : '0%' })).sort((a, b) => b.count - a.count);
         },
@@ -327,7 +328,7 @@ export default function Reports() {
           return (teamUsers || []).filter(u => isSalesRole(u.role) || u.role === 'Sales Manager' || u.role === 'Manager').map(u => {
             const userOrders = orders.filter(o => o.assignedTo === u.id && o.status !== 'Cancelled' && inRange(o.date || o.createdAt));
             const userLeads = leads.filter(l => l.assignedTo === u.id && inRange(l.createdAt));
-            const converted = userLeads.filter(l => l.status === 'Converted').length;
+            const converted = userLeads.filter(isConvertedLead).length;
             return {
               name: u.name, role: u.role,
               revenue: userOrders.reduce((s, o) => s + (o.value || 0), 0),

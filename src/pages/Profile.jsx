@@ -3,6 +3,7 @@ import { useAuth, isAdminRole, isManagerRole, isSalesRole } from '../context/Aut
 import { useData } from '../context/DataContext';
 import { User, Lock, Users, Shield, Eye, EyeOff, TrendingUp, ShoppingBag, Target, Star, Activity, Package } from 'lucide-react';
 import { PageHeader } from '../components/ui';
+import { isConvertedLead } from '../utils/leadStatus';
 
 const Profile = () => {
   const { user, users: allUsers, updateUser, verifyCurrentPassword } = useAuth();
@@ -29,7 +30,7 @@ const Profile = () => {
       : invoices.filter(inv => inv.assignedTo === user?.id);
 
     const totalRevenue = myOrders.reduce((s, o) => s + (o.value || 0), 0);
-    const converted = myLeads.filter(l => l.status === 'Converted').length;
+    const converted = myLeads.filter(isConvertedLead).length;
     const conversionRate = myLeads.length > 0
       ? Math.round((converted / myLeads.length) * 100)
       : 0;

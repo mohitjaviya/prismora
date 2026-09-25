@@ -6,6 +6,7 @@ import { PageHeader, StatCard, EmptyState } from '../components/ui';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts';
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
 import { MONTHS, monthKey } from '../utils/months';
+import { isOpenLead, conversionRate as rateOf } from '../utils/leadStatus';
 import DistributorDashboard from './DistributorDashboard';
 import DealerDashboard from './DealerDashboard';
 import RetailerDashboard from './RetailerDashboard';
@@ -33,11 +34,10 @@ const Dashboard = () => {
   const visibleOrders = orders.filter(o => canAccessData(o.assignedTo));
 
   const totalLeads = visibleLeads.length;
-  const convertedLeads = visibleLeads.filter(l => l.status === 'Converted').length;
-  const conversionRate = totalLeads ? ((convertedLeads / totalLeads) * 100).toFixed(1) : 0;
+  const conversionRate = rateOf(visibleLeads).toFixed(1);
   
   const pipelineValue = visibleLeads
-    .filter(l => l.status !== 'Lost' && l.status !== 'Converted')
+    .filter(isOpenLead)
     .reduce((sum, lead) => sum + (lead.dealValue || 0), 0);
 
   const totalRevenue = visibleOrders
@@ -81,18 +81,16 @@ const Dashboard = () => {
     : (currentMonthLeads.length > 0 ? 100 : 0);
 
   // Conversion Rate MoM (absolute point difference)
-  const currentMonthConv = currentMonthLeads.length 
-    ? (currentMonthLeads.filter(l => l.status === 'Converted').length / currentMonthLeads.length) * 100 : 0;
-  const lastMonthConv = lastMonthLeads.length 
-    ? (lastMonthLeads.filter(l => l.status === 'Converted').length / lastMonthLeads.length) * 100 : 0;
+  const currentMonthConv = rateOf(currentMonthLeads);
+  const lastMonthConv = rateOf(lastMonthLeads);
   const convMoM = Math.round(currentMonthConv - lastMonthConv);
 
   // Pipeline MoM
   const currentPipeline = currentMonthLeads
-    .filter(l => l.status !== 'Lost' && l.status !== 'Converted')
+    .filter(isOpenLead)
     .reduce((sum, lead) => sum + (lead.dealValue || 0), 0);
   const lastPipeline = lastMonthLeads
-    .filter(l => l.status !== 'Lost' && l.status !== 'Converted')
+    .filter(isOpenLead)
     .reduce((sum, lead) => sum + (lead.dealValue || 0), 0);
   const pipelineMoM = lastPipeline 
     ? Math.round(((currentPipeline - lastPipeline) / lastPipeline) * 100) 

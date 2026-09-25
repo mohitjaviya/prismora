@@ -5,6 +5,7 @@ import {
   Target, Brain, Gauge, ArrowRight, Clock
 } from 'lucide-react';
 import { PageHeader } from '../components/ui';
+import { isOpenLead } from '../utils/leadStatus';
 
 
 const compact = (n) => {
@@ -130,7 +131,7 @@ export default function AIInsights() {
 
   // ── Smart lead prioritization ─────────────────────────────────────────────
   const priorityLeads = useMemo(() => {
-    const open = leads.filter(l => !['Converted', 'Lost', 'Active', 'First Order'].includes(l.status));
+    const open = leads.filter(isOpenLead);
     const maxVal = Math.max(...open.map(l => Number(l.dealValue || 0)), 1);
     return open.map(l => {
       const valScore = (Number(l.dealValue || 0) / maxVal) * 40;
