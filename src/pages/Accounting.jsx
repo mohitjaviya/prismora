@@ -17,6 +17,8 @@ import { unbookedPayouts, unbookedTotal } from '../utils/payouts';
 import { sendWhatsAppAlert, sendEmailAlert } from '../utils/notificationUtils';
 import { gstForOrder, productsMissingGst, isProforma } from '../utils/billing';
 import InvoicesTable from '../components/accounting/InvoicesTable';
+import ExpensesTable from '../components/accounting/ExpensesTable';
+import CreditNotesTable from '../components/accounting/CreditNotesTable';
 
 
 const Accounting = () => {
@@ -889,123 +891,38 @@ const Accounting = () => {
 
       {activeTab === 'expenses' && (
         <div className="space-y-6">
-          {/* Expenses Table */}
-          <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                    <th className="p-4">Expense ID</th>
-                    <th className="p-4">Date</th>
-                    <th className="p-4">Category</th>
-                    <th className="p-4">Description</th>
-                    <th className="p-4">Recorded by</th>
-                    <th className="p-4 text-right">Amount</th>
-                    <th className="p-4 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-sm text-slate-300">
-                  {expenses.length > 0 ? (
-                    expenses.map((exp) => (
-                      <tr key={exp.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                        <td className="p-4 font-bold text-white">{exp.id}</td>
-                        <td className="p-4 text-slate-400">{formatDate(exp.date)}</td>
-                        <td className="p-4 font-semibold text-brand-accent">{exp.category}</td>
-                        <td className="p-4 text-slate-300 italic max-w-xs truncate" title={exp.description}>
-                          {exp.description || 'No description provided'}
-                        </td>
-                        <td className="p-4">
-                          {/* An expense the system booked itself — a settled
-                              claim, a paid incentive — has no author, and
-                              saying "Not recorded" about one would read as
-                              data lost rather than as this working. */}
-                          {(() => {
-                            const who = attributionFor(exp, users);
-                            return (
-                              <span className={who.automatic ? 'text-slate-500 italic'
-                                : who.id ? 'text-slate-300' : 'text-slate-500 italic'}>
-                                {who.name}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td className="p-4 text-right font-bold text-white">{formatCurrency(exp.amount)}</td>
-                        <td className="p-4 text-center">
-                          <button
-                            onClick={async () => {
-                              if (await confirm({ title: "Delete this expense record?", danger: true, confirmLabel: 'Delete' })) deleteExpense(exp.id);
-                            }}
-                            className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                            title="Delete Expense"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="7" className="p-8 text-center text-slate-500">
-                        No expenses logged yet. Click "Log Expense" to begin.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <ExpensesTable
+            expenses={expenses}
+            users={users}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            renderActions={exp => (
+              <IconButton
+                icon={Trash2}
+                title="Delete this expense"
+                size="sm"
+                tone="danger"
+                onClick={async () => {
+                  if (await confirm({ title: 'Delete this expense record?', danger: true, confirmLabel: 'Delete' })) deleteExpense(exp.id);
+                }}
+              />
+            )}
+          />
         </div>
       )}
 
       {activeTab === 'credit' && (
-        <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                  <th className="p-4">Credit Note ID</th>
-                  <th className="p-4">Customer</th>
-                  <th className="p-4">Against Invoice</th>
-                  <th className="p-4">Reason</th>
-                  <th className="p-4 text-right">Amount</th>
-                  <th className="p-4">Date</th>
-                  <th className="p-4">Recorded by</th>
-                  <th className="p-4 text-right w-12"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5 text-sm text-slate-300">
-                {(creditNotes || []).length > 0 ? creditNotes.map(cn => (
-                  <tr key={cn.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                    <td className="p-4 font-bold text-white font-mono text-xs">{cn.id}</td>
-                    <td className="p-4 font-medium">{cn.customerName}</td>
-                    <td className="p-4 text-slate-400 font-mono text-xs">{cn.invoiceId || '—'}</td>
-                    <td className="p-4"><span className="text-xs bg-rose-500/10 text-rose-300 border border-rose-500/20 px-2 py-0.5 rounded-full">{cn.reason}</span></td>
-                    <td className="p-4 text-right font-bold text-emerald-400">{formatCurrency(cn.amount)}</td>
-                    <td className="p-4 text-slate-400">{formatDate(cn.createdAt)}</td>
-                    {/* recordedBy has been stored here since credit notes
-                        existed, and shown nowhere. */}
-                    <td className="p-4 text-slate-400">{attributionFor(cn, users).name}</td>
-                    <td className="p-4 text-right">
-                      {/* A credit note issued for the wrong amount, or against
-                          the wrong customer, used to be permanent. */}
-                      <IconButton
-                        icon={Trash2}
-                        title="Withdraw this credit note"
-                        size="sm"
-                        tone="danger"
-                        onClick={() => handleDeleteCreditNote(cn)}
-                      />
-                    </td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan="8" className="p-8 text-center text-slate-500">
-                    No credit notes issued yet. Use "Credit Note" above to record a sales return or adjustment.
-                  </td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <CreditNotesTable
+          creditNotes={creditNotes || []}
+          users={users}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+          renderActions={cn => (
+            // A credit note issued for the wrong amount, or against the wrong
+            // customer, used to be permanent.
+            <IconButton icon={Trash2} title="Withdraw this credit note" size="sm" tone="danger" onClick={() => handleDeleteCreditNote(cn)} />
+          )}
+        />
       )}
 
       {/* Modal: Issue Credit Note */}
