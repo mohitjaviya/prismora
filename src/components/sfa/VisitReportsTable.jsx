@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ShoppingCart } from 'lucide-react';
-import { DataTable, Badge } from '../ui';
+import { DataTable, Badge, ClampText } from '../ui';
 
 /**
  * The SFA Visit Reports list, on the shared DataTable.
@@ -46,32 +46,10 @@ function ProductsCell({ products }) {
   );
 }
 
-// Two lines, then "Show more". The note used to be one truncated line in a
-// cell that ignored its own max-width, so it both hid the text and pushed the
-// table wider than the screen.
-function NoteCell({ note }) {
-  const [open, setOpen] = useState(false);
-  const text = String(note || '').trim();
-  if (!text) return <span className="text-slate-600">—</span>;
-  const long = text.length > 90;
-  return (
-    <div className="w-52 max-w-full">
-      <p className={`text-[11px] text-slate-400 italic leading-snug whitespace-normal break-words ${open ? '' : 'line-clamp-2'}`} title={open ? undefined : text}>
-        {text}
-      </p>
-      {long && (
-        <button
-          type="button"
-          onClick={() => setOpen(o => !o)}
-          className="mt-0.5 text-[10px] font-semibold text-brand-accent hover:underline"
-          aria-expanded={open}
-        >
-          {open ? 'Show less' : 'Show more'}
-        </button>
-      )}
-    </div>
-  );
-}
+// Two lines, then "Show more" — the kit's ClampText. The note used to be one
+// truncated line in a cell that ignored its own max-width, so it both hid the
+// text and pushed the table wider than the screen.
+const NoteCell = ({ note }) => <ClampText text={note} width="w-52" className="text-[11px] text-slate-400 italic" />;
 
 function FollowUpCell({ date, fmtDate }) {
   if (!date) return <span className="text-[11px] text-slate-600 italic">None set</span>;
