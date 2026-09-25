@@ -164,6 +164,20 @@ inserts orders with its own id, bills and deducts stock from the browser, and
 does not check whether a delivery was refused; the newer app inserts orders
 without an id and calls the two functions, which do not exist until this runs.
 
+## One that records who did what, and must precede two function deploys
+
+`040_audit_log_and_last_modified.sql` adds `audit_log` and `updatedBy` /
+`updatedAt` on 30 tables, written by one trigger pair from the same
+`audit_actor()` — the signed-in user, or on a service-key request the person
+our server function names. The Audit Log screen reads it; `events` stays as the
+Activity feed. Test it on staging with `supabase/tests/040_audit_log.sql`.
+
+Order: run 040 **before** deploying the updated `create-user` and
+`partner-signup` Edge Functions. They now send `updatedBy`, a column that does
+not exist until 040 runs, and PostgREST refuses a whole insert that names an
+unknown column — partner signup and user creation would fail. The app itself
+works either way: the Audit Log tab says the trail is not set up yet.
+
 ## One that pairs with an Edge Function
 
 `029_pending_accounts_have_no_access.sql` puts the approval gate in the

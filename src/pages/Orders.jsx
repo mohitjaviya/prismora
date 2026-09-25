@@ -15,6 +15,7 @@ import { optionsFor, badgeStyle } from '../utils/masterLists';
 import { canRecordReceipt, describeReceipt, receiptSourceOf, validateReceipt, RECEIPT_EVIDENCE } from '../utils/receipts';
 import { useToast, useConfirm } from '../context/DialogContext';
 import { missingDelivery } from '../utils/delivery';
+import LastChanged from '../components/audit/LastChanged';
 
 
 // Which role "owns" moving an order into a given status — enforces the
@@ -775,6 +776,7 @@ const Orders = () => {
           <div className="bg-brand-primary-light border border-slate-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center sticky top-0 bg-brand-primary-light z-10">
               <h2 className="text-xl font-bold text-white">{editingOrder ? 'Edit Order' : 'Add New Order'}</h2>
+              {editingOrder && <LastChanged record={editingOrder} users={mockUsers} className="mt-0.5" />}
               <button onClick={closeModal} className="text-slate-400 hover:text-white transition-colors">✕</button>
             </div>
 

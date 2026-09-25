@@ -356,6 +356,9 @@ BEGIN
   END IF;
 
   IF NEW.status = 'Delivered' AND OLD.status IS DISTINCT FROM 'Delivered' THEN
+    -- Named for the audit trail (040), so the stock, invoice and balance
+    -- changes below read as part of this delivery, not as separate edits.
+    PERFORM set_config('app.via', format('delivery of order %s', NEW.id), true);
     -- What is still to leave the warehouse: an itemised order all at once; a
     -- single-product order whatever earlier instalments did not take.
     IF itemised THEN
@@ -373,6 +376,7 @@ BEGIN
   ELSIF NOT itemised AND after_qty > before_qty THEN
     -- A partial delivery instalment: its units leave now; billing waits for
     -- the last one.
+    PERFORM set_config('app.via', format('partial delivery of order %s', NEW.id), true);
     PERFORM public.deduct_stock(NEW.id, jsonb_build_array(jsonb_build_object(
       'name', NEW.product, 'quantity', after_qty - before_qty)));
   END IF;
@@ -443,6 +447,7 @@ BEGIN
 
   v_lines := public.lines_with_gst(v_lines);
   v_tax := public.gst_total(v_lines);
+  PERFORM set_config('app.via', format('conversion of %s to a GST invoice', p_invoice_id), true);
 
   UPDATE public.invoices
   SET tax = v_tax, lines = v_lines, "invoiceType" = 'tax_invoice',
@@ -472,6 +477,9 @@ BEGIN
   IF NOT public.can_raise_invoices() THEN
     RAISE EXCEPTION 'Your role cannot raise invoices. It needs full Accounting access.' USING ERRCODE = '42501';
   END IF;
+
+  PERFORM set_config('app.via', CASE WHEN p_order_id IS NOT NULL
+    THEN format('manual invoice for order %s', p_order_id) ELSE 'manual custom invoice' END, true);
 
   IF p_order_id IS NOT NULL THEN
     SELECT * INTO o FROM public.orders WHERE id = p_order_id FOR UPDATE;

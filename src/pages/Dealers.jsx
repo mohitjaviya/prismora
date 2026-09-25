@@ -12,6 +12,7 @@ import { downloadCSV } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
+import LastChanged from '../components/audit/LastChanged';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -438,6 +439,7 @@ export default function Dealers() {
           <div className="relative glass-panel bg-brand-primary w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 flex flex-col overflow-hidden">
             <div className="flex justify-between items-center p-6 border-b border-white/5 flex-shrink-0">
               <h3 className="text-lg font-bold text-white">{editingDealer ? 'Edit Dealer' : 'Add New Dealer'}</h3>
+              {editingDealer && <LastChanged record={editingDealer} users={users} className="mt-0.5" />}
               <button onClick={() => setIsModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
             </div>
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6">

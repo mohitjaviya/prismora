@@ -9,6 +9,7 @@ import {
   MODULES, MODULE_GROUPS, ROLE_LEVELS, grantedCount, isUnrestrictedRole, rejectPermissionChange,
   fallbackRoles, roleSummary, peopleByRole, holdersOf, orphanedRoles,
 } from '../../utils/roleUtils';
+import LastChanged from '../../components/audit/LastChanged';
 
 /**
  * Who may see what, editable.
@@ -353,6 +354,8 @@ export default function Roles() {
             <Shield size={22} className="text-brand-accent" /> {role.name}
           </h1>
           <p className="text-slate-400 text-sm mt-1">{role.description}</p>
+          {/* A permission change is exactly what someone asks "who did this?" about. */}
+          <LastChanged record={role} users={users} className="mt-1" />
         </div>
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
           <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${LEVEL_STYLE[role.level] || LEVEL_STYLE.staff}`}>

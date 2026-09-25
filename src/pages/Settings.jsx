@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { Settings as SettingsIcon, Lock, History } from 'lucide-react';
+import { Settings as SettingsIcon, Lock, History, ShieldCheck } from 'lucide-react';
+import AuditLogPanel from '../components/audit/AuditLogPanel';
+import { canViewAuditLog } from '../utils/audit';
 import { PageHeader, DataTable, Badge } from '../components/ui';
-import {  } from 'react-dom';
 import { Navigate } from 'react-router-dom';
 
 
@@ -16,10 +17,11 @@ const passwordPolicyError = (pw) => {
 };
 
 export default function Settings() {
-  const { user, updateUser, verifyCurrentPassword, canAccess } = useAuth();
+  const { user, users, updateUser, verifyCurrentPassword, canAccess } = useAuth();
   const { eventLog } = useData();
 
-  const [activeTab, setActiveTab] = useState('audit'); // 'audit' | 'password'
+  // 'audit' (the database's own trail, 040) | 'activity' (the older event feed) | 'password'
+  const [activeTab, setActiveTab] = useState(() => (canViewAuditLog(user?.role) ? 'audit' : 'activity'));
   
   // Password States
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -30,7 +32,11 @@ export default function Settings() {
   // crash the page rather than redirect it.
   // Granted by the role's Settings permission, not by being admin level --
   // Director is admin level and has no Settings access.
-  if (!canAccess('settings')) return <Navigate to="/" replace />;
+  // The Audit Log is for Super Admin, Admin and Director — Director has no
+  // Settings access, so the page opens for either reason, and each tab
+  // checks its own.
+  const auditViewer = canViewAuditLog(user?.role);
+  if (!canAccess('settings') && !auditViewer) return <Navigate to="/" replace />;
 
   // ── Password Handlers ────────────────────────────────────────────────────
   const handlePasswordSubmit = async (e) => {
@@ -95,15 +101,16 @@ export default function Settings() {
       <PageHeader
         icon={SettingsIcon}
         title="Admin Settings"
-        subtitle="The audit trail, and your own password. Team members and the product catalogue moved to Master Lists."
+        subtitle="The audit trail, the activity feed, and your own password. Team members and the product catalogue are under Master Lists."
       />
 
       {/* Tabs */}
       <div className="flex border-b border-white/5 pb-px gap-1">
         {[
-          ['audit', 'Audit Log', <History size={16} />],
+          auditViewer && ['audit', 'Audit Log', <ShieldCheck size={16} />],
+          ['activity', 'Activity', <History size={16} />],
           ['password', 'Change Password', <Lock size={16} />]
-        ].map(([key, label, icon]) => (
+        ].filter(Boolean).map(([key, label, icon]) => (
           <button key={key} onClick={() => setActiveTab(key)}
             className={`px-5 py-3 font-semibold text-sm border-b-2 flex items-center gap-2 transition-all ${activeTab === key ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}>
             {icon}{label}
@@ -114,10 +121,13 @@ export default function Settings() {
 
 
       {/* ── Tab: Audit Log ──────────────────────────────────────────────────── */}
-      {activeTab === 'audit' && (
+      {activeTab === 'audit' && auditViewer && <AuditLogPanel users={users} />}
+
+      {/* ── Tab: Activity — the older, readable event feed ─────────────────── */}
+      {activeTab === 'activity' && (
         <div className="space-y-4">
           <DataTable
-            title="Audit trail"
+            title="Activity"
             columns={auditColumns}
             rows={eventLog || []}
             rowKey={e => e.id}
@@ -127,12 +137,12 @@ export default function Settings() {
             empty={{
               icon: History,
               title: 'Nothing recorded yet',
-              hint: 'Every create, update and delete is written here, along with order status changes, payments and approvals. It fills up as the system is used.',
+              hint: 'Readable notes the app writes as things happen — new orders, deliveries, payments, approvals.',
             }}
           />
           <p className="text-[11px] text-slate-500">
-            The audit trail records every create, update and delete, plus order status changes, payments and
-            approvals across the platform.
+            A readable feed of what the app noted as it happened. It is not a complete record and does not say
+            reliably who did what — the Audit Log is the full, per-person record of every change.
           </p>
         </div>
       )}

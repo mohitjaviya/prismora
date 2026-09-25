@@ -1,10 +1,11 @@
-import { Menu, Bell, User, LogOut, Search, Sun, Moon, Activity, Package, Wallet, MessageSquareWarning, Users } from 'lucide-react';
+import { Menu, Bell, User, LogOut, Search, Sun, Moon, Activity, Package, Wallet, MessageSquareWarning, Users, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import useDismiss from '../hooks/useDismiss';
+import { canViewAuditLog } from '../utils/audit';
 import { formatDistanceToNow } from 'date-fns';
 
 const Topbar = ({ setIsMobileMenuOpen }) => {
@@ -276,6 +277,16 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
                   <User size={16} className="text-brand-accent" />
                   {canAccess('settings') ? 'Settings' : 'My Profile'}
                 </button>
+                {/* Director reads the Audit Log without Settings access. */}
+                {!canAccess('settings') && canViewAuditLog(user?.role) && (
+                  <button
+                    onClick={() => { setDropdownOpen(false); navigate('/settings'); }}
+                    className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-white/5 flex items-center gap-3 transition-colors border-b border-white/5"
+                  >
+                    <ShieldCheck size={16} className="text-brand-accent" />
+                    Audit Log
+                  </button>
+                )}
                 <button 
                   onClick={handleLogout}
                   className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-white/5 flex items-center gap-3 transition-colors rounded-b-xl"

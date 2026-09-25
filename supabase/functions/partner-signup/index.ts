@@ -402,6 +402,13 @@ Deno.serve(async (req) => {
   };
   if (spec.parentColumn) partnerRow[spec.parentColumn] = parentId;
 
+  // The person registering did this, not "System". These inserts use the
+  // service key, so the database sees no signed-in user; naming the new
+  // account's id is what the audit trail (040) records instead. Accepted only
+  // from a service-key request.
+  const profileId = `U${Date.now()}`;
+  partnerRow.updatedBy = profileId;
+
   const { error: partnerError } = await admin.from(spec.table).insert([partnerRow]);
   if (partnerError) {
     await undoAuth();
@@ -411,9 +418,9 @@ Deno.serve(async (req) => {
   const undoPartner = async () => { await admin.from(spec.table).delete().eq('id', partnerId); };
 
   // ── 6. The profile that gives the login a role ─────────────────────────
-  const profileId = `U${Date.now()}`;
   const profile: Record<string, unknown> = {
     id: profileId,
+    updatedBy: profileId,
     name: contactPerson,
     email,
     role: spec.role,

@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
   const admin = createClient(url, serviceKey);
 
   const { data: caller, error: callerError } = await admin
-    .from('users').select('role').ilike('email', auth.user.email).maybeSingle();
+    .from('users').select('id, role').ilike('email', auth.user.email).maybeSingle();
 
   if (callerError) return json({ error: 'Could not verify your account.' }, 500);
   if (!caller || !ADMIN_ROLES.includes(caller.role)) {
@@ -154,6 +154,10 @@ Deno.serve(async (req) => {
   // this whole function change is for.
   if (partner) profile[partner.column] = linkId;
 
+  // This insert uses the service key, so the database sees no signed-in user.
+  // Naming the admin who asked is what lets the audit trail (040) record them
+  // instead of "System" — and it is accepted only from a service-key request.
+  profile.updatedBy = caller.id;
   const { error: profileError } = await admin.from('users').insert([profile]);
   if (profileError) {
     // A login with no profile has no role and cannot be placed, so it is worse

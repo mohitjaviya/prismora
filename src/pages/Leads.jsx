@@ -15,6 +15,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { isConvertedStatus, isOpenLead } from '../utils/leadStatus';
 import { missingDelivery } from '../utils/delivery';
+import LastChanged from '../components/audit/LastChanged';
 
 // Moving a lead into a conversion status means the customer has committed,
 // which is when an order is raised. The drag handler and the edit form both
@@ -718,6 +719,7 @@ const Leads = () => {
           <div className="bg-brand-primary-light border border-slate-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center sticky top-0 bg-brand-primary-light z-10">
               <h2 className="text-xl font-bold text-white">{editingLead ? 'Edit Lead' : 'Add New Lead'}</h2>
+              {editingLead && <LastChanged record={editingLead} users={mockUsers} className="mt-0.5" />}
               <button onClick={closeModal} className="text-slate-400 hover:text-white transition-colors">✕</button>
             </div>
 

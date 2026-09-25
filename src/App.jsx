@@ -145,7 +145,9 @@ function AppRoutes() {
         <Route path="ai-insights" element={<PermissionGuard module="reports"><AIInsights /></PermissionGuard>} />
         <Route path="ml-lab" element={<PermissionGuard module="reports"><MLLab /></PermissionGuard>} />
         <Route path="geography" element={<PermissionGuard module="geography"><Geography /></PermissionGuard>} />
-        <Route path="settings" element={<PermissionGuard module="settings"><Settings /></PermissionGuard>} />
+        {/* Settings checks access itself: its Audit Log tab is for Super Admin,
+            Admin and Director, and Director has no Settings permission. */}
+        <Route path="settings" element={<Settings />} />
         {/* Master data, as its own section. /masters lands on the option
             lists, which is what most visits are for. */}
         <Route path="masters" element={<Navigate to="/masters/lists" replace />} />
