@@ -20,13 +20,17 @@
 begin;
 
 -- The account every case signs in as. Change the email if staging differs.
-select set_config('t.email', 'salesmanager@prismora.com', true);
+select set_config('t.email', 'test.sales.manager@prismora.test', true);
 select set_config('t.uid', (select id from users where lower(email) = current_setting('t.email')), true);
 select set_config('t.uname', (select name from users where id = current_setting('t.uid')), true);
 
 -- Somewhere for each role to write.
-insert into orders (id, "customerName", product, quantity, value, status, "createdAt")
-  values ('O-AUDIT-TEST', 'Audit Test', 'Test product', 1, 1, 'Shipped', now());
+-- Orders are numbered by the database (039), so keep the number it gives.
+DO $o$ DECLARE v text; BEGIN
+  insert into orders ("customerName", product, quantity, value, status, "createdAt")
+    values ('Audit Test', 'Test product', 1, 1, 'Shipped', now()) returning id into v;
+  perform set_config('t.order', v, true);
+END $o$;
 insert into inventory (id, product, quantity, "createdAt") values ('INV-AUDIT-TEST', 'Audit Test Product', 10, now());
 
 create temp table audit_results (n serial, check_name text, ok boolean, detail text) on commit drop;
@@ -52,8 +56,9 @@ begin
   execute format('select "updatedBy" from %I where id = %L', p_table, p_row) into stamped;
   insert into audit_results (check_name, ok, detail) values (
     p_role || ' is logged by name',
-    a.actor_id = current_setting('t.uid') and a.actor_name = current_setting('t.uname')
-      and a.actor_role = p_role and stamped = current_setting('t.uid'),
+    -- A check that could not be evaluated (no row found) is a failure, not a pass.
+    coalesce(a.actor_id = current_setting('t.uid') and a.actor_name = current_setting('t.uname')
+      and a.actor_role = p_role and stamped = current_setting('t.uid'), false),
     format('audit: %s (%s) %s %s/%s, updatedBy=%s', a.actor_name, a.actor_role, a.action, p_table, p_row, stamped));
 end $$;
 
@@ -65,8 +70,8 @@ select pg_temp.as_role_check('Sales Executive',
   $q$insert into leads (id, name, status, "assignedTo", "createdAt") values ('L-AUDIT-2', 'Audit lead 2', 'New', current_setting('t.uid'), now())$q$,
   'leads', 'L-AUDIT-2');
 select pg_temp.as_role_check('Dispatch Team',
-  $q$update orders set status = 'Cancelled' where id = 'O-AUDIT-TEST'$q$,
-  'orders', 'O-AUDIT-TEST');
+  $q$update orders set status = 'Cancelled' where id = current_setting('t.order')$q$,
+  'orders', current_setting('t.order'));
 select pg_temp.as_role_check('Warehouse Manager',
   $q$update inventory set quantity = 9 where id = 'INV-AUDIT-TEST'$q$,
   'inventory', 'INV-AUDIT-TEST');
@@ -123,8 +128,8 @@ begin
 end $$;
 
 reset role;
-select string_agg(case when ok then 'PASS  ' else 'FAIL  ' end || check_name || ' — ' || detail, E'\n' order by n)
-       || E'\n' || case when bool_and(ok) then 'ALL PASSED' else 'SOME FAILED' end as result
+select string_agg(case when coalesce(ok, false) then 'PASS  ' else 'FAIL  ' end || check_name || ' — ' || detail, E'\n' order by n)
+       || E'\n' || case when bool_and(coalesce(ok, false)) then 'ALL PASSED' else 'SOME FAILED' end as result
 from audit_results;
 
 rollback;
