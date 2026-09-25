@@ -11,7 +11,7 @@ import {
   Upload, CheckSquare, XSquare, Route, Clock, RefreshCw
 } from 'lucide-react';
 import { useToast } from '../context/DialogContext';
-import { Button, PageHeader, StatCard } from '../components/ui';
+import { Button, PageHeader, StatCard, DataTable, Badge, ClampText } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { optionsFor } from '../utils/masterLists';
 import { shiftDuration } from '../utils/attendance';
@@ -626,94 +626,73 @@ export default function SFA() {
               </form>
             </div>
           )}
-          <div className={`${isSREP ? 'lg:col-span-8' : 'lg:col-span-12'} glass-panel rounded-2xl overflow-hidden border border-white/5`}>
-            <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex justify-between items-center">
-              <span className="text-sm font-bold text-white uppercase tracking-wider">Attendance Register</span>
-              <span className="text-xs text-slate-400">{(() => { const n = isSREP ? attendance.filter(a => a.userId === user?.id).length : attendance.length; return `${n} ${n === 1 ? 'record' : 'records'}`; })()}</span>
-            </div>
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
-                    {isManagerOrAbove && <th className="p-4">Representative</th>}<th className="p-4">Date</th>
-                    <th className="p-4 text-center">In</th><th className="p-4 text-center">Out</th>
-                    <th className="p-4 text-center">Duration</th>
-                    <th className="p-4">Punch-In Location</th>
-                    <th className="p-4">Notes</th>
-                    {isManagerOrAbove && <th className="p-4 text-center">Approval</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-slate-300">
-                  {(() => {
-                    const visibleRecords = isSREP
-                      ? attendance.filter(a => a.userId === user?.id)
-                      : attendance;
-                    return visibleRecords.length > 0 ? visibleRecords.map(att => {
-                    // Was hard-coded to '~8h' for every closed shift, so a
-                    // punch-out one minute after the punch-in beside it read
-                    // as a full working day.
-                    const duration = shiftDuration(att.checkInTime, att.checkOutTime);
-                    return (
-                      <tr key={att.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                        {isManagerOrAbove && (
-                          <td className="p-4 font-semibold text-white">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-[10px]">{getRepName(att.userId).substring(0,2).toUpperCase()}</div>
-                              {getRepName(att.userId)}
-                            </div>
-                          </td>
-                        )}
-                        <td className="p-4 text-xs text-slate-400 whitespace-nowrap">{fmtDate(att.date)}</td>
-                        <td className="p-4 text-center font-semibold text-white whitespace-nowrap">{att.checkInTime || '—'}</td>
-                        <td className="p-4 text-center font-semibold text-white whitespace-nowrap">{att.checkOutTime || '—'}</td>
-                        <td className="p-4 text-center">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-bold border ${att.checkOutTime ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : att.checkInTime ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}>{duration}</span>
-                        </td>
-                        <td className="p-4">
-                          {att.punchInLat ? (
-                            <a
-                              href={`https://www.openstreetmap.org/?mlat=${att.punchInLat}&mlon=${att.punchInLng}&zoom=16`}
-                              target="_blank" rel="noreferrer"
-                              className="text-brand-accent hover:underline text-xs font-mono flex items-center gap-1"
-                              title={`Accuracy: ±${att.punchInAccuracy}m`}
-                            >
-                              <Navigation size={10} />
-                              {att.punchInLat.toFixed(4)}, {att.punchInLng.toFixed(4)}
-                            </a>
-                          ) : (
-                            <span className="text-slate-600 text-xs italic">No location</span>
-                          )}
-                        </td>
-                        <td className="p-4 text-xs text-slate-400 italic max-w-[160px] truncate" title={att.notes}>{att.notes}</td>
-                        {isManagerOrAbove && (
-                          <td className="p-4 text-center">
-                            {att.approved ? (
-                              <div className="flex flex-col items-center gap-0.5">
-                                <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                                  <CheckCircle2 size={10} /> Approved
-                                </span>
-                                <span className="text-[9px] text-slate-500">by {att.approvedBy || 'Admin'}</span>
-                              </div>
-                            ) : att.checkInTime && canEditSfa ? (
-                              <button
-                                onClick={() => updateAttendanceRecord(att.id, { approved: true, approvedBy: user.name })}
-                                className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold transition-all flex items-center gap-1 mx-auto"
-                              >
-                                <CheckSquare size={11} /> Approve
-                              </button>
-                            ) : (
-                              <span className="text-slate-600 italic text-[10px]">No record</span>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  }) : <tr><td colSpan={isManagerOrAbove ? 8 : 7} className="p-8 text-center text-slate-500">No attendance records yet.</td></tr>;
-                  })()}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* On the shared DataTable: search, sort, a count, and notes that
+              clamp with "Show more" instead of a truncation cells ignore. */}
+          <DataTable
+            className={isSREP ? 'lg:col-span-8' : 'lg:col-span-12'}
+            title="Attendance Register"
+            dense
+            rows={attendance}
+            search={a => `${getRepName(a.userId)} ${a.date} ${a.notes || ''}`}
+            searchPlaceholder="Search rep, date, notes"
+            empty={{ title: 'No attendance records yet', hint: 'Check-ins appear here as reps punch in.' }}
+            columns={[
+              isManagerOrAbove && {
+                key: 'rep', header: 'Representative', sort: a => getRepName(a.userId),
+                render: a => (
+                  <div className="flex items-center gap-2 whitespace-nowrap font-semibold text-white">
+                    <div className="w-7 h-7 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-[10px]">{getRepName(a.userId).substring(0, 2).toUpperCase()}</div>
+                    {getRepName(a.userId)}
+                  </div>
+                ),
+              },
+              { key: 'date', header: 'Date', sort: a => a.date, render: a => <span className="whitespace-nowrap text-slate-400">{fmtDate(a.date)}</span> },
+              {
+                key: 'inout', header: 'In → Out', sort: a => a.checkInTime || '',
+                render: a => <span className="whitespace-nowrap font-semibold text-white tabular-nums">{a.checkInTime || '—'} <span className="text-slate-500">→</span> {a.checkOutTime || '—'}</span>,
+              },
+              {
+                // Was hard-coded to '~8h' for every closed shift, so a punch-out
+                // one minute after the punch-in read as a full working day.
+                key: 'duration', header: 'Duration', align: 'center',
+                render: a => (
+                  <Badge tone={a.checkOutTime ? 'info' : a.checkInTime ? 'success' : 'neutral'}>
+                    {shiftDuration(a.checkInTime, a.checkOutTime)}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'location', header: 'Punch-in location', hideBelow: 'lg',
+                render: a => (a.punchInLat ? (
+                  <a
+                    href={`https://www.openstreetmap.org/?mlat=${a.punchInLat}&mlon=${a.punchInLng}&zoom=16`}
+                    target="_blank" rel="noreferrer"
+                    className="text-brand-accent hover:underline text-xs font-mono inline-flex items-center gap-1 whitespace-nowrap"
+                    title={`Accuracy: ±${a.punchInAccuracy}m`}
+                  >
+                    <Navigation size={10} />{a.punchInLat.toFixed(4)}, {a.punchInLng.toFixed(4)}
+                  </a>
+                ) : <span className="text-slate-600 text-xs italic whitespace-nowrap">No location</span>),
+              },
+              { key: 'notes', header: 'Notes', render: a => <ClampText text={a.notes} width="w-44" className="text-xs text-slate-400 italic" /> },
+              isManagerOrAbove && {
+                key: 'approval', header: 'Approval', align: 'center', sort: a => (a.approved ? 1 : 0),
+                render: a => (a.approved ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <Badge tone="success"><CheckCircle2 size={10} /> Approved</Badge>
+                    <span className="text-[9px] text-slate-500">by {a.approvedBy || 'Admin'}</span>
+                  </div>
+                ) : a.checkInTime && canEditSfa ? (
+                  <button
+                    onClick={() => updateAttendanceRecord(a.id, { approved: true, approvedBy: user.name })}
+                    className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold transition-all inline-flex items-center gap-1"
+                  >
+                    <CheckSquare size={11} /> Approve
+                  </button>
+                ) : <span className="text-slate-600 italic text-[10px]">Not checked in</span>),
+              },
+            ].filter(Boolean)}
+          />
         </div>
 
         {/* ── Employee Year Report (Admin Only) ────────────────────────────── */}
@@ -866,128 +845,134 @@ export default function SFA() {
       {/* TAB: Beat Plan                                                     */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'beats' && (
-        <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-          <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex justify-between items-center">
-            <span className="text-sm font-bold text-white uppercase tracking-wider">Beat Plan</span>
-            <span className="text-xs text-slate-400">{beatPlans.length} {beatPlans.length === 1 ? 'beat' : 'beats'}</span>
-          </div>
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
-                  <th className="p-4">Route Assignment</th><th className="p-4">Territory</th>
-                  <th className="p-4">Date</th><th className="p-4">Outlets</th>
-                  {/* "Action" held "1/1 done", which is not an action. */}
-                  <th className="p-4 text-center">Status</th><th className="p-4 text-right">Coverage</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5 text-slate-300">
-                {beatPlans.length > 0 ? beatPlans.map(beat => (
-                  <tr key={beat.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                    <td className="p-4 font-semibold text-white">
-                      {!isSREP ? <div className="flex items-center gap-2"><User size={13} className="text-slate-500" />{getRepName(beat.executiveId)}</div>
-                        : <span className="text-brand-accent text-xs bg-brand-accent/10 border border-brand-accent/20 px-2 py-0.5 rounded">My Beat</span>}
-                    </td>
-                    <td className="p-4"><div className="flex items-center gap-1 font-medium text-white"><MapPin size={12} className="text-brand-accent" />{territoryName(territories, beat)}</div></td>
-                    <td className="p-4 text-xs font-bold text-slate-400 whitespace-nowrap">{fmtDate(beat.date)}</td>
-                    <td className="p-4">
-                      <div className="flex flex-wrap gap-1">
-                        {Array.isArray(beat.outlets) && beat.outlets.map((outlet, idx) => {
-                          // Each outlet carries its own outcome, so working one
-                          // no longer closes the rest of the route.
-                          const record = (beat.outletVisits || {})[outlet];
-                          const done = Boolean(record);
-                          const skipped = record?.outcome === 'Not Visited';
-                          return (
-                            <div
-                              key={idx}
-                              title={skipped && record?.reason ? `Not visited — ${record.reason}` : undefined}
-                              className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border ${
-                                !done ? 'bg-white/5 border-white/5 text-slate-300'
-                                  : skipped ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
-                                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                              }`}
-                            >
-                              {outlet}
-                              {done && <span className="font-bold">{skipped ? '✕' : '✓'}</span>}
-                              {!done && isSREP && checkInFor(beat).canCheckIn && (
-                                <>
-                                  <button onClick={() => handleOpenVisit(beat, outlet, 'Visited')} className="ml-1 text-brand-accent hover:underline font-bold">Check in</button>
-                                  <button onClick={() => handleOpenVisit(beat, outlet, 'Not Visited')} className="ml-1 text-slate-400 hover:text-rose-400 hover:underline">Not visited</button>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {(() => {
-                        const outlets = Array.isArray(beat.outlets) ? beat.outlets : [];
-                        if (!outlets.some(o => !(beat.outletVisits || {})[o])) return null;
-                        const note = 'mt-2 text-[11px] leading-relaxed';
-                        if (isSREP && beat.executiveId === user?.id) {
-                          const c = checkInFor(beat);
-                          if (c.state === 'missed') return <p className={`${note} text-rose-300`}>Missed — this beat was on {fmtDate(beat.date)}.</p>;
-                          if (c.state === 'approved') return <p className={`${note} text-emerald-300`}>Early check-in approved for today.</p>;
-                          if (c.state === 'pending') return <p className={`${note} text-yellow-300`}>Early check-in requested — waiting for approval.</p>;
-                          if (c.state === 'early' || c.state === 'rejected') {
-                            return (
-                              <p className={`${note} text-slate-400`}>
-                                {c.state === 'rejected'
-                                  ? <>Early check-in declined{c.request?.decisionNote ? ` — ${c.request.decisionNote}` : ''}. </>
-                                  : <>Opens on {fmtDate(beat.date)}. </>}
-                                <button
-                                  type="button"
-                                  onClick={() => { setEarlyRequestBeat(beat); setEarlyReason(''); setEarlyError(''); }}
-                                  className="text-brand-accent hover:underline font-bold"
-                                >
-                                  {c.state === 'rejected' ? 'Ask again' : 'Request early check-in'}
-                                </button>
-                              </p>
-                            );
-                          }
-                          return null;
-                        }
-                        // Everyone else who can see the beat: what is waiting, and the
-                        // decision for those who may make it.
-                        const req = openRequestFor(beat);
-                        if (!req) return isMissedBeat(beat, todayStr)
-                          ? <p className={`${note} text-rose-300`}>Missed — this beat was on {fmtDate(beat.date)}.</p>
-                          : null;
-                        const mayDecide = canDecideRequest({ approver: user, approverLevel: roleLevel(user?.role), canEditSfa, request: req, today: todayStr });
+        // On the shared DataTable: search, sort and a count. The outlet cell —
+        // check-in buttons and the early check-in notices — is unchanged.
+        <DataTable
+          title="Beat Plan"
+          dense
+          rows={beatPlans}
+          search={beat => `${getRepName(beat.executiveId)} ${territoryName(territories, beat)} ${beat.date} ${(beat.outlets || []).join(' ')} ${beatDisplayStatus(beat, todayStr)}`}
+          searchPlaceholder="Search rep, territory, outlet, status"
+          empty={{ title: 'No beat plans yet', hint: isSREP ? 'Your manager assigns beats from Route Planning.' : 'Assign one from Route Planning.' }}
+          columns={[
+            {
+              key: 'route', header: isSREP ? 'Route' : 'Rep / Territory', sort: beat => `${getRepName(beat.executiveId)} ${territoryName(territories, beat)}`,
+              render: beat => (
+                <div className="whitespace-nowrap">
+                  {!isSREP
+                    ? <div className="flex items-center gap-1.5 font-semibold text-white"><User size={12} className="text-slate-500" />{getRepName(beat.executiveId)}</div>
+                    : <span className="text-brand-accent text-[10px] font-bold bg-brand-accent/10 border border-brand-accent/20 px-2 py-0.5 rounded">My Beat</span>}
+                  <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-1"><MapPin size={10} className="text-brand-accent" />{territoryName(territories, beat)}</div>
+                </div>
+              ),
+            },
+            { key: 'date', header: 'Date', sort: beat => beat.date, render: beat => <span className="whitespace-nowrap font-semibold text-slate-300">{fmtDate(beat.date)}</span> },
+            {
+              key: 'outlets', header: 'Outlets',
+              render: beat => (
+                <div className="max-w-[26rem] whitespace-normal">
+                  <div className="flex flex-wrap gap-1">
+                    {Array.isArray(beat.outlets) && beat.outlets.map((outlet, idx) => {
+                      // Each outlet carries its own outcome, so working one
+                      // no longer closes the rest of the route.
+                      const record = (beat.outletVisits || {})[outlet];
+                      const done = Boolean(record);
+                      const skipped = record?.outcome === 'Not Visited';
+                      return (
+                        <div
+                          key={idx}
+                          title={skipped && record?.reason ? `Not visited — ${record.reason}` : undefined}
+                          className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border ${
+                            !done ? 'bg-white/5 border-white/5 text-slate-300'
+                              : skipped ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                          }`}
+                        >
+                          {outlet}
+                          {done && <span className="font-bold">{skipped ? '✕' : '✓'}</span>}
+                          {!done && isSREP && checkInFor(beat).canCheckIn && (
+                            <>
+                              <button onClick={() => handleOpenVisit(beat, outlet, 'Visited')} className="ml-1 text-brand-accent hover:underline font-bold">Check in</button>
+                              <button onClick={() => handleOpenVisit(beat, outlet, 'Not Visited')} className="ml-1 text-slate-400 hover:text-rose-400 hover:underline">Not visited</button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const outlets = Array.isArray(beat.outlets) ? beat.outlets : [];
+                    if (!outlets.some(o => !(beat.outletVisits || {})[o])) return null;
+                    const note = 'mt-2 text-[11px] leading-relaxed';
+                    if (isSREP && beat.executiveId === user?.id) {
+                      const c = checkInFor(beat);
+                      if (c.state === 'missed') return <p className={`${note} text-rose-500`}>Missed — this beat was on {fmtDate(beat.date)}.</p>;
+                      if (c.state === 'approved') return <p className={`${note} text-emerald-500`}>Early check-in approved for today.</p>;
+                      if (c.state === 'pending') return <p className={`${note} text-amber-500`}>Early check-in requested — waiting for approval.</p>;
+                      if (c.state === 'early' || c.state === 'rejected') {
                         return (
-                          <div className={`${note} rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-2.5 py-1.5`}>
-                            <p className="text-yellow-300 font-semibold">Early check-in requested for today</p>
-                            <p className="text-slate-300 mt-0.5">“{req.reason}”</p>
-                            {mayDecide ? (
-                              <div className="flex gap-2 mt-1.5">
-                                <button type="button" disabled={decidingId === req.id} onClick={() => decide(req, 'Approved')} className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 font-bold disabled:opacity-50">Approve</button>
-                                <button type="button" disabled={decidingId === req.id} onClick={() => decide(req, 'Rejected')} className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 font-bold disabled:opacity-50">Reject</button>
-                              </div>
-                            ) : (
-                              <p className="text-slate-500 mt-1">Waiting for an admin or the rep’s manager.</p>
-                            )}
-                          </div>
+                          <p className={`${note} text-slate-400`}>
+                            {c.state === 'rejected'
+                              ? <>Early check-in declined{c.request?.decisionNote ? ` — ${c.request.decisionNote}` : ''}. </>
+                              : <>Opens on {fmtDate(beat.date)}. </>}
+                            <button
+                              type="button"
+                              onClick={() => { setEarlyRequestBeat(beat); setEarlyReason(''); setEarlyError(''); }}
+                              className="text-brand-accent hover:underline font-bold"
+                            >
+                              {c.state === 'rejected' ? 'Ask again' : 'Request early check-in'}
+                            </button>
+                          </p>
                         );
-                      })()}
-                    </td>
-                    <td className="p-4 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${beatTone(beatDisplayStatus(beat, todayStr))}`}>{beatDisplayStatus(beat, todayStr)}</span>
-                    </td>
-                    <td className="p-4 text-right">
-                      {(() => {
-                        const outlets = Array.isArray(beat.outlets) ? beat.outlets : [];
-                        const doneCount = outlets.filter(o => (beat.outletVisits || {})[o]).length;
-                        if (outlets.length === 0) return <span className="text-xs text-slate-500 italic">—</span>;
-                        if (doneCount === outlets.length) return <span className="text-xs text-emerald-400 font-semibold">{doneCount}/{outlets.length} done</span>;
-                        return <span className="text-xs text-brand-accent font-semibold">{doneCount}/{outlets.length} done</span>;
-                      })()}
-                    </td>
-                  </tr>
-                )) : <tr><td colSpan="6" className="p-8 text-center text-slate-500">No beat plans found.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      }
+                      return null;
+                    }
+                    // Everyone else who can see the beat: what is waiting, and the
+                    // decision for those who may make it.
+                    const req = openRequestFor(beat);
+                    if (!req) return isMissedBeat(beat, todayStr)
+                      ? <p className={`${note} text-rose-500`}>Missed — this beat was on {fmtDate(beat.date)}.</p>
+                      : null;
+                    const mayDecide = canDecideRequest({ approver: user, approverLevel: roleLevel(user?.role), canEditSfa, request: req, today: todayStr });
+                    return (
+                      <div className={`${note} rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-2.5 py-1.5`}>
+                        <p className="text-amber-500 font-semibold">Early check-in requested for today</p>
+                        <p className="text-slate-300 mt-0.5">“{req.reason}”</p>
+                        {mayDecide ? (
+                          <div className="flex gap-2 mt-1.5">
+                            <button type="button" disabled={decidingId === req.id} onClick={() => decide(req, 'Approved')} className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25 font-bold disabled:opacity-50">Approve</button>
+                            <button type="button" disabled={decidingId === req.id} onClick={() => decide(req, 'Rejected')} className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-500 hover:bg-rose-500/25 font-bold disabled:opacity-50">Reject</button>
+                          </div>
+                        ) : (
+                          <p className="text-slate-500 mt-1">Waiting for an admin or the rep’s manager.</p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ),
+            },
+            {
+              key: 'status', header: 'Status', align: 'center', sort: beat => beatDisplayStatus(beat, todayStr),
+              render: beat => <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${beatTone(beatDisplayStatus(beat, todayStr))}`}>{beatDisplayStatus(beat, todayStr)}</span>,
+            },
+            {
+              key: 'coverage', header: 'Coverage', align: 'right',
+              sort: beat => { const o = Array.isArray(beat.outlets) ? beat.outlets : []; return o.length ? o.filter(x => (beat.outletVisits || {})[x]).length / o.length : -1; },
+              render: beat => (
+                <span className="whitespace-nowrap">
+                  {(() => {
+                    const outlets = Array.isArray(beat.outlets) ? beat.outlets : [];
+                    const doneCount = outlets.filter(o => (beat.outletVisits || {})[o]).length;
+                    if (outlets.length === 0) return <span className="text-xs text-slate-500 italic">—</span>;
+                    if (doneCount === outlets.length) return <span className="text-xs text-emerald-400 font-semibold">{doneCount}/{outlets.length} done</span>;
+                    return <span className="text-xs text-brand-accent font-semibold">{doneCount}/{outlets.length} done</span>;
+                  })()}
+                </span>
+              ),
+            },
+          ]}
+        />
       )}
 
       {/* ══════════════════════════════════════════════════════════════════ */}
@@ -1144,55 +1129,40 @@ export default function SFA() {
             ))}
           </div>
 
-          {/* Expense Table */}
-          <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-            <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex justify-between items-center">
-              <span className="text-sm font-bold text-white uppercase tracking-wider">{isManagerOrAbove ? 'All Expense Claims' : 'My Expense Claims'}</span>
-              <Button variant="primary" size="sm" icon={Plus} onClick={() => setIsExpenseModalOpen(true)}>New Claim</Button>
-            </div>
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
-                    {isManagerOrAbove && <th className="p-4">Rep</th>}
-                    <th className="p-4">Date</th><th className="p-4">Category</th>
-                    <th className="p-4">Description</th><th className="p-4">Receipt</th>
-                    <th className="p-4 text-right">Amount</th><th className="p-4 text-center">Status</th>
-                    {isManagerOrAbove && <th className="p-4 text-center">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-slate-300">
-                  {sfaExpenses.length > 0 ? sfaExpenses.map(exp => (
-                    <tr key={exp.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                      {isManagerOrAbove && <td className="p-4 text-xs font-semibold text-white">{getRepName(exp.userId)}</td>}
-                      <td className="p-4 text-xs text-slate-400 whitespace-nowrap">{fmtDate(exp.date)}</td>
-                      <td className="p-4"><span className="bg-brand-accent/10 border border-brand-accent/20 text-brand-accent text-[10px] px-2 py-0.5 rounded">{exp.category}</span></td>
-                      <td className="p-4 text-xs text-slate-300 max-w-[200px] truncate">{exp.description}</td>
-                      <td className="p-4 text-xs">
-                        {exp.receiptName
-                          ? <a href={exp.receiptData} download={exp.receiptName} className="text-blue-400 hover:underline flex items-center gap-1"><FileText size={11} />{exp.receiptName}</a>
-                          : <span className="text-slate-600 italic">No file</span>}
-                      </td>
-                      <td className="p-4 text-right font-bold text-white">₹{exp.amount?.toLocaleString('en-IN')}</td>
-                      <td className="p-4 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${exp.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : exp.status === 'Rejected' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>{exp.status}</span>
-                      </td>
-                      {isManagerOrAbove && (
-                        <td className="p-4 text-center">
-                          {exp.status === 'Pending' && canEditSfa ? (
-                            <div className="flex items-center justify-center gap-1.5">
+          {/* On the shared DataTable: search, sort, a count, and descriptions
+              and receipt names you can read in full. */}
+          <DataTable
+            title={isManagerOrAbove ? 'All Expense Claims' : 'My Expense Claims'}
+            toolbar={<Button variant="primary" size="sm" icon={Plus} onClick={() => setIsExpenseModalOpen(true)}>New Claim</Button>}
+            dense
+            rows={sfaExpenses}
+            search={exp => `${getRepName(exp.userId)} ${exp.category || ''} ${exp.description || ''} ${exp.status || ''}`}
+            searchPlaceholder="Search rep, category, description"
+            empty={{ title: 'No expense claims yet', hint: 'Use "New Claim" to submit travel, food or other field costs with a receipt.' }}
+            columns={[
+              isManagerOrAbove && { key: 'rep', header: 'Rep', sort: exp => getRepName(exp.userId), render: exp => <span className="whitespace-nowrap font-semibold text-white">{getRepName(exp.userId)}</span> },
+              { key: 'date', header: 'Date', sort: exp => exp.date, render: exp => <span className="whitespace-nowrap text-slate-400">{fmtDate(exp.date)}</span> },
+              { key: 'category', header: 'Category', sort: exp => exp.category, render: exp => <Badge tone="accent">{exp.category}</Badge> },
+              { key: 'description', header: 'Description', render: exp => <ClampText text={exp.description} width="w-52" className="text-xs text-slate-300" /> },
+              {
+                key: 'receipt', header: 'Receipt', hideBelow: 'md',
+                render: exp => (exp.receiptName
+                  ? <a href={exp.receiptData} download={exp.receiptName} title={exp.receiptName} className="text-blue-400 hover:underline inline-flex items-center gap-1 max-w-[9rem]"><FileText size={11} className="flex-shrink-0" /><span className="truncate">{exp.receiptName}</span></a>
+                  : <span className="text-slate-600 italic text-xs">No file</span>),
+              },
+              { key: 'amount', header: 'Amount', align: 'right', sort: exp => Number(exp.amount || 0), render: exp => <span className="tabular-nums whitespace-nowrap font-bold text-white">₹{Number(exp.amount || 0).toLocaleString('en-IN')}</span> },
+              { key: 'status', header: 'Status', align: 'center', sort: exp => exp.status, render: exp => <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${exp.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : exp.status === 'Rejected' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>{exp.status}</span> },
+              isManagerOrAbove && {
+                key: 'actions', header: 'Actions', align: 'center',
+                render: exp => (exp.status === 'Pending' && canEditSfa ? (
+                  <div className="flex items-center justify-center gap-1.5">
                               <button onClick={async () => { if (!await updateSFAExpense(exp.id, { status: 'Approved' })) toast(PAYOUT_FAILED, 'error'); }} className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-400 transition-colors" title="Approve"><CheckSquare size={14} /></button>
                               <button onClick={() => updateSFAExpense(exp.id, { status: 'Rejected' })} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 transition-colors" title="Reject"><XSquare size={14} /></button>
                             </div>
-                          ) : <span className="text-slate-600 italic text-xs">—</span>}
-                        </td>
-                      )}
-                    </tr>
-                  )) : <tr><td colSpan={isManagerOrAbove ? 8 : 6} className="p-8 text-center text-slate-500">No expense claims found.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                ) : <span className="text-slate-600 italic text-xs">—</span>),
+              },
+            ].filter(Boolean)}
+          />
         </div>
       )}
 
