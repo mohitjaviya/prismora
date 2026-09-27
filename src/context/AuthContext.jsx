@@ -3,7 +3,8 @@ import { supabase, isConfigured, missingEnvVars } from '../supabaseClient';
 import { accessFor, levelFor } from '../utils/roleUtils';
 import { checkEmailTaken } from '../utils/signupChecks';
 import { signupPayload, signupOutcome } from '../utils/partnerSignup';
-import { canSeeOwner } from '../utils/sfaVisibility';
+import { canSeeOwner, scopedToOwnAccounts } from '../utils/sfaVisibility';
+import { noteEvent } from '../utils/writeJournal';
 
 export const USER_ROLES = [
   'Super Admin',
@@ -282,6 +283,7 @@ export const AuthProvider = ({ children }) => {
     // setTimeout puts the work in a later task, after the lock is gone.
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
+      noteEvent(`auth ${event}`);
       if (event === 'SIGNED_OUT') { clearSession(); return; }
       const email = session?.user?.email;
       if (!email) return;
@@ -289,6 +291,7 @@ export const AuthProvider = ({ children }) => {
         if (cancelled) return;
         const profile = await loadProfileAfterSignIn(email);
         if (cancelled || !profile) return;
+        noteEvent('signed-in', profile.id);
         applySession(profile);
       }, 0);
     });
@@ -683,7 +686,18 @@ export const AuthProvider = ({ children }) => {
   // RBAC Helper: Check if current user can see data assigned to `ownerId`
   // Admins see everyone's, a manager their own and their team's, everyone
   // else their own. The rule itself lives in sfaVisibility so it can be tested.
-  const canAccessData = (ownerId) => canSeeOwner(user, user ? roleLevel(user.role) : null, ownerId);
+  // Limited to the accounts a role owns only for roles that work accounts;
+  // see scopedToOwnAccounts. SFA screens use their own rule (sfaVisibility).
+  const canAccessData = (ownerId) => {
+    if (!user) return false;
+    const level = roleLevel(user.role);
+    const scoped = scopedToOwnAccounts({
+      level,
+      canEditLeads: canAccess('leads', 'full'),
+      canEditSfa: canAccess('sfa', 'full'),
+    });
+    return scoped ? canSeeOwner(user, level, ownerId) : true;
+  };
 
   // RBAC Helper: Returns list of users current user can assign data to
   const getAssignableUsers = () => {

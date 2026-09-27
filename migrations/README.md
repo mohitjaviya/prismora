@@ -178,6 +178,20 @@ not exist until 040 runs, and PostgREST refuses a whole insert that names an
 unknown column — partner signup and user creation would fail. The app itself
 works either way: the Audit Log tab says the trail is not set up yet.
 
+## One that must precede the app, and one that can go any time
+
+`041_grn_adds_stock_in_database.sql` moves a goods receipt's stock into the
+database, in the receipt's own transaction, so a Purchase Manager (Purchases
+but no Inventory) no longer saves receipts whose stock is refused. Run it
+**before** deploying the app that stops writing GRN stock from the browser;
+the older app with 041 in place would add the stock twice. Test:
+`supabase/tests/041_grn_stock.sql`.
+
+`042_client_write_log.sql` adds `client_write_log`, where the app records any
+save that fails, takes over four seconds, or is cut off by a reload
+(`src/utils/writeJournal.js`). The app tolerates it missing. Test:
+`supabase/tests/042_client_write_log.sql`.
+
 ## One that pairs with an Edge Function
 
 `029_pending_accounts_have_no_access.sql` puts the approval gate in the

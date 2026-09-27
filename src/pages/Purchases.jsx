@@ -37,7 +37,7 @@ const BLANK_LINE = { product: '', quantity: '', unitCost: '', batchNumber: '', e
 export default function Purchases() {
   const { purchaseOrders, vendors, grn, products, vendorPayments, purchaseReturns,
     addPurchaseOrder, updatePurchaseOrderStatus, cancelPurchaseOrder, deletePurchaseOrder,
-    addVendor, updateVendor, deleteVendor, addGRN, receiveStock, addVendorPayment, deleteVendorPayment, addPurchaseReturn, deletePurchaseReturn, masters } = useData();
+    addVendor, updateVendor, deleteVendor, addGRN, addVendorPayment, deleteVendorPayment, addPurchaseReturn, deletePurchaseReturn, masters } = useData();
   const confirm = useConfirm();
   const toast = useToast();
   // statusConfig below is keyed on the stored value, so the filter uses keys.
@@ -304,20 +304,10 @@ export default function Purchases() {
       receivedBy: user.id
     });
     if (!grnId) return;
-
-    // ── Take the delivery into stock as its own batch ──────────────────────
-    for (const item of grnForm.items) {
-      const receivedQty = Number(item.receivedQty);
-      if (!receivedQty || receivedQty <= 0) continue;
-      await receiveStock({
-        product: item.product,
-        batchNumber: item.batchNumber || '',
-        expiryDate: item.expiryDate ? new Date(item.expiryDate).toISOString() : null,
-        unitCost: Number(item.unitCost || 0),
-        quantity: receivedQty,
-        reason: `GRN ${grnId} from ${grnTargetPO?.vendorName || 'vendor'}`,
-      });
-    }
+    // The stock comes in with the receipt, in the database (041) — whoever
+    // records it, Purchase Manager included, who has no Inventory access. It
+    // used to be a second write from here under the clicker's own access, so
+    // a Purchase Manager's receipt saved and its stock was refused.
 
     setIsGRNModalOpen(false);
   };

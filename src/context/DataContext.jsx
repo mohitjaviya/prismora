@@ -19,6 +19,7 @@ import { leadOrderDraft } from '../utils/leadConversion';
 import { beatStatusFor } from '../utils/beatVisits';
 import { localDateStr } from '../utils/beatDates';
 import { shouldFetchData, dataCacheKeysToClear } from '../utils/dataSession';
+import { journaled, noteEvent, startJournal } from '../utils/writeJournal';
 
 // The bracketed territory on a "new partner" log line. On a signup page the
 // visitor is anonymous and the territories list is empty, so there is no name
@@ -60,6 +61,7 @@ clearStaleCaches();
 // instantly on load; fetchData() then refreshes from Supabase in the background.
 const CACHE_KEYS_BY_TABLE = {
   attendance: 'prismora_attendance',
+  sfa_expenses: 'prismora_sfa_expenses',
   beat_plans: 'prismora_beat_plans',
   complaints: 'prismora_complaints',
   credit_notes: 'prismora_credit_notes',
@@ -151,7 +153,9 @@ const writeComplaint = (err, row) => {
   return { text: message + detail, cause: '' };
 };
 
-const persist = async (label, query, row) => {
+const persist = (label, query, row) => journaled(label, () => persistNow(label, query, row));
+
+const persistNow = async (label, query, row) => {
   try {
     const { error } = await query;
     if (error) {
@@ -458,6 +462,14 @@ export const DataProvider = ({ children }) => {
   const { user: signedInUser, authReady } = useAuth();
   const stamp = (row) => stampCreator(row, signedInUser?.id);
 
+  // A new data layer for each user; a remount mid-form closes that form, so
+  // the journal notes each one next to the saves around it.
+  useEffect(() => {
+    noteEvent('data layer mounted', signedInUser?.id || 'signed out');
+    if (signedInUser?.id) startJournal(row => supabase.from('client_write_log').insert([row]));
+    return () => noteEvent('data layer unmounted', signedInUser?.id || 'signed out');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 'loading' until the first fetch for this user lands. App mounts this
   // provider afresh for each signed-in user (see dataSessionKey), so this is
   // per user, not per page load.
@@ -592,6 +604,9 @@ export const DataProvider = ({ children }) => {
       territories: begin(supabase.from('territories').select('*')),
       beat_plans: begin(supabase.from('beat_plans').select('*').order('date', { ascending: false })),
       attendance: begin(supabase.from('attendance').select('*').order('date', { ascending: false })),
+      // Never fetched before: claims were only ever the ones this browser had
+      // filed, so a manager elsewhere could not see a rep's claim to approve it.
+      sfa_expenses: begin(supabase.from('sfa_expenses').select('*').order('date', { ascending: false })),
       visit_reports: begin(supabase.from('visit_reports').select('*').order('visitDate', { ascending: false })),
       beat_checkin_requests: begin(supabase.from('beat_checkin_requests').select('*').order('createdAt', { ascending: false })),
       distributor_payments: begin(supabase.from('distributor_payments').select('*').order('createdAt', { ascending: false })),
@@ -978,6 +993,18 @@ export const DataProvider = ({ children }) => {
     }
     applyFetched('prismora_attendance', setAttendance, fetchedAttendance);
 
+    // ── SFA Expense Claims ──
+    let fetchedSfaExpenses = [];
+    try {
+      const { data, error } = await inflight.sfa_expenses;
+      if (error) throw error;
+      fetchedSfaExpenses = data || [];
+    } catch {
+      const local = localStorage.getItem('prismora_sfa_expenses');
+      fetchedSfaExpenses = local ? JSON.parse(local) : [];
+    }
+    applyFetched('prismora_sfa_expenses', setSfaExpenses, fetchedSfaExpenses);
+
     // ── SFA Visit Reports ──
     let fetchedVisits = [];
     try {
@@ -1294,7 +1321,9 @@ export const DataProvider = ({ children }) => {
    * — so the change is not shown as saved until it has been. On refusal the
    * order is put back and the reason comes back in words Dispatch can act on.
    */
-  const saveDelivery = async (id, patch, before) => {
+  const saveDelivery = (id, patch, before) => journaled(`deliver ${id}`, () => saveDeliveryNow(id, patch, before));
+
+  const saveDeliveryNow = async (id, patch, before) => {
     const { data, error } = await supabase.from('orders').update(patch).eq('id', id).select('*');
     if (error || !data || data.length === 0) {
       setOrders(prev => {
@@ -2710,6 +2739,10 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_grn', JSON.stringify(next));
       return next;
     });
+    // The database took the received lines into stock with the receipt (041);
+    // show what it did.
+    await reloadRows('inventory', setInventory, 'prismora_inventory', 'product',
+      (grnData.items || []).map(i => i.product));
     if (grnData.poId) updatePurchaseOrderStatus(grnData.poId, 'GRN Done');
     logEvent('grn_created', `GRN ${newId} received from ${grnData.vendorName}`, grnData.receivedBy, newId);
 
@@ -3677,6 +3710,10 @@ export const DataProvider = ({ children }) => {
       : true;
   };
 
+  // Saves a user starts from a form, journaled so one that fails, stalls or
+  // is cut off by a reload is recorded (writeJournal.js).
+  const logged = (label, fn) => (...args) => journaled(`${label} ${typeof args[0] === 'string' ? args[0] : ''}`.trim(), () => fn(...args));
+
   return (
     <DataContext.Provider value={{
       // Original CRM
@@ -3684,9 +3721,9 @@ export const DataProvider = ({ children }) => {
       schemaError, dismissSchemaError: () => setSchemaError(null),
       dataStatus, hadCache,
       addLead, updateLead, deleteLead, convertLeadToOrder,
-      addOrder, updateOrder, deleteOrder, confirmOrderReceipt, recordOrderReceipt, clearOrderReceipt, splitOrder, deliverPartial,
+      addOrder: logged('add order', addOrder), updateOrder, deleteOrder, confirmOrderReceipt, recordOrderReceipt, clearOrderReceipt, splitOrder, deliverPartial,
       addProduct, updateProduct, deleteProduct,
-      addInvoice, convertInvoice, updateInvoiceStatus, deleteInvoice,
+      addInvoice: logged('add invoice', addInvoice), convertInvoice: logged('convert invoice', convertInvoice), updateInvoiceStatus, deleteInvoice,
       creditNotes, addCreditNote, deleteCreditNote,
       addExpense, deleteExpense, reconcilePayouts, correctPartyBalance,
       // Phase 1 Enterprise
@@ -3697,7 +3734,7 @@ export const DataProvider = ({ children }) => {
       vendorPayments, addVendorPayment, deleteVendorPayment,
       purchaseReturns, addPurchaseReturn, deletePurchaseReturn,
       addPurchaseOrder, updatePurchaseOrderStatus, cancelPurchaseOrder, deletePurchaseOrder,
-      addGRN,
+      addGRN: logged('add GRN', addGRN),
       addDistributor, updateDistributor, deleteDistributor,
       addDealer, updateDealer, deleteDealer,
       addRetailer, updateRetailer, deleteRetailer,

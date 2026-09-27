@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canSeeOwner, visibleTo } from '../sfaVisibility';
+import { canSeeOwner, visibleTo, scopedToOwnAccounts } from '../sfaVisibility';
 
 const ABHI = { id: 'U-abhi', role: 'Sales Executive', managedUsers: [] };
 const ANKITA = { id: 'U-ankita', role: 'Sales Executive', managedUsers: [] };
@@ -56,5 +56,32 @@ describe('the same rule on the other field records', () => {
     expect(visibleTo(attendance, 'userId', MANAGER, 'manager')).toHaveLength(2);
     expect(visibleTo(expenses, 'userId', MANAGER, 'manager')).toHaveLength(2);
     expect(visibleTo(beats, 'executiveId', MANAGER, 'manager')).toHaveLength(2);
+  });
+});
+
+describe('scopedToOwnAccounts — who is limited to the accounts they own', () => {
+  // The bug: Accounts saw 0 invoices and 0 expenses on Accounting because the
+  // "own accounts only" rule meant for reps was applied to every role.
+  it('does not limit roles that own no accounts', () => {
+    expect(scopedToOwnAccounts({ level: 'staff', canEditLeads: false, canEditSfa: false })).toBe(false); // Accounts, Dispatch, Warehouse
+    expect(scopedToOwnAccounts({ level: 'staff', canEditLeads: false, canEditSfa: false })).toBe(false); // Customer Support (leads view only)
+    expect(scopedToOwnAccounts({ level: 'manager', canEditLeads: false, canEditSfa: false })).toBe(false); // Purchase Manager
+  });
+
+  it('limits the roles that work accounts', () => {
+    expect(scopedToOwnAccounts({ level: 'sales', canEditLeads: true, canEditSfa: true })).toBe(true); // Sales Executive
+    expect(scopedToOwnAccounts({ level: 'manager', canEditLeads: true, canEditSfa: true })).toBe(true); // Sales Manager
+  });
+
+  it('never limits an admin', () => {
+    expect(scopedToOwnAccounts({ level: 'admin', canEditLeads: true, canEditSfa: true })).toBe(false);
+  });
+
+  it('lets an unscoped role see an invoice owned by someone else, and keeps a rep to their own', () => {
+    const invoice = { assignedTo: 'U-rep' };
+    const accounts = { id: 'U-acc', managedUsers: [] };
+    const seen = (viewer, level, flags) => !scopedToOwnAccounts({ level, ...flags }) || canSeeOwner(viewer, level, invoice.assignedTo);
+    expect(seen(accounts, 'staff', { canEditLeads: false, canEditSfa: false })).toBe(true);
+    expect(seen({ id: 'U-other-rep', managedUsers: [] }, 'sales', { canEditLeads: true, canEditSfa: true })).toBe(false);
   });
 });

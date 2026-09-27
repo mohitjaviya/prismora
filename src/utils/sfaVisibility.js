@@ -22,3 +22,17 @@ export const canSeeOwner = (viewer, viewerLevel, ownerId) => {
 /** The rows of `records` whose `ownerKey` the viewer may see. */
 export const visibleTo = (records, ownerKey, viewer, viewerLevel) =>
   (records || []).filter(r => canSeeOwner(viewer, viewerLevel, r?.[ownerKey]));
+
+/**
+ * Whether a role's lists are limited to the accounts it owns.
+ *
+ * "Reps see their own, managers their team's" is a sales rule. It was applied
+ * to everyone, so a role that owns no accounts — Accounts, Dispatch,
+ * Warehouse, Customer Support, Purchase Manager — saw almost nothing: the
+ * Accounting screen showed Accounts 0 invoices and 0 expenses while the
+ * database handed it every one. Only roles that work accounts (full Leads or
+ * full SFA access) are limited this way; everyone else sees whatever the
+ * database lets them read, which is where access is enforced anyway.
+ */
+export const scopedToOwnAccounts = ({ level, canEditLeads, canEditSfa }) =>
+  level !== 'admin' && Boolean(canEditLeads || canEditSfa);
