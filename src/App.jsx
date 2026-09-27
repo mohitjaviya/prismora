@@ -5,6 +5,7 @@ import { DataProvider } from './context/DataContext';
 import { dataSessionKey } from './utils/dataSession';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+const PartnerRegister = lazy(() => import('./pages/PartnerRegister'));
 const DistributorSignup = lazy(() => import('./pages/DistributorSignup'));
 const DealerSignup = lazy(() => import('./pages/DealerSignup'));
 const RetailerSignup = lazy(() => import('./pages/RetailerSignup'));
@@ -119,6 +120,7 @@ function AppRoutes() {
     <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<PartnerRegister />} />
       <Route path="/register-distributor" element={<DistributorSignup />} />
       <Route path="/register-dealer" element={<DealerSignup />} />
       <Route path="/register-retailer" element={<RetailerSignup />} />

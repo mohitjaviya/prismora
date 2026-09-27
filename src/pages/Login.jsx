@@ -1,17 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, ArrowRight, Lock, UserPlus, ChevronDown, Truck, Store, ShoppingBag } from 'lucide-react';
-import useDismiss from '../hooks/useDismiss';
+import { Mail, ArrowRight, Lock } from 'lucide-react';
 
-// One way in for a new partner, which then asks what kind. Signing in is the
-// same for everyone — the account's role decides where it lands — so the only
-// choice on this page is which signup form a newcomer needs.
-const PARTNER_SIGNUPS = [
-  { to: '/register-distributor', label: 'Distributor', hint: 'Buys from us and supplies dealers', icon: Truck },
-  { to: '/register-dealer', label: 'Dealer', hint: 'Buys from a distributor, supplies retailers', icon: Store },
-  { to: '/register-retailer', label: 'Retailer', hint: 'A shop selling to customers', icon: ShoppingBag },
-];
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -19,9 +10,6 @@ const Login = () => {
   const [error, setError] = useState('');
   const { login, missingEnvVars } = useAuth();
   const navigate = useNavigate();
-  const [registerOpen, setRegisterOpen] = useState(false);
-  const registerRef = useRef(null);
-  useDismiss([registerRef], registerOpen, () => setRegisterOpen(false));
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -138,38 +126,10 @@ const Login = () => {
             </button>
           </form>
 
-          <div className="relative mt-5 flex justify-center" ref={registerRef}>
-            <button
-              type="button"
-              onClick={() => setRegisterOpen(o => !o)}
-              aria-haspopup="menu"
-              aria-expanded={registerOpen}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-brand-accent font-medium px-3 py-1.5 rounded-lg hover:bg-brand-accent/5 transition-colors"
-            >
-              <UserPlus size={14} />
-              New partner? <span className="text-brand-accent">Register</span>
-              <ChevronDown size={13} className={`transition-transform ${registerOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {registerOpen && (
-              <div role="menu" className="absolute top-full mt-2 w-64 menu-panel rounded-xl py-1.5 z-30 animate-fade-in-up">
-                <p className="px-3 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Register as a…</p>
-                {PARTNER_SIGNUPS.map(({ to, label, hint, icon: Icon }) => (
-                  <Link
-                    key={to}
-                    to={to}
-                    role="menuitem"
-                    className="flex items-start gap-2.5 px-3 py-2 hover:bg-brand-accent/10 transition-colors"
-                  >
-                    <Icon size={15} className="text-brand-accent mt-0.5 flex-shrink-0" />
-                    <span>
-                      <span className="block text-sm font-semibold text-white">{label}</span>
-                      <span className="block text-[11px] text-slate-500">{hint}</span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* One link for every new partner; the next page asks which kind. */}
+          <p className="text-center text-xs text-slate-500 mt-5">
+            New partner? <Link to="/register" className="text-brand-accent hover:underline font-medium">Register here</Link>
+          </p>
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-4">

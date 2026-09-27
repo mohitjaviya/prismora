@@ -46,3 +46,6 @@ backup-*.json
 # Local database backups (contain data and password hashes)
 backups/
 .env.test-accounts.local
+
+# Browser test screenshots
+test-results/

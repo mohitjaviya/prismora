@@ -28,13 +28,25 @@
  */
 
 /**
+ * References to a user that do not end in `Id`.
+ *
+ * The convention above has exceptions, and they are all people: an order,
+ * lead, invoice or expense is `assignedTo` somebody, and an early check-in
+ * request is `requestedBy` and `decidedBy` somebody — each a foreign key to
+ * users. A distributor with no territory places an order that nobody is
+ * assigned to yet, the form sends `assignedTo: ''`, and the database looked
+ * for a user whose id is the empty string and refused the order.
+ */
+const PERSON_REFERENCES = new Set(['assignedTo', 'requestedBy', 'decidedBy']);
+
+/**
  * Whether a column holds a reference to another row.
  *
  * True for `territoryId` and `parentDealerId`, false for `id`, `gstin` and
  * `paid`. The capital I is the whole test — this schema names every foreign key
  * `somethingId` and nothing else ends that way.
  */
-export const isIdColumn = (key) => /[a-z0-9]Id$/.test(String(key ?? ''));
+export const isIdColumn = (key) => /[a-z0-9]Id$/.test(String(key ?? '')) || PERSON_REFERENCES.has(String(key ?? ''));
 
 /**
  * The same row, with blank references written as NULL.

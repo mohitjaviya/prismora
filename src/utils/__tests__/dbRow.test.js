@@ -97,3 +97,20 @@ describe('blankIdsToNull', () => {
     expect(blankIdsToNull([{ territoryId: '' }])).toEqual([{ territoryId: '' }]);
   });
 });
+
+describe('person references that do not end in Id', () => {
+  // The bug: a new distributor with no territory placed an order with
+  // assignedTo: '', and orders_assignedTo_fkey refused it.
+  it('sends an unassigned order as NULL, not the empty string', () => {
+    expect(blankIdsToNull({ customerName: 'new distributor', assignedTo: '' }))
+      .toEqual({ customerName: 'new distributor', assignedTo: null });
+  });
+
+  it('treats assignedTo, requestedBy and decidedBy as references', () => {
+    for (const k of ['assignedTo', 'requestedBy', 'decidedBy']) expect(isIdColumn(k)).toBe(true);
+  });
+
+  it('keeps a real assignee', () => {
+    expect(blankIdsToNull({ assignedTo: 'U1' })).toEqual({ assignedTo: 'U1' });
+  });
+});
