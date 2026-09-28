@@ -2,7 +2,7 @@ import { Component, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
-import { dataSessionKey } from './utils/dataSession';
+import { dataSessionKey, routeGate } from './utils/dataSession';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 const PartnerRegister = lazy(() => import('./pages/PartnerRegister'));
@@ -47,8 +47,11 @@ const ProtectedRoute = ({ children }) => {
   // session takes a moment, and redirecting during that moment sent a signed-in
   // person to the login page on every refresh — the slower the connection, the
   // more reliably it happened.
-  if (!user && !authReady) return <RouteFallback />;
-  if (!user) return <Navigate to="/login" replace />;
+  // And a cached user is not a confirmed one: rendering before the session was
+  // confirmed let forms open that the data layer then rebuilt away (routeGate).
+  const gate = routeGate({ authReady, user });
+  if (gate === 'wait') return <RouteFallback />;
+  if (gate === 'login') return <Navigate to="/login" replace />;
   return children;
 };
 

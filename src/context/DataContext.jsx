@@ -20,6 +20,7 @@ import { beatStatusFor } from '../utils/beatVisits';
 import { localDateStr } from '../utils/beatDates';
 import { shouldFetchData, dataCacheKeysToClear } from '../utils/dataSession';
 import { journaled, noteEvent, startJournal } from '../utils/writeJournal';
+import { createLoadGate, gateWrites } from '../utils/loadGate';
 
 // The bracketed territory on a "new partner" log line. On a signup page the
 // visitor is anonymous and the territories list is empty, so there is no name
@@ -461,6 +462,10 @@ export const DataProvider = ({ children }) => {
   // keyboard, and four of the six that could have already did not.
   const { user: signedInUser, authReady } = useAuth();
   const stamp = (row) => stampCreator(row, signedInUser?.id);
+
+  // Saves wait here until the first load has landed (utils/loadGate.js).
+  const loadGate = useRef(null);
+  if (!loadGate.current) loadGate.current = createLoadGate();
 
   // A new data layer for each user; a remount mid-form closes that form, so
   // the journal notes each one next to the saves around it.
@@ -1095,6 +1100,7 @@ export const DataProvider = ({ children }) => {
   // from them.
   useEffect(() => {
     if (!shouldFetchData({ authReady, user: signedInUser })) {
+      loadGate.current.open();
       if (authReady && !signedInUser) {
         try {
           dataCacheKeysToClear(Object.keys(localStorage)).forEach(k => localStorage.removeItem(k));
@@ -1103,7 +1109,11 @@ export const DataProvider = ({ children }) => {
       return;
     }
     let live = true;
-    fetchData().finally(() => { if (live) setDataStatus('ready'); });
+    fetchData().finally(() => {
+      loadGate.current.open();
+      noteEvent('data loaded');
+      if (live) setDataStatus('ready');
+    });
     return () => { live = false; };
     // Mounted once per user by App (keyed on dataSessionKey), so this runs
     // once per sign-in by design.
@@ -3725,7 +3735,8 @@ export const DataProvider = ({ children }) => {
   const logged = (label, fn) => (...args) => journaled(`${label} ${typeof args[0] === 'string' ? args[0] : ''}`.trim(), () => fn(...args));
 
   return (
-    <DataContext.Provider value={{
+    <DataContext.Provider value={gateWrites({
+      whenLoaded: () => loadGate.current.wait(),
       // Original CRM
       leads, orders, eventLog, products, productCatalog, invoices, expenses,
       schemaError, dismissSchemaError: () => setSchemaError(null),
@@ -3761,7 +3772,7 @@ export const DataProvider = ({ children }) => {
       distributorPayments, addDistributorPayment, addDealerPayment, addRetailerPayment,
       schemeClaims, addSchemeClaim, updateSchemeClaimStatus,
       distributorIncentives, markIncentivePaid,
-    }}>
+    }, loadGate.current, (name, ms) => noteEvent('save waited for data load', `${name} ${ms} ms`))}>
       {children}
     </DataContext.Provider>
   );

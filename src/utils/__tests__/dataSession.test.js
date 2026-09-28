@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { dataSessionKey, shouldFetchData, dataCacheKeysToClear, loadingView } from '../dataSession';
+import { routeGate } from '../dataSession';
 
 const ANKITA = { id: 'U-ankita', role: 'Sales Executive' };
 const ADMIN = { id: '1', role: 'Admin' };
@@ -75,5 +76,18 @@ describe('loadingView - never a blank screen on first load', () => {
   it('shows nothing extra once loaded, or when nobody is signed in', () => {
     expect(loadingView({ status: 'ready', hadCache: false })).toBeNull();
     expect(loadingView({ status: 'idle', hadCache: false })).toBeNull();
+  });
+});
+
+describe('routeGate', () => {
+  // A cached user shown before the session was confirmed could open a form
+  // that the data layer then rebuilt away — the "closed without saving" bug.
+  it('waits for the session to be confirmed even when a user is cached', () => {
+    expect(routeGate({ authReady: false, user: { id: 'U1' } })).toBe('wait');
+    expect(dataSessionKey({ authReady: false, user: { id: 'U1' } })).not.toBe(dataSessionKey({ authReady: true, user: { id: 'U1' } }));
+  });
+  it('renders once confirmed, and sends a confirmed visitor to sign in', () => {
+    expect(routeGate({ authReady: true, user: { id: 'U1' } })).toBe('render');
+    expect(routeGate({ authReady: true, user: null })).toBe('login');
   });
 });

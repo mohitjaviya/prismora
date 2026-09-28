@@ -19,6 +19,21 @@ export const dataSessionKey = ({ authReady, user }) => {
   return user?.id ? `user:${user.id}` : 'signed-out';
 };
 
+/**
+ * What a signed-in page shows: 'wait' until the session is confirmed, then
+ * 'login' or 'render'.
+ *
+ * It used to render as soon as a cached user was known. The data layer is
+ * rebuilt when the session is confirmed (the key goes from 'pending' to the
+ * user), so anything opened in that first second — an edit form, Generate
+ * Invoice — was torn down with it, unsaved. Waiting costs a moment of
+ * "Loading…" on refresh; it never sends a signed-in person to the login page.
+ */
+export const routeGate = ({ authReady, user }) => {
+  if (!authReady) return 'wait';
+  return user ? 'render' : 'login';
+};
+
 /** Whether this mount may fetch: only with a confirmed, signed-in session. */
 export const shouldFetchData = ({ authReady, user }) => Boolean(authReady && user?.id);
 

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { retryingFetch } from './utils/retryFetch';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -29,9 +30,11 @@ if (!isConfigured) {
 // Placeholders keep createClient from throwing at module load. Every request
 // made through it fails, which is correct and now visible, rather than taking
 // the whole app down before it can explain itself.
+// Failed reads are asked again; writes are not repeated (utils/retryFetch.js).
 export const supabase = createClient(
   supabaseUrl || 'https://unconfigured.invalid',
-  supabaseAnonKey || 'unconfigured'
+  supabaseAnonKey || 'unconfigured',
+  { global: { fetch: retryingFetch() } }
 );
 
 // Which project this build points at. Two deployments pointing at different

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
 import { attributionFor } from '../utils/attribution';
@@ -47,7 +47,7 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded } = useData();
   // From Master Lists. The stepper and the dropdown show the label; every
   // check in this file — STATUS_OWNERS, the stock guards, the delivery
   // branches — still compares the stored key, which cannot be renamed.
@@ -64,6 +64,11 @@ const Orders = () => {
   const [isCustomProduct, setIsCustomProduct] = useState(false);
   const [salespersonFilter, setSalespersonFilter] = useState('');
   const [statusError, setStatusError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  // The stock check must see inventory as it is when Save runs, not as it was
+  // when the form rendered — a save can wait for the first load to land.
+  const inventoryRef = useRef(inventory);
+  useEffect(() => { inventoryRef.current = inventory; }, [inventory]);
   const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
 
   // Recording a receipt on a customer's behalf. Staff only: a party signed into
@@ -133,7 +138,7 @@ const Orders = () => {
   const isFulfillmentRole = user?.role === 'Warehouse Manager' || user?.role === 'Dispatch Team';
   const baseVisibleOrders = orders.filter(o => isFulfillmentRole || canAccessData(o.assignedTo));
 
-  const getAvailableQty = (productName) => inventory
+  const getAvailableQty = (productName, stock = inventory) => stock
     .filter(b => b.product === productName)
     .reduce((sum, b) => sum + Math.max(0, (b.quantity || 0) - (b.reserved || 0)), 0);
 
@@ -164,14 +169,14 @@ const Orders = () => {
     return ['Shipped', 'Partially Delivered', 'Delivered'].includes(formData.status);
   };
 
-  const getStockShortfalls = (order) => {
+  const getStockShortfalls = (order, stock = inventory) => {
     // For a single-product order already part-delivered, only what's still
     // outstanding needs to be in stock — not the original full quantity.
     const lineItems = Array.isArray(order.items) && order.items.length > 0
       ? order.items.map(i => ({ name: i.name, quantity: Number(i.quantity || 0) }))
       : [{ name: order.product, quantity: Number(order.quantity || 0) - Number(order.deliveredQty || 0) }];
     return lineItems
-      .map(li => ({ ...li, available: getAvailableQty(li.name) }))
+      .map(li => ({ ...li, available: getAvailableQty(li.name, stock) }))
       .filter(li => li.name && li.available < li.quantity);
   };
 
@@ -202,7 +207,7 @@ const Orders = () => {
     // dispatch, ship, or deliver goods you don't physically have. (Delivered
     // was previously unguarded, allowing "delivery" with no stock.)
     if (['Ready for Dispatch', 'Shipped', 'Delivered'].includes(targetStatus)) {
-      const shortfalls = getStockShortfalls(formData);
+      const shortfalls = getStockShortfalls(formData, inventoryRef.current);
       if (shortfalls.length > 0) {
         setStatusError(`Insufficient stock to ${targetStatus === 'Delivered' ? 'deliver' : 'dispatch'} — ${shortfalls.map(s => `${s.name} (need ${s.quantity}, have ${s.available})`).join('; ')}. Split the order to fulfil what's available.`);
         return;
@@ -514,6 +519,20 @@ const Orders = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      // Right after sign-in the tables may still be loading. Checking stock
+      // against inventory that has not arrived blocked real deliveries, and a
+      // save that landed before the load was overwritten on screen by it.
+      if (await whenLoaded() > 0) await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await submitOrder();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const submitOrder = async () => {
 
     // An order already cleared for fulfilment can have its quantity raised
     // above what's in stock. The status guard only runs on a status *change*,
@@ -1235,8 +1254,8 @@ const Orders = () => {
 
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
                 <button type="button" onClick={closeModal} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium">Cancel</button>
-                <button type="submit" className="px-5 py-2 bg-brand-accent text-brand-primary font-bold rounded-lg hover:bg-brand-accent-light hover:shadow-lg hover:shadow-brand-accent/20 transition-all">
-                  {editingOrder ? 'Update Order' : 'Save Order'}
+                <button type="submit" disabled={isSaving} className="px-5 py-2 bg-brand-accent text-brand-primary font-bold rounded-lg hover:bg-brand-accent-light hover:shadow-lg hover:shadow-brand-accent/20 transition-all disabled:opacity-60 disabled:cursor-wait">
+                  {isSaving ? 'Saving…' : editingOrder ? 'Update Order' : 'Save Order'}
                 </button>
               </div>
             </form>
