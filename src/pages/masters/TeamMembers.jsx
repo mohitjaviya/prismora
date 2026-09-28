@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole } from '../../context/AuthContext';
 import { createPortal } from 'react-dom';
-import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X, Download } from 'lucide-react';
+import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X, Download, UserX, UserCheck } from 'lucide-react';
 import { downloadCSV } from '../../utils/exportUtils';
 import { useConfirm } from '../../context/DialogContext';
 import { useToast } from '../../context/DialogContext';
@@ -60,10 +60,12 @@ export default function TeamMembers() {
       // Supabase Auth only lets an account change its own password, so editing a
       // colleague saves their profile and leaves their password alone.
       const { password, ...profileOnly } = payload;
-      updateUser(editingUser.id, editingUser.id === user?.id ? payload : profileOnly);
-      if (password && editingUser.id !== user?.id) {
-        toast('Profile saved. A password can only be changed by its own account holder, or reset from the Supabase dashboard.', 'success');
-      }
+      updateUser(editingUser.id, editingUser.id === user?.id ? payload : profileOnly).then(ok => {
+        if (!ok) { toast('The changes to ' + payload.name + ' were not saved — the database refused them.', 'error'); return; }
+        if (password && editingUser.id !== user?.id) {
+          toast('Profile saved. A password can only be changed by its own account holder, or reset from the Supabase dashboard.', 'success');
+        }
+      });
     } else {
       // The login is made server-side by the create-user function, which holds
       // the key that can do it. Falls back to the manual two-step where that
@@ -82,6 +84,23 @@ export default function TeamMembers() {
       });
     }
     setIsUserModalOpen(false);
+  };
+
+  // Switching an account off keeps its records and history, unlike Delete.
+  // The database refuses an Inactive account everything, and an open session
+  // is signed out within a minute (043, AuthContext).
+  const setActive = async (u, active) => {
+    const verb = active ? 'Reactivate' : 'Deactivate';
+    if (!await confirm({
+      title: `${verb} ${u.name}?`,
+      body: active
+        ? 'They will be able to sign in again with their existing password.'
+        : 'They will be signed out and unable to sign in or read anything. Their records stay as they are.',
+      danger: !active,
+      confirmLabel: verb,
+    })) return;
+    const ok = await updateUser(u.id, { status: active ? 'Active' : 'Inactive' });
+    toast(ok ? `${u.name} is now ${active ? 'active' : 'inactive'}.` : `${u.name} could not be ${active ? 'reactivated' : 'deactivated'}.`, ok ? 'success' : 'error');
   };
 
   const toggleManagedUser = (userId) => {
@@ -115,6 +134,14 @@ export default function TeamMembers() {
       ),
     },
     {
+      key: 'status', header: 'Status', sort: u => u.status || '',
+      render: u => (
+        <Badge tone={u.status === 'Inactive' || u.status === 'Rejected' ? 'danger' : u.status === 'Pending' ? 'warning' : 'success'}>
+          {u.status || 'Active'}
+        </Badge>
+      ),
+    },
+    {
       key: 'managed', header: 'Team Members Managed', hideBelow: 'lg',
       render: u => (isManagerRole(u.role)
         ? (
@@ -130,10 +157,13 @@ export default function TeamMembers() {
         : <span className="text-slate-600">—</span>),
     },
     {
-      key: 'actions', header: '', align: 'center', width: 'w-24',
+      key: 'actions', header: '', align: 'center', width: 'w-28',
       render: u => (
         <div className="flex items-center justify-center gap-0.5">
           <IconButton icon={Edit2} title="Edit user" size="sm" tone="accent" onClick={() => openUserEdit(u)} />
+          {u.id !== user.id && (u.status === 'Inactive'
+            ? <IconButton icon={UserCheck} title="Reactivate user" size="sm" tone="accent" onClick={() => setActive(u, true)} />
+            : u.status !== 'Pending' && <IconButton icon={UserX} title="Deactivate user" size="sm" tone="danger" onClick={() => setActive(u, false)} />)}
           {u.id !== user.id && (
             <IconButton icon={Trash2} title="Delete user" size="sm" tone="danger"
               onClick={async () => { if (await confirm({ title: 'Delete this user?', danger: true, confirmLabel: 'Delete' })) deleteUser(u.id); }} />
@@ -147,6 +177,7 @@ export default function TeamMembers() {
     Name: u.name,
     Email: u.email,
     Role: u.role,
+    Status: u.status || 'Active',
     Manages: (u.managedUsers || [])
       .map(id => (allUsers.find(x => x.id === id) || {}).name)
       .filter(Boolean)

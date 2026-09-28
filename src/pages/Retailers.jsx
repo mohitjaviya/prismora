@@ -40,7 +40,7 @@ export default function Retailers() {
   const { retailers, addRetailer, updateRetailer, deleteRetailer, dealers, invoices, distributorPayments, addRetailerPayment, orders, territories,
     distributorIncentives, schemeClaims, complaints } = useData();
   const confirm = useConfirm();
-  const { user, users, updateUser, deleteUser, canAccess } = useAuth();
+  const { user, users, deleteUser, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState('');
@@ -90,8 +90,8 @@ export default function Retailers() {
 
   const approveRetailer = (r) => {
     updateRetailer(r.id, { status: 'Active' });
-    const linkedUser = users.find(u => u.retailerId === r.id);
-    if (linkedUser) updateUser(linkedUser.id, { status: 'Active' });
+    // Its Pending login is activated by the database when the partner is (043),
+    // so approving does not also need rights over user accounts.
   };
 
   const rejectRetailer = async (r) => {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SIGNED_OUT_REASON_KEY } from '../utils/accountStatus';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, ArrowRight, Lock } from 'lucide-react';
@@ -7,7 +8,14 @@ import { Mail, ArrowRight, Lock } from 'lucide-react';
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  // Why the last session ended, when the app ended it (a deactivated account).
+  const [error, setError] = useState(() => {
+    try {
+      const reason = sessionStorage.getItem(SIGNED_OUT_REASON_KEY) || '';
+      sessionStorage.removeItem(SIGNED_OUT_REASON_KEY);
+      return reason;
+    } catch { return ''; }
+  });
   const { login, missingEnvVars } = useAuth();
   const navigate = useNavigate();
 
@@ -18,6 +26,8 @@ const Login = () => {
       navigate('/');
     } else if (result === 'pending') {
       setError('Your account is awaiting admin approval. Please check back soon.');
+    } else if (result === 'inactive') {
+      setError('Your account has been deactivated. Contact your administrator.');
     } else if (result === 'rejected') {
       setError('Your registration was not approved. Please contact support.');
     } else if (result === 'unconfigured') {

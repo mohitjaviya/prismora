@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { ShoppingCart, Plus, Trash2, X, Package, Tag, Truck, CheckCircle, Clock, PackageCheck, UserX } from 'lucide-react';
 import { PageHeader, DataTable, Button, Badge, Card, EmptyState } from '../components/ui';
+import CancelMyOrderButton from '../components/CancelMyOrderButton';
+import { useToast } from '../context/DialogContext';
 import { isSchemeEligible } from '../utils/schemeUtils';
 
 const formatCurrency = (val) =>
@@ -26,6 +28,7 @@ const statusConfig = {
 export default function DealerOrders() {
   const { orders, addOrder, confirmOrderReceipt, productCatalog, schemes, territories, dealers, distributors } = useData();
   const { user } = useAuth();
+  const toast = useToast();
 
   const dealer = useMemo(() => dealers?.find(d => d.id === user?.dealerId), [dealers, user]);
 
@@ -314,12 +317,14 @@ export default function DealerOrders() {
             ) : canConfirmReceipt ? (
               <button
                 type="button"
-                onClick={() => confirmOrderReceipt(liveOrder.id)}
+                onClick={async () => { const r = await confirmOrderReceipt(liveOrder.id); if (!r?.ok) toast(r?.error || 'Receipt could not be confirmed.', 'error'); }}
                 className="mt-4 w-full btn-accent px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
               >
                 <CheckCircle size={16} /> Confirm Receipt
               </button>
-            ) : null}
+            ) : (
+              <CancelMyOrderButton order={liveOrder} />
+            )}
           </div>
         </div>, document.body
         );

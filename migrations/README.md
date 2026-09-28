@@ -253,3 +253,19 @@ INSERT INTO public.schema_migrations (filename, note)
 VALUES ('024_what_it_does.sql', 'one line on what changed')
 ON CONFLICT (filename) DO NOTHING;
 ```
+
+## Batch 1 security: run before the app that expects it
+
+`043_batch1_access_security.sql` (Phase 1 D-02 to D-07):
+- 'Inactive' is refused like Pending and Rejected.
+- An account may change only its own name (a trigger on `users`); administrators change the rest, except their own status. Server functions are unaffected.
+- Approving a partner activates its Pending login in the database.
+- Partners can no longer update orders. They confirm receipt (`confirm_my_order_receipt`) and cancel while Pending (`cancel_my_order`). Their new orders are forced Pending, onto their own party, and priced from `products` at their tier.
+- Leads and orders are scoped by owner for sales and manager roles with full Leads or SFA (`sees_account_row`).
+- Invoices reach a partner only through its own orders.
+- `bank_transactions` → accounting, `stock_transfers`/`warehouses` → inventory, `notifications` → own (any active staff account may send one).
+
+`044_partner_cancel_not_after_invoice.sql`: a partner can't cancel an invoiced order, and can confirm receipt only once Shipped or Delivered.
+
+Order: run 043 and 044 **before** deploying the matching app code. The older app writes a partner's receipt with a direct update, which 043 refuses. The newer app calls functions that don't exist until 043 runs.
+

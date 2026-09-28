@@ -5,6 +5,7 @@ import { checkEmailTaken } from '../utils/signupChecks';
 import { signupPayload, signupOutcome } from '../utils/partnerSignup';
 import { canSeeOwner, scopedToOwnAccounts } from '../utils/sfaVisibility';
 import { noteEvent } from '../utils/writeJournal';
+import { isBlockedStatus, blockedLoginResult, signedOutMessage, SIGNED_OUT_REASON_KEY } from '../utils/accountStatus';
 
 export const USER_ROLES = [
   'Super Admin',
@@ -231,6 +232,14 @@ export const AuthProvider = ({ children }) => {
     try { localStorage.removeItem('prismora_user'); } catch { /* storage blocked */ }
   };
 
+  // Sign out an account the database has switched off, saying why on the sign-in screen.
+  const signOutBlocked = async (status) => {
+    noteEvent('signed out: account ' + status);
+    try { sessionStorage.setItem(SIGNED_OUT_REASON_KEY, signedOutMessage(status) || ''); } catch { /* storage blocked */ }
+    await supabase.auth.signOut();
+    clearSession();
+  };
+
   // The Supabase session is the source of truth for whether someone is signed
   // in. localStorage still seeds `user` above so a refresh does not flash the
   // login page, but if the session has expired this corrects it a moment later
@@ -265,7 +274,8 @@ export const AuthProvider = ({ children }) => {
       // A read that failed says nothing about whether the account exists, so it
       // must not end a session Supabase considers valid. Keeping the cached
       // profile is the safe answer; the next load corrects it.
-      if (profile) applySession(profile);
+      if (profile && isBlockedStatus(profile.status)) await signOutBlocked(profile.status);
+      else if (profile) applySession(profile);
       else if (!failed) clearSession();
       setAuthReady(true);
     })();
@@ -291,6 +301,7 @@ export const AuthProvider = ({ children }) => {
         if (cancelled) return;
         const profile = await loadProfileAfterSignIn(email);
         if (cancelled || !profile) return;
+        if (isBlockedStatus(profile.status)) { await signOutBlocked(profile.status); return; }
         noteEvent('signed-in', profile.id);
         applySession(profile);
       }, 0);
@@ -298,6 +309,35 @@ export const AuthProvider = ({ children }) => {
 
     return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
   }, []);
+
+  /**
+   * An account switched off while signed in is signed out.
+   *
+   * The database refuses it everything from the moment it is deactivated
+   * (043); this makes the screen follow within a minute, or at once when the
+   * window is brought back to the front, instead of showing a session that
+   * can no longer load anything.
+   */
+  useEffect(() => {
+    if (!user?.email) return undefined;
+    let stopped = false;
+    const check = async () => {
+      if (stopped) return;
+      const { profile } = await loadProfile(user.email);
+      if (!stopped && profile && isBlockedStatus(profile.status)) await signOutBlocked(profile.status);
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    const timer = setInterval(check, 60000);
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user?.email]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   /**
    * The roles table, which decides what every screen offers.
@@ -374,7 +414,7 @@ export const AuthProvider = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Returns true (success) | false (invalid credentials) | 'pending' | 'rejected'
+  // Returns true (success) | false (invalid credentials) | 'pending' | 'rejected' | 'inactive'
   const login = async (email, password) => {
     try {
       // Checked by Supabase Auth against a hash it alone holds. This used to be
@@ -412,8 +452,7 @@ export const AuthProvider = ({ children }) => {
         await supabase.auth.signOut();
         return 'no-profile:' + (probe.failed ? 'read-blocked' : 'not-found') + ':' + auth.user.email;
       }
-      if (profile.status === 'Pending') { await supabase.auth.signOut(); return 'pending'; }
-      if (profile.status === 'Rejected') { await supabase.auth.signOut(); return 'rejected'; }
+      if (isBlockedStatus(profile.status)) { await supabase.auth.signOut(); return blockedLoginResult(profile.status); }
 
       applySession(profile);
       return true;
@@ -661,12 +700,19 @@ export const AuthProvider = ({ children }) => {
       if (Object.keys(updatedData).length === 0) return true;
     }
 
+    // The database decides who may change what here (043: your own name
+    // only, unless you administer users), so the screen changes only once it
+    // has agreed. It used to change first and ignore a refusal.
+    const { data, error } = await supabase.from('users').update(updatedData).eq('id', id).select('id');
+    if (error || !data?.length) {
+      console.error('[Prismora] Could not save the profile:', error?.message || 'no row was changed');
+      return false;
+    }
     setUsers(prev => {
       const next = prev.map(u => u.id === id ? { ...u, ...updatedData } : u);
       localStorage.setItem('prismora_users', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('users').update(updatedData).eq('id', id); } catch { /* ok */ }
 
     if (user && user.id === id) {
       applySession({ ...user, ...updatedData });

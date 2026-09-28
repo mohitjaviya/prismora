@@ -1256,7 +1256,9 @@ export const DataProvider = ({ children }) => {
     const draft = stamp({ ...order, createdAt: new Date().toISOString() });
     const row = orderRow(draft);
     delete row.id;
-    const { data, error } = await supabase.from('orders').insert([row]).select('id').single();
+    // select('*'): a partner's order is priced by the database (043), so what
+    // was saved can differ from what the browser sent.
+    const { data, error } = await supabase.from('orders').insert([row]).select('*').single();
     // A refused insert used to come back with an id all the same, so the order
     // appeared on screen and anything that recorded that id — a field visit's
     // report — then pointed at an order the database never had.
@@ -1265,7 +1267,7 @@ export const DataProvider = ({ children }) => {
       return null;
     }
     const newId = data.id;
-    const newOrder = { ...draft, id: newId };
+    const newOrder = { ...draft, ...data, id: newId };
     setOrders(prev => {
       const next = [newOrder, ...prev];
       localStorage.setItem('prismora_orders', JSON.stringify(next));
@@ -1644,15 +1646,23 @@ export const DataProvider = ({ children }) => {
     return writeReceipt(id, patch, [...dropped, culprit]);
   };
 
+  // A partner may not edit its orders directly (043); the database checks the
+  // order is theirs and sets only the receipt fields.
   const confirmOrderReceipt = async (id) => {
     const order = orders.find(o => o.id === id);
-    const receivedAt = new Date().toISOString();
-    const patch = { receivedByDistributor: true, receivedAt, receiptSource: 'partner' };
-    const next = orders.map(o => o.id === id ? { ...o, ...patch } : o);
-    setOrders(next);
-    localStorage.setItem('prismora_orders', JSON.stringify(next));
-    await writeReceipt(id, patch);
+    const { error } = await supabase.rpc('confirm_my_order_receipt', { p_order_id: id });
+    if (error) return { ok: false, error: plainDatabaseError(error, 'confirm receipt of this order') };
+    await reloadRows('orders', setOrders, 'prismora_orders', 'id', [id]);
     if (order) logEvent('order_receipt_confirmed', `${order.customerName} confirmed receipt of order ${id}`, order.assignedTo, id);
+    return { ok: true };
+  };
+
+  // A partner cancelling its own order, allowed by the database only while Pending.
+  const cancelMyOrder = async (id) => {
+    const { error } = await supabase.rpc('cancel_my_order', { p_order_id: id });
+    if (error) return { ok: false, error: plainDatabaseError(error, 'cancel this order') };
+    await reloadRows('orders', setOrders, 'prismora_orders', 'id', [id]);
+    return { ok: true };
   };
 
   /**
@@ -3721,7 +3731,7 @@ export const DataProvider = ({ children }) => {
       schemaError, dismissSchemaError: () => setSchemaError(null),
       dataStatus, hadCache,
       addLead, updateLead, deleteLead, convertLeadToOrder,
-      addOrder: logged('add order', addOrder), updateOrder, deleteOrder, confirmOrderReceipt, recordOrderReceipt, clearOrderReceipt, splitOrder, deliverPartial,
+      addOrder: logged('add order', addOrder), updateOrder, deleteOrder, confirmOrderReceipt, cancelMyOrder: logged('cancel my order', cancelMyOrder), recordOrderReceipt, clearOrderReceipt, splitOrder, deliverPartial,
       addProduct, updateProduct, deleteProduct,
       addInvoice: logged('add invoice', addInvoice), convertInvoice: logged('convert invoice', convertInvoice), updateInvoiceStatus, deleteInvoice,
       creditNotes, addCreditNote, deleteCreditNote,

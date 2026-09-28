@@ -40,7 +40,7 @@ export default function Distributors() {
   const { distributors, addDistributor, updateDistributor, deleteDistributor, invoices, distributorPayments, addDistributorPayment, orders, territories,
     distributorIncentives, schemeClaims, complaints, dealers } = useData();
   const confirm = useConfirm();
-  const { user, users, updateUser, deleteUser, canAccess } = useAuth();
+  const { user, users, deleteUser, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState('');
@@ -87,8 +87,8 @@ export default function Distributors() {
 
   const approveDistributor = (d) => {
     updateDistributor(d.id, { status: 'Active' });
-    const linkedUser = users.find(u => u.distributorId === d.id);
-    if (linkedUser) updateUser(linkedUser.id, { status: 'Active' });
+    // Its Pending login is activated by the database when the partner is (043),
+    // so approving does not also need rights over user accounts.
   };
 
   const rejectDistributor = async (d) => {
