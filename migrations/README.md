@@ -283,3 +283,5 @@ Order: run 043 and 044 **before** deploying the matching app code. The older app
 - **D-09 / D-10:** `sales_move_order` lets sales roles send their own Pending order to the warehouse, or cancel it.
 
 **Deploy the matching app code right after applying 046.** The older app also moves the balance from the browser after a payment. With 046 in place, a payment recorded by that older app is counted twice.
+
+`047_purchase_manager_no_accounting.sql`: Purchase Manager's Accounting access goes from view to none, for least access. With view, it could read every partner payment, invoice and credit note. Owner decision, 2026-09-28. Recorded in `audit_log` with that reason. Independent of app code.
