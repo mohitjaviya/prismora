@@ -300,3 +300,5 @@ Order: run 043 and 044 **before** deploying the matching app code. The older app
 Both are safe with the older app code. Its browser balance writes are refused, and the database moves the balance itself.
 
 `050_purchase_manager_no_partner_records.sql`: Purchase Manager Distributors/Dealers/Retailers full → none (least access; owner decision 2026-09-28). Audited. Independent of app code.
+
+`051_partial_goods_receipts.sql` (D-20): every GRN against a PO is checked in the database. The PO must be open, each line must be on the PO, and receipts may not exceed what was ordered. The PO then becomes Partially Received, or GRN Done once fully received. Deploy the matching app code: the older app sets GRN Done itself after any receipt.

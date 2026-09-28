@@ -296,7 +296,7 @@ const insertWithFreeId = async (label, table, prefix, firstNumber, record, rawSh
           'references sent:', refs);
         const complaint = writeComplaint(error, sent);
         if (complaint) reportSchemaError({ label, detail: complaint.text, cause: complaint.cause });
-        return { id, saved: false };
+        return { id, saved: false, error };
       }
 
       // 23505 = that id is already taken. `firstNumber` was worked out from the
@@ -2748,10 +2748,11 @@ export const DataProvider = ({ children }) => {
       return !isNaN(num) && num > max ? num : max;
     }, 0);
     const draft = { ...grnData, createdAt: new Date().toISOString() };
-    const { id: newId, saved } = await insertWithFreeId('grn insert', 'grn', 'GRN-', maxId + 1, draft, grnRow);
-    // A receipt that was refused must not go on to close the PO or bill the
-    // vendor for goods with no record behind them.
-    if (!saved) return null;
+    const { id: newId, saved, error } = await insertWithFreeId('grn insert', 'grn', 'GRN-', maxId + 1, draft, grnRow);
+    // A receipt that was refused must not go on to bill the vendor for goods
+    // with no record behind them. The database says why: over what was
+    // ordered, a product not on the PO, or a PO not open for receipts (051).
+    if (!saved) return { ok: false, error: error ? plainDatabaseError(error, 'record this goods receipt') : 'The goods receipt could not be saved.' };
     const newGRN = { ...grnRow(draft), id: newId };
     setGrn(prev => {
       const next = [newGRN, ...prev];
@@ -2762,7 +2763,9 @@ export const DataProvider = ({ children }) => {
     // show what it did.
     await reloadRows('inventory', setInventory, 'prismora_inventory', 'product',
       (grnData.items || []).map(i => i.product));
-    if (grnData.poId) updatePurchaseOrderStatus(grnData.poId, 'GRN Done');
+    // The PO's status follows from what has now been received — Partially
+    // Received, or GRN Done once every line is in — set by the database (051).
+    if (grnData.poId) await reloadRows('purchase_orders', setPurchaseOrders, 'prismora_purchase_orders', 'id', [grnData.poId]);
     logEvent('grn_created', `GRN ${newId} received from ${grnData.vendorName}`, grnData.receivedBy, newId);
 
     // Receiving goods creates money owed to the vendor — bump their outstanding
@@ -2781,8 +2784,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
       await persist('vendors update', supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id));
     }
-    // Returned so the caller can hold back the stock increase if this failed.
-    return newId;
+    return { ok: true, id: newId };
   };
 
   // ── Vendor Payments ───────────────────────────────────────────────────────

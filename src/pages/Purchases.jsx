@@ -19,6 +19,7 @@ import { optionsFor, badgeStyle } from '../utils/masterLists';
 const statusConfig = {
   'Draft':      { cls: 'bg-slate-500/10 text-slate-400 border-slate-500/20', icon: <FileText size={12} /> },
   'Confirmed':  { cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20',    icon: <CheckCircle size={12} /> },
+  'Partially Received': { cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20', icon: <Truck size={12} /> },
   'GRN Done':   { cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: <Truck size={12} /> },
   'Closed':     { cls: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: <CheckCircle size={12} /> },
   'Cancelled':  { cls: 'bg-rose-500/10 text-rose-400 border-rose-500/20',    icon: <AlertCircle size={12} /> },
@@ -81,6 +82,8 @@ export default function Purchases() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [isPOModalOpen, setIsPOModalOpen] = useState(false);
   const [isGRNModalOpen, setIsGRNModalOpen] = useState(false);
+  const [isSavingGRN, setIsSavingGRN] = useState(false);
+  const [grnError, setGrnError] = useState('');
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
   const [viewingVendor, setViewingVendor] = useState(null);
@@ -104,7 +107,7 @@ export default function Purchases() {
   // KPIs
   const kpis = useMemo(() => ({
     total: purchaseOrders.length,
-    pending: purchaseOrders.filter(p => p.status === 'Confirmed').length,
+    pending: purchaseOrders.filter(p => p.status === 'Confirmed' || p.status === 'Partially Received').length,
     // Only committed spend counts — a Draft was never sent to the vendor and a
     // Cancelled PO represents no obligation, so including either overstates spend.
     thisMonth: purchaseOrders.filter(p => {
@@ -267,8 +270,21 @@ export default function Purchases() {
     setIsPOModalOpen(false);
   };
 
+  // What each PO line has had received already, across its earlier GRNs, so a
+  // second receipt starts from what is still outstanding (D-20).
+  const receivedSoFar = (po) => {
+    const key = (v) => String(v || '').trim().toLowerCase();
+    const got = {};
+    for (const g of grn.filter(g => g.poId === po.id)) {
+      for (const l of (g.items || [])) got[key(l.product)] = (got[key(l.product)] || 0) + Number(l.receivedQty ?? l.quantity ?? 0);
+    }
+    return (product) => got[key(product)] || 0;
+  };
+
   const openGRN = (po) => {
+    const had = receivedSoFar(po);
     setGrnTargetPO(po);
+    setGrnError('');
     setGRNForm({
       receivedDate: new Date().toISOString().split('T')[0],
       notes: '',
@@ -277,7 +293,9 @@ export default function Purchases() {
       // a starting point because it is usually what was ordered.
       items: (po.items || []).map(i => ({
         ...i,
-        receivedQty: i.quantity,
+        orderedQty: Number(i.quantity || 0),
+        alreadyReceived: had(i.product),
+        receivedQty: Math.max(0, Number(i.quantity || 0) - had(i.product)),
         batchNumber: i.batchNumber || '',
         expiryDate: i.expiryDate || '',
       }))
@@ -287,10 +305,12 @@ export default function Purchases() {
 
   const handleSubmitGRN = async (e) => {
     e.preventDefault();
-    // Awaited, because the stock increase below used to run whether or not the
-    // receipt saved — so a refused GRN still raised inventory, and there was no
-    // receipt left to say where the units came from.
-    const grnId = await addGRN({
+    if (isSavingGRN) return;
+    setGrnError('');
+    setIsSavingGRN(true);
+    // Kept open until the database has the receipt, with its reason if it
+    // refuses one (more than is outstanding, for instance).
+    const result = await addGRN({
       poId: grnTargetPO?.id || null,
       vendorName: grnTargetPO?.vendorName || '',
       items: grnForm.items.map(i => ({
@@ -303,7 +323,9 @@ export default function Purchases() {
       notes: grnForm.notes,
       receivedBy: user.id
     });
-    if (!grnId) return;
+    setIsSavingGRN(false);
+    if (!result?.ok) { setGrnError(result?.error || 'The goods receipt could not be saved.'); return; }
+    toast(`${result.id} recorded.`, 'success');
     // The stock comes in with the receipt, in the database (041) — whoever
     // records it, Purchase Manager included, who has no Inventory access. It
     // used to be a second write from here under the clicker's own access, so
@@ -423,7 +445,7 @@ export default function Purchases() {
                         <span style={statusStyle(po.status) || undefined} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${statusStyle(po.status) ? "" : st.cls}`}>
                           {st.icon}{po.status}
                         </span>
-                        {po.status === 'Confirmed' && (() => {
+                        {(po.status === 'Confirmed' || po.status === 'Partially Received') && (() => {
                           const days = Math.floor((Date.now() - new Date(po.createdAt)) / 86400000);
                           const cls = days > 30 ? 'text-rose-400' : days > 15 ? 'text-amber-400' : 'text-slate-500';
                           return <div className={`mt-1 text-[10px] font-semibold ${cls}`}>⏳ {days}d awaiting GRN</div>;
@@ -435,7 +457,7 @@ export default function Purchases() {
                             {po.status === 'Draft' && (
                               <button onClick={() => updatePurchaseOrderStatus(po.id, 'Confirmed')} className="px-2 py-1 text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-colors">Confirm</button>
                             )}
-                            {po.status === 'Confirmed' && (
+                            {(po.status === 'Confirmed' || po.status === 'Partially Received') && (
                               <button onClick={() => openGRN(po)} className="px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-colors">GRN</button>
                             )}
                             {po.status === 'GRN Done' && (
@@ -756,11 +778,16 @@ export default function Purchases() {
                   }));
                   return (
                     <div key={idx} className="bg-brand-primary-lighter/20 rounded-xl p-3 mb-2 border border-white/5">
-                      <p className="text-xs font-semibold text-white mb-2 truncate">{item.product}</p>
+                      <p className="text-xs font-semibold text-white mb-0.5 truncate">{item.product}</p>
+                      {item.orderedQty != null && (
+                        <p className="text-[10px] text-slate-500 mb-2">
+                          Ordered {item.orderedQty} · received {item.alreadyReceived || 0} · outstanding {Math.max(0, item.orderedQty - (item.alreadyReceived || 0))}
+                        </p>
+                      )}
                       <div className="grid grid-cols-3 gap-2">
                         <div>
                           <label htmlFor="purchases-qty-received" className="block text-[10px] text-slate-500 mb-1">Qty received</label>
-                          <input id="purchases-qty-received" type="number" min="0" value={item.receivedQty}
+                          <input id="purchases-qty-received" type="number" min="0" max={item.orderedQty != null ? Math.max(0, item.orderedQty - (item.alreadyReceived || 0)) : undefined} value={item.receivedQty}
                             onChange={e => patch('receivedQty', e.target.value)}
                             className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" placeholder="Qty" />
                         </div>
@@ -784,13 +811,14 @@ export default function Purchases() {
                   );
                 })}
               </div>
+              {grnError && <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">{grnError}</p>}
               <div>
                 <label htmlFor="purchases-notes-2" className={labelCls}>Notes</label>
                 <textarea id="purchases-notes-2" rows="2" value={grnForm.notes} onChange={e => setGRNForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsGRNModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Record GRN & Update Stock</button>
+                <button type="submit" disabled={isSavingGRN} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingGRN ? 'Saving…' : 'Record GRN & Update Stock'}</button>
               </div>
             </form>
           </div>
