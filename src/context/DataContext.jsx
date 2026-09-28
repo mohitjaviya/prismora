@@ -1624,11 +1624,43 @@ export const DataProvider = ({ children }) => {
     return { ok: true };
   };
 
+  // Removed from the screen only once the database has removed it: a
+  // delivered order is refused (054), and used to vanish and come back.
   const deleteOrder = async (id) => {
-    const next = orders.filter(o => o.id !== id);
-    setOrders(next);
-    localStorage.setItem('prismora_orders', JSON.stringify(next));
-    await persist('orders delete', supabase.from('orders').delete().eq('id', id));
+    const { data, error } = await supabase.from('orders').delete().eq('id', id).select('id');
+    if (error || !data?.length) {
+      return { ok: false, error: error ? plainDatabaseError(error, 'delete this order') : 'The order could not be deleted.' };
+    }
+    setOrders(prev => {
+      const next = prev.filter(o => o.id !== id);
+      localStorage.setItem('prismora_orders', JSON.stringify(next));
+      return next;
+    });
+    return { ok: true };
+  };
+
+  // What a delivered order can still take back, per product and batch (054).
+  const getOrderReturnable = async (orderId) => {
+    const { data, error } = await supabase.rpc('order_returnable', { p_order_id: orderId });
+    if (error) return { data: [], error: plainDatabaseError(error, 'read what this order delivered') };
+    return { data: (data || []).map(r => ({ ...r, delivered: Number(r.delivered), returned: Number(r.returned), returnable: Number(r.returnable) })) };
+  };
+
+  // Goods back on a delivered order: stock, credit note and balance together,
+  // in the database (record_sales_return, 054).
+  const recordSalesReturn = async (orderId, lines, note) => {
+    const { data, error } = await supabase.rpc('record_sales_return', { p_order_id: orderId, p_lines: lines, p_note: note || null });
+    if (error) return { ok: false, error: plainDatabaseError(error, 'record this return') };
+    const order = orders.find(o => o.id === orderId);
+    await Promise.all([
+      reloadRows('inventory', setInventory, 'prismora_inventory', 'product', lines.map(l => l.product)),
+      reloadRows('credit_notes', setCreditNotes, 'prismora_credit_notes', 'id', [data.creditNoteId]),
+      reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [order?.distributorId]),
+      reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [order?.dealerId]),
+      reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [order?.retailerId]),
+    ]);
+    logEvent('sales_return', `Sales return ${data.returnId} on order ${orderId}: credit note ${data.creditNoteId}`, order?.assignedTo, orderId);
+    return { ok: true, ...data };
   };
 
   // Lets a distributor self-acknowledge physical receipt of an order —
@@ -3764,6 +3796,7 @@ export const DataProvider = ({ children }) => {
   return (
     <DataContext.Provider value={gateWrites({
       whenLoaded: () => loadGate.current.wait(),
+      getOrderReturnable, recordSalesReturn,
       companySettings, loadCompanySettings, updateCompanySettings,
       // Original CRM
       leads, orders, eventLog, products, productCatalog, invoices, expenses,

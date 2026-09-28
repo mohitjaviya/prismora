@@ -18,6 +18,10 @@ import { missingDelivery } from '../utils/delivery';
 import LastChanged from '../components/audit/LastChanged';
 import { localDay, orderDateToSave } from '../utils/orderDate';
 import { sellableQty } from '../utils/expiry';
+import SalesReturnModal from '../components/SalesReturnModal';
+
+// Delivered — fully, or any units — is final: no cancel, no going back (054).
+const isDelivered = (o) => Boolean(o && (o.fulfilledAt || Number(o.deliveredQty || 0) > 0 || o.status === 'Delivered' || o.status === 'Partially Delivered'));
 
 
 // Which role "owns" moving an order into a given status — enforces the
@@ -56,7 +60,7 @@ const Orders = () => {
   const statusOptions = optionsFor(masters, 'order_status');
   const statuses = statusOptions.map(o => o.key);
   const labelForStatus = (k) => (statusOptions.find(o => o.key === k) || {}).label || k;
-  const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
+  const { user, users: mockUsers, canAccessData, getAssignableUsers, canAccess } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -67,6 +71,7 @@ const Orders = () => {
   const [salespersonFilter, setSalespersonFilter] = useState('');
   const [statusError, setStatusError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [returningOrder, setReturningOrder] = useState(null);
   // The stock check must see inventory as it is when Save runs, not as it was
   // when the form rendered — a save can wait for the first load to land.
   const inventoryRef = useRef(inventory);
@@ -78,6 +83,8 @@ const Orders = () => {
   const toast = useToast();
   const confirm = useConfirm();
   const canStaffRecordReceipt = !['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
+  // Returns move stock and money: the warehouse or Accounts, and administrators.
+  const canRecordReturns = canAccess('accounting', 'full') || canAccess('inventory', 'full');
   const [receiptOrder, setReceiptOrder] = useState(null);
   const [receiptForm, setReceiptForm] = useState({ evidence: '', note: '' });
   const [savingReceipt, setSavingReceipt] = useState(false);
@@ -187,6 +194,13 @@ const Orders = () => {
   const missingDeliveryFor = (target) => missingDelivery(formData, target);
 
   const attemptSetStatus = (targetStatus) => {
+    // Delivered is final: the goods left and the invoice stands. What comes
+    // back is a sales return; the database refuses the rest too (054).
+    if (editingOrder && isDelivered(editingOrder) && targetStatus !== editingOrder.status
+        && !(editingOrder.status === 'Partially Delivered' && targetStatus === 'Delivered')) {
+      setStatusError(`Order ${editingOrder.id} has been delivered, so it cannot be ${targetStatus === 'Cancelled' ? 'cancelled' : `moved back to ${targetStatus}`}. Record a sales return (the ↩ button on the order) or issue a credit note instead.`);
+      return;
+    }
     if (!canSetOrderStatus(user?.role, targetStatus)) {
       const owners = STATUS_STAGE_OWNERS[targetStatus];
       setStatusError(`Only ${owners ? owners.join('/') : 'Admin'} can set this status.`);
@@ -740,10 +754,21 @@ const Orders = () => {
             <IconButton icon={Undo2} title="Withdraw the receipt you recorded" size="sm"
               onClick={e => { e.stopPropagation(); withdrawReceipt(o); }} />
           )}
+          {canRecordReturns && isDelivered(o) && (
+            <IconButton icon={Undo2} title="Sales return" size="sm" tone="accent"
+              onClick={e => { e.stopPropagation(); setReturningOrder(o); }} />
+          )}
           <IconButton icon={Edit2} title="Edit order" size="sm" tone="accent"
             onClick={e => { e.stopPropagation(); handleOpenModal(o); }} />
-          <IconButton icon={Trash2} title="Delete order" size="sm" tone="danger"
-            onClick={e => { e.stopPropagation(); deleteOrder(o.id); }} />
+          {!isDelivered(o) && (
+            <IconButton icon={Trash2} title="Delete order" size="sm" tone="danger"
+              onClick={async e => {
+                e.stopPropagation();
+                if (!await confirm({ title: `Delete order ${o.id}?`, body: 'Cancelling keeps the record; deleting removes it.', danger: true, confirmLabel: 'Delete' })) return;
+                const r = await deleteOrder(o.id);
+                if (!r?.ok) toast(r?.error || 'The order could not be deleted.', 'error');
+              }} />
+          )}
         </div>
       ),
     },
@@ -751,6 +776,7 @@ const Orders = () => {
 
   return (
     <div className="space-y-6 flex flex-col h-full">
+      {returningOrder && <SalesReturnModal order={returningOrder} onClose={() => setReturningOrder(null)} />}
       <PageHeader
         icon={ShoppingCart}
         title="Order Management"

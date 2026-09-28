@@ -1,0 +1,156 @@
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Undo2, X, Plus, Trash2 } from 'lucide-react';
+import { useData } from '../context/DataContext';
+import { useToast } from '../context/DialogContext';
+
+const REASONS = ['Damaged in transit', 'Expired / near expiry', 'Wrong product', 'Quality complaint', 'Excess stock', 'Other'];
+const inputCls = 'w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white';
+
+const formatCurrency = (val) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(val || 0);
+
+/**
+ * Goods coming back on a delivered order (D-19, D-22).
+ *
+ * A delivered order is never cancelled — the goods left, the invoice stands.
+ * What came back is recorded here, line by line, and the database does the
+ * rest in one step (record_sales_return, 054): the units go back into the
+ * batch they left from, a credit note is raised for what was billed (the
+ * partner's balance moves once), and nothing can come back beyond what was
+ * delivered. The form offers only what is still returnable, and the
+ * database checks it again.
+ */
+export default function SalesReturnModal({ order, onClose }) {
+  const { getOrderReturnable, recordSalesReturn, inventory } = useData();
+  const toast = useToast();
+  const [position, setPosition] = useState(null);
+  const [lines, setLines] = useState([]);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let live = true;
+    getOrderReturnable(order.id).then(({ data, error: err }) => {
+      if (!live) return;
+      if (err) { setError(err); setPosition([]); return; }
+      setPosition(data);
+      const first = data.find(p => p.returnable > 0);
+      if (first) setLines([blankLine(first)]);
+    });
+    return () => { live = false; };
+  }, [order.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Batches a line may go back to: the ones this order was delivered from, when
+  // they were recorded; otherwise any batch of the product on record.
+  const batchesFor = (product) => {
+    const pos = position?.find(p => p.product === product);
+    if (pos?.batches?.length) {
+      return pos.batches.map(b => ({ id: b.inventoryId, label: `${b.batchNumber || '(no batch no.)'} — delivered ${b.delivered}, returnable ${b.returnable}`, max: Number(b.returnable) }));
+    }
+    return (inventory || []).filter(b => b.product === product)
+      .map(b => ({ id: b.id, label: `${b.batchNumber || '(no batch no.)'} — ${b.warehouse || ''}`, max: null }));
+  };
+  function blankLine(pos) {
+    const b = pos.batches?.find(x => Number(x.returnable) > 0) || null;
+    return { product: pos.product, inventoryId: b?.inventoryId || '', quantity: '', reason: REASONS[0] };
+  }
+
+  const returnable = useMemo(() => (position || []).filter(p => Number(p.returnable) > 0), [position]);
+  const setLine = (i, patch) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (saving) return;
+    setError('');
+    const clean = lines.filter(l => Number(l.quantity) > 0);
+    if (!clean.length) { setError('Enter a quantity to return on at least one line.'); return; }
+    if (clean.some(l => !l.inventoryId)) { setError('Choose the batch each returned line goes back to.'); return; }
+    setSaving(true);
+    const result = await recordSalesReturn(order.id, clean.map(l => ({ ...l, quantity: Number(l.quantity) })), note);
+    setSaving(false);
+    if (!result.ok) { setError(result.error); return; }
+    toast(`Return ${result.returnId} recorded: stock put back, credit note ${result.creditNoteId} for ${formatCurrency(result.value)}.`, 'success');
+    onClose(true);
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-[6vh]">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !saving && onClose(false)} />
+      <div className="relative glass-panel bg-brand-primary w-full max-w-2xl max-h-[88vh] rounded-2xl shadow-2xl border border-brand-accent/30 z-10 flex flex-col overflow-hidden">
+        <div className="flex justify-between items-center p-5 border-b border-white/5">
+          <h3 className="text-lg font-bold text-white flex items-center gap-2"><Undo2 size={18} className="text-brand-accent" />Sales return — {order.id}</h3>
+          <button type="button" title="Close" onClick={() => onClose(false)} className="p-1 text-slate-400 hover:text-white"><X size={18} /></button>
+        </div>
+        <form onSubmit={save} className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
+          <p className="text-xs text-slate-400">
+            {order.customerName}. Returned units go back into the batch they left from, and a credit note for what was billed
+            is raised against the partner's account. Nothing can come back beyond what was delivered.
+          </p>
+          {position === null ? <p className="text-sm text-slate-500">Loading what was delivered…</p> : (
+            <>
+              <div className="rounded-xl border border-white/5 p-3 text-xs text-slate-300 space-y-1">
+                {position.map(p => (
+                  <div key={p.product} className="flex justify-between gap-3">
+                    <span>{p.product}</span>
+                    <span className="text-slate-500">delivered {p.delivered} · returned {p.returned} · <span className="text-white font-semibold">returnable {p.returnable}</span></span>
+                  </div>
+                ))}
+              </div>
+              {returnable.length === 0 ? <p className="text-sm text-amber-400">Everything delivered on this order has already come back.</p> : lines.map((l, i) => {
+                const pos = position.find(p => p.product === l.product);
+                const batchOpts = batchesFor(l.product);
+                const batchMax = batchOpts.find(b => b.id === l.inventoryId)?.max;
+                const max = Math.min(Number(pos?.returnable || 0), batchMax ?? Infinity);
+                return (
+                  <div key={i} className="grid grid-cols-12 gap-2 items-end bg-brand-primary-lighter/20 rounded-xl p-3 border border-white/5">
+                    <div className="col-span-12 sm:col-span-4">
+                      <label htmlFor={`sr-product-${i}`} className="block text-[10px] text-slate-500 mb-1">Product</label>
+                      <select id={`sr-product-${i}`} className={inputCls} value={l.product}
+                        onChange={e => { const p = returnable.find(x => x.product === e.target.value); setLine(i, blankLine(p)); }}>
+                        {returnable.map(p => <option key={p.product} value={p.product} className="bg-brand-primary">{p.product}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-12 sm:col-span-4">
+                      <label htmlFor={`sr-batch-${i}`} className="block text-[10px] text-slate-500 mb-1">Back into batch</label>
+                      <select id={`sr-batch-${i}`} className={inputCls} value={l.inventoryId} onChange={e => setLine(i, { inventoryId: e.target.value })}>
+                        <option value="" className="bg-brand-primary">Choose…</option>
+                        {batchOpts.map(b => <option key={b.id} value={b.id} className="bg-brand-primary">{b.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-4 sm:col-span-1">
+                      <label htmlFor={`sr-qty-${i}`} className="block text-[10px] text-slate-500 mb-1">Qty</label>
+                      <input id={`sr-qty-${i}`} type="number" min="1" max={Number.isFinite(max) ? max : undefined} className={inputCls}
+                        value={l.quantity} onChange={e => setLine(i, { quantity: e.target.value })} />
+                    </div>
+                    <div className="col-span-7 sm:col-span-2">
+                      <label htmlFor={`sr-reason-${i}`} className="block text-[10px] text-slate-500 mb-1">Reason</label>
+                      <select id={`sr-reason-${i}`} className={inputCls} value={l.reason} onChange={e => setLine(i, { reason: e.target.value })}>
+                        {REASONS.map(r => <option key={r} value={r} className="bg-brand-primary">{r}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-1 flex justify-end">
+                      {lines.length > 1 && <button type="button" title="Remove line" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))} className="p-2 text-slate-500 hover:text-rose-400"><Trash2 size={14} /></button>}
+                    </div>
+                  </div>
+                );
+              })}
+              {returnable.length > 0 && (
+                <button type="button" onClick={() => setLines(ls => [...ls, blankLine(returnable[0])])} className="text-xs font-semibold text-brand-accent inline-flex items-center gap-1"><Plus size={12} /> Add a line</button>
+              )}
+              <div>
+                <label htmlFor="sr-note" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Note (optional)</label>
+                <textarea id="sr-note" rows="2" value={note} onChange={e => setNote(e.target.value)} className="w-full glass-input rounded-xl px-3 py-2 text-sm text-white resize-none" />
+              </div>
+            </>
+          )}
+          {error && <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">{error}</p>}
+          <div className="flex justify-end gap-3 pt-2 border-t border-white/5">
+            <button type="button" onClick={() => onClose(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
+            <button type="submit" disabled={saving || !returnable.length} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{saving ? 'Saving…' : 'Record return'}</button>
+          </div>
+        </form>
+      </div>
+    </div>, document.body);
+}
