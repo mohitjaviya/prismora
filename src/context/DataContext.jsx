@@ -18,6 +18,7 @@ import { leadOrderDraft } from '../utils/leadConversion';
 import { beatStatusFor } from '../utils/beatVisits';
 import { localDateStr } from '../utils/beatDates';
 import { sellableQty } from '../utils/expiry';
+import { LEAD_ATTACHMENT_BUCKET, attachmentError, attachmentPath, contentTypeFor } from '../utils/leadAttachments';
 import { shouldFetchData, dataCacheKeysToClear } from '../utils/dataSession';
 import { journaled, noteEvent, startJournal } from '../utils/writeJournal';
 import { createLoadGate, gateWrites } from '../utils/loadGate';
@@ -243,6 +244,13 @@ const orderRow = (order) => {
 // so the database sorts them lexicographically — "O9" lands after "O47" — which
 // makes ORDER BY useless here. The numeric part has to be parsed instead.
 const maxSequentialId = async (table, prefix) => {
+  // The whole table's highest (060). Reading the ids here only finds the rows
+  // this user may see, which for a Sales Executive stops short of the other
+  // reps' leads — so every id tried was already taken.
+  try {
+    const { data, error } = await supabase.rpc('highest_sequential_id', { p_table: table, p_prefix: prefix });
+    if (!error && Number.isInteger(data)) return data;
+  } catch { /* fall back to the visible rows */ }
   try {
     const { data, error } = await supabase.from(table).select('id');
     if (error || !data) return 0;
@@ -1252,11 +1260,49 @@ export const DataProvider = ({ children }) => {
     return { ok: true, orderId: newOrderId };
   };
 
+  // ── Lead attachments (D-21, 059): Storage under the lead, the lead's rules ──
+  const attachmentStore = () => supabase.storage.from(LEAD_ATTACHMENT_BUCKET);
+  const listLeadAttachments = async (leadId) => {
+    const { data, error } = await attachmentStore().list(leadId, { limit: 100, sortBy: { column: 'created_at', order: 'asc' } });
+    if (error) return { ok: false, error: `The files could not be listed: ${error.message}` };
+    return { ok: true, files: (data || []).filter(f => f.id).map(f => ({ name: f.name, size: f.metadata?.size, type: f.metadata?.mimetype, createdAt: f.created_at })) };
+  };
+  const uploadLeadAttachment = async (leadId, file) => {
+    const problem = attachmentError(file);
+    if (problem) return { ok: false, error: problem };
+    const { error } = await attachmentStore().upload(attachmentPath(leadId, file.name), file, { contentType: contentTypeFor(file), upsert: false });
+    if (error) return { ok: false, error: `${file.name} could not be attached: ${error.message}` };
+    return { ok: true };
+  };
+  const removeLeadAttachment = async (leadId, name) => {
+    const { data, error } = await attachmentStore().remove([`${leadId}/${name}`]);
+    if (error || !data?.length) return { ok: false, error: error ? `The file could not be removed: ${error.message}` : 'The file could not be removed.' };
+    return { ok: true };
+  };
+  // A short-lived link, made for whoever asks and only if they may see the lead.
+  const openLeadAttachment = async (leadId, name) => {
+    const { data, error } = await attachmentStore().createSignedUrl(`${leadId}/${name}`, 120);
+    if (error || !data?.signedUrl) return { ok: false, error: `The file could not be opened: ${error?.message || 'no link'}` };
+    window.open(data.signedUrl, '_blank', 'noopener');
+    return { ok: true, url: data.signedUrl };
+  };
+
+  // A lead's files go before the lead; the database refuses to delete a lead
+  // that still has any (059), so none is left behind with nothing to open it.
   const deleteLead = async (id) => {
-    const next = leads.filter(l => l.id !== id);
-    setLeads(next);
-    localStorage.setItem('prismora_leads', JSON.stringify(next));
-    await persist('leads delete', supabase.from('leads').delete().eq('id', id));
+    const listed = await listLeadAttachments(id);
+    if (listed.ok && listed.files.length) {
+      const { error } = await attachmentStore().remove(listed.files.map(f => `${id}/${f.name}`));
+      if (error) return { ok: false, error: `The lead's files could not be removed, so it was kept: ${error.message}` };
+    }
+    const { data, error } = await supabase.from('leads').delete().eq('id', id).select('id');
+    if (error || !data?.length) return { ok: false, error: error ? plainDatabaseError(error, 'delete this lead') : 'The lead could not be deleted.' };
+    setLeads(prev => {
+      const next = prev.filter(l => l.id !== id);
+      localStorage.setItem('prismora_leads', JSON.stringify(next));
+      return next;
+    });
+    return { ok: true };
   };
 
   // ── Orders ───────────────────────────────────────────────────────────────
@@ -3766,6 +3812,7 @@ export const DataProvider = ({ children }) => {
     <DataContext.Provider value={gateWrites({
       whenLoaded: () => loadGate.current.wait(),
       getOrderReturnable, recordSalesReturn,
+      listLeadAttachments, uploadLeadAttachment, removeLeadAttachment, openLeadAttachment,
       companySettings, loadCompanySettings, updateCompanySettings,
       // Original CRM
       leads, orders, eventLog, products, productCatalog, invoices, expenses,

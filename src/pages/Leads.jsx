@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
 import { format, differenceInDays } from 'date-fns';
-import { Plus, Edit2, Trash2, AlertCircle, LayoutGrid, List, Download, X, User, Phone, Mail, FileText, Calendar, Building, Package, DollarSign, MapPin } from 'lucide-react';
-import { useToast } from '../context/DialogContext';
+import { Plus, Edit2, Trash2, AlertCircle, LayoutGrid, List, Download, X, User, Phone, Mail, Calendar, Building, Package, DollarSign, MapPin } from 'lucide-react';
+import { useToast, useConfirm } from '../context/DialogContext';
 import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { downloadCSV } from '../utils/exportUtils';
@@ -16,6 +16,7 @@ import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { isConvertedStatus, isOpenLead } from '../utils/leadStatus';
 import { missingDelivery } from '../utils/delivery';
 import LastChanged from '../components/audit/LastChanged';
+import LeadAttachments from '../components/LeadAttachments';
 
 // Moving a lead into a conversion status means the customer has committed,
 // which is when an order is raised. The drag handler and the edit form both
@@ -33,15 +34,21 @@ const INDIAN_STATES = [
 ];
 
 const Leads = () => {
-  const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog, masters, territories } = useData();
+  const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog, masters, territories, uploadLeadAttachment } = useData();
   const toast = useToast();
+  const confirm = useConfirm();
 
   // Statuses and sources come from Master Lists. The fallback when nothing is
   // configured lives in masterLists.js, which is also the single record of
   // which keys the code itself depends on.
   const statusOptions = optionsFor(masters, 'lead_status');
   const sourceOptions = optionsFor(masters, 'lead_source');
-  const { user, users: mockUsers, canAccessData, getAssignableUsers } = useAuth();
+  const { user, users: mockUsers, canAccessData, getAssignableUsers, canAccess } = useAuth();
+  // Files are added and removed by whoever may edit leads; the database also
+  // checks the lead itself is theirs (059).
+  const canEditLeads = canAccess('leads', 'full');
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [savingLead, setSavingLead] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -125,6 +132,7 @@ const Leads = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setIsCustomProduct(false);
+    setPendingFiles([]);
   };
 
   // ── Converting a lead into an order ──────────────────────────────────────
@@ -187,8 +195,9 @@ const Leads = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savingLead) return;
 
     if (formData.status === 'Converted') {
       if (!formData.state || !formData.state.trim() || !formData.city || !formData.city.trim()) {
@@ -216,7 +225,17 @@ const Leads = () => {
     if (editingLead) {
       updateLead(editingLead.id, wantsConversion ? { ...dataToSave, status: editingLead.status } : dataToSave);
     } else {
-      addLead(dataToSave);
+      setSavingLead(true);
+      const newId = await addLead(dataToSave);
+      // Files chosen before the lead existed go up now, under its id (D-21).
+      if (newId) {
+        for (const f of pendingFiles) {
+          const r = await uploadLeadAttachment(newId, f);
+          if (!r.ok) toast(r.error, 'error');
+        }
+      }
+      setSavingLead(false);
+      if (!newId) { toast('The lead could not be saved.', 'error'); return; }
     }
     const target = formData.status;
     closeModal();
@@ -322,7 +341,12 @@ const Leads = () => {
           <IconButton icon={Edit2} title="Edit lead" size="sm" tone="accent"
             onClick={e => { e.stopPropagation(); handleOpenModal(l); }} />
           <IconButton icon={Trash2} title="Delete lead" size="sm" tone="danger"
-            onClick={e => { e.stopPropagation(); deleteLead(l.id); }} />
+            onClick={async e => {
+              e.stopPropagation();
+              if (!await confirm({ title: `Delete lead ${l.name}?`, body: 'Its attached files are deleted with it.', danger: true, confirmLabel: 'Delete' })) return;
+              const r = await deleteLead(l.id);
+              toast(r?.ok ? 'Lead and its files deleted.' : (r?.error || 'The lead could not be deleted.'), r?.ok ? 'success' : 'error');
+            }} />
         </div>
       ),
     },
@@ -692,18 +716,7 @@ const Leads = () => {
                 {/* Uploaded Documents Section */}
                 <div className="md:col-span-2 mt-2">
                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-white/10 pb-2">Documents & Attachments</h3>
-                  <div className="flex flex-wrap gap-2.5">
-                    {selectedLeadView.attachments && selectedLeadView.attachments.length > 0 ? (
-                      selectedLeadView.attachments.map((file, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs bg-slate-800/80 text-slate-200 border border-slate-700/80 px-3.5 py-2.5 rounded-xl font-medium shadow-sm">
-                          <FileText size={14} className="text-brand-accent" />
-                          <span>{file}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-slate-500 italic">No files attached to this lead.</p>
-                    )}
-                  </div>
+                  <LeadAttachments leadId={selectedLeadView.id} canEdit={canEditLeads} />
                 </div>
 
               </div>
@@ -909,43 +922,16 @@ const Leads = () => {
                 <textarea id="leads-remarks-notes" rows="3" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white custom-scrollbar" placeholder="Add primary remarks or notes..."></textarea>
               </div>
 
-              {/* Documents & File Attachments Upload Mock */}
+              {/* Stored in Storage under the lead (D-21, 059). */}
               <div className="mt-4 col-span-2">
-                <label htmlFor="leads-lead-documents-attachments" className="block text-sm font-medium text-slate-300 mb-1.5">Lead Documents & Attachments</label>
-                <div className="border-2 border-dashed border-slate-700 rounded-xl p-4 text-center hover:border-brand-accent/50 transition-colors relative cursor-pointer bg-brand-primary-lighter/10">
-                  <input id="leads-lead-documents-attachments"
-                    type="file"
-                    multiple
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    onChange={e => {
-                      const files = Array.from(e.target.files).map(f => f.name);
-                      setFormData(prev => ({
-                        ...prev,
-                        attachments: [...(prev.attachments || []), ...files]
-                      }));
-                    }}
-                  />
-                  <FileText className="mx-auto mb-2 text-slate-500" size={24} />
-                  <span className="text-xs text-slate-400 block">Drag and drop files here, or <span className="text-brand-accent font-semibold underline">browse</span></span>
-                  <span className="text-[10px] text-slate-600 block mt-1">PDF, DOC, Images (Max 10MB)</span>
-                </div>
-                {/* Render listed files */}
-                {(formData.attachments || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2.5">
-                    {(formData.attachments || []).map((file, idx) => (
-                      <span key={idx} className="flex items-center gap-1.5 text-xs bg-slate-800 text-slate-300 px-2.5 py-1.5 rounded-lg border border-slate-700">
-                        {file}
-                        <button type="button" onClick={() => setFormData({ ...formData, attachments: formData.attachments.filter((_, i) => i !== idx) })} className="text-red-400 hover:text-red-300 font-bold ml-1">✕</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <span className="block text-sm font-medium text-slate-300 mb-1.5">Lead Documents & Attachments</span>
+                <LeadAttachments leadId={editingLead?.id} canEdit={canEditLeads} pending={pendingFiles} onPendingChange={setPendingFiles} />
               </div>
 
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
                 <button type="button" onClick={closeModal} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium">Cancel</button>
-                <button type="submit" className="px-5 py-2 bg-brand-accent text-brand-primary font-bold rounded-lg hover:bg-brand-accent-light hover:shadow-lg hover:shadow-brand-accent/20 transition-all">
-                  {editingLead ? 'Update Lead' : 'Save Lead'}
+                <button type="submit" disabled={savingLead} className="px-5 py-2 bg-brand-accent text-brand-primary font-bold rounded-lg hover:bg-brand-accent-light hover:shadow-lg hover:shadow-brand-accent/20 transition-all disabled:opacity-60">
+                  {savingLead ? 'Saving…' : editingLead ? 'Update Lead' : 'Save Lead'}
                 </button>
               </div>
             </form>

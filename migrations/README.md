@@ -335,3 +335,14 @@ SELECT public.recompute_invoice_statuses();
 - Re-running 057's `cron.schedule(...)` block puts it back.
 
 `058_invoice_brand_from_settings.sql`: the brand name, tagline and jurisdiction move into `company_settings` (Admin edits, audited). Each invoice records them at issue and they are fixed after that (the `invoice_gst_split` guard). Existing invoices record the text they always printed.
+
+## Batch 4: lead attachments
+
+`059_lead_attachments_storage.sql` (D-21): a private Storage bucket, `lead-attachments`. Each file is at most 10 MB and must be a PDF, an image, a Word file or an Excel file; Storage refuses anything else. Files live under the lead's id (`<leadId>/<timestamp>-<name>`).
+- Access follows the lead (`can_view_lead` / `can_edit_lead`, built on 043's `sees_account_row`). A Sales Executive sees only their own leads' files, a Sales Manager the team's, and admin roles all of them. Leads view is enough to open a file; Leads full is needed to add or remove one.
+- A lead that still has files cannot be deleted. The app removes the files first, through the Storage API; SQL cannot delete Storage objects.
+- Deploy the matching app code with it. The older app never uploads, so it is unaffected, but it can no longer delete a lead that has files.
+
+`060_highest_sequential_id.sql`: `highest_sequential_id(table, prefix)` returns the highest id number in use across the whole table. It covers leads, expenses, purchase orders, GRNs and complaints, is for signed-in users only, and returns one number and no rows.
+- The app asks it when a new id clashes. Before this, a Sales Executive could not add a lead: they can see only their own leads, so every id the app tried (L1…L8) was already taken by another rep's.
+- Safe with the older app, which never calls it.
