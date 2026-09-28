@@ -298,3 +298,5 @@ Order: run 043 and 044 **before** deploying the matching app code. The older app
 `049_events_write_is_not_read.sql`: `events_write` was FOR ALL, and so also granted reading. It is split into insert, update and delete, so the 048 hiding holds for Sales Manager and Manager.
 
 Both are safe with the older app code. Its browser balance writes are refused, and the database moves the balance itself.
+
+`050_purchase_manager_no_partner_records.sql`: Purchase Manager Distributors/Dealers/Retailers full → none (least access; owner decision 2026-09-28). Audited. Independent of app code.
