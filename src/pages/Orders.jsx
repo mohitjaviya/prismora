@@ -16,6 +16,7 @@ import { canRecordReceipt, describeReceipt, receiptSourceOf, validateReceipt, RE
 import { useToast, useConfirm } from '../context/DialogContext';
 import { missingDelivery } from '../utils/delivery';
 import LastChanged from '../components/audit/LastChanged';
+import { localDay, orderDateToSave } from '../utils/orderDate';
 
 
 // Which role "owns" moving an order into a given status — enforces the
@@ -489,7 +490,7 @@ const Orders = () => {
         phone: '',
         email: '',
         ...order,
-        date: order.date ? order.date.split('T')[0] : ''
+        date: order.date ? localDay(order.date) : ''
       });
       const safeProducts = products || [];
       if (order.product && !safeProducts.includes(order.product)) {
@@ -504,7 +505,7 @@ const Orders = () => {
         customerName: '', companyName: '', product: '', quantity: '', value: '',
         state: '', city: '', deliveryAddress: '', deliveryPincode: '', status: 'Pending',
         assignedTo: isSalesRole(user?.role) ? user.id : '',
-        date: new Date().toISOString().split('T')[0],
+        date: localDay(new Date()),
         phone: '', email: ''
       });
     }
@@ -565,7 +566,7 @@ const Orders = () => {
       ...formData,
       quantity: Number(formData.quantity),
       value: Number(formData.value),
-      date: formData.date ? new Date(formData.date).toISOString() : new Date().toISOString()
+      date: orderDateToSave(formData.date, editingOrder?.date || null)
     };
 
     // Awaited: delivering now takes the stock and raises the invoice in the
