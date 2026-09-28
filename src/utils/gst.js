@@ -46,6 +46,10 @@ export const invoiceGst = (invoice, fallbackSeller = {}) => {
       name: invoice?.sellerName || fallbackSeller.companyName || '',
       gstin: invoice?.sellerGstin || fallbackSeller.gstin || '',
       state: sellerState,
+      // Printed identity, recorded on the invoice when issued (058).
+      brand: invoice?.sellerBrand || fallbackSeller.brandName || '',
+      tagline: invoice?.sellerTagline || fallbackSeller.brandTagline || '',
+      jurisdiction: invoice?.sellerJurisdiction || fallbackSeller.jurisdiction || '',
     },
     placeOfSupply,
     supplyType,

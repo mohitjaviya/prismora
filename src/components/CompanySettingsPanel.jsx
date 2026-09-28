@@ -38,6 +38,9 @@ export default function CompanySettingsPanel({ canEdit }) {
       state: form.state,
       address: String(form.address || '').trim() || null,
       email: String(form.email || '').trim() || null,
+      brandName: String(form.brandName || '').trim() || 'PRISMORA',
+      brandTagline: String(form.brandTagline || '').trim(),
+      jurisdiction: String(form.jurisdiction || '').trim(),
       isDemo: Boolean(form.isDemo),
     });
     setSaving(false);
@@ -84,6 +87,18 @@ export default function CompanySettingsPanel({ canEdit }) {
         <div className="sm:col-span-2">
           <label htmlFor="company-address" className={labelCls}>Address (optional)</label>
           <input id="company-address" disabled={!canEdit} value={form.address || ''} onChange={set('address')} className={inputCls} />
+        </div>
+        <div>
+          <label htmlFor="company-brand" className={labelCls}>Brand (invoice heading)</label>
+          <input id="company-brand" disabled={!canEdit} value={form.brandName || ''} onChange={set('brandName')} className={inputCls} />
+        </div>
+        <div>
+          <label htmlFor="company-tagline" className={labelCls}>Brand line</label>
+          <input id="company-tagline" disabled={!canEdit} value={form.brandTagline || ''} onChange={set('brandTagline')} className={inputCls} />
+        </div>
+        <div>
+          <label htmlFor="company-jurisdiction" className={labelCls}>Jurisdiction (city, for invoice terms)</label>
+          <input id="company-jurisdiction" disabled={!canEdit} value={form.jurisdiction || ''} onChange={set('jurisdiction')} className={inputCls} />
         </div>
         <div>
           <label htmlFor="company-email" className={labelCls}>Billing email (optional)</label>

@@ -349,7 +349,7 @@ export default function Purchases() {
             <PageHeader
         icon={ShoppingBag}
         title="Purchase Management"
-        subtitle="Purchase orders, vendor management & goods receipt from Janki Herbals."
+        subtitle="Purchase orders, vendor management and goods receipt."
         actions={<>
           <Button icon={Download} onClick={handleExport}>Export</Button>
           {canManage && activeTab === 'orders' && (
@@ -950,7 +950,7 @@ export default function Purchases() {
             </div>
             <form onSubmit={handleSubmitVendor} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2"><label htmlFor="purchases-vendor-name" className={labelCls}>Vendor Name *</label><input id="purchases-vendor-name" required type="text" value={vendorForm.name} onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Janki Herbals" className={inputCls} /></div>
+                <div className="col-span-2"><label htmlFor="purchases-vendor-name" className={labelCls}>Vendor Name *</label><input id="purchases-vendor-name" required type="text" value={vendorForm.name} onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Gujarat Herbal Supplies" className={inputCls} /></div>
                 <div><label htmlFor="purchases-gstin" className={labelCls}>GSTIN</label><input id="purchases-gstin" type="text" value={vendorForm.gstin} onChange={e => setVendorForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className={inputCls} /></div>
                 <div><label htmlFor="purchases-contact-person" className={labelCls}>Contact Person</label><input id="purchases-contact-person" type="text" value={vendorForm.contactPerson} onChange={e => setVendorForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} /></div>
                 <div><label htmlFor="purchases-phone" className={labelCls}>Phone</label><input id="purchases-phone" type="text" value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>

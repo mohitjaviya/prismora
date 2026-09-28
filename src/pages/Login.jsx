@@ -143,7 +143,7 @@ const Login = () => {
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-4">
-          © {new Date().getFullYear()} Janki Herbals Pvt. Ltd.<br />All rights reserved.
+          © {new Date().getFullYear()} Prismora.<br />All rights reserved.
         </p>
       </div>
     </div>

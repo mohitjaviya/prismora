@@ -93,7 +93,7 @@ export default function Ledger() {
         <PageHeader
           icon={Wallet}
           title="Outstanding Ledger"
-          subtitle="Invoices, payments and running balance with Janki Herbals."
+          subtitle="Invoices, payments and running balance with us."
         />
         {partyPicker}
         <Card padding="p-0">
@@ -156,7 +156,7 @@ export default function Ledger() {
         icon={Wallet}
         title="Outstanding Ledger"
         subtitle={isParty
-          ? 'Your invoices, payments and running balance with Janki Herbals.'
+          ? 'Your invoices, payments and running balance with us.'
           : `Invoices, payments and running balance for ${party.name}.`}
         actions={entries.length > 0
           ? <Button icon={Download} onClick={handleExport}>Export statement</Button>

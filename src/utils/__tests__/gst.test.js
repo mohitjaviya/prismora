@@ -20,9 +20,10 @@ describe('GST type and split', () => {
   });
 
   it('reads an invoice as it was issued, not as Settings are now', () => {
-    const issued = { sellerName: 'Old Name', sellerGstin: '24OLD', sellerState: 'Gujarat', placeOfSupply: 'Maharashtra', supplyType: 'inter', tax: 180, cgst: 0, sgst: 0, igst: 180 };
-    const g = invoiceGst(issued, { companyName: 'New Name', gstin: '27NEW', state: 'Maharashtra' });
-    expect(g.seller).toEqual({ name: 'Old Name', gstin: '24OLD', state: 'Gujarat' });
+    const issued = { sellerName: 'Old Name', sellerGstin: '24OLD', sellerState: 'Gujarat', sellerBrand: 'OLDBRAND', sellerTagline: 'Old line', sellerJurisdiction: 'Ahmedabad',
+      placeOfSupply: 'Maharashtra', supplyType: 'inter', tax: 180, cgst: 0, sgst: 0, igst: 180 };
+    const g = invoiceGst(issued, { companyName: 'New Name', gstin: '27NEW', state: 'Maharashtra', brandName: 'NEWBRAND', brandTagline: 'New line', jurisdiction: 'Pune' });
+    expect(g.seller).toEqual({ name: 'Old Name', gstin: '24OLD', state: 'Gujarat', brand: 'OLDBRAND', tagline: 'Old line', jurisdiction: 'Ahmedabad' });
     expect(g.supplyType).toBe('inter');
     expect(g.igst).toBe(180);
   });

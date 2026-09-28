@@ -312,3 +312,26 @@ Both are safe with the older app code. Its browser balance writes are refused, a
 `056_sales_return_audit_label.sql`: the sales-return row is audited "via" the return, not its credit note.
 
 `057_invoice_status_from_payments.sql`: invoice status is derived in the database (Unpaid, Partially Paid, Settled or Overdue), and so is `amountPaid`. Explicit settlements and credit notes on an invoice count first; other payments and credit notes are applied oldest first. Walk-in invoices use `markedPaid`. Statuses are recalculated on every payment, credit note or invoice change, and nightly by pg_cron (00:05 IST) so Overdue arrives on its date. Only status and amountPaid are written; balances are untouched.
+
+### pg_cron: scheduled jobs in the database (installed by 057)
+
+pg_cron is PostgreSQL's built-in scheduler. Supabase ships it as an extension, and 057 installed it. It runs SQL on a timetable, inside the database, whether or not anyone has the app open.
+
+**Job:** `invoice-status-nightly`, scheduled `35 18 * * *` in UTC, which is **00:05 IST** every day. It runs `SELECT public.recompute_invoice_statuses()`. That moves an unsettled invoice to Overdue once its due date has passed, and keeps Partially Paid and Settled in step with payments. It runs as the database owner, so the audit log shows these changes as "System".
+
+**Checking it:**
+```sql
+-- the job is there and active
+SELECT jobid, jobname, schedule, command, active FROM cron.job;
+-- the last runs, newest first: status 'succeeded' or 'failed', with any message
+SELECT jobid, status, return_message, start_time, end_time
+FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
+-- run it by hand, now (returns how many invoices changed)
+SELECT public.recompute_invoice_statuses();
+```
+
+**Changing or stopping it:**
+- `SELECT cron.unschedule('invoice-status-nightly');` stops it.
+- Re-running 057's `cron.schedule(...)` block puts it back.
+
+`058_invoice_brand_from_settings.sql`: the brand name, tagline and jurisdiction move into `company_settings` (Admin edits, audited). Each invoice records them at issue and they are fixed after that (the `invoice_gst_split` guard). Existing invoices record the text they always printed.

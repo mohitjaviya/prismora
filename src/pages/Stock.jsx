@@ -88,7 +88,7 @@ export default function Stock() {
         <PageHeader
           icon={Boxes}
           title="Stock Availability"
-          subtitle="Goods delivered by Janki Herbals, totalled by product."
+          subtitle="Goods delivered, totalled by product."
         />
         {partyPicker}
         <Card padding="p-0">
@@ -116,8 +116,8 @@ export default function Stock() {
         icon={Boxes}
         title="Stock Availability"
         subtitle={isParty
-          ? 'Goods delivered to you by Janki Herbals, totalled by product.'
-          : `Goods delivered to ${party.name} by Janki Herbals, totalled by product.`}
+          ? 'Goods delivered to you, totalled by product.'
+          : `Goods delivered to ${party.name}, totalled by product.`}
         actions={<Button icon={Download} onClick={handleExport} disabled={!(rows.length > 0)}>Export</Button>}
       />
 
@@ -199,7 +199,7 @@ export default function Stock() {
       )}
 
       <p className="text-[11px] text-slate-600 leading-relaxed max-w-3xl">
-        These are cumulative totals of what Janki Herbals has delivered{isParty ? ' to you' : ''}. The system does not
+        These are cumulative totals of what has been delivered{isParty ? ' to you' : ''}. The system does not
         track {isParty ? 'your' : 'their'} own onward sales, so this figure does not reduce as stock is sold on.
       </p>
     </div>

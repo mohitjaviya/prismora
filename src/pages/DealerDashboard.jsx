@@ -76,7 +76,7 @@ export default function DealerDashboard() {
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         title={`Welcome back, ${dealer.name}`}
-        subtitle="A snapshot of your account with Janki Herbals."
+        subtitle="A snapshot of your account with us."
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

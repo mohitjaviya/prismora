@@ -754,7 +754,7 @@ const Accounting = () => {
               <p className="text-2xl sm:text-3xl font-extrabold text-rose-400 tracking-tight break-all">
                 {formatCurrency(vendorPayables)}
               </p>
-              <p className="mt-2 text-xs text-slate-500">What Janki Herbals still owes its vendors</p>
+              <p className="mt-2 text-xs text-slate-500">What is still owed to vendors</p>
             </div>
 
             {/* Net Profit */}
@@ -1466,8 +1466,8 @@ const Accounting = () => {
                   {/* Brand & Invoice title */}
                   <div className="flex justify-between items-start border-b pb-6 border-slate-200">
                     <div>
-                      <h1 className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-brand-accent to-pink-600">PRISMORA</h1>
-                      <p className="text-xs text-slate-500 mt-1 font-medium font-sans">PREMIUM SKIN & BODY CARE</p>
+                      <h1 className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-brand-accent to-pink-600">{gst.seller.brand}</h1>
+                      <p className="text-xs text-slate-500 mt-1 font-medium font-sans uppercase">{gst.seller.tagline}</p>
                     </div>
                     <div className="text-right font-sans">
                       <h2 className="text-xl font-bold tracking-wider text-slate-900">{title}</h2>
@@ -1628,7 +1628,7 @@ const Accounting = () => {
                     <div className="space-y-1">
                       <p className="font-bold text-slate-700">Terms & Conditions:</p>
                       <p>1. Interest @ 18% p.a. will be charged if payment is not made within 14 due days.</p>
-                      <p>2. All disputes are subject to Ahmedabad jurisdiction only.</p>
+                      {gst.seller.jurisdiction && <p>2. All disputes are subject to {gst.seller.jurisdiction} jurisdiction only.</p>}
                       <p>3. Goods once sold will not be taken back.</p>
                     </div>
                     <div className="text-right flex flex-col justify-end items-end space-y-4">
