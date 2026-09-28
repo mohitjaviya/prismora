@@ -8,18 +8,18 @@ import { PageHeader, DataTable, Button, Card, StatCard, SearchInput, Select } fr
 import { downloadCSV } from '../utils/exportUtils';
 import { sendEmailAlert, templates } from '../utils/notificationUtils';
 import { optionsFor } from '../utils/masterLists';
+import { isExpired, isExpiringSoon, daysToExpiry as expiryDays, EXPIRING_SOON_DAYS } from '../utils/expiry';
 
-const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Out of Stock'];
+const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Expired', 'Out of Stock'];
 
+// Expired comes first: an expired batch is not stock that can be sold, however
+// much of it there is (D-18, utils/expiry.js, the rule deliveries follow too).
 const getStockStatus = (item) => {
   if (item.quantity === 0) return 'Out of Stock';
+  if (isExpired(item)) return 'Expired';
+  if (isExpiringSoon(item)) return 'Expiring Soon';
   if (item.quantity <= item.reorderLevel * 0.5) return 'Critical';
   if (item.quantity <= item.reorderLevel) return 'Low Stock';
-  if (item.expiryDate) {
-    const daysToExpiry = Math.ceil((new Date(item.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-    if (daysToExpiry <= 60 && daysToExpiry > 0) return 'Expiring Soon';
-    if (daysToExpiry <= 0) return 'Expired';
-  }
   return 'OK';
 };
 
@@ -78,6 +78,7 @@ export default function Inventory() {
     totalBatches:   inventory.length,
     lowStock:       withStatus.filter(i => i._status === 'Low Stock' || i._status === 'Critical' || i._status === 'Out of Stock').length,
     expiringSoon:   withStatus.filter(i => i._status === 'Expiring Soon').length,
+    expiredUnits:   withStatus.filter(i => i._status === 'Expired').reduce((s, i) => s + (i.quantity || 0), 0),
     stockValue:     inventory.reduce((s, i) => s + (i.quantity || 0) * (i.unitCost || 0), 0),
   }), [inventory, withStatus]);
 
@@ -96,14 +97,17 @@ export default function Inventory() {
     const byProduct = {};
     filtered.forEach(item => {
       if (!byProduct[item.product]) {
-        byProduct[item.product] = { product: item.product, totalQty: 0, reserved: 0, batchCount: 0 };
+        byProduct[item.product] = { product: item.product, totalQty: 0, reserved: 0, batchCount: 0, expired: 0, available: 0 };
       }
-      byProduct[item.product].totalQty += item.quantity || 0;
-      byProduct[item.product].reserved += item.reserved || 0;
-      byProduct[item.product].batchCount += 1;
+      const p = byProduct[item.product];
+      p.totalQty += item.quantity || 0;
+      p.reserved += item.reserved || 0;
+      p.batchCount += 1;
+      // Expired units are counted apart and never offered as available.
+      if (item._status === 'Expired') p.expired += item.quantity || 0;
+      else p.available += Math.max(0, (item.quantity || 0) - (item.reserved || 0));
     });
     return Object.values(byProduct)
-      .map(p => ({ ...p, available: Math.max(0, p.totalQty - p.reserved) }))
       .sort((a, b) => a.product.localeCompare(b.product));
   }, [filtered]);
 
@@ -173,7 +177,7 @@ export default function Inventory() {
   const handleExport = () => {
     downloadCSV(filtered.map(i => ({
       Product: i.product, Batch: i.batchNumber, Warehouse: i.warehouse,
-      Qty: i.quantity, Reserved: i.reserved, AvailableToSell: Math.max(0, (i.quantity || 0) - (i.reserved || 0)), Transit: i.transit, Damaged: i.damaged,
+      Qty: i.quantity, Reserved: i.reserved, AvailableToSell: isExpired(i) ? 0 : Math.max(0, (i.quantity || 0) - (i.reserved || 0)), Expired: isExpired(i) ? 'Yes' : '', Transit: i.transit, Damaged: i.damaged,
       ReorderLevel: i.reorderLevel, Expiry: formatDate(i.expiryDate),
       UnitCost: i.unitCost, StockValue: i.quantity * (i.unitCost || 0), Status: i._status
     })), 'PRISMORA_Inventory');
@@ -195,6 +199,10 @@ export default function Inventory() {
       render: p => (
         <span className={`font-bold ${p.available > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{p.available}</span>
       ) },
+    { key: 'expired', header: 'Expired', align: 'center', sort: p => p.expired,
+      render: p => (p.expired > 0
+        ? <span className="font-bold text-red-400" title="In expired batches: never sold or delivered">{p.expired}</span>
+        : <span className="text-slate-600">—</span>) },
   ];
 
   return (
@@ -211,13 +219,15 @@ export default function Inventory() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
         <StatCard label="Total SKUs" value={kpis.totalSKUs} icon={Package2} tone="info" />
         <StatCard label="Total Batches" value={kpis.totalBatches} icon={Layers} tone="accent" />
         <StatCard label="Low / Critical" value={kpis.lowStock} icon={AlertTriangle}
           tone={kpis.lowStock > 0 ? 'warning' : 'accent'} />
-        <StatCard label="Expiring Soon" value={kpis.expiringSoon} icon={Clock}
-          tone={kpis.expiringSoon > 0 ? 'danger' : 'accent'} />
+        <StatCard label={`Expiring ≤${EXPIRING_SOON_DAYS}d`} value={kpis.expiringSoon} icon={Clock}
+          tone={kpis.expiringSoon > 0 ? 'warning' : 'accent'} />
+        <StatCard label="Expired units" value={kpis.expiredUnits} icon={AlertTriangle}
+          tone={kpis.expiredUnits > 0 ? 'danger' : 'accent'} />
         <StatCard label="Stock Value" value={formatCurrency(kpis.stockValue)} icon={Wallet} tone="accent"
           className="col-span-2 lg:col-span-1" />
       </div>
@@ -302,23 +312,25 @@ export default function Inventory() {
                 <tbody className="divide-y divide-white/5 text-slate-300">
                   {filtered.filter(item => item.product === viewingProduct).map(item => {
                     const st = statusConfig[item._status] || statusConfig['OK'];
-                    const daysToExpiry = item.expiryDate ? Math.ceil((new Date(item.expiryDate) - new Date()) / 86400000) : null;
+                    const daysToExpiry = expiryDays(item);
+                    const expired = item._status === 'Expired';
                     return (
                       <tr key={item.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
                         <td className="p-4 text-xs text-slate-500 font-mono">{item.batchNumber || '—'}</td>
                         <td className="p-4 text-slate-400 text-xs">{item.warehouse}</td>
                         <td className="p-4 text-center font-bold text-white">{item.quantity}</td>
                         <td className="p-4 text-center text-slate-400">{item.reserved || 0}</td>
-                        <td className={`p-4 text-center font-bold ${Math.max(0, (item.quantity || 0) - (item.reserved || 0)) > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {Math.max(0, (item.quantity || 0) - (item.reserved || 0))}
+                        <td className={`p-4 text-center font-bold ${!expired && Math.max(0, (item.quantity || 0) - (item.reserved || 0)) > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {expired ? 0 : Math.max(0, (item.quantity || 0) - (item.reserved || 0))}
                         </td>
                         <td className="p-4 text-center text-slate-400">{item.transit || 0}</td>
                         <td className="p-4 text-center text-rose-400">{item.damaged || 0}</td>
                         <td className="p-4 text-center text-amber-400">{item.reorderLevel}</td>
                         <td className="p-4">
-                          <div className={`text-xs font-medium ${daysToExpiry !== null && daysToExpiry <= 60 ? 'text-orange-400' : 'text-slate-400'}`}>
+                          <div className={`text-xs font-medium ${expired ? 'text-red-400' : daysToExpiry !== null && daysToExpiry <= EXPIRING_SOON_DAYS ? 'text-orange-400' : 'text-slate-400'}`}>
                             {formatDate(item.expiryDate)}
-                            {daysToExpiry !== null && daysToExpiry <= 60 && daysToExpiry > 0 && <span className="ml-1 text-orange-400">({daysToExpiry}d)</span>}
+                            {expired && <span className="ml-1 font-bold">(Expired)</span>}
+                            {!expired && daysToExpiry !== null && daysToExpiry <= EXPIRING_SOON_DAYS && <span className="ml-1 text-orange-400">({daysToExpiry}d)</span>}
                           </div>
                         </td>
                         <td className="p-4 text-right text-slate-300">{formatCurrency(item.unitCost)}</td>

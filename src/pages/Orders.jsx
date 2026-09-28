@@ -17,6 +17,7 @@ import { useToast, useConfirm } from '../context/DialogContext';
 import { missingDelivery } from '../utils/delivery';
 import LastChanged from '../components/audit/LastChanged';
 import { localDay, orderDateToSave } from '../utils/orderDate';
+import { sellableQty } from '../utils/expiry';
 
 
 // Which role "owns" moving an order into a given status — enforces the
@@ -139,9 +140,8 @@ const Orders = () => {
   const isFulfillmentRole = user?.role === 'Warehouse Manager' || user?.role === 'Dispatch Team';
   const baseVisibleOrders = orders.filter(o => isFulfillmentRole || canAccessData(o.assignedTo));
 
-  const getAvailableQty = (productName, stock = inventory) => stock
-    .filter(b => b.product === productName)
-    .reduce((sum, b) => sum + Math.max(0, (b.quantity || 0) - (b.reserved || 0)), 0);
+  // Sellable stock only: expired batches are never delivered (D-18).
+  const getAvailableQty = (productName, stock = inventory) => sellableQty(stock, productName);
 
   // Rate depends on which tier the order is billed to — a distributor pays
   // distributorPrice, not MRP. Falls back to MRP for a direct customer with no

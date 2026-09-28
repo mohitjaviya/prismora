@@ -16,6 +16,7 @@ import { isConvertedStatus } from '../utils/leadStatus';
 import { leadOrderDraft } from '../utils/leadConversion';
 import { beatStatusFor } from '../utils/beatVisits';
 import { localDateStr } from '../utils/beatDates';
+import { sellableQty } from '../utils/expiry';
 import { shouldFetchData, dataCacheKeysToClear } from '../utils/dataSession';
 import { journaled, noteEvent, startJournal } from '../utils/writeJournal';
 import { createLoadGate, gateWrites } from '../utils/loadGate';
@@ -1419,9 +1420,7 @@ export const DataProvider = ({ children }) => {
     // attribute isn't enforced (the input sits outside a <form>), so a typed-in
     // quantity must be validated here or the order gets marked Delivered and
     // the customer billed for goods that never left the warehouse.
-    const availableNow = inventory
-      .filter(b => b.product === order.product)
-      .reduce((sum, b) => sum + Math.max(0, (b.quantity || 0) - (b.reserved || 0)), 0);
+    const availableNow = sellableQty(inventory, order.product);
 
     // The arithmetic is in utils/fulfilment.js, with tests that check units are
     // conserved: what moves plus what remains equals what was outstanding.
@@ -1771,9 +1770,7 @@ export const DataProvider = ({ children }) => {
       ? order.items.map(i => ({ ...i, quantity: Number(i.quantity || 0) }))
       : [{ name: order.product, quantity: Number(order.quantity || 0), unitPrice: order.quantity ? (order.value || 0) / order.quantity : 0, gstPct: 0, total: order.value || 0 }];
 
-    const getAvailableQty = (productName) => inventory
-      .filter(b => b.product === productName)
-      .reduce((sum, b) => sum + Math.max(0, (b.quantity || 0) - (b.reserved || 0)), 0);
+    const getAvailableQty = (productName) => sellableQty(inventory, productName);
 
     // The division is in utils/fulfilment.js, with tests -- including the one
     // that checks every unit is accounted for on both sides, which is the

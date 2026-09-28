@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '../components/ui';
 import { isOpenLead } from '../utils/leadStatus';
+import { isExpired } from '../utils/expiry';
 
 
 const compact = (n) => {
@@ -89,7 +90,7 @@ export default function AIInsights() {
   // ── Stock-out prediction (velocity-based) ─────────────────────────────────
   const stockout = useMemo(() => {
     const availByProduct = {};
-    inventory.forEach(i => { availByProduct[i.product] = (availByProduct[i.product] || 0) + Math.max(0, (i.quantity || 0) - (i.reserved || 0)); });
+    inventory.forEach(i => { availByProduct[i.product] = (availByProduct[i.product] || 0) + (isExpired(i) ? 0 : Math.max(0, (i.quantity || 0) - (i.reserved || 0))); });
     const sold30 = {};
     salesLines.forEach(l => { if (daysAgo(l.date) <= 30) sold30[l.name] = (sold30[l.name] || 0) + l.qty; });
 

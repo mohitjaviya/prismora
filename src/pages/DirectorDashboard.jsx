@@ -9,6 +9,7 @@ import { PageHeader } from '../components/ui';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
 import { isConvertedLead } from '../utils/leadStatus';
+import { isExpired } from '../utils/expiry';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -123,7 +124,7 @@ export default function DirectorDashboard() {
     const stockValue = inventory.reduce((s, i) => s + (i.quantity || 0) * (i.unitCost || 0), 0);
     const byProduct = {};
     inventory.forEach(i => {
-      byProduct[i.product] = (byProduct[i.product] || 0) + Math.max(0, (i.quantity || 0) - (i.reserved || 0));
+      byProduct[i.product] = (byProduct[i.product] || 0) + (isExpired(i) ? 0 : Math.max(0, (i.quantity || 0) - (i.reserved || 0)));
     });
     const outOfStock = productCatalog.filter(p => (byProduct[p.name] || 0) === 0).length;
     const nearExpiry = inventory.filter(i => {
@@ -190,7 +191,7 @@ export default function DirectorDashboard() {
     });
     // Near stock-out
     const byProduct = {};
-    inventory.forEach(i => { byProduct[i.product] = (byProduct[i.product] || 0) + Math.max(0, (i.quantity || 0) - (i.reserved || 0)); });
+    inventory.forEach(i => { byProduct[i.product] = (byProduct[i.product] || 0) + (isExpired(i) ? 0 : Math.max(0, (i.quantity || 0) - (i.reserved || 0))); });
     productCatalog.forEach(p => {
       const avail = byProduct[p.name] || 0;
       if (avail === 0) list.push({ type: 'stock', text: `${p.name} is OUT of stock` });

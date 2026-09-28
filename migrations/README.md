@@ -302,3 +302,5 @@ Both are safe with the older app code. Its browser balance writes are refused, a
 `050_purchase_manager_no_partner_records.sql`: Purchase Manager Distributors/Dealers/Retailers full → none (least access; owner decision 2026-09-28). Audited. Independent of app code.
 
 `051_partial_goods_receipts.sql` (D-20): every GRN against a PO is checked in the database. The PO must be open, each line must be on the PO, and receipts may not exceed what was ordered. The PO then becomes Partially Received, or GRN Done once fully received. Deploy the matching app code: the older app sets GRN Done itself after any receipt.
+
+`052_expired_stock_never_delivered.sql` (D-18): `batch_is_sellable()` (sellable through its expiry day, India time). `deduct_stock` counts and takes sellable batches only, earliest expiry first. A refusal names the ordered, available and expired quantities. Also reopens PO-1 as Partially Received (owner request, audited). Safe with the older app, which only offers too much; the database refuses it.
