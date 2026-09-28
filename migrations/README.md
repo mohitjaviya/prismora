@@ -269,3 +269,5 @@ ON CONFLICT (filename) DO NOTHING;
 
 Order: run 043 and 044 **before** deploying the matching app code. The older app writes a partner's receipt with a direct update, which 043 refuses. The newer app calls functions that don't exist until 043 runs.
 
+
+`045_invoices_visible_by_own_party_id.sql` (D-06 follow-up): a partner also sees an invoice carrying its own `distributorId`/`dealerId`/`retailerId`, not only invoices on its own orders. Never by name. Applied 2026-09-28, together with linking INV-1790265113364 (order O5, raised by a sales rep, contact email of DIST-1790265786389) to that distributor. Independent of app code.
