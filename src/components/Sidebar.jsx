@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2, MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck, Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical, Layers, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2, MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck, Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical, Layers, Shield, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { canViewAuditLog } from '../utils/audit';
 
 const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
   const { user, canAccess } = useAuth();
@@ -200,7 +201,19 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
           </NavLink>
         </div>
       ) : (
-        <div className="p-4 border-t border-white/5 bg-brand-primary-light/20 flex-shrink-0">
+        <div className="p-4 border-t border-white/5 bg-brand-primary-light/20 flex-shrink-0 space-y-1">
+          {/* Roles that read the Audit Log without Settings access (Director)
+              had no way to it but typing /settings (NEW-03). */}
+          {canViewAuditLog(user?.role) && (
+            <NavLink
+              to="/settings"
+              onClick={closeMobileMenu}
+              className="flex items-center px-4 py-2.5 rounded-xl text-slate-400 hover:bg-brand-primary-lighter/50 hover:text-white transition-all duration-300 text-sm border-l-2 border-transparent"
+            >
+              <ShieldCheck size={18} className="mr-3" />
+              <span className="font-semibold">Audit Log</span>
+            </NavLink>
+          )}
           <NavLink
             to="/profile"
             onClick={closeMobileMenu}

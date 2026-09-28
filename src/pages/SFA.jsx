@@ -1156,8 +1156,8 @@ export default function SFA() {
                 key: 'actions', header: 'Actions', align: 'center',
                 render: exp => (exp.status === 'Pending' && canEditSfa ? (
                   <div className="flex items-center justify-center gap-1.5">
-                              <button onClick={async () => { if (!await updateSFAExpense(exp.id, { status: 'Approved' })) toast(PAYOUT_FAILED, 'error'); }} className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-400 transition-colors" title="Approve"><CheckSquare size={14} /></button>
-                              <button onClick={() => updateSFAExpense(exp.id, { status: 'Rejected' })} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 transition-colors" title="Reject"><XSquare size={14} /></button>
+                              <button onClick={async () => { const r = await updateSFAExpense(exp.id, { status: 'Approved' }); if (!r?.ok) toast(r?.error || PAYOUT_FAILED, 'error'); else toast('Approved and booked in Accounting → Expenses.', 'success'); }} className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-400 transition-colors" title="Approve"><CheckSquare size={14} /></button>
+                              <button onClick={async () => { const r = await updateSFAExpense(exp.id, { status: 'Rejected' }); if (!r?.ok) toast(r?.error || 'The claim could not be rejected.', 'error'); }} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 transition-colors" title="Reject"><XSquare size={14} /></button>
                             </div>
                 ) : <span className="text-slate-600 italic text-xs">—</span>),
               },

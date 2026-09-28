@@ -271,3 +271,15 @@ Order: run 043 and 044 **before** deploying the matching app code. The older app
 
 
 `045_invoices_visible_by_own_party_id.sql` (D-06 follow-up): a partner also sees an invoice carrying its own `distributorId`/`dealerId`/`retailerId`, not only invoices on its own orders. Never by name. Applied 2026-09-28, together with linking INV-1790265113364 (order O5, raised by a sales rep, contact email of DIST-1790265786389) to that distributor. Independent of app code.
+
+## Batch 2: deploy the app straight after this one
+
+`046_batch2_role_fixes.sql`:
+- **D-01:** Purchase Manager is restored to 010's permissions.
+- **D-11:** approving a field expense books the Accounting expense in the database; only a manager or admin may decide a claim, and never their own; Accounts can read field expenses.
+- **D-12:** Accounting full may record partner payments.
+- **D-22:** credit notes carry a partner id.
+- **Balances:** payments and credit notes move the partner's balance in the database, by id.
+- **D-09 / D-10:** `sales_move_order` lets sales roles send their own Pending order to the warehouse, or cancel it.
+
+**Deploy the matching app code right after applying 046.** The older app also moves the balance from the browser after a payment. With 046 in place, a payment recorded by that older app is counted twice.

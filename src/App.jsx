@@ -65,7 +65,11 @@ const OrdersRoute = () => {
 
 // Redirects to dashboard with access-denied message if user lacks module permission
 const PermissionGuard = ({ module, children }) => {
-  const { canAccess } = useAuth();
+  const { canAccess, rolesReady } = useAuth();
+  // Decided on the role's settings, not on the matrix compiled into the app:
+  // a refresh or a direct link used to arrive before the roles table and turn
+  // away a role an admin had given access (NEW-01).
+  if (!rolesReady) return <RouteFallback />;
   if (!canAccess(module)) return <Navigate to="/?denied=1" replace />;
   return children;
 };

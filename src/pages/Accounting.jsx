@@ -63,6 +63,7 @@ const Accounting = () => {
   const [printInvoice, setPrintInvoice] = useState(null);
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [creditForm, setCreditForm] = useState({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
+  const [isSavingCredit, setIsSavingCredit] = useState(false);
 
   // Form states
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -395,19 +396,31 @@ const Accounting = () => {
     else toast(result?.error || 'The credit note could not be withdrawn.', 'error');
   };
 
-  const handleCreditSubmit = (e) => {
+  const handleCreditSubmit = async (e) => {
     e.preventDefault();
+    if (isSavingCredit) return;
     const amount = Number(creditForm.amount);
-    if (!creditForm.customerName || isNaN(amount) || amount <= 0) { toast('Enter a valid customer and amount.', 'success'); return; }
-    addCreditNote({
-      customerName: creditForm.customerName,
-      invoiceId: creditForm.invoiceId || null,
-      amount,
-      reason: creditForm.reason,
-      recordedBy: user.id
-    });
-    setCreditForm({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
-    setIsCreditModalOpen(false);
+    if (!creditForm.customerName || isNaN(amount) || amount <= 0) { toast('Enter a valid customer and amount.', 'error'); return; }
+    setIsSavingCredit(true);
+    try {
+      // Kept open until the database has the note; the partner's balance moves
+      // with it there (046), found by id rather than by name.
+      const result = await addCreditNote({
+        customerName: creditForm.customerName,
+        invoiceId: creditForm.invoiceId || null,
+        amount,
+        reason: creditForm.reason,
+        recordedBy: user.id
+      });
+      if (!result?.ok) { toast(result?.error || 'The credit note could not be saved.', 'error'); return; }
+      toast(result.credited
+        ? `Credit note ${result.id} issued; ${formatCurrency(amount)} taken off the partner's balance.`
+        : `Credit note ${result.id} issued. No partner matched, so no balance was changed.`, 'success');
+      setCreditForm({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
+      setIsCreditModalOpen(false);
+    } finally {
+      setIsSavingCredit(false);
+    }
   };
 
   // What can be done with one invoice. Kept here, beside the handlers it
@@ -472,7 +485,12 @@ const Accounting = () => {
       })()}
       {inv.status !== 'Paid' && (
         <button
-          onClick={() => updateInvoiceStatus(inv.id, 'Paid')}
+          onClick={async () => {
+            // The payment and the partner's balance move together in the
+            // database; a refusal is said, not swallowed.
+            if (await updateInvoiceStatus(inv.id, 'Paid')) toast(`${inv.id} marked paid and the payment recorded.`, 'success');
+            else toast(`${inv.id} could not be marked paid. Nothing was changed.`, 'error');
+          }}
           className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
           title="Mark as Paid"
         >
@@ -966,7 +984,7 @@ const Accounting = () => {
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsCreditModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Issue Credit Note</button>
+                <button type="submit" disabled={isSavingCredit} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingCredit ? 'Saving…' : 'Issue Credit Note'}</button>
               </div>
             </form>
           </div>

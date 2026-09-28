@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { personName } from '../utils/attribution';
 import { createPortal } from 'react-dom';
 import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, ArrowUpCircle, ArrowDownCircle, Truck, Clock, AlertTriangle } from 'lucide-react';
-import { useConfirm } from '../context/DialogContext';
+import { useConfirm, useToast } from '../context/DialogContext';
 import PartnerLoginAction from '../components/PartnerLoginAction';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
@@ -40,6 +40,7 @@ export default function Distributors() {
   const { distributors, addDistributor, updateDistributor, deleteDistributor, invoices, distributorPayments, addDistributorPayment, orders, territories,
     distributorIncentives, schemeClaims, complaints, dealers } = useData();
   const confirm = useConfirm();
+  const toast = useToast();
   const { user, users, deleteUser, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
@@ -50,9 +51,13 @@ export default function Distributors() {
   const [viewingDist, setViewingDist] = useState(null);
   const [form, setForm] = useState(BLANK_FORM);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '' });
 
   const canManage = canAccess('distributors', 'full');
+  // Money received is Accounts' work: Ledger or Accounting full records it,
+  // without rights to edit the partner record itself (D-12).
+  const canRecordPayment = canAccess('ledger', 'full') || canAccess('accounting', 'full');
 
   const kpis = useMemo(() => ({
     total: distributors.length,
@@ -129,10 +134,13 @@ export default function Distributors() {
 
   const ledgerEntries = useMemo(() => viewingDist ? buildLedgerEntries(viewingDist, invoices, distributorPayments, orders) : [], [viewingDist, invoices, distributorPayments, orders]);
 
-  const handleRecordPayment = (e) => {
+  const handleRecordPayment = async (e) => {
     e.preventDefault();
-    if (!viewingDist) return;
-    addDistributorPayment({
+    if (!viewingDist || isSavingPayment) return;
+    setIsSavingPayment(true);
+    try {
+      // Open until the database has the payment; the balance moves with it there.
+      const result = await addDistributorPayment({
       distributorId: viewingDist.id,
       amount: Number(paymentForm.amount),
       method: paymentForm.method,
@@ -140,9 +148,14 @@ export default function Distributors() {
       date: paymentForm.date ? new Date(paymentForm.date).toISOString() : new Date().toISOString(),
       notes: paymentForm.notes,
       recordedBy: user?.id
-    });
-    setIsPaymentModalOpen(false);
-    setPaymentForm({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '' });
+      });
+      if (!result?.ok) { toast('The payment could not be saved. Nothing was recorded.', 'error'); return; }
+      toast(`Payment of ₹${Number(paymentForm.amount).toLocaleString('en-IN')} recorded.`, 'success');
+      setIsPaymentModalOpen(false);
+      setPaymentForm({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '' });
+    } finally {
+      setIsSavingPayment(false);
+    }
   };
 
   const rowColumns = [
@@ -332,7 +345,7 @@ export default function Distributors() {
                 <div className="mt-5 pt-4 border-t border-white/5">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-bold text-white flex items-center gap-1.5"><Wallet size={14} className="text-brand-accent" />Outstanding Ledger</h4>
-                    {canManage && <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
+                    {canRecordPayment && <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
                   </div>
                   {ledgerEntries.length > 0 ? (
                     <div className="max-h-52 overflow-y-auto custom-scrollbar space-y-1.5">
@@ -407,7 +420,7 @@ export default function Distributors() {
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Record Payment</button>
+                <button type="submit" disabled={isSavingPayment} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingPayment ? 'Saving…' : 'Record Payment'}</button>
               </div>
             </form>
           </div>

@@ -1,13 +1,13 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { linkedExpenseId, expenseForIncentive, expenseForClaim, expenseForFieldExpense, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
+import { linkedExpenseId, expenseForIncentive, expenseForClaim, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty, invoicesSettledBy, balanceAfterPayment, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
 import { balanceAfterCharge } from '../utils/billing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
-import { balanceDrift, balanceAfterCreditNote, balanceAfterCreditNoteWithdrawn } from '../utils/ledgerWrites';
+import { balanceDrift } from '../utils/ledgerWrites';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
 import { blankIdsToNull } from '../utils/dbRow';
@@ -460,7 +460,7 @@ export const DataProvider = ({ children }) => {
   // reachable here. Reading it centrally is the point: every screen that
   // writes a record would otherwise have to remember to say who was at the
   // keyboard, and four of the six that could have already did not.
-  const { user: signedInUser, authReady } = useAuth();
+  const { user: signedInUser, authReady, canAccess } = useAuth();
   const stamp = (row) => stampCreator(row, signedInUser?.id);
 
   // Saves wait here until the first load has landed (utils/loadGate.js).
@@ -1203,13 +1203,15 @@ export const DataProvider = ({ children }) => {
         // order for the same customer.
         const targetOrder = orders.find(o => o.leadId === id && o.status === 'Pending');
         if (targetOrder) {
-          logEvent('lead_rollback', `Lead rolled back from conversion: ${oldLead.name}. Pending order ${targetOrder.id} removed.`, updatedData.assignedTo || oldLead.assignedTo, id);
-          setOrders(prev => {
-            const nextOrders = prev.filter(o => o.id !== targetOrder.id);
-            localStorage.setItem('prismora_orders', JSON.stringify(nextOrders));
-            return nextOrders;
-          });
-          await persist('orders delete', supabase.from('orders').delete().eq('id', targetOrder.id));
+          // Cancelled, not deleted: the order keeps its history, and a rep —
+          // who may not delete orders — can do it (sales_move_order, 046).
+          const cancelled = await salesMoveOrder(targetOrder.id, 'Cancelled');
+          if (cancelled.ok) {
+            logEvent('lead_rollback', `Lead rolled back from conversion: ${oldLead.name}. Pending order ${targetOrder.id} cancelled.`, updatedData.assignedTo || oldLead.assignedTo, id);
+          } else {
+            console.error(`[Prismora] Lead ${id} rolled back, but its order ${targetOrder.id} was not cancelled:`, cancelled.error);
+            reportSchemaError({ label: 'lead rollback', detail: `Order ${targetOrder.id} is still open: ${cancelled.error}`, cause: '' });
+          }
         }
       } else if (updatedData.status === 'Lost') {
         logEvent('lead_lost', `Lead Lost: ${updatedData.name || oldLead.name}`, updatedData.assignedTo || oldLead.assignedTo, id);
@@ -1354,8 +1356,25 @@ export const DataProvider = ({ children }) => {
     return { ok: true, order: data[0] };
   };
 
+  // The sales team holds Orders view: it may only send its own Pending order
+  // to the warehouse or cancel it, and the database checks both (046).
+  const salesMoveOrder = async (id, status) => {
+    const { error } = await supabase.rpc('sales_move_order', { p_order_id: id, p_status: status });
+    if (error) return { ok: false, error: plainDatabaseError(error, status === 'Cancelled' ? 'cancel this order' : 'send this order to the warehouse') };
+    await reloadRows('orders', setOrders, 'prismora_orders', 'id', [id]);
+    return { ok: true };
+  };
+
   const updateOrder = async (id, updatedData) => {
     const oldOrder = orders.find(o => o.id === id);
+    if (!canAccess('orders', 'full')) {
+      if (oldOrder && updatedData.status && updatedData.status !== oldOrder.status) {
+        const moved = await salesMoveOrder(id, updatedData.status);
+        if (moved.ok) logEvent(updatedData.status === 'Cancelled' ? 'order_cancelled' : 'order_processing', `Order ${updatedData.status}: ${oldOrder.customerName}`, oldOrder.assignedTo, id);
+        return moved;
+      }
+      return { ok: false, error: 'Your role can view orders but not change them. Ask the order desk.' };
+    }
     const delivering = Boolean(oldOrder) && updatedData.status === 'Delivered' && oldOrder.status !== 'Delivered';
     setOrders(prev => {
       const next = prev.map(o => o.id === id ? { ...o, ...updatedData } : o);
@@ -2060,6 +2079,15 @@ export const DataProvider = ({ children }) => {
   const partyForInvoice = (invoice) =>
     resolveInvoiceParty(invoice, { distributors, dealers, retailers, orders });
 
+  // A partner's row after the database moved its balance (payments and credit
+  // notes, 046) — whoever records them, without rights over partner records.
+  const reloadParty = async (type, id) => {
+    if (!id) return;
+    if (type === 'Distributor') await reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [id]);
+    else if (type === 'Dealer') await reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [id]);
+    else await reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [id]);
+  };
+
   const writePartyOutstanding = async (type, party, value) => {
     const patch = { outstandingAmount: value };
     if (type === 'Distributor') return updateDistributor(party.id, patch);
@@ -2100,7 +2128,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
-    await writePartyOutstanding(type, party, balanceAfterPayment(party.outstandingAmount, total));
+    // The balance moved with the payment, in the database (046).
+    await reloadParty(type, party.id);
     return true;
   };
 
@@ -2117,10 +2146,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
-    if (party) {
-      await writePartyOutstanding(type, party,
-        balanceAfterPayment(party.outstandingAmount, -invoiceTotal(invoice)));
-    }
+    if (party) await reloadParty(type, party.id);
   };
 
   const updateInvoiceStatus = async (id, status) => {
@@ -2196,38 +2222,16 @@ export const DataProvider = ({ children }) => {
   const deleteCreditNote = async (id) => {
     const note = creditNotes.find(n => n.id === id);
     if (!note) return { ok: false, error: 'That credit note no longer exists.' };
-
     const amount = Number(note.amount || 0);
-    const name = String(note.customerName || '').toLowerCase();
 
-    const restore = async (list, setter, table) => {
-      const match = list.find(p => String(p.name || '').toLowerCase() === name);
-      if (!match) return false;
-      // The mirror of addCreditNote: it subtracted, so this adds back.
-      const restored = balanceAfterCreditNoteWithdrawn(match.outstandingAmount, amount);
-      const { error } = await supabase.from(table).update({ outstandingAmount: restored }).eq('id', match.id);
-      if (error) {
-        console.error(`[Prismora] Could not restore the ${table} balance, so the credit note has been left alone:`, error);
-        return null;
-      }
-      const next = list.map(p => p.id === match.id ? { ...p, outstandingAmount: restored } : p);
-      setter(next);
-      localStorage.setItem(`prismora_${table}`, JSON.stringify(next));
-      return true;
-    };
-
-    if (amount > 0 && name) {
-      const outcome = await restore(distributors, setDistributors, 'distributors')
-        ?? await restore(dealers, setDealers, 'dealers')
-        ?? await restore(retailers, setRetailers, 'retailers');
-      if (outcome === null) return { ok: false, error: 'The balance could not be put back, so nothing was deleted.' };
-    }
-
+    // Deleting the note puts its credit back on the partner's balance, in the
+    // same transaction, in the database (046).
     const { error } = await supabase.from('credit_notes').delete().eq('id', id);
     if (error) {
       console.error('[Prismora] Could not delete the credit note:', error);
-      return { ok: false, error: 'The credit note could not be deleted.' };
+      return { ok: false, error: plainDatabaseError(error, 'withdraw this credit note') };
     }
+    await reloadCreditParty(note);
 
     setCreditNotes(prev => {
       const next = prev.filter(n => n.id !== id);
@@ -2238,57 +2242,65 @@ export const DataProvider = ({ children }) => {
     return { ok: true };
   };
 
+  /**
+   * Which partner a credit note is for, by id (D-22).
+   *
+   * It used to be whichever partner's name matched what was typed, and names
+   * are not unique. The invoice it is raised against decides where there is
+   * one; otherwise the name must match exactly one partner, or the note is
+   * refused rather than credited to a guess.
+   */
+  const creditNoteParty = (cnData) => {
+    if (cnData.invoiceId) {
+      const inv = invoices.find(i => i.id === cnData.invoiceId);
+      const order = inv?.orderId ? orders.find(o => o.id === inv.orderId) : null;
+      const ids = {
+        distributorId: inv?.distributorId || order?.distributorId || null,
+        dealerId: inv?.dealerId || order?.dealerId || null,
+        retailerId: inv?.retailerId || order?.retailerId || null,
+      };
+      if (ids.distributorId || ids.dealerId || ids.retailerId) return { ok: true, ids };
+    }
+    const name = String(cnData.customerName || '').trim().toLowerCase();
+    const matches = [
+      ...distributors.filter(p => String(p.name || '').trim().toLowerCase() === name).map(p => ({ distributorId: p.id })),
+      ...dealers.filter(p => String(p.name || '').trim().toLowerCase() === name).map(p => ({ dealerId: p.id })),
+      ...retailers.filter(p => String(p.name || '').trim().toLowerCase() === name).map(p => ({ retailerId: p.id })),
+    ];
+    if (matches.length > 1) {
+      return { ok: false, error: `${matches.length} partners are called "${cnData.customerName}". Issue the credit note against one of their invoices so it goes to the right one.` };
+    }
+    return { ok: true, ids: { distributorId: null, dealerId: null, retailerId: null, ...(matches[0] || {}) } };
+  };
+
+  const reloadCreditParty = async (note) => {
+    if (note?.distributorId) await reloadParty('Distributor', note.distributorId);
+    else if (note?.dealerId) await reloadParty('Dealer', note.dealerId);
+    else if (note?.retailerId) await reloadParty('Retailer', note.retailerId);
+  };
+
   const addCreditNote = async (cnData) => {
+    const party = creditNoteParty(cnData);
+    if (!party.ok) return { ok: false, error: party.error };
+
     const newId = `CN-${Date.now()}`;
-    const newCN = { ...cnData, id: newId, createdAt: new Date().toISOString() };
+    const newCN = { ...cnData, ...party.ids, id: newId, createdAt: new Date().toISOString() };
+    // The partner's balance moves with the note, in the database (046).
+    const { error } = await supabase.from('credit_notes').insert([newCN]);
+    if (error) {
+      console.error('[Prismora] Could not save the credit note:', error);
+      return { ok: false, error: plainDatabaseError(error, 'issue this credit note') };
+    }
     setCreditNotes(prev => {
       const next = [newCN, ...prev];
       localStorage.setItem('prismora_credit_notes', JSON.stringify(next));
       return next;
     });
-    // Checked. The balance change below is a separate statement that would go
-    // through on its own, so a refused credit note used to reduce what the
-    // customer owed with no note on file to say why.
-    const saved = await persist('credit_notes insert', supabase.from('credit_notes').insert([newCN]));
-    if (!saved) {
-      setCreditNotes(prev => {
-        const next = prev.filter(n => n.id !== newId);
-        localStorage.setItem('prismora_credit_notes', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
+    await reloadCreditParty(newCN);
 
     const amount = Number(cnData.amount || 0);
-    const name = (cnData.customerName || '').toLowerCase();
-    const applyCredit = async (list, setter, table) => {
-      const match = list.find(p => (p.name || '').toLowerCase() === name);
-      if (!match) return false;
-      // Not floored at zero: a credit note larger than the balance leaves the
-      // partner in credit, which is money the business owes them.
-      const newOutstanding = balanceAfterCreditNote(match.outstandingAmount, amount);
-      const next = list.map(p => p.id === match.id ? { ...p, outstandingAmount: newOutstanding } : p);
-      setter(next);
-      localStorage.setItem(`prismora_${table}`, JSON.stringify(next));
-      // Must be awaited: without it the promise escapes the try/catch entirely and
-      // a failed balance write is never noticed, silently reverting on next fetch.
-      const { error } = await supabase.from(table).update({ outstandingAmount: newOutstanding }).eq('id', match.id);
-      if (error) console.error(`Credit note: failed to update ${table} outstanding balance — will revert on next refresh:`, error);
-      return true;
-    };
-    // Match against whichever channel the customer belongs to. Awaited in sequence
-    // rather than `a() || b()` — now that applyCredit is async it returns a Promise,
-    // which is always truthy, so `||` would stop after the first call and never try
-    // dealers or retailers.
-    const credited = await applyCredit(distributors, setDistributors, 'distributors')
-      || await applyCredit(dealers, setDealers, 'dealers')
-      || await applyCredit(retailers, setRetailers, 'retailers');
-
-    if (!credited) {
-      console.warn(`Credit note ${newId}: no distributor/dealer/retailer named "${cnData.customerName}" — the note was recorded but no outstanding balance was reduced.`);
-    }
-
     logEvent('credit_note', `Credit note ${newId} issued to ${cnData.customerName} for ₹${amount} (${cnData.reason || 'adjustment'})`, cnData.recordedBy, newId);
+    return { ok: true, id: newId, credited: Boolean(party.ids.distributorId || party.ids.dealerId || party.ids.retailerId) };
   };
 
   // ── Expenses ─────────────────────────────────────────────────────────────
@@ -3427,25 +3439,32 @@ export const DataProvider = ({ children }) => {
     await persist('sfa_expenses insert', supabase.from('sfa_expenses').insert([blankIdsToNull(newExp)]));
   };
 
+  // Approving books the claim in Accounting → Expenses, and moving it back out
+  // of Approved removes it — both in the database with the status (046), so a
+  // Sales Manager can approve without Accounting access. The database also
+  // decides who may approve: a manager or admin, never their own claim.
   const updateSFAExpense = async (id, updatedData) => {
-    const claim = sfaExpenses.find(e => e.id === id);
-
-    // Approving a field expense commits the company to paying it, and these
-    // sat in their own table that Accounting never read.
-    if (updatedData.status === 'Approved' && claim) {
-      const expense = expenseForFieldExpense(claim);
-      if (expense && !await bookLinkedExpense(expense)) return false;
-    } else if (updatedData.status && updatedData.status !== 'Approved') {
-      await unbookLinkedExpense(id);
+    const { data, error } = await supabase.from('sfa_expenses').update(blankIdsToNull(updatedData)).eq('id', id).select('*');
+    if (error || !data?.length) {
+      console.error('[Prismora] Could not update the field expense:', error?.message || 'no row changed');
+      return { ok: false, error: error ? plainDatabaseError(error, 'update this field expense') : 'This claim could not be changed — it may have been changed elsewhere.' };
     }
-
     setSfaExpenses(prev => {
-      const next = prev.map(e => e.id === id ? { ...e, ...updatedData } : e);
+      const next = prev.map(e => (e.id === id ? data[0] : e));
       localStorage.setItem('prismora_sfa_expenses', JSON.stringify(next));
       return next;
     });
-    await persist('sfa_expenses update', supabase.from('sfa_expenses').update(blankIdsToNull(updatedData)).eq('id', id));
-    return true;
+    if ('status' in updatedData) {
+      const linked = linkedExpenseId(id);
+      const { data: booked } = await supabase.from('expenses').select('*').eq('id', linked);
+      setExpenses(prev => {
+        const rest = prev.filter(e => e.id !== linked);
+        const next = booked?.length ? [booked[0], ...rest] : rest;
+        try { localStorage.setItem('prismora_expenses', JSON.stringify(next)); } catch { /* storage full */ }
+        return next;
+      });
+    }
+    return { ok: true };
   };
 
   // ── Distributor Payments (Outstanding Ledger credits) ──────────────────────
@@ -3478,9 +3497,8 @@ export const DataProvider = ({ children }) => {
       // Not floored at zero any more. Paying more than is owed used to discard
       // the excess, so a partner who paid in advance had that advance
       // forgotten. A negative balance is money held on their behalf.
-      updateDistributor(dist.id, {
-        outstandingAmount: balanceAfterPayment(dist.outstandingAmount, paymentData.amount),
-      });
+      // The balance moved with the payment, in the database (046).
+      await reloadParty('Distributor', dist.id);
 
       // And settle what it covers, so the money shows as income rather than
       // only as a smaller balance. Oldest first, and only invoices the payment
@@ -3495,6 +3513,7 @@ export const DataProvider = ({ children }) => {
       }
     }
     logEvent('distributor_payment', `Payment of ₹${paymentData.amount} recorded for ${dist?.name || paymentData.distributorId}`, null, newId);
+    return { ok: true, id: newId };
   };
 
   const addDealerPayment = async (paymentData) => {
@@ -3526,9 +3545,8 @@ export const DataProvider = ({ children }) => {
       // Not floored at zero any more. Paying more than is owed used to discard
       // the excess, so a partner who paid in advance had that advance
       // forgotten. A negative balance is money held on their behalf.
-      updateDealer(dealer.id, {
-        outstandingAmount: balanceAfterPayment(dealer.outstandingAmount, paymentData.amount),
-      });
+      // The balance moved with the payment, in the database (046).
+      await reloadParty('Dealer', dealer.id);
 
       // And settle what it covers, so the money shows as income rather than
       // only as a smaller balance. Oldest first, and only invoices the payment
@@ -3543,6 +3561,7 @@ export const DataProvider = ({ children }) => {
       }
     }
     logEvent('dealer_payment', `Payment of ₹${paymentData.amount} recorded for ${dealer?.name || paymentData.dealerId}`, null, newId);
+    return { ok: true, id: newId };
   };
 
   const addRetailerPayment = async (paymentData) => {
@@ -3574,9 +3593,8 @@ export const DataProvider = ({ children }) => {
       // Not floored at zero any more. Paying more than is owed used to discard
       // the excess, so a partner who paid in advance had that advance
       // forgotten. A negative balance is money held on their behalf.
-      updateRetailer(retailer.id, {
-        outstandingAmount: balanceAfterPayment(retailer.outstandingAmount, paymentData.amount),
-      });
+      // The balance moved with the payment, in the database (046).
+      await reloadParty('Retailer', retailer.id);
 
       // And settle what it covers, so the money shows as income rather than
       // only as a smaller balance. Oldest first, and only invoices the payment
@@ -3591,6 +3609,7 @@ export const DataProvider = ({ children }) => {
       }
     }
     logEvent('retailer_payment', `Payment of ₹${paymentData.amount} recorded for ${retailer?.name || paymentData.retailerId}`, null, newId);
+    return { ok: true, id: newId };
   };
 
   // ── Scheme Claims (distributor/dealer/retailer-submitted) ───────────────────

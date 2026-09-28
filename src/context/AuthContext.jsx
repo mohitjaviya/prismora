@@ -162,6 +162,10 @@ export const AuthProvider = ({ children }) => {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [rolesError, setRolesError] = useState('');
+  // Whether the roles table has answered (or failed) for this user. Route
+  // guards wait for it: deciding from the compiled-in matrix first sent a role
+  // an admin had changed to "Access Denied" on its own pages (NEW-01).
+  const [rolesReady, setRolesReady] = useState(false);
 
 
   // False until the Supabase session has been read once, so the app can tell
@@ -348,6 +352,7 @@ export const AuthProvider = ({ children }) => {
    */
   const fetchRoles = async () => {
     const { data, error } = await supabase.from('roles').select('*').order('sort', { ascending: true });
+    setRolesReady(true);
     if (error || !data) {
       // PGRST205 is the table not existing, which is a migration nobody has run
       // yet rather than a fault. Anything else is a fault, and saying which is
@@ -409,6 +414,7 @@ export const AuthProvider = ({ children }) => {
   // the id rather than the object — otherwise it would fetch in a loop.
   useEffect(() => {
     if (!user?.id) return;
+    setRolesReady(false);
     fetchUsers();
     fetchRoles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -772,7 +778,7 @@ export const AuthProvider = ({ children }) => {
   const isSales = user ? isSalesRole(user.role) : false;
 
   return (
-    <AuthContext.Provider value={{ user, users, roles, rolesError, fetchRoles, authReady, isConfigured, missingEnvVars, login, logout, addUser, isEmailTaken, registerPartner, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, verifyCurrentPassword, isAdmin, isManager, isSales }}>
+    <AuthContext.Provider value={{ user, users, roles, rolesError, fetchRoles, authReady, rolesReady, isConfigured, missingEnvVars, login, logout, addUser, isEmailTaken, registerPartner, createUserAccount, updateUser, deleteUser, canAccessData, getAssignableUsers, canAccess, verifyCurrentPassword, isAdmin, isManager, isSales }}>
       {children}
     </AuthContext.Provider>
   );
