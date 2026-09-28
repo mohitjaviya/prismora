@@ -462,6 +462,24 @@ export const DataProvider = ({ children }) => {
   const { user: signedInUser, authReady, canAccess } = useAuth();
   const stamp = (row) => stampCreator(row, signedInUser?.id);
 
+  // The seller printed on invoices (D-17, company_settings): name, GSTIN and
+  // state, readable by anyone signed in, changed only by an administrator.
+  const [companySettings, setCompanySettings] = useState(null);
+  const loadCompanySettings = async () => {
+    const { data } = await supabase.from('company_settings').select('*').eq('id', 'company').maybeSingle();
+    if (data) setCompanySettings(data);
+    return data;
+  };
+  useEffect(() => { if (signedInUser?.id) loadCompanySettings(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const updateCompanySettings = async (patch) => {
+    const { data, error } = await supabase.from('company_settings').update(patch).eq('id', 'company').select('*');
+    if (error || !data?.length) {
+      return { ok: false, error: error ? plainDatabaseError(error, 'save the company details') : 'Only an administrator can change the company details.' };
+    }
+    setCompanySettings(data[0]);
+    return { ok: true };
+  };
+
   // Saves wait here until the first load has landed (utils/loadGate.js).
   const loadGate = useRef(null);
   if (!loadGate.current) loadGate.current = createLoadGate();
@@ -1999,7 +2017,7 @@ export const DataProvider = ({ children }) => {
    *
    * Returns { ok, id } or { ok: false, error } with the reason in plain words.
    */
-  const addInvoice = async ({ orderId = null, customerName = '', amount = null, withTax = true, gstPct = null, dueDate = null }) => {
+  const addInvoice = async ({ orderId = null, customerName = '', amount = null, withTax = true, gstPct = null, dueDate = null, partyId = null, placeOfSupply = null }) => {
     if (orderId) {
       const existing = invoices.find(i => i.orderId === orderId);
       if (existing) {
@@ -2013,15 +2031,19 @@ export const DataProvider = ({ children }) => {
       p_with_tax: Boolean(withTax),
       p_gst_pct: gstPct === null || gstPct === undefined || gstPct === '' ? null : Number(gstPct),
       p_due: dueDate || null,
+      // A custom invoice names its partner, or the state it is supplied to:
+      // that decides CGST + SGST or IGST (053).
+      p_party_id: orderId ? null : (partyId || null),
+      p_place_of_supply: orderId ? null : (placeOfSupply || null),
     });
     if (error || !newId) return { ok: false, error: plainDatabaseError(error, 'raise this invoice') };
 
     const order = orderId ? orders.find(o => o.id === orderId) : null;
     await Promise.all([
       reloadRows('invoices', setInvoices, 'prismora_invoices', 'id', [newId]),
-      reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [order?.distributorId]),
-      reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [order?.dealerId]),
-      reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [order?.retailerId]),
+      reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [order?.distributorId, partyId]),
+      reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [order?.dealerId, partyId]),
+      reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [order?.retailerId, partyId]),
     ]);
     logEvent('invoice_new', `Invoice generated for ${order?.customerName || customerName}: ${newId}`, signedInUser?.id, newId);
     return { ok: true, id: newId };
@@ -3742,6 +3764,7 @@ export const DataProvider = ({ children }) => {
   return (
     <DataContext.Provider value={gateWrites({
       whenLoaded: () => loadGate.current.wait(),
+      companySettings, loadCompanySettings, updateCompanySettings,
       // Original CRM
       leads, orders, eventLog, products, productCatalog, invoices, expenses,
       schemaError, dismissSchemaError: () => setSchemaError(null),

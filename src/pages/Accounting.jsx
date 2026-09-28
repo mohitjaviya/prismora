@@ -20,6 +20,7 @@ import InvoicesTable from '../components/accounting/InvoicesTable';
 import ExpensesTable from '../components/accounting/ExpensesTable';
 import CreditNotesTable from '../components/accounting/CreditNotesTable';
 import BalanceCheckPanel from '../components/accounting/BalanceCheckPanel';
+import { INDIAN_STATES, supplyTypeFor, invoiceGst } from '../utils/gst';
 
 
 const Accounting = () => {
@@ -31,7 +32,7 @@ const Accounting = () => {
     distributorIncentives, schemeClaims, sfaExpenses, reconcilePayouts,
     addInvoice, convertInvoice, updateInvoiceStatus, deleteInvoice,
     addExpense, deleteExpense, creditNotes, addCreditNote, deleteCreditNote,
-    grn, vendors, purchaseReturns, distributorPayments
+    grn, vendors, purchaseReturns, distributorPayments, dealers, retailers, companySettings
   } = useData();
 
 
@@ -65,6 +66,16 @@ const Accounting = () => {
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [creditForm, setCreditForm] = useState({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
   const [isSavingCredit, setIsSavingCredit] = useState(false);
+  // A custom invoice is billed to a partner (whose state it takes) or to a
+  // walk-in customer, whose state has to be chosen: it decides CGST + SGST or
+  // IGST (D-17).
+  const [invoicePartyId, setInvoicePartyId] = useState('');
+  const [invoiceState, setInvoiceState] = useState('');
+  const invoiceParties = useMemo(() => [
+    ...(distributors || []).map(p => ({ ...p, kind: 'Distributor' })),
+    ...(dealers || []).map(p => ({ ...p, kind: 'Dealer' })),
+    ...(retailers || []).map(p => ({ ...p, kind: 'Retailer' })),
+  ].filter(p => p.status !== 'Pending' && p.status !== 'Rejected'), [distributors, dealers, retailers]);
 
   // Form states
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -306,6 +317,10 @@ const Accounting = () => {
         setInvoiceError('Choose the GST rate for this invoice.');
         return;
       }
+      if (!invoiceState) {
+        setInvoiceError("Choose the customer's state (place of supply). It decides CGST + SGST or IGST.");
+        return;
+      }
     }
 
     setIsSavingInvoice(true);
@@ -317,6 +332,8 @@ const Accounting = () => {
         withTax: invoiceWithTax,
         gstPct: selectedOrderId || !invoiceWithTax ? null : Number(customGstPct),
         dueDate: invoiceDueDate ? new Date(invoiceDueDate).toISOString() : null,
+        partyId: selectedOrderId ? null : (invoicePartyId || null),
+        placeOfSupply: selectedOrderId ? null : (invoiceState || null),
       });
       if (!result.ok) {
         setInvoiceError(result.error);
@@ -329,6 +346,8 @@ const Accounting = () => {
       setCustomGstPct('');
       setInvoiceDueDate('');
       setInvoiceWithTax(true);
+      setInvoicePartyId('');
+      setInvoiceState('');
       setIsInvoiceModalOpen(false);
     } finally {
       setIsSavingInvoice(false);
@@ -1084,6 +1103,38 @@ const Accounting = () => {
                 ) : (
                   <>
                     <div>
+                      <label htmlFor="accounting-bill-to" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Bill To</label>
+                      <select id="accounting-bill-to" value={invoicePartyId}
+                        onChange={(e) => {
+                          const p = invoiceParties.find(x => x.id === e.target.value);
+                          setInvoicePartyId(e.target.value);
+                          if (p) { setCustomCustomerName(p.name); setInvoiceState(p.state || ''); }
+                          else { setCustomCustomerName(''); setInvoiceState(''); }
+                        }}
+                        className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
+                        <option value="" className="bg-brand-primary-light">Walk-in customer (no partner account)</option>
+                        {invoiceParties.map(p => (
+                          <option key={p.id} value={p.id} className="bg-brand-primary-light">{p.name} · {p.kind}{p.state ? ` · ${p.state}` : ''}</option>
+                        ))}
+                      </select>
+                      {invoicePartyId && <p className="text-[11px] text-slate-500 mt-1">The partner is charged for this invoice, as for any other.</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="accounting-place-of-supply" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Customer State (Place of Supply)</label>
+                      <select id="accounting-place-of-supply" required value={invoiceState} onChange={(e) => setInvoiceState(e.target.value)}
+                        className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
+                        <option value="" className="bg-brand-primary-light">Choose a state…</option>
+                        {INDIAN_STATES.map(s => <option key={s} value={s} className="bg-brand-primary-light">{s}</option>)}
+                      </select>
+                      {invoiceState && companySettings?.state && (
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          {supplyTypeFor(invoiceState, companySettings.state) === 'intra'
+                            ? `Same state as ${companySettings.companyName} (${companySettings.state}): CGST + SGST.`
+                            : `Outside ${companySettings.state}: IGST.`}
+                        </p>
+                      )}
+                    </div>
+                    <div>
                       <label htmlFor="accounting-customer-name-2" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Customer Name</label>
                       <input id="accounting-customer-name-2"
                         type="text"
@@ -1348,17 +1399,18 @@ const Accounting = () => {
       {printInvoice && createPortal(
         (() => {
           const order = getOrderForInvoice(printInvoice);
-          const destinationState = order?.state || 'Gujarat';
-          const destinationCity = order?.city || 'Ahmedabad';
-          const isIntrastate = destinationState.toLowerCase() === 'gujarat';
-          
+          // Seller, place of supply and the CGST/SGST/IGST split as the invoice
+          // was issued (053) — not from code, and not from today's Settings.
+          const gst = invoiceGst(printInvoice, companySettings || {});
+          const destinationState = gst.placeOfSupply;
+          const destinationCity = order?.city || '';
+          const isIntrastate = gst.supplyType === 'intra';
+
           const baseAmount = Number(printInvoice.amount || 0);
           const gstAmount = Number(printInvoice.tax || 0);
           const grandTotal = baseAmount + gstAmount;
 
-          const cgst = isIntrastate ? Math.round(gstAmount / 2) : 0;
-          const sgst = isIntrastate ? Math.round(gstAmount / 2) : 0;
-          const igst = !isIntrastate ? gstAmount : 0;
+          const { cgst, sgst, igst } = gst;
 
           // A proforma is a request for payment, not a tax invoice, and must
           // never be mistaken for one — on screen or on paper.
@@ -1443,11 +1495,11 @@ const Accounting = () => {
                   <div className="grid grid-cols-2 gap-8 my-8 text-xs font-sans">
                     {/* Sender Details */}
                     <div className="space-y-1">
-                      <p className="font-bold text-slate-950 text-sm">PRISMORA PERSONAL CARE LTD.</p>
-                      <p>402, Spectrum Towers, Chimanlal Girdharlal Rd</p>
-                      <p>Ahmedabad, Gujarat - 380009</p>
-                      <p className="font-semibold text-slate-700">GSTIN: 24AAACP4920M1Z4</p>
-                      <p>Email: billing@prismora.com</p>
+                      <p className="font-bold text-slate-950 text-sm">{gst.seller.name}</p>
+                      {companySettings?.address && gst.seller.name === companySettings.companyName && <p>{companySettings.address}</p>}
+                      <p>{gst.seller.state}</p>
+                      <p className="font-semibold text-slate-700">GSTIN: {gst.seller.gstin}</p>
+                      {companySettings?.email && gst.seller.name === companySettings.companyName && <p>Email: {companySettings.email}</p>}
                     </div>
 
                     {/* Consignee/Buyer Details */}
@@ -1457,8 +1509,8 @@ const Accounting = () => {
                       {printInvoice.contactName
                         ? <p>Attn: {printInvoice.contactName}</p>
                         : order?.companyName && order.companyName !== printInvoice.customerName && <p>{order.companyName}</p>}
-                      <p>{destinationCity}, {destinationState}</p>
-                      <p className="font-semibold text-slate-700">Place of Supply: {destinationState}</p>
+                      <p>{[destinationCity, destinationState].filter(Boolean).join(', ')}</p>
+                      <p className="font-semibold text-slate-700">Place of Supply: {destinationState} ({isIntrastate ? 'intra-state: CGST + SGST' : 'inter-state: IGST'})</p>
                     </div>
                   </div>
 
@@ -1587,7 +1639,7 @@ const Accounting = () => {
                     </div>
                     <div className="text-right flex flex-col justify-end items-end space-y-4">
                       <div className="h-10 w-24 border-b border-dashed border-slate-300"></div>
-                      <p className="font-bold text-slate-800 font-sans">For PRISMORA PERSONAL CARE LTD.</p>
+                      <p className="font-bold text-slate-800 font-sans">For {gst.seller.name}</p>
                       <p className="text-[9px] text-slate-400">Authorized Signatory</p>
                     </div>
                   </div>

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { Settings as SettingsIcon, Lock, History, ShieldCheck } from 'lucide-react';
+import { Settings as SettingsIcon, Lock, History, ShieldCheck, Building2 } from 'lucide-react';
+import CompanySettingsPanel from '../components/CompanySettingsPanel';
 import AuditLogPanel from '../components/audit/AuditLogPanel';
 import { canViewAuditLog } from '../utils/audit';
 import { PageHeader, DataTable, Badge } from '../components/ui';
@@ -109,6 +110,7 @@ export default function Settings() {
         {[
           auditViewer && ['audit', 'Audit Log', <ShieldCheck size={16} />],
           ['activity', 'Activity', <History size={16} />],
+          ['company', 'Company', <Building2 size={16} />],
           ['password', 'Change Password', <Lock size={16} />]
         ].filter(Boolean).map(([key, label, icon]) => (
           <button key={key} onClick={() => setActiveTab(key)}
@@ -146,6 +148,9 @@ export default function Settings() {
           </p>
         </div>
       )}
+
+      {/* ── Tab: Company — the seller on invoices (D-17); administrators edit ── */}
+      {activeTab === 'company' && <CompanySettingsPanel canEdit={canAccess('settings', 'full')} />}
 
       {/* ── Tab: Change Password ────────────────────────────────────────────── */}
       {activeTab === 'password' && (
