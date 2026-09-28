@@ -4,6 +4,7 @@ import { useData } from './DataContext';
 import { isToday } from 'date-fns';
 import { isOpenLead } from '../utils/leadStatus';
 import { localDateStr, canDecideRequest } from '../utils/beatDates';
+import { isOpen } from '../utils/invoiceStatus';
 
 const NotificationContext = createContext();
 
@@ -116,7 +117,7 @@ export const NotificationProvider = ({ children }) => {
     // Trigger 2: Overdue Invoices (Admin, Manager, Accounts)
     if (isAdminRole(user.role) || isManagerRole(user.role)) {
       invoices.forEach(inv => {
-        if (inv.status === 'Sent' || inv.status === 'Unpaid' || inv.status === 'Pending') {
+        if (isOpen(inv)) {
           const daysOld = Math.ceil((new Date() - new Date(inv.createdAt)) / (1000 * 60 * 60 * 24));
           if (daysOld > 15) {
             newSystemNotifications.push({

@@ -10,6 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
 import { isConvertedLead } from '../utils/leadStatus';
 import { isExpired } from '../utils/expiry';
+import { isOpen, amountPaid } from '../utils/invoiceStatus';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -89,7 +90,7 @@ export default function DirectorDashboard() {
       dealers.reduce((s, d) => s + (d.outstandingAmount || 0), 0) +
       retailers.reduce((s, r) => s + (r.outstandingAmount || 0), 0);
 
-    const unpaid = invoices.filter(i => i.status === 'Unpaid' || i.status === 'Overdue' || i.status === 'Pending');
+    const unpaid = invoices.filter(isOpen);
     const overdueVal = unpaid.reduce((s, i) => {
       const due = i.dueDate ? new Date(i.dueDate) : null;
       return (due && due < now) ? s + Number(i.amount || 0) + Number(i.tax || 0) : s;
@@ -112,7 +113,7 @@ export default function DirectorDashboard() {
 
   // ── Finance ──────────────────────────────────────────────────────────────
   const finance = useMemo(() => {
-    const revenue = invoices.filter(i => i.status === 'Paid').reduce((s, i) => s + Number(i.amount || 0) + Number(i.tax || 0), 0);
+    const revenue = invoices.reduce((s, i) => s + amountPaid(i), 0);
     const exp = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
     const profit = revenue - exp;
     const margin = revenue ? ((profit / revenue) * 100).toFixed(1) : 0;

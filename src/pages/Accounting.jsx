@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { attributionFor } from '../utils/attribution';
 import { Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Wallet, TrendingUp, Plus, Trash2, FileText, Clock, AlertCircle, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
+import { Wallet, TrendingUp, Plus, Trash2, FileText, Clock, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
 import { useToast, useConfirm } from '../context/DialogContext';
 import { Button, Card, IconButton, PageHeader } from '../components/ui';
 import { 
@@ -21,6 +21,7 @@ import ExpensesTable from '../components/accounting/ExpensesTable';
 import CreditNotesTable from '../components/accounting/CreditNotesTable';
 import BalanceCheckPanel from '../components/accounting/BalanceCheckPanel';
 import { INDIAN_STATES, supplyTypeFor, invoiceGst } from '../utils/gst';
+import { INVOICE_STATUSES, isSettled, isOpen, amountPaid, amountDue } from '../utils/invoiceStatus';
 
 
 const Accounting = () => {
@@ -57,7 +58,7 @@ const Accounting = () => {
   const [reconciling, setReconciling] = useState(false);
   const [reconcileResult, setReconcileResult] = useState(null);
   const [activeTab, setActiveTab] = useState(canAccess('accounting', 'full') ? 'overview' : 'invoices'); // 'overview' | 'invoices' | 'expenses'
-  const [invoiceFilter, setInvoiceFilter] = useState('All'); // 'All' | 'Paid' | 'Unpaid' | 'Overdue'
+  const [invoiceFilter, setInvoiceFilter] = useState('All'); // 'All' | a status in INVOICE_STATUSES | 'Proforma'
   
   // Modals state
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
@@ -98,13 +99,14 @@ const Accounting = () => {
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Financial Calculations
-  const totalIncome = invoices
-    .filter(inv => inv.status === 'Paid')
-    .reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
-
-  const totalTax = invoices
-    .filter(inv => inv.status === 'Paid')
-    .reduce((sum, inv) => sum + Number(inv.tax || 0), 0);
+  // What has been received, part-payments included (057), split between the
+  // goods and the GST in the invoice's own proportion.
+  const paidShare = (inv) => {
+    const total = Number(inv.amount || 0) + Number(inv.tax || 0);
+    return total > 0 ? amountPaid(inv) / total : 0;
+  };
+  const totalIncome = invoices.reduce((sum, inv) => sum + Number(inv.amount || 0) * paidShare(inv), 0);
+  const totalTax = invoices.reduce((sum, inv) => sum + Number(inv.tax || 0) * paidShare(inv), 0);
 
   // GST collected is not the business's money. It is held on behalf of the
   // government and paid over, so it belongs on neither the revenue line nor
@@ -161,8 +163,8 @@ const Accounting = () => {
   const netProfit = totalRevenue - totalExpensesValue - purchaseCost;
   const profitMargin = totalRevenue ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
 
-  const unpaidInvoices = invoices.filter(inv => inv.status === 'Unpaid' || inv.status === 'Overdue');
-  const outstandingAmount = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.amount || 0) + Number(inv.tax || 0), 0);
+  const unpaidInvoices = invoices.filter(isOpen);
+  const outstandingAmount = unpaidInvoices.reduce((sum, inv) => sum + amountDue(inv), 0);
 
   /**
    * What the Generate Invoice form will charge, worked out the way the
@@ -255,10 +257,10 @@ const Accounting = () => {
     });
 
     invoices.forEach(inv => {
-      if (inv.status === 'Paid' && inv.createdAt) {
+      if (amountPaid(inv) > 0 && inv.createdAt) {
         const m = monthKey(inv.createdAt);
         if (data[m]) {
-          data[m].Income += Number(inv.amount || 0) + Number(inv.tax || 0);
+          data[m].Income += amountPaid(inv);
         }
       }
     });
@@ -447,7 +449,7 @@ const Accounting = () => {
   // calls; InvoicesTable only lays the row out.
   const renderInvoiceActions = (inv) => (
     <div className="flex items-center justify-end gap-0.5">
-      {inv.status !== 'Paid' && (() => {
+      {isOpen(inv) && (() => {
         // ── Resolve customer contact details dynamically ──────────────────────
         const orderObj = inv.orderId ? rawOrders.find(o => o.id === inv.orderId) : null;
         const leadObj = leads.find(l => l.name?.toLowerCase() === inv.customerName?.toLowerCase() || l.company?.toLowerCase() === inv.customerName?.toLowerCase());
@@ -503,12 +505,12 @@ const Accounting = () => {
           </>
         );
       })()}
-      {inv.status !== 'Paid' && (
+      {isOpen(inv) && (
         <button
           onClick={async () => {
-            // The payment and the partner's balance move together in the
-            // database; a refusal is said, not swallowed.
-            if (await updateInvoiceStatus(inv.id, 'Paid')) toast(`${inv.id} marked paid and the payment recorded.`, 'success');
+            // Settles what is still due. The payment and the partner's balance
+            // move together in the database; a refusal is said, not swallowed.
+            if (await updateInvoiceStatus(inv.id, 'Settled')) toast(`${inv.id} settled: ${formatCurrency(amountDue(inv))} recorded.`, 'success');
             else toast(`${inv.id} could not be marked paid. Nothing was changed.`, 'error');
           }}
           className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
@@ -517,7 +519,7 @@ const Accounting = () => {
           <Check size={16} />
         </button>
       )}
-      {inv.status === 'Paid' && (
+      {isSettled(inv) && (
         <button
           onClick={async () => {
             // Marking an invoice paid now also credits the partner, so a
@@ -536,15 +538,7 @@ const Accounting = () => {
           <Undo2 size={16} />
         </button>
       )}
-      {inv.status === 'Unpaid' && (
-        <button
-          onClick={() => updateInvoiceStatus(inv.id, 'Overdue')}
-          className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors"
-          title="Mark as Overdue"
-        >
-          <AlertCircle size={16} />
-        </button>
-      )}
+      {/* Overdue is the database's, from the due date (057): no button. */}
       {isProforma(inv) && canAccess('accounting', 'full') && (
         <button
           onClick={() => handleConvert(inv)}
@@ -591,7 +585,7 @@ const Accounting = () => {
         </>}
       />
 
-      <BalanceCheckPanel watch={`${rawInvoices.length}:${rawInvoices.filter(i => i.status === 'Paid').length}:${(distributorPayments || []).length}:${(creditNotes || []).length}`} />
+      <BalanceCheckPanel watch={`${rawInvoices.length}:${rawInvoices.filter(isSettled).length}:${(distributorPayments || []).length}:${(creditNotes || []).length}`} />
 
         {missingPayouts.length > 0 && canAccess('accounting', 'full') && (
           <Card padding="p-4" className="border-amber-500/25 bg-amber-500/5">
@@ -889,7 +883,7 @@ const Accounting = () => {
           {/* Status filters */}
           <div className="flex flex-wrap justify-between items-center gap-4">
             <div className="flex gap-2">
-              {['All', 'Paid', 'Unpaid', 'Overdue'].map(status => (
+              {['All', ...INVOICE_STATUSES].map(status => (
                 <button
                   key={status}
                   onClick={() => setInvoiceFilter(status)}

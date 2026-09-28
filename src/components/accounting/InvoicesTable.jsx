@@ -1,4 +1,4 @@
-import { CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, CircleDot } from 'lucide-react';
 import { DataTable, Badge } from '../ui';
 import { invoiceTypeLabel, isProforma } from '../../utils/billing';
 
@@ -17,8 +17,10 @@ import { invoiceTypeLabel, isProforma } from '../../utils/billing';
 const money = 'tabular-nums whitespace-nowrap';
 const total = (inv) => Number(inv.amount || 0) + Number(inv.tax || 0);
 
-const STATUS_ICON = { Paid: CheckCircle, Unpaid: Clock, Overdue: AlertCircle };
-const STATUS_TONE = { Paid: 'success', Unpaid: 'warning', Overdue: 'danger' };
+// From the database (057): Unpaid · Partially Paid · Settled · Overdue.
+// "Paid" is the old name for Settled.
+const STATUS_ICON = { Settled: CheckCircle, Paid: CheckCircle, 'Partially Paid': CircleDot, Unpaid: Clock, Overdue: AlertCircle };
+const STATUS_TONE = { Settled: 'success', Paid: 'success', 'Partially Paid': 'info', Unpaid: 'warning', Overdue: 'danger' };
 
 export default function InvoicesTable({ invoices, formatCurrency, formatDate, raisedBy, renderActions, toolbar }) {
   const columns = [
@@ -76,7 +78,15 @@ export default function InvoicesTable({ invoices, formatCurrency, formatDate, ra
       key: 'status', header: 'Status', align: 'center', sort: inv => inv.status,
       render: inv => {
         const Icon = STATUS_ICON[inv.status];
-        return <Badge tone={STATUS_TONE[inv.status] || 'neutral'}>{Icon && <Icon size={11} />}{inv.status}</Badge>;
+        const paid = Number(inv.amountPaid || 0);
+        return (
+          <div className="flex flex-col items-center gap-0.5">
+            <Badge tone={STATUS_TONE[inv.status] || 'neutral'}>{Icon && <Icon size={11} />}{inv.status === 'Paid' ? 'Settled' : inv.status}</Badge>
+            {paid > 0 && paid < total(inv) - 0.005 && (
+              <span className="text-[10px] text-slate-500 whitespace-nowrap">{formatCurrency(paid)} of {formatCurrency(total(inv))} paid</span>
+            )}
+          </div>
+        );
       },
     },
     {

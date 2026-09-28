@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { linkedExpenseId, expenseForIncentive, expenseForClaim, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
-import { invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty, invoicesSettledBy, balanceAfterPayment, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
+import { amountDue, isSettled } from '../utils/invoiceStatus';
+import { paymentIdForInvoice, balanceAfterPayment, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
 import { balanceAfterCharge } from '../utils/billing';
@@ -756,22 +757,11 @@ export const DataProvider = ({ children }) => {
       fetchedInvoices = local ? JSON.parse(local) : [];
     }
     
-    // Automatically transition unpaid invoices to overdue if past due date
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const processedInvoices = fetchedInvoices.map(inv => {
-      if (inv.status === 'Unpaid' && inv.dueDate) {
-        const due = new Date(inv.dueDate);
-        due.setHours(0, 0, 0, 0);
-        if (due < today) {
-          return { ...inv, status: 'Overdue' };
-        }
-      }
-      return inv;
-    });
-
-    applyFetched('prismora_invoices', setInvoices, processedInvoices);
-    localStorage.setItem('prismora_invoices', JSON.stringify(processedInvoices));
+    // Status, including Overdue, is the database's (057): worked out from
+    // payments and credit notes, and every night from the date. It used to
+    // turn Overdue only when someone with the invoices loaded opened the app.
+    applyFetched('prismora_invoices', setInvoices, fetchedInvoices);
+    localStorage.setItem('prismora_invoices', JSON.stringify(fetchedInvoices));
 
     // ── Credit Notes ──
     let fetchedCreditNotes = [];
@@ -785,13 +775,6 @@ export const DataProvider = ({ children }) => {
     }
     applyFetched('prismora_credit_notes', setCreditNotes, fetchedCreditNotes);
 
-    // Async update transitioned invoices back to Supabase
-    processedInvoices.forEach(async (inv) => {
-      const original = fetchedInvoices.find(orig => orig.id === inv.id);
-      if (original && original.status === 'Unpaid' && inv.status === 'Overdue') {
-        await persist('invoices update', supabase.from('invoices').update({ status: 'Overdue' }).eq('id', inv.id));
-      }
-    });
 
     // Fetch Expenses with fallback
     let fetchedExpenses = [];
@@ -1659,6 +1642,7 @@ export const DataProvider = ({ children }) => {
       reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [order?.dealerId]),
       reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [order?.retailerId]),
     ]);
+    await reloadInvoices();
     logEvent('sales_return', `Sales return ${data.returnId} on order ${orderId}: credit note ${data.creditNoteId}`, order?.assignedTo, orderId);
     return { ok: true, ...data };
   };
@@ -2107,19 +2091,15 @@ export const DataProvider = ({ children }) => {
    * Just the status. Used by the payment path, which has already moved the
    * money and must not set off a second payment by doing so.
    */
-  const writeInvoiceStatus = async (id, status) => {
-    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status } : inv));
-    try {
-      const { error } = await supabase.from('invoices').update({ status }).eq('id', id);
-      if (error) throw error;
-    } catch {
-      const local = localStorage.getItem('prismora_invoices');
-      if (local) {
-        const updated = JSON.parse(local).map(inv => inv.id === id ? { ...inv, status } : inv);
-        localStorage.setItem('prismora_invoices', JSON.stringify(updated));
-      }
-    }
+  // Invoice statuses follow the money in the database (057), so after any
+  // payment, credit note or settlement the invoices are read back.
+  const reloadInvoices = async () => {
+    const { data, error } = await supabase.from('invoices').select('*').order('createdAt', { ascending: false });
+    if (error || !data) return;
+    setInvoices(data);
+    try { localStorage.setItem('prismora_invoices', JSON.stringify(data)); } catch { /* storage full */ }
   };
+
 
   /** The distributor, dealer or retailer an invoice was raised against. */
   // The tier search is in utils/settlement.js, with tests. Which of three
@@ -2154,12 +2134,13 @@ export const DataProvider = ({ children }) => {
   const settleInvoiceAsPayment = async (invoice) => {
     const { party, type } = partyForInvoice(invoice);
     if (!party) return true;              // a walk-in invoice has no ledger to credit
-    const total = invoiceTotal(invoice);
-    if (total <= 0) return true;
+    // What is still due — part of it may already be paid (057).
+    const due = amountDue(invoice);
+    if (due <= 0) return true;
 
     if (alreadySettled(invoice.id, distributorPayments)) return true;
 
-    const row = settlementRowFor(invoice, party, type);
+    const row = settlementRowFor({ ...invoice, amount: due, tax: 0 }, party, type);
     if (!row) return false;
     const payId = row.id;
     const ok = await persist('distributor_payments insert (invoice settled)',
@@ -2192,21 +2173,31 @@ export const DataProvider = ({ children }) => {
     if (party) await reloadParty(type, party.id);
   };
 
+  /**
+   * Mark an invoice paid, or not. The status itself is the database's (057):
+   * a partner's invoice gets the payment that settles what is still due, and
+   * a walk-in's is marked; the database then works out Settled, Partially
+   * Paid, Unpaid or Overdue from the money.
+   */
   const updateInvoiceStatus = async (id, status) => {
     const invoice = invoices.find(inv => inv.id === id);
     if (!invoice) return false;
+    const settle = status === 'Settled' || status === 'Paid';
+    const { party } = partyForInvoice(invoice);
 
-    // The credit is written before the status, and the status is left alone if
-    // it fails. An invoice reading Paid with the partner still owing for it is
-    // the exact split this change exists to close.
-    if (status === 'Paid' && invoice.status !== 'Paid') {
-      if (!await settleInvoiceAsPayment(invoice)) return false;
-    } else if (status !== 'Paid' && invoice.status === 'Paid') {
-      await reverseInvoiceSettlement(invoice);
+    if (party) {
+      if (settle && !isSettled(invoice)) {
+        if (!await settleInvoiceAsPayment(invoice)) return false;
+      } else if (!settle) {
+        await reverseInvoiceSettlement(invoice);
+      }
+    } else {
+      const { error } = await supabase.from('invoices').update({ markedPaid: settle }).eq('id', id);
+      if (error) return false;
     }
 
-    await writeInvoiceStatus(id, status);
-    logEvent('invoice_status_update', `Invoice ${id} marked as ${status}`, invoice.assignedTo, id);
+    await reloadInvoices();
+    logEvent('invoice_status_update', `Invoice ${id} marked as ${settle ? 'paid' : 'unpaid'}`, invoice.assignedTo, id);
     return true;
   };
 
@@ -2234,7 +2225,7 @@ export const DataProvider = ({ children }) => {
     // delete (048); a paid invoice's payment is removed too, which puts that
     // money back (046). Nothing is written to the balance from here.
     if (invoice) {
-      if (invoice.status === 'Paid') await reverseInvoiceSettlement(invoice);
+      if (isSettled(invoice)) await reverseInvoiceSettlement(invoice);
       const { party, type } = partyForInvoice(invoice);
       if (party) await reloadParty(type, party.id);
     }
@@ -2275,6 +2266,7 @@ export const DataProvider = ({ children }) => {
       return { ok: false, error: plainDatabaseError(error, 'withdraw this credit note') };
     }
     await reloadCreditParty(note);
+    await reloadInvoices();
 
     setCreditNotes(prev => {
       const next = prev.filter(n => n.id !== id);
@@ -2340,6 +2332,7 @@ export const DataProvider = ({ children }) => {
       return next;
     });
     await reloadCreditParty(newCN);
+    await reloadInvoices();
 
     const amount = Number(cnData.amount || 0);
     logEvent('credit_note', `Credit note ${newId} issued to ${cnData.customerName} for ₹${amount} (${cnData.reason || 'adjustment'})`, cnData.recordedBy, newId);
@@ -3540,17 +3533,9 @@ export const DataProvider = ({ children }) => {
       // The balance moved with the payment, in the database (046).
       await reloadParty('Distributor', dist.id);
 
-      // And settle what it covers, so the money shows as income rather than
-      // only as a smaller balance. Oldest first, and only invoices the payment
-      // covers in full.
-      const theirs = invoices.filter(inv =>
-        inv.status !== 'Paid' && invoiceBelongsToParty(inv, dist, orders));
-      const { settled } = invoicesSettledBy(paymentData.amount, theirs);
-      for (const inv of settled) {
-        // writeInvoiceStatus, not updateInvoiceStatus: the money has already
-        // moved, and the public one would record a second payment for it.
-        await writeInvoiceStatus(inv.id, 'Paid');
-      }
+      // Which invoices it pays, and how far, is the database's (057): oldest
+      // first, part-payments included. Read the statuses back.
+      await reloadInvoices();
     }
     logEvent('distributor_payment', `Payment of ₹${paymentData.amount} recorded for ${dist?.name || paymentData.distributorId}`, null, newId);
     return { ok: true, id: newId };
@@ -3588,17 +3573,9 @@ export const DataProvider = ({ children }) => {
       // The balance moved with the payment, in the database (046).
       await reloadParty('Dealer', dealer.id);
 
-      // And settle what it covers, so the money shows as income rather than
-      // only as a smaller balance. Oldest first, and only invoices the payment
-      // covers in full.
-      const theirs = invoices.filter(inv =>
-        inv.status !== 'Paid' && invoiceBelongsToParty(inv, dealer, orders));
-      const { settled } = invoicesSettledBy(paymentData.amount, theirs);
-      for (const inv of settled) {
-        // writeInvoiceStatus, not updateInvoiceStatus: the money has already
-        // moved, and the public one would record a second payment for it.
-        await writeInvoiceStatus(inv.id, 'Paid');
-      }
+      // Which invoices it pays, and how far, is the database's (057): oldest
+      // first, part-payments included. Read the statuses back.
+      await reloadInvoices();
     }
     logEvent('dealer_payment', `Payment of ₹${paymentData.amount} recorded for ${dealer?.name || paymentData.dealerId}`, null, newId);
     return { ok: true, id: newId };
@@ -3636,17 +3613,9 @@ export const DataProvider = ({ children }) => {
       // The balance moved with the payment, in the database (046).
       await reloadParty('Retailer', retailer.id);
 
-      // And settle what it covers, so the money shows as income rather than
-      // only as a smaller balance. Oldest first, and only invoices the payment
-      // covers in full.
-      const theirs = invoices.filter(inv =>
-        inv.status !== 'Paid' && invoiceBelongsToParty(inv, retailer, orders));
-      const { settled } = invoicesSettledBy(paymentData.amount, theirs);
-      for (const inv of settled) {
-        // writeInvoiceStatus, not updateInvoiceStatus: the money has already
-        // moved, and the public one would record a second payment for it.
-        await writeInvoiceStatus(inv.id, 'Paid');
-      }
+      // Which invoices it pays, and how far, is the database's (057): oldest
+      // first, part-payments included. Read the statuses back.
+      await reloadInvoices();
     }
     logEvent('retailer_payment', `Payment of ₹${paymentData.amount} recorded for ${retailer?.name || paymentData.retailerId}`, null, newId);
     return { ok: true, id: newId };

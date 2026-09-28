@@ -5,6 +5,7 @@
  */
 
 import { isConvertedLead, isOpenLead } from './leadStatus';
+import { isOpen, amountPaid, amountDue } from './invoiceStatus';
 
 // ── 1. Text normalization & tokenization ────────────────────────────────────
 
@@ -496,7 +497,7 @@ const HANDLERS = {
   },
 
   profit: (d) => {
-    const income = d.invoices.filter(i => i.status === 'Paid').reduce((s, i) => s + Number(i.amount || 0) + Number(i.tax || 0), 0);
+    const income = d.invoices.reduce((s, i) => s + amountPaid(i), 0);
     const spend = d.expenses.reduce((s, x) => s + Number(x.amount || 0), 0);
     const net = income - spend;
     const margin = income ? (net / income) * 100 : 0;
@@ -515,7 +516,7 @@ const HANDLERS = {
   },
 
   outstanding: (d, e) => {
-    let due = d.invoices.filter(i => i.status === 'Unpaid' || i.status === 'Overdue');
+    let due = d.invoices.filter(isOpen);
     if (e.customer) due = due.filter(i => i.customerName === e.customer);
     const total = due.reduce((s, i) => s + Number(i.amount || 0) + Number(i.tax || 0), 0);
     if (!due.length) return `✓ No outstanding invoices${e.customer ? ` for **${e.customer}**` : ''} — everything is collected.`;
@@ -732,7 +733,7 @@ const HANDLERS = {
     if (e.customer) {
       const his = d.liveOrders.filter(o => o.customerName === e.customer);
       const inv = d.invoices.filter(i => i.customerName === e.customer);
-      const dueAmt = inv.filter(i => i.status !== 'Paid').reduce((s, i) => s + Number(i.amount || 0) + Number(i.tax || 0), 0);
+      const dueAmt = inv.filter(isOpen).reduce((s, i) => s + amountDue(i), 0);
       return [
         `**${e.customer}**`,
         ``,
@@ -779,7 +780,7 @@ const fallback = (d, concepts) => {
     `Here's a quick snapshot instead:`,
     `* Revenue: **${inr(d.totalRevenue)}** across **${d.liveOrders.length}** orders`,
     `* Open leads: **${d.leads.filter(isOpenLead).length}**`,
-    `* Outstanding: **${inr(d.invoices.filter(i => i.status !== 'Paid').reduce((s, i) => s + Number(i.amount || 0) + Number(i.tax || 0), 0))}**`,
+    `* Outstanding: **${inr(d.invoices.filter(isOpen).reduce((s, i) => s + amountDue(i), 0))}**`,
     ``,
     `Try asking about **revenue**, **orders**, **leads**, **profit**, **stock**, **forecast**, or **churn risk** — or type *help*.`,
   ].join('\n');

@@ -6,6 +6,7 @@ import { BarChart3, Download, TrendingUp, Package2, Wallet, Users, Star, Chevron
 import { Button, PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { isConvertedLead } from '../utils/leadStatus';
+import { isOpen, amountPaid } from '../utils/invoiceStatus';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -174,7 +175,7 @@ export default function Reports() {
         label: 'Outstanding Receivables',
         desc: 'Unpaid invoices (Sent / Unpaid status).',
         generate: () => invoices
-          .filter(i => i.status === 'Sent' || i.status === 'Unpaid' || i.status === 'Overdue' || i.status === 'Pending')
+          .filter(isOpen)
           .map(i => {
             const subtotalVal = Number(i.amount || 0);
             const taxVal = Number(i.tax || 0);
@@ -204,7 +205,7 @@ export default function Reports() {
         label: 'P&L Summary',
         desc: 'Revenue vs. expenses summary.',
         generate: () => {
-          const revenue = invoices.filter(i => i.status === 'Paid' && inRange(i.createdAt)).reduce((s, i) => s + Number(i.amount || 0) + Number(i.tax || 0), 0);
+          const revenue = invoices.filter(i => inRange(i.createdAt)).reduce((s, i) => s + amountPaid(i), 0);
           const exp = expenses.filter(e => inRange(e.date)).reduce((s, e) => s + (e.amount || 0), 0);
           return [
             { metric: 'Total Revenue (Paid Invoices)', value: revenue },

@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import { User, Lock, Users, Shield, Eye, EyeOff, TrendingUp, ShoppingBag, Target, Star, Activity, Package } from 'lucide-react';
 import { PageHeader } from '../components/ui';
 import { isConvertedLead } from '../utils/leadStatus';
+import { isSettled } from '../utils/invoiceStatus';
 
 const Profile = () => {
   const { user, users: allUsers, updateUser, verifyCurrentPassword } = useAuth();
@@ -35,7 +36,7 @@ const Profile = () => {
       ? Math.round((converted / myLeads.length) * 100)
       : 0;
     const pendingOrders = myOrders.filter(o => o.status === 'Pending' || o.status === 'Processing').length;
-    const paidInvoices = myInvoices.filter(inv => inv.status === 'Paid').length;
+    const paidInvoices = myInvoices.filter(isSettled).length;
 
     // Month-over-month revenue
     const now = new Date();
