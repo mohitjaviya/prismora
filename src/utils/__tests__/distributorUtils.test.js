@@ -31,14 +31,19 @@ describe('buildLedgerEntries — invoices owed by one party', () => {
     expect(buildLedgerEntries(renamed, invoices, [], orders)).toHaveLength(1);
   });
 
-  it('falls back to the name for a manually raised invoice with no order', () => {
+  // Names are not unique (two "Krishna pharma" distributors), so a name never
+  // decides whose invoice it is — only an id does.
+  it('does not claim an invoice by name alone', () => {
     const invoices = [{ id: 'INV-4', customerName: 'gujarat super stockist', amount: 250, createdAt: '2026-01-01' }];
-    expect(buildLedgerEntries(DIST, invoices, [], orders)).toHaveLength(1);
+    expect(buildLedgerEntries(DIST, invoices, [], orders)).toHaveLength(0);
   });
 
-  it('ignores surrounding whitespace and case in the name fallback', () => {
-    const invoices = [{ id: 'INV-5', customerName: '  GUJARAT SUPER STOCKIST  ', amount: 250, createdAt: '2026-01-01' }];
-    expect(buildLedgerEntries(DIST, invoices, [], orders)).toHaveLength(1);
+  it("claims a manual invoice by the invoice's own partner id, ahead of its order", () => {
+    const invoices = [
+      { id: 'INV-5', distributorId: 'DIST-1', customerName: 'someone else', amount: 250, createdAt: '2026-01-01' },
+      { id: 'INV-5b', distributorId: 'DIST-1', orderId: 'O2', amount: 100, createdAt: '2026-01-02' },
+    ];
+    expect(buildLedgerEntries(DIST, invoices, [], orders).map(r => r.ref)).toEqual(['INV-5', 'INV-5b']);
   });
 
   it('adds tax to the invoice debit', () => {
@@ -85,9 +90,20 @@ describe('buildLedgerEntries — payments and running balance', () => {
     expect(buildLedgerEntries(null, invoices, payments, orders)).toEqual([]);
   });
 
-  it('still works when no orders are supplied (older callers)', () => {
-    const named = [{ id: 'INV-7', customerName: 'Gujarat Super Stockist', amount: 100, createdAt: '2026-01-01' }];
-    expect(buildLedgerEntries(DIST, named, [])).toHaveLength(1);
+  it('credits credit notes, and the last balance is what the partner owes', () => {
+    const notes = [{ id: 'CN-1', distributorId: 'DIST-1', amount: 1000, reason: 'Sales Return', createdAt: '2026-03-02' },
+                   { id: 'CN-2', dealerId: 'DEAL-1', amount: 50, createdAt: '2026-03-02' }];
+    const rows = buildLedgerEntries(DIST, invoices, payments, orders, notes);
+    expect(rows.find(r => r.type === 'Credit Note').credit).toBe(1000);
+    expect(rows.at(-1).balance).toBe(10000);   // 15000 invoiced − 4000 paid − 1000 credited
+  });
+
+  it('puts an invoice before a payment made at the same moment', () => {
+    const sameTime = '2026-05-01T10:00:00Z';
+    const rows = buildLedgerEntries(DIST,
+      [{ id: 'INV-9', distributorId: 'DIST-1', amount: 300, createdAt: sameTime }],
+      [{ id: 'PAY-9', distributorId: 'DIST-1', amount: 300, date: sameTime }], orders);
+    expect(rows.map(r => r.balance)).toEqual([300, 0]);
   });
 });
 
@@ -125,8 +141,8 @@ describe('ledger attribution', () => {
   it('carries it onto an invoice line, and leaves it null when nobody typed it', () => {
     // Most invoices are raised by delivery rather than by a person.
     const rows = buildLedgerEntries(PARTY, [
-      { id: 'INV-1', customerName: 'Shree Ayur Agencies', amount: 1000, tax: 180, createdAt: '2026-01-01', createdBy: 'U2' },
-      { id: 'INV-2', customerName: 'Shree Ayur Agencies', amount: 500, tax: 90, createdAt: '2026-01-03' },
+      { id: 'INV-1', distributorId: 'DIST-1', customerName: 'Shree Ayur Agencies', amount: 1000, tax: 180, createdAt: '2026-01-01', createdBy: 'U2' },
+      { id: 'INV-2', distributorId: 'DIST-1', customerName: 'Shree Ayur Agencies', amount: 500, tax: 90, createdAt: '2026-01-03' },
     ], [], []);
     expect(rows.find(r => r.ref === 'INV-1').recordedBy).toBe('U2');
     expect(rows.find(r => r.ref === 'INV-2').recordedBy).toBeNull();
@@ -135,14 +151,14 @@ describe('ledger attribution', () => {
   it('does not let assignedTo masquerade as the author', () => {
     // On an invoice assignedTo is who it is filed under, not who raised it.
     const rows = buildLedgerEntries(PARTY, [
-      { id: 'INV-3', customerName: 'Shree Ayur Agencies', amount: 100, createdAt: '2026-01-01', assignedTo: 'U9' },
+      { id: 'INV-3', distributorId: 'DIST-1', customerName: 'Shree Ayur Agencies', amount: 100, createdAt: '2026-01-01', assignedTo: 'U9' },
     ], [], []);
     expect(rows[0].recordedBy).toBeNull();
   });
 
   it('keeps the running balance untouched by any of this', () => {
     const rows = buildLedgerEntries(PARTY, [
-      { id: 'INV-1', customerName: 'Shree Ayur Agencies', amount: 1000, tax: 0, createdAt: '2026-01-01', createdBy: 'U2' },
+      { id: 'INV-1', distributorId: 'DIST-1', customerName: 'Shree Ayur Agencies', amount: 1000, tax: 0, createdAt: '2026-01-01', createdBy: 'U2' },
     ], [
       { id: 'PAY-1', distributorId: 'DIST-1', amount: 400, date: '2026-01-02', recordedBy: 'U1' },
     ], []);

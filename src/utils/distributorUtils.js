@@ -14,26 +14,35 @@ export const allParties = (distributors = [], dealers = [], retailers = []) => [
 ];
 
 // Builds a combined, running-balance ledger for a distributor, dealer, or
-// retailer from their invoices (debits) and recorded payments (credits).
-export const buildLedgerEntries = (party, invoices = [], payments = [], orders = []) => {
+// retailer: invoices are debits; payments and credit notes are credits.
+//
+// The same rule the database uses for the balance (043/045/046, and the
+// partner_balance_drift check in 048): a line belongs to a partner by id —
+// the invoice's own partner id, else its order's — and never by name. The
+// name fallback this used to have credited one partner's bills to another of
+// the same name, and a ledger without credit notes could not add up to the
+// balance. With the same rule on both sides, the last running balance equals
+// the stored balance.
+const partyIdOf = (row) => row?.distributorId || row?.dealerId || row?.retailerId || null;
+
+export const invoiceParty = (inv, orderById) => {
+  const own = partyIdOf(inv);
+  if (own) return own;
+  const order = inv?.orderId ? orderById.get(inv.orderId) : null;
+  return partyIdOf(order);
+};
+
+// Same moment: the charge before the money against it, so a running balance
+// never dips below zero between an invoice and the payment settling it.
+const TYPE_ORDER = { Invoice: 0, 'Credit Note': 1, Payment: 2 };
+
+export const buildLedgerEntries = (party, invoices = [], payments = [], orders = [], creditNotes = []) => {
   if (!party) return [];
 
-  // An invoice belongs to this party when the order it was raised against is
-  // linked to them by id. The previous rule compared `customerName` to the
-  // party's name, which orphaned every past invoice the moment a party was
-  // renamed, and merged the accounts of two parties that shared a name.
-  // `orders` is optional so older callers keep the name-matching behaviour.
-  const orderById = new Map(orders.map(o => [o.id, o]));
-  const belongsToParty = (inv) => {
-    const order = inv.orderId ? orderById.get(inv.orderId) : null;
-    const linkedId = order && (order.distributorId || order.dealerId || order.retailerId);
-    if (linkedId) return linkedId === party.id;
-    // Manually raised invoices carry no order link — fall back to the name.
-    return (inv.customerName || '').trim().toLowerCase() === (party.name || '').trim().toLowerCase();
-  };
+  const orderById = new Map((orders || []).map(o => [o.id, o]));
 
-  const debitRows = invoices
-    .filter(belongsToParty)
+  const debitRows = (invoices || [])
+    .filter(inv => invoiceParty(inv, orderById) === party.id)
     .map(inv => ({
       id: `inv-${inv.id}`,
       date: inv.createdAt,
@@ -48,8 +57,8 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
       recordedBy: recordedById(inv),
     }));
 
-  const creditRows = payments
-    .filter(p => p.distributorId === party.id || p.dealerId === party.id || p.retailerId === party.id)
+  const creditRows = (payments || [])
+    .filter(p => partyIdOf(p) === party.id)
     .map(p => ({
       id: `pay-${p.id}`,
       date: p.date || p.createdAt,
@@ -61,7 +70,21 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
       recordedBy: recordedById(p),
     }));
 
-  const rows = [...debitRows, ...creditRows].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const noteRows = (creditNotes || [])
+    .filter(c => partyIdOf(c) === party.id)
+    .map(c => ({
+      id: `cn-${c.id}`,
+      date: c.createdAt,
+      type: 'Credit Note',
+      ref: c.id,
+      description: `Credit note ${c.id}${c.reason ? ` — ${c.reason}` : ''}${c.invoiceId ? ` (against ${c.invoiceId})` : ''}`,
+      debit: 0,
+      credit: Number(c.amount || 0),
+      recordedBy: recordedById(c),
+    }));
+
+  const rows = [...debitRows, ...creditRows, ...noteRows].sort((a, b) =>
+    (new Date(a.date) - new Date(b.date)) || (TYPE_ORDER[a.type] - TYPE_ORDER[b.type]));
 
   let balance = 0;
   return rows.map(row => {

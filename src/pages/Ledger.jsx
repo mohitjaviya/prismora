@@ -13,7 +13,7 @@ const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
 
 export default function Ledger() {
-  const { invoices, distributorPayments, distributors, dealers, retailers, orders, correctPartyBalance } = useData();
+  const { invoices, distributorPayments, distributors, dealers, retailers, orders, correctPartyBalance, creditNotes } = useData();
   const { user, canAccess } = useAuth();
 
   // A partner sees their own account. Staff have full access to this screen but
@@ -40,7 +40,7 @@ export default function Ledger() {
     [isParty, distributors, dealers, retailers]
   );
   const party = isParty ? ownParty : partyOptions.find(p => p.id === selectedPartyId);
-  const entries = useMemo(() => buildLedgerEntries(party, invoices, distributorPayments, orders), [party, invoices, distributorPayments, orders]);
+  const entries = useMemo(() => buildLedgerEntries(party, invoices, distributorPayments, orders, creditNotes), [party, invoices, distributorPayments, orders, creditNotes]);
 
   // `outstandingAmount` is a single number kept on the party record and adjusted
   // as invoices and payments happen; the table below is recomputed from those

@@ -285,3 +285,16 @@ Order: run 043 and 044 **before** deploying the matching app code. The older app
 **Deploy the matching app code right after applying 046.** The older app also moves the balance from the browser after a payment. With 046 in place, a payment recorded by that older app is counted twice.
 
 `047_purchase_manager_no_accounting.sql`: Purchase Manager's Accounting access goes from view to none, for least access. With view, it could read every partner payment, invoice and credit note. Owner decision, 2026-09-28. Recorded in `audit_log` with that reason. Independent of app code.
+
+## Batch 3: balances reconciled and kept honest
+
+`048_balance_reconciliation.sql`:
+- The five owner-approved balance corrections (FIX-BATCH-3-RECONCILIATION.md), each audited with its reason. Each refuses to run unless the balance is still what was reviewed.
+- Deleting an invoice takes its charge back in the database.
+- Direct writes to `outstandingAmount` are refused. Balances move only with invoices, payments and credit notes, or through `correct_party_balance()`.
+- `partner_balance_drift()`, which the Accounting screen's "Balance check" panel shows.
+- Money entries are hidden in the activity feed from roles without Accounting view.
+
+`049_events_write_is_not_read.sql`: `events_write` was FOR ALL, and so also granted reading. It is split into insert, update and delete, so the 048 hiding holds for Sales Manager and Manager.
+
+Both are safe with the older app code. Its browser balance writes are refused, and the database moves the balance itself.

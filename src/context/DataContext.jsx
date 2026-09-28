@@ -2,12 +2,10 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { linkedExpenseId, expenseForIncentive, expenseForClaim, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { invoiceTotal, paymentIdForInvoice, invoiceBelongsToParty, invoicesSettledBy, balanceAfterPayment, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
-import { buildLedgerEntries } from '../utils/distributorUtils';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
 import { balanceAfterCharge } from '../utils/billing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
-import { balanceDrift } from '../utils/ledgerWrites';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
 import { blankIdsToNull } from '../utils/dbRow';
@@ -2088,12 +2086,6 @@ export const DataProvider = ({ children }) => {
     else await reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [id]);
   };
 
-  const writePartyOutstanding = async (type, party, value) => {
-    const patch = { outstandingAmount: value };
-    if (type === 'Distributor') return updateDistributor(party.id, patch);
-    if (type === 'Dealer') return updateDealer(party.id, patch);
-    return updateRetailer(party.id, patch);
-  };
 
   /**
    * Marking an invoice paid now also credits the partner it was raised against.
@@ -2187,13 +2179,13 @@ export const DataProvider = ({ children }) => {
       return { ok: false, error: 'The invoice could not be deleted.' };
     }
 
+    // The invoice's charge came off the partner in the database with the
+    // delete (048); a paid invoice's payment is removed too, which puts that
+    // money back (046). Nothing is written to the balance from here.
     if (invoice) {
       if (invoice.status === 'Paid') await reverseInvoiceSettlement(invoice);
       const { party, type } = partyForInvoice(invoice);
-      if (party) {
-        await writePartyOutstanding(type, party,
-          balanceAfterPayment(party.outstandingAmount, invoiceTotal(invoice)));
-      }
+      if (party) await reloadParty(type, party.id);
     }
 
     setInvoices(prev => prev.filter(inv => inv.id !== id));
@@ -2409,27 +2401,22 @@ export const DataProvider = ({ children }) => {
    * figure to what the documents add up to, which is the one of the two that
    * can be checked row by row.
    */
+  /**
+   * Set a partner's stored balance to what its invoices, payments and credit
+   * notes add up to. Done by the database (correct_party_balance, 048), which
+   * uses the same rule as the Balance check and records who did it and why.
+   */
   const correctPartyBalance = async (party, partyType) => {
     if (!party?.id || !partyType) return null;
-
-    const entries = buildLedgerEntries(party, invoices, distributorPayments, orders);
-    // The drift measurement is in utils/ledgerWrites.js, with tests -- including
-    // the one that stops half a paisa of float noise being offered as a
-    // correction worth making.
-    const { derived, stored, drift } = balanceDrift(party.outstandingAmount, entries);
-    if (drift === 0) return { changed: false, from: stored, to: derived, drift: 0 };
-
-    // Reported changed: true whatever happened. A refused write left the drift
-    // in place and told the user it had been fixed, which is worse than the
-    // drift: they stop looking.
-    const written = await writePartyOutstanding(partyType, party, derived);
-    if (written === false) {
-      return { changed: false, from: stored, to: derived, drift, error: 'The balance could not be corrected.' };
+    const stored = Number(party.outstandingAmount || 0);
+    const { data, error } = await supabase.rpc('correct_party_balance', { p_id: party.id });
+    if (error) return { changed: false, from: stored, error: plainDatabaseError(error, 'correct this balance') };
+    await reloadParty(partyType, party.id);
+    const to = Number(data);
+    if (Math.round(to - stored) !== 0) {
+      logEvent('balance_corrected', `${party.name}: outstanding corrected from ${stored} to ${to} to match the ledger`, null, party.id);
     }
-    logEvent('balance_corrected',
-      `${party.name}: outstanding corrected from ${stored} to ${derived} to match the ledger`,
-      null, party.id);
-    return { changed: true, from: stored, to: derived, drift };
+    return { changed: Math.round(to - stored) !== 0, from: stored, to, drift: Math.round(stored - to) };
   };
 
   const addExpense = async (expenseData) => {

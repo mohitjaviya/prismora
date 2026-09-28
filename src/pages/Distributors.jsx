@@ -38,7 +38,7 @@ const BLANK_FORM = {
 
 export default function Distributors() {
   const { distributors, addDistributor, updateDistributor, deleteDistributor, invoices, distributorPayments, addDistributorPayment, orders, territories,
-    distributorIncentives, schemeClaims, complaints, dealers } = useData();
+    distributorIncentives, schemeClaims, complaints, dealers, creditNotes } = useData();
   const confirm = useConfirm();
   const toast = useToast();
   const { user, users, deleteUser, canAccess } = useAuth();
@@ -132,7 +132,7 @@ export default function Distributors() {
     if (ok) deleteDistributor(d.id);
   };
 
-  const ledgerEntries = useMemo(() => viewingDist ? buildLedgerEntries(viewingDist, invoices, distributorPayments, orders) : [], [viewingDist, invoices, distributorPayments, orders]);
+  const ledgerEntries = useMemo(() => viewingDist ? buildLedgerEntries(viewingDist, invoices, distributorPayments, orders, creditNotes) : [], [viewingDist, invoices, distributorPayments, orders, creditNotes]);
 
   const handleRecordPayment = async (e) => {
     e.preventDefault();

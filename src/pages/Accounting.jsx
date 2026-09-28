@@ -19,6 +19,7 @@ import { gstForOrder, productsMissingGst, isProforma } from '../utils/billing';
 import InvoicesTable from '../components/accounting/InvoicesTable';
 import ExpensesTable from '../components/accounting/ExpensesTable';
 import CreditNotesTable from '../components/accounting/CreditNotesTable';
+import BalanceCheckPanel from '../components/accounting/BalanceCheckPanel';
 
 
 const Accounting = () => {
@@ -30,7 +31,7 @@ const Accounting = () => {
     distributorIncentives, schemeClaims, sfaExpenses, reconcilePayouts,
     addInvoice, convertInvoice, updateInvoiceStatus, deleteInvoice,
     addExpense, deleteExpense, creditNotes, addCreditNote, deleteCreditNote,
-    grn, vendors, purchaseReturns
+    grn, vendors, purchaseReturns, distributorPayments
   } = useData();
 
 
@@ -570,6 +571,8 @@ const Accounting = () => {
           <Button variant="primary" icon={Plus} onClick={() => setIsInvoiceModalOpen(true)}>Generate Invoice</Button>
         </>}
       />
+
+      <BalanceCheckPanel watch={`${rawInvoices.length}:${rawInvoices.filter(i => i.status === 'Paid').length}:${(distributorPayments || []).length}:${(creditNotes || []).length}`} />
 
         {missingPayouts.length > 0 && canAccess('accounting', 'full') && (
           <Card padding="p-4" className="border-amber-500/25 bg-amber-500/5">
