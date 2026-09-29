@@ -20,6 +20,7 @@ import { localDay, orderDateToSave } from '../utils/orderDate';
 import { sellableQty } from '../utils/expiry';
 import SalesReturnModal from '../components/SalesReturnModal';
 import { canStepTo, stepRefusal, lockingInvoice } from '../utils/orderFlow';
+import { changedFields, describeConflict, ORDER_FIELDS } from '../utils/staleEdit';
 
 // Delivered — fully, or any units — is final: no cancel, no going back (054).
 const isDelivered = (o) => Boolean(o && (o.fulfilledAt || Number(o.deliveredQty || 0) > 0 || o.status === 'Delivered' || o.status === 'Partially Delivered'));
@@ -604,7 +605,18 @@ const Orders = () => {
     // often. The form stays open with the reason instead of closing as though
     // the order had gone.
     if (editingOrder) {
-      const result = await updateOrder(editingOrder.id, dataToSave);
+      // Saved only if nobody changed the order since this form opened (B09).
+      let result = await updateOrder(editingOrder.id, dataToSave, { expectUpdatedAt: editingOrder.updatedAt });
+      if (result?.conflict) {
+        const current = result.conflict.current;
+        const overwrite = await confirm({
+          title: 'Someone else changed this order',
+          body: describeConflict({ kind: 'order', who: mockUsers.find(u => u.id === current.updatedBy)?.name, at: current.updatedAt, changes: changedFields(editingOrder, current, ORDER_FIELDS) }),
+          confirmLabel: 'Overwrite with mine', cancelLabel: 'Load theirs',
+        });
+        if (!overwrite) { handleOpenModal({ ...editingOrder, ...current }); toast('Loaded the latest version. Make your change again and save.', 'info'); return; }
+        result = await updateOrder(editingOrder.id, dataToSave, { force: true });
+      }
       if (result && !result.ok) {
         setStatusError(result.error || 'This change could not be saved.');
         toast(result.error || 'This change could not be saved.', 'error');

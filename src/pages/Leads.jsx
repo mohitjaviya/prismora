@@ -17,6 +17,7 @@ import { isConvertedStatus, isOpenLead } from '../utils/leadStatus';
 import { missingDelivery } from '../utils/delivery';
 import LastChanged from '../components/audit/LastChanged';
 import LeadAttachments from '../components/LeadAttachments';
+import { changedFields, describeConflict, LEAD_FIELDS } from '../utils/staleEdit';
 
 // Moving a lead into a conversion status means the customer has committed,
 // which is when an order is raised. The drag handler and the edit form both
@@ -223,7 +224,22 @@ const Leads = () => {
       && !editingLead.orderCreated;
 
     if (editingLead) {
-      updateLead(editingLead.id, wantsConversion ? { ...dataToSave, status: editingLead.status } : dataToSave);
+      const payload = wantsConversion ? { ...dataToSave, status: editingLead.status } : dataToSave;
+      setSavingLead(true);
+      // Saved only if nobody changed the lead since this form opened (B09).
+      let r = await updateLead(editingLead.id, payload, { expectUpdatedAt: editingLead.updatedAt });
+      if (r?.conflict) {
+        const current = r.conflict.current;
+        const overwrite = await confirm({
+          title: 'Someone else changed this lead',
+          body: describeConflict({ kind: 'lead', who: mockUsers.find(u => u.id === current.updatedBy)?.name, at: current.updatedAt, changes: changedFields(editingLead, current, LEAD_FIELDS) }),
+          confirmLabel: 'Overwrite with mine', cancelLabel: 'Load theirs',
+        });
+        if (!overwrite) { setSavingLead(false); handleOpenModal({ ...editingLead, ...current }); toast('Loaded the latest version. Make your change again and save.', 'info'); return; }
+        r = await updateLead(editingLead.id, payload, { force: true });
+      }
+      setSavingLead(false);
+      if (r && !r.ok) { toast(r.error || 'The lead could not be saved.', 'error'); return; }
     } else {
       setSavingLead(true);
       const newId = await addLead(dataToSave);

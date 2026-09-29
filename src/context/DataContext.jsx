@@ -2,10 +2,9 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { linkedExpenseId, expenseForIncentive, expenseForClaim, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { amountDue, isSettled } from '../utils/invoiceStatus';
-import { paymentIdForInvoice, balanceAfterPayment, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
+import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
 import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
-import { returnValue as computeReturnValue, lineItemsValue, vendorBalanceAfterReturn, batchForReturn } from '../utils/purchasing';
-import { balanceAfterCharge } from '../utils/billing';
+import { returnValue as computeReturnValue, batchForReturn } from '../utils/purchasing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
@@ -1149,24 +1148,30 @@ export const DataProvider = ({ children }) => {
 
   // ── Leads ────────────────────────────────────────────────────────────────
   const addLead = async (lead) => {
-    const maxId = leads.reduce((max, l) => {
-      const num = parseInt(l.id.replace('L', ''), 10);
-      return !isNaN(num) && num > max ? num : max;
-    }, 0);
     const draft = stamp({ ...lead, createdAt: new Date().toISOString() });
     // Shaped by leadRow, the way orders are shaped by orderRow. This was the
     // one add function that sent the raw form straight to the database, and
     // the form carries five fields no column matched — so PostgREST refused
     // every statement and not one lead was ever stored.
-    const { id: newId, saved } = await insertWithFreeId('leads insert', 'leads', 'L', maxId + 1, draft,
-      leadRow, 8, ['createdBy']);
-    if (!saved) {
-      // insertWithFreeId has already raised the banner explaining why. Putting
-      // the lead on screen regardless is what hid this for so long: it looked
-      // saved, it survived in this one browser, it was invisible to everybody
-      // else, and it vanished for good the next time the cache was cleared.
+    //
+    // One request: the database numbers the lead (064) and says which number.
+    // Guessing it here took several round trips for a rep, and a page left
+    // part-way lost the lead without a trace (B07). Journaled, so a page
+    // closed mid-save asks first and is reported if it goes anyway.
+    const row = blankIdsToNull(leadRow(draft));
+    delete row.id;
+    const res = await journaled(`New lead "${lead.name}"`, async () => {
+      const { data, error } = await supabase.from('leads').insert([row]).select('id').single();
+      return error || !data?.id ? { ok: false, error: error || { message: 'The database did not return the new lead.' } } : { ok: true, id: data.id };
+    });
+    if (!res.ok) {
+      // The banner explains why. Putting the lead on screen regardless is what
+      // hid this for so long: it looked saved, survived in this one browser,
+      // and vanished for good the next time the cache was cleared.
+      await persist('leads insert', Promise.resolve({ error: res.error }), row);
       return null;
     }
+    const newId = res.id;
     // Held in the same shape the table holds it, so nothing on screen changes
     // under the user when the next fetch replaces this row with the server's.
     const newLead = { ...leadRow(draft), id: newId };
@@ -1177,7 +1182,26 @@ export const DataProvider = ({ children }) => {
     return newId;
   };
 
-  const updateLead = async (id, updatedData) => {
+  /**
+   * Update a row only if it still carries the stamp the form opened with
+   * (B09). { ok, row } on success; { ok: false, conflict: { current } } when
+   * someone saved it since; { ok: false, error } when refused. Journaled.
+   */
+  const saveUnlessChanged = (table, id, row, opts, label, action) => journaled(`${label} changes`, async () => {
+    let q = supabase.from(table).update(row).eq('id', id);
+    if (opts?.expectUpdatedAt && !opts?.force) q = q.eq('updatedAt', opts.expectUpdatedAt);
+    const { data, error } = await q.select('*');
+    if (error) return { ok: false, error: plainDatabaseError(error, action) };
+    if (!data?.length) {
+      const { data: current } = await supabase.from(table).select('*').eq('id', id).maybeSingle();
+      return current ? { ok: false, conflict: { current } } : { ok: false, error: 'This record no longer exists — it may have been deleted.' };
+    }
+    return { ok: true, row: data[0] };
+  }, (r) => Boolean(r?.ok || r?.conflict));
+
+  // opts.expectUpdatedAt: the stamp the form opened with — the save only goes
+  // through if nobody saved the lead since (B09); opts.force overwrites anyway.
+  const updateLead = async (id, updatedData, opts = {}) => {
     const oldLead = leads.find(l => l.id === id);
     let next = leads.map(l => l.id === id ? { ...l, ...updatedData } : l);
 
@@ -1202,7 +1226,14 @@ export const DataProvider = ({ children }) => {
 
     setLeads(next);
     localStorage.setItem('prismora_leads', JSON.stringify(next));
-    await persist('leads update', supabase.from('leads').update(leadRow(updatedData)).eq('id', id));
+    const res = await saveUnlessChanged('leads', id, leadRow(updatedData), opts, `Lead ${oldLead?.name || id}`, 'save this lead');
+    setLeads(prev => {
+      const back = res.ok ? res.row : (res.conflict?.current || oldLead);
+      const n = back ? prev.map(l => l.id === id ? { ...l, ...back } : l) : prev;
+      localStorage.setItem('prismora_leads', JSON.stringify(n));
+      return n;
+    });
+    if (!res.ok) return res;
 
     if (oldLead && oldLead.status !== updatedData.status) {
       if (shouldCancelOrder) {
@@ -1225,6 +1256,7 @@ export const DataProvider = ({ children }) => {
         logEvent('lead_lost', `Lead Lost: ${updatedData.name || oldLead.name}`, updatedData.assignedTo || oldLead.assignedTo, id);
       }
     }
+    return { ok: true };
   };
 
   /**
@@ -1316,7 +1348,11 @@ export const DataProvider = ({ children }) => {
     delete row.id;
     // select('*'): a partner's order is priced by the database (043), so what
     // was saved can differ from what the browser sent.
-    const { data, error } = await supabase.from('orders').insert([row]).select('*').single();
+    const { data, error } = await journaled(`New order for ${order.customerName || 'a customer'}`,
+      async () => {
+        const r = await supabase.from('orders').insert([row]).select('*').single();
+        return { ...r, ok: !r.error && Boolean(r.data?.id) };
+      });
     // A refused insert used to come back with an id all the same, so the order
     // appeared on screen and anything that recorded that id — a field visit's
     // report — then pointed at an order the database never had.
@@ -1411,7 +1447,7 @@ export const DataProvider = ({ children }) => {
     return { ok: true };
   };
 
-  const updateOrder = async (id, updatedData) => {
+  const updateOrder = async (id, updatedData, opts = {}) => {
     const oldOrder = orders.find(o => o.id === id);
     if (!canAccess('orders', 'full')) {
       if (oldOrder && updatedData.status && updatedData.status !== oldOrder.status) {
@@ -1445,17 +1481,12 @@ export const DataProvider = ({ children }) => {
 
     // The database decides the stage rules and the invoiced lock (061, 062),
     // so its refusal is shown as it is and the row goes back to what it was.
-    const res = await journaled(`update order ${id}`, async () => {
-      const { data, error } = await supabase.from('orders').update(orderRow(updatedData)).eq('id', id).select('id');
-      if (error || !data?.length) {
-        if (oldOrder) setOrders(prev => {
-          const next = prev.map(o => (o.id === id ? oldOrder : o));
-          localStorage.setItem('prismora_orders', JSON.stringify(next));
-          return next;
-        });
-        return { ok: false, error: error ? plainDatabaseError(error, 'save this order') : 'The order could not be updated — it may have been changed or removed elsewhere. Reload and try again.' };
-      }
-      return { ok: true };
+    const res = await saveUnlessChanged('orders', id, orderRow(updatedData), opts, `Order ${id}`, 'save this order');
+    setOrders(prev => {
+      const back = res.ok ? res.row : (res.conflict?.current || oldOrder);
+      const next = back ? prev.map(o => (o.id === id ? { ...o, ...back } : o)) : prev;
+      localStorage.setItem('prismora_orders', JSON.stringify(next));
+      return next;
     });
     const saved = res.ok;
     if (saved && oldOrder && oldOrder.status !== updatedData.status) {
@@ -2531,8 +2562,9 @@ export const DataProvider = ({ children }) => {
     const draft = stamp({ ...expenseData, createdAt: new Date().toISOString() });
     // addGRN checks this same flag; this did not. A refused expense stayed on
     // screen and in the month's totals, and was gone on the next refresh.
-    const { id: newId, saved } = await insertWithFreeId('expenses insert', 'expenses', 'EXP-', maxId + 1, draft,
-      (r) => r, 8, ['createdBy']);
+    const { id: newId, saved } = await journaled(`New expense ${expenseData.category || ''} ₹${expenseData.amount}`,
+      () => insertWithFreeId('expenses insert', 'expenses', 'EXP-', maxId + 1, draft, (r) => r, 8, ['createdBy']),
+      (r) => Boolean(r?.saved));
     if (!saved) return null;
     const newExpense = { ...draft, id: newId };
     setExpenses(prev => [newExpense, ...prev]);
@@ -2756,13 +2788,23 @@ export const DataProvider = ({ children }) => {
   };
 
   const updateVendor = async (id, updatedData) => {
+    // The balance is the database's to move (065); an edit form must not send
+    // back the figure it happened to load.
+    const changes = { ...(updatedData || {}) };
+    delete changes.outstandingAmount;
     setVendors(prev => {
-      const next = prev.map(v => v.id === id ? { ...v, ...updatedData } : v);
+      const next = prev.map(v => v.id === id ? { ...v, ...changes } : v);
       localStorage.setItem('prismora_vendors', JSON.stringify(next));
       return next;
     });
-    await persist('vendors update', supabase.from('vendors').update(blankIdsToNull(updatedData)).eq('id', id));
+    await persist('vendors update', supabase.from('vendors').update(blankIdsToNull(changes)).eq('id', id));
   };
+
+  // What a vendor is owed is moved by the database with the receipt, return or
+  // payment that causes it (065); read it back rather than work it out here.
+  const reloadVendor = (vendorId) => vendorId
+    ? reloadRows('vendors', setVendors, 'prismora_vendors', 'id', [vendorId])
+    : Promise.resolve();
 
   const deleteVendor = async (id) => {
     setVendors(prev => {
@@ -2877,17 +2919,11 @@ export const DataProvider = ({ children }) => {
     // delivered customer order bills the distributor/dealer/retailer.
     // Was its own reduce: unrounded, and one unreadable line turned the sum
     // into NaN, which was then added to the vendor's balance and written.
-    const grnValue = lineItemsValue(grnData.items);
+    // The payable moved with the receipt, in the database (065).
     const linkedPO = purchaseOrders.find(p => p.id === grnData.poId);
     const vendor = vendors.find(v => v.id === (linkedPO?.vendorId)) ||
       vendors.find(v => v.name?.toLowerCase() === grnData.vendorName?.toLowerCase());
-    if (vendor && grnValue > 0) {
-      const newOutstanding = balanceAfterCharge(vendor.outstandingAmount, grnValue);
-      const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: newOutstanding } : v);
-      setVendors(nextVendors);
-      localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
-      await persist('vendors update', supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id));
-    }
+    await reloadVendor(vendor?.id);
     return { ok: true, id: newId };
   };
 
@@ -2905,23 +2941,13 @@ export const DataProvider = ({ children }) => {
     if (!payment) return { ok: false, error: 'That payment no longer exists.' };
 
     const vendor = vendors.find(v => v.id === payment.vendorId);
-    if (vendor) {
-      const restored = balanceAfterCharge(vendor.outstandingAmount, payment.amount);
-      const { error } = await supabase.from('vendors').update({ outstandingAmount: restored }).eq('id', vendor.id);
-      if (error) {
-        console.error('[Prismora] Could not restore the vendor balance, so the payment has been left alone:', error);
-        return { ok: false, error: 'The vendor balance could not be put back, so nothing was deleted.' };
-      }
-      const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: restored } : v);
-      setVendors(nextVendors);
-      localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
-    }
-
+    // Withdrawing the payment puts the balance back in the same transaction (065).
     const { error } = await supabase.from('vendor_payments').delete().eq('id', id);
     if (error) {
       console.error('[Prismora] Could not delete the vendor payment:', error);
-      return { ok: false, error: 'The payment could not be deleted.' };
+      return { ok: false, error: plainDatabaseError(error, 'withdraw this payment') };
     }
+    await reloadVendor(payment.vendorId);
 
     setVendorPayments(prev => {
       const next = prev.filter(p => p.id !== id);
@@ -2941,7 +2967,7 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_vendor_payments', JSON.stringify(next));
       return next;
     });
-    const saved = await persist('vendor_payments insert', supabase.from('vendor_payments').insert([newPayment]));
+    const saved = await persist(`Vendor payment ₹${paymentData.amount}`, supabase.from('vendor_payments').insert([newPayment]));
     if (!saved) {
       // The balance write below is a separate statement and would go through on
       // its own, so a refused payment used to still reduce what the vendor is
@@ -2955,16 +2981,9 @@ export const DataProvider = ({ children }) => {
       return null;
     }
 
+    // The payable came down with the payment, in the database (065).
     const vendor = vendors.find(v => v.id === paymentData.vendorId);
-    if (vendor) {
-      // Same as the sales side: paying a vendor more than is owed leaves a
-      // credit with them, it does not evaporate.
-      const newOutstanding = balanceAfterPayment(vendor.outstandingAmount, paymentData.amount);
-      const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: newOutstanding } : v);
-      setVendors(nextVendors);
-      localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
-      await persist('vendors update', supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id));
-    }
+    await reloadVendor(paymentData.vendorId);
     logEvent('vendor_payment', `Payment of ₹${paymentData.amount} recorded for ${vendor?.name || paymentData.vendorId}`, paymentData.recordedBy, newId);
   };
 
@@ -2994,18 +3013,7 @@ export const DataProvider = ({ children }) => {
 
     const vendor = vendors.find(v => v.id === ret.vendorId);
     const value = Number(ret.value || 0);
-
-    if (vendor && value > 0) {
-      const restored = balanceAfterCharge(vendor.outstandingAmount, value);
-      const { error } = await supabase.from('vendors').update({ outstandingAmount: restored }).eq('id', vendor.id);
-      if (error) {
-        console.error('[Prismora] Could not restore the vendor balance, so the return has been left alone:', error);
-        return { ok: false, error: 'The vendor balance could not be put back, so nothing was deleted.' };
-      }
-      const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: restored } : v);
-      setVendors(nextVendors);
-      localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
-    }
+    // The balance goes back with the return's removal, in the database (065).
 
     let guessedBatch = false;
     for (const line of (ret.items || [])) {
@@ -3028,8 +3036,9 @@ export const DataProvider = ({ children }) => {
     const { error } = await supabase.from('purchase_returns').delete().eq('id', id);
     if (error) {
       console.error('[Prismora] Could not delete the purchase return:', error);
-      return { ok: false, error: 'The stock and balance were put back, but the return could not be deleted. It will need removing by hand.' };
+      return { ok: false, error: 'The stock was put back, but the return could not be withdrawn. It will need removing by hand.' };
     }
+    await reloadVendor(ret.vendorId);
 
     setPurchaseReturns(prev => {
       const next = prev.filter(r => r.id !== id);
@@ -3084,19 +3093,10 @@ export const DataProvider = ({ children }) => {
       return null;
     }
 
-    // Credit the vendor payable (we owe them less now)
+    // The payable came down with the return, in the database (065) — below
+    // zero if more was returned than owed, which is the vendor owing us.
     const vendor = vendors.find(v => v.id === returnData.vendorId);
-    if (vendor && returnValue > 0) {
-      // Was Math.max(0, ...). settlement.js already carries the note on why
-      // that is wrong: it discards the excess. Returning more than you owe
-      // leaves the vendor owing you, and a negative balance is how a ledger
-      // says so.
-      const newOutstanding = vendorBalanceAfterReturn(vendor.outstandingAmount, returnValue);
-      const nextVendors = vendors.map(v => v.id === vendor.id ? { ...v, outstandingAmount: newOutstanding } : v);
-      setVendors(nextVendors);
-      localStorage.setItem('prismora_vendors', JSON.stringify(nextVendors));
-      await persist('vendors update', supabase.from('vendors').update({ outstandingAmount: newOutstanding }).eq('id', vendor.id));
-    }
+    await reloadVendor(returnData.vendorId);
 
     // Remove the returned units from inventory (goods physically leave)
     // Awaited in turn. These were fired off unawaited, so a failure here was
@@ -3529,7 +3529,8 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_sfa_expenses', JSON.stringify(next));
       return next;
     });
-    await persist('sfa_expenses insert', supabase.from('sfa_expenses').insert([blankIdsToNull(newExp)]));
+    await persist(`Expense claim ₹${expData.amount}${expData.description ? ` "${String(expData.description).slice(0, 40)}"` : ''}`,
+      supabase.from('sfa_expenses').insert([blankIdsToNull(newExp)]));
   };
 
   // Approving books the claim in Accounting → Expenses, and moving it back out

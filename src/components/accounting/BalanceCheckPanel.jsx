@@ -17,7 +17,18 @@ const formatCurrency = (val) =>
  *
  * `watch` is anything that changes when money moves (invoice and payment
  * counts), so the check re-runs after a save on this screen.
+ *
+ * Vendors too (vendor_balance_drift, 065): what we owe each vendor against
+ * its goods receipts − purchase returns − payments.
  */
+const summary = (rows) => {
+  const vendors = rows.filter(r => r.kind === 'Vendor').length, partners = rows.length - vendors;
+  return [
+    partners && `${partners} partner balance${partners === 1 ? '' : 's'} differ from invoices − payments − credit notes`,
+    vendors && `${vendors} vendor balance${vendors === 1 ? '' : 's'} differ from goods receipts − returns − payments`,
+  ].filter(Boolean).join('; ');
+};
+
 export default function BalanceCheckPanel({ watch }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
@@ -25,11 +36,12 @@ export default function BalanceCheckPanel({ watch }) {
 
   useEffect(() => {
     let live = true;
-    supabase.rpc('partner_balance_drift').then(({ data, error: err }) => {
+    Promise.all([supabase.rpc('partner_balance_drift'), supabase.rpc('vendor_balance_drift')]).then(([p, v]) => {
       if (!live) return;
+      const err = p.error || v.error;
       if (err) { setError(err.message || 'The balance check could not run.'); setRows([]); return; }
       setError('');
-      setRows(data || []);
+      setRows([...(p.data || []), ...(v.data || []).map(r => ({ ...r, kind: 'Vendor' }))]);
     });
     return () => { live = false; };
   }, [watch, tick]);
@@ -49,7 +61,7 @@ export default function BalanceCheckPanel({ watch }) {
             {loading ? 'Checking…'
               : error ? error
                 : clean ? 'All balances match'
-                  : `${rows.length} partner balance${rows.length === 1 ? '' : 's'} differ from invoices − payments − credit notes`}
+                  : summary(rows)}
           </span>
         </div>
         <button type="button" onClick={() => { setRows(null); setTick(t => t + 1); }}
@@ -63,7 +75,7 @@ export default function BalanceCheckPanel({ watch }) {
           <table className="w-full min-w-[520px] text-xs">
             <thead>
               <tr className="text-slate-400 text-left border-b border-white/5">
-                <th scope="col" className="py-1.5 pr-3 font-semibold">Partner</th>
+                <th scope="col" className="py-1.5 pr-3 font-semibold">Partner / vendor</th>
                 <th scope="col" className="py-1.5 pr-3 font-semibold text-right">Stored</th>
                 <th scope="col" className="py-1.5 pr-3 font-semibold text-right">Should be</th>
                 <th scope="col" className="py-1.5 font-semibold text-right">Difference</th>
@@ -71,7 +83,7 @@ export default function BalanceCheckPanel({ watch }) {
             </thead>
             <tbody>
               {rows.map(r => (
-                <tr key={r.id} className="border-b border-white/5 last:border-0">
+                <tr key={`${r.kind}-${r.id}`} className="border-b border-white/5 last:border-0">
                   <td className="py-1.5 pr-3 text-white">{r.name} <span className="text-slate-500">· {r.kind} {r.id}</span></td>
                   <td className="py-1.5 pr-3 text-right text-slate-300">{formatCurrency(r.stored)}</td>
                   <td className="py-1.5 pr-3 text-right text-slate-300">{formatCurrency(r.derived)}</td>

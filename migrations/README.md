@@ -364,3 +364,14 @@ SELECT public.recompute_invoice_statuses();
 Database maintenance (no signed-in user) passes both. Deploy the matching app code: the order screen offers only the next step, locks billed fields, and shows these refusals as written.
 
 `063_invoiced_order_no_cancel_delete.sql` (owner's follow-up to 061): an order that any invoice names can't be cancelled or deleted by any signed-in user, Admin included. The refusal names the invoice and points to a credit note (or a sales return for delivered goods). Removing the invoice (Accounts) is what frees the order. Also a one-off audited maintenance correction: O113 was set back to ₹2,400 × 20 and O118 to ₹850, the values on their invoices; the Phase 2 B10 test had changed them.
+
+## Batch 5, group 2: save reliability and vendor balances
+
+`064_leads_numbered_by_database.sql` (Phase 2 B07): a lead inserted without an id is numbered L<highest + 1> by the database, under a lock. The app saves a new lead in one request and reads the number back. Before this, a rep's new lead took several round trips (guess, clash, ask, retry), and a page left part-way lost it without a trace. Leads inserted with an id keep it.
+
+`065_vendor_balances_in_database.sql`: what we owe a vendor moves in the database, in the same transaction as the goods receipt (+ Σ quantity × unit cost), purchase return (− value) or vendor payment (− amount). Removing or changing one of those records moves the balance back or by the difference.
+- A receipt's vendor is its PO's vendor, or, for a receipt with no PO, the vendor with exactly its name.
+- App users can't write `outstandingAmount` directly.
+- `vendor_balance_drift()` lists every vendor whose stored balance differs from receipts − returns − payments. It is shown in Accounting's Balance check, for Accounting or Purchases viewers.
+- Existing balances were not corrected: TEST-V-1 and Janki Herbal drift and are for the owner to decide.
+- Deploy with the matching app, which no longer writes vendor balances itself.

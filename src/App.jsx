@@ -174,6 +174,7 @@ function AppRoutes() {
 
 import { NotificationProvider } from './context/NotificationContext';
 import { DialogProvider } from './context/DialogContext';
+import SaveGuard from './components/SaveGuard';
 
 // The data layer is rebuilt for each signed-in user. It used to be mounted once
 // on the login page, fetch as nobody, and keep that empty result after sign-in
@@ -192,6 +193,7 @@ function App() {
           <NotificationProvider>
             <DialogProvider>
               <AppRoutes />
+              <SaveGuard />
             </DialogProvider>
           </NotificationProvider>
         </DataForSession>

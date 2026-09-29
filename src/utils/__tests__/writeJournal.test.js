@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { reportKind, reportRow, journaled, startJournal, startWrite, SLOW_MS } from '../writeJournal';
+import { reportKind, reportRow, journaled, startJournal, startWrite, SLOW_MS, subscribe, clearAbandoned } from '../writeJournal';
 
 describe('reportKind', () => {
   it('reports a failed save whatever its speed', () => {
@@ -70,6 +70,11 @@ describe('a save cut off by a reload', () => {
 
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ kind: 'abandoned', label: 'add invoice O6' });
+    // …and the person is told too, even by a listener that arrives later (B07)
+    const heard = [];
+    const stop = subscribe(e => heard.push(e));
+    expect(heard[0]).toMatchObject({ type: 'abandoned', list: [{ label: 'add invoice O6' }] });
+    stop(); clearAbandoned();
     vi.unstubAllGlobals();
   });
 });
