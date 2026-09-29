@@ -205,6 +205,11 @@ const Orders = () => {
       setStatusError(`Order ${editingOrder.id} has been delivered, so it cannot be ${targetStatus === 'Cancelled' ? 'cancelled' : `moved back to ${targetStatus}`}. Record a sales return (the ↩ button on the order) or issue a credit note instead.`);
       return;
     }
+    // An invoiced order is reversed by a credit note, not cancelled (063).
+    if (targetStatus === 'Cancelled' && billedBy && editingOrder?.status !== 'Cancelled') {
+      setStatusError(`Order ${editingOrder.id} has been invoiced (${billedBy.id}), so it cannot be cancelled. To reverse it, issue a credit note (or record a sales return for goods already delivered).`);
+      return;
+    }
     // One stage at a time, as the database enforces (062): no skipping, no going back.
     if (editingOrder && !canStepTo(editingOrder.status, targetStatus) && !isDelivered(editingOrder)) {
       setStatusError(stepRefusal(editingOrder.id, editingOrder.status, targetStatus));

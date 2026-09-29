@@ -362,3 +362,5 @@ SELECT public.recompute_invoice_statuses();
 - **Partner orders.** They now need the Processing step before the warehouse can take them: a sales role or an Admin sends them there.
 
 Database maintenance (no signed-in user) passes both. Deploy the matching app code: the order screen offers only the next step, locks billed fields, and shows these refusals as written.
+
+`063_invoiced_order_no_cancel_delete.sql` (owner's follow-up to 061): an order that any invoice names can't be cancelled or deleted by any signed-in user, Admin included. The refusal names the invoice and points to a credit note (or a sales return for delivered goods). Removing the invoice (Accounts) is what frees the order. Also a one-off audited maintenance correction: O113 was set back to ₹2,400 × 20 and O118 to ₹850, the values on their invoices; the Phase 2 B10 test had changed them.
