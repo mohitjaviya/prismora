@@ -123,5 +123,6 @@ describe('plainDatabaseError - what Dispatch and Accounts are told', () => {
     expect(say('Only Dispatch Team, Admin can move an order to Shipped (your role: Warehouse Manager).')).toMatch(/^Only Dispatch Team/);
     expect(say('Order O128 needs a delivery address and a pincode before it can be Processing.', '23514')).toMatch(/^Order O128 needs/);
     expect(say('new row violates row-level security policy for table "orders"')).toBe('Your role is not allowed to save this order.');
+    expect(say('Purchase order PO-9 has goods received against it (GRN-14), so it cannot be deleted. Close it instead.')).toMatch(/^Purchase order PO-9 has goods received/);
   });
 });

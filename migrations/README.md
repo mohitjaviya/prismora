@@ -381,3 +381,5 @@ Database maintenance (no signed-in user) passes both. Deploy the matching app co
 `066_one_order_per_lead.sql` (Phase 2 A06): a new order naming a lead is refused while that lead already has an order that isn't Cancelled ("Lead … has already been converted to order …"). Cancelling the first order frees the lead. Existing orders are untouched.
 
 `067_correct_vendor_balance.sql`: `correct_vendor_balance(vendor)` sets a vendor's balance to goods receipts − returns − payments. It's for Accounts full or administrators only, and is audited ("balance corrected to goods receipts − returns − payments"). It's the twin of 048's partner tool. Nothing is corrected by the migration.
+
+`068_po_with_receipts_not_deleted.sql`: a purchase order that any goods receipt names can't be deleted by any signed-in user, Admin included. The refusal names the receipt, and the order can be closed instead. It prevents what happened to GRN-17, left without a PO when PO-10 was deleted after its receipt. Also, `correct_vendor_balance(vendor, reason)` now takes an optional reason, which is what the audit row says. The app's one-argument call still works.

@@ -473,7 +473,7 @@ export default function Purchases() {
                             {(po.status === 'Draft' || po.status === 'Confirmed') && (
                               <button onClick={() => { setCancellingPO(po); setCancelReason('Ordered by mistake'); }} className="px-2 py-1 text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-colors" title="Cancel this purchase order">Cancel</button>
                             )}
-                            <button onClick={async () => { if (await confirm({ title: 'Delete this PO? Cancelling keeps the record — deleting removes it for good.', danger: true, confirmLabel: 'Delete' })) deletePurchaseOrder(po.id); }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete this purchase order"><Trash2 size={13} /></button>
+                            <button onClick={async () => { if (await confirm({ title: 'Delete this PO? Cancelling keeps the record — deleting removes it for good.', danger: true, confirmLabel: 'Delete' })) { const r = await deletePurchaseOrder(po.id); toast(r?.ok ? `${po.id} deleted.` : (r?.error || 'The purchase order could not be deleted.'), r?.ok ? 'success' : 'error'); } }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete this purchase order"><Trash2 size={13} /></button>
                           </div>
                         </td>
                       )}

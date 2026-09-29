@@ -2882,13 +2882,20 @@ export const DataProvider = ({ children }) => {
     return id;
   };
 
+  // Removed from screen only once the database has removed it: a PO with
+  // goods received against it is refused (068), and the reason is shown.
   const deletePurchaseOrder = async (id) => {
+    const { data, error } = await journaled(`Delete purchase order ${id}`,
+      async () => { const r = await supabase.from('purchase_orders').delete().eq('id', id).select('id'); return { ...r, ok: !r.error && r.data?.length > 0 }; });
+    if (error || !data?.length) {
+      return { ok: false, error: error ? plainDatabaseError(error, 'delete this purchase order') : 'The purchase order could not be deleted.' };
+    }
     setPurchaseOrders(prev => {
       const next = prev.filter(po => po.id !== id);
       localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
       return next;
     });
-    await persist('purchase_orders delete', supabase.from('purchase_orders').delete().eq('id', id));
+    return { ok: true };
   };
 
   // ── GRN ───────────────────────────────────────────────────────────────────

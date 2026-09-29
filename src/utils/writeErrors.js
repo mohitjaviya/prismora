@@ -87,7 +87,7 @@ export function explainForeignKey(error, row) {
  * pass through as they are. Everything else is translated rather than shown as
  * raw SQL.
  */
-const ORDER_RULE = /^(Order \S+ (is |has been |was |needs )|Only .+ can move an order to |A new order starts at Pending|A backorder can only)/;
+const ORDER_RULE = /^(Order \S+ (is |has been |was |needs )|Only .+ can move an order to |A new order starts at Pending|A backorder can only|Purchase order \S+ has goods received)/;
 
 export function plainDatabaseError(error, action = 'save this') {
   if (!error) return `Could not ${action}.`;
