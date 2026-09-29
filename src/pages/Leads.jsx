@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
 import { format, differenceInDays } from 'date-fns';
@@ -183,8 +183,13 @@ const Leads = () => {
   // Asked as if the order were leaving Pending, which is where it would stop.
   const convertMissingDelivery = missingDelivery(convertDelivery, 'Processing');
 
+  // Guards that hold from the first click, before React re-renders — two
+  // clicks in the same instant used to save twice (A06, B06).
+  const savingRef = useRef(false);
+  const convertingRef = useRef(false);
   const confirmConversion = async () => {
-    if (!convertingLead || isConverting) return;
+    if (!convertingLead || isConverting || convertingRef.current) return;
+    convertingRef.current = true;
     setIsConverting(true);
     setConvertError('');
     try {
@@ -192,13 +197,19 @@ const Leads = () => {
       if (result && !result.ok) { setConvertError(result.error || 'Could not raise the order.'); return; }
       setConvertingLead(null);
     } finally {
+      convertingRef.current = false;
       setIsConverting(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (savingLead) return;
+    if (savingLead || savingRef.current) return;
+    savingRef.current = true;
+    try { await submitLeadForm(); } finally { savingRef.current = false; }
+  };
+
+  const submitLeadForm = async () => {
 
     if (formData.status === 'Converted') {
       if (!formData.state || !formData.state.trim() || !formData.city || !formData.city.trim()) {

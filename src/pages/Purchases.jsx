@@ -119,7 +119,11 @@ export default function Purchases() {
     payables: vendors.reduce((s, v) => s + (v.outstandingAmount || 0), 0),
   }), [purchaseOrders, vendors]);
 
-  const ledgerEntries = useMemo(() => viewingVendor ? buildVendorLedger(viewingVendor, grn, vendorPayments, purchaseReturns) : [], [viewingVendor, grn, vendorPayments, purchaseReturns]);
+  // The vendor as the database now has it: a payment or return reloads it, so
+  // the pop-up's payable follows at once instead of showing the figure it
+  // opened with.
+  const liveVendor = viewingVendor ? (vendors.find(v => v.id === viewingVendor.id) || viewingVendor) : null;
+  const ledgerEntries = useMemo(() => liveVendor ? buildVendorLedger(liveVendor, grn, vendorPayments, purchaseReturns) : [], [liveVendor, grn, vendorPayments, purchaseReturns]);
 
   const handleDeletePayment = async (row) => {
     const ok = await confirm({
@@ -840,11 +844,11 @@ export default function Purchases() {
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 text-center mb-5">
                 <p className="text-xs text-slate-400 uppercase tracking-wide">Outstanding Payable</p>
-                <p className="text-2xl font-extrabold text-rose-400 mt-0.5">{formatCurrency(viewingVendor.outstandingAmount || 0)}</p>
+                <p className="text-2xl font-extrabold text-rose-400 mt-0.5">{formatCurrency(liveVendor.outstandingAmount || 0)}</p>
               </div>
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-bold text-white flex items-center gap-1.5"><Wallet size={14} className="text-brand-accent" />Vendor Ledger</h4>
-                {canManage && (viewingVendor.outstandingAmount || 0) > 0 && (
+                {canManage && (liveVendor.outstandingAmount || 0) > 0 && (
                   <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>
                 )}
               </div>

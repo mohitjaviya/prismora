@@ -375,3 +375,9 @@ Database maintenance (no signed-in user) passes both. Deploy the matching app co
 - `vendor_balance_drift()` lists every vendor whose stored balance differs from receipts − returns − payments. It is shown in Accounting's Balance check, for Accounting or Purchases viewers.
 - Existing balances were not corrected: TEST-V-1 and Janki Herbal drift and are for the owner to decide.
 - Deploy with the matching app, which no longer writes vendor balances itself.
+
+## Batch 5, group 4
+
+`066_one_order_per_lead.sql` (Phase 2 A06): a new order naming a lead is refused while that lead already has an order that isn't Cancelled ("Lead … has already been converted to order …"). Cancelling the first order frees the lead. Existing orders are untouched.
+
+`067_correct_vendor_balance.sql`: `correct_vendor_balance(vendor)` sets a vendor's balance to goods receipts − returns − payments. It's for Accounts full or administrators only, and is audited ("balance corrected to goods receipts − returns − payments"). It's the twin of 048's partner tool. Nothing is corrected by the migration.

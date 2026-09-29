@@ -73,6 +73,7 @@ const Orders = () => {
   const [salespersonFilter, setSalespersonFilter] = useState('');
   const [statusError, setStatusError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
   const [returningOrder, setReturningOrder] = useState(null);
   // The stock check must see inventory as it is when Save runs, not as it was
   // when the form rendered — a save can wait for the first load to land.
@@ -551,7 +552,9 @@ const Orders = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isSaving) return;
+    // A ref holds from the first click; the state flag only after a re-render (B06).
+    if (isSaving || savingRef.current) return;
+    savingRef.current = true;
     setIsSaving(true);
     try {
       // Right after sign-in the tables may still be loading. Checking stock
@@ -560,6 +563,7 @@ const Orders = () => {
       if (await whenLoaded() > 0) await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       await submitOrder();
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -868,7 +872,7 @@ const Orders = () => {
                       <div className="flex items-center justify-between gap-3">
                         <span style={statusStyle(formData.status) || undefined} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusStyle(formData.status) ? "" : getStatusColor(formData.status)}`}>{labelForStatus(formData.status)}</span>
                         <div className="flex gap-2">
-                          <button type="button" onClick={() => attemptSetStatus('Cancelled')} className="px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">Cancel Order</button>
+                          <button type="button" onClick={async () => { if (await confirm({ title: `Cancel order ${editingOrder.id}?`, body: 'The order is marked Cancelled when you press Update Order. It cannot be revived afterwards.', danger: true, confirmLabel: 'Cancel order', cancelLabel: 'Keep it' })) attemptSetStatus('Cancelled'); }} className="px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">Cancel Order</button>
                           <button type="button" onClick={() => attemptSetStatus('Processing')} className="btn-accent px-4 py-2 rounded-lg text-xs font-bold">Assign to Warehouse Manager</button>
                         </div>
                       </div>

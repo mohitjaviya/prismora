@@ -1270,6 +1270,10 @@ export const DataProvider = ({ children }) => {
   const convertLeadToOrder = async (lead, lineItems, newStatus = 'First Order', delivery = {}) => {
     if (!lead) return { ok: false, error: 'Lead not found.' };
     if (lead.orderCreated) return { ok: false, error: 'An order has already been raised for this lead.' };
+    // This tab's copy of the lead may be stale (A06): ask the database. It
+    // also refuses a second order itself (066).
+    const { data: already } = await supabase.from('orders').select('id').eq('leadId', lead.id).neq('status', 'Cancelled').limit(1);
+    if (already?.length) return { ok: false, error: `This lead has already been converted to order ${already[0].id}. Refresh to see it.` };
 
     const items = (lineItems || [])
       .map(i => ({

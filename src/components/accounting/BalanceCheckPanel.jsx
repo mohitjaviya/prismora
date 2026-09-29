@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { Card } from '../ui';
+import { useConfirm, useToast } from '../../context/DialogContext';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -33,6 +34,21 @@ export default function BalanceCheckPanel({ watch }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
+  const confirm = useConfirm();
+  const toast = useToast();
+  // A vendor's balance set to its receipts − returns − payments (067); the
+  // database allows Accounts and administrators only, and audits it.
+  const correctVendor = async (r) => {
+    if (!await confirm({
+      title: `Correct ${r.name}'s balance?`,
+      body: `Stored ${formatCurrency(r.stored)} becomes ${formatCurrency(r.derived)} — goods receipts − returns − payments. The change is recorded in the audit log. Only do this once the cause is understood.`,
+      confirmLabel: 'Correct balance',
+    })) return;
+    const { data, error: err } = await supabase.rpc('correct_vendor_balance', { p_id: r.id });
+    if (err) { toast(err.message || 'The balance could not be corrected.', 'error'); return; }
+    toast(`${r.name}: balance corrected to ${formatCurrency(data)}.`, 'success');
+    setRows(null); setTick(t => t + 1);
+  };
 
   useEffect(() => {
     let live = true;
@@ -87,12 +103,17 @@ export default function BalanceCheckPanel({ watch }) {
                   <td className="py-1.5 pr-3 text-white">{r.name} <span className="text-slate-500">· {r.kind} {r.id}</span></td>
                   <td className="py-1.5 pr-3 text-right text-slate-300">{formatCurrency(r.stored)}</td>
                   <td className="py-1.5 pr-3 text-right text-slate-300">{formatCurrency(r.derived)}</td>
-                  <td className="py-1.5 text-right font-bold text-amber-400">{formatCurrency(r.difference)}</td>
+                  <td className="py-1.5 text-right font-bold text-amber-400">
+                    {formatCurrency(r.difference)}
+                    {r.kind === 'Vendor' && (
+                      <button type="button" onClick={() => correctVendor(r)} className="ml-2 text-[11px] font-semibold text-brand-accent hover:underline">Correct</button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="text-[11px] text-slate-500 mt-2">Open the partner's Ledger to see the entries, and use "Correct balance" there once the cause is understood.</p>
+          <p className="text-[11px] text-slate-500 mt-2">For a partner, open its Ledger to see the entries and use "Correct balance" there; for a vendor, check its ledger under Purchases → Vendors and use "Correct" here — once the cause is understood.</p>
         </div>
       )}
     </Card>

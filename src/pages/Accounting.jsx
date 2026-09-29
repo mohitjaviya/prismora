@@ -508,6 +508,12 @@ const Accounting = () => {
       {isOpen(inv) && (
         <button
           onClick={async () => {
+            // Money moves, so it asks first (Phase 2 A15).
+            if (!await confirm({
+              title: `Mark ${inv.id} as paid?`,
+              body: `This records a payment of ${formatCurrency(amountDue(inv))} from ${inv.customerName} and settles the invoice.`,
+              confirmLabel: 'Mark as paid',
+            })) return;
             // Settles what is still due. The payment and the partner's balance
             // move together in the database; a refusal is said, not swallowed.
             if (await updateInvoiceStatus(inv.id, 'Settled')) toast(`${inv.id} settled: ${formatCurrency(amountDue(inv))} recorded.`, 'success');

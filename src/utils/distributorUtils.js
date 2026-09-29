@@ -62,6 +62,7 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
     .map(p => ({
       id: `pay-${p.id}`,
       date: p.date || p.createdAt,
+      at: p.createdAt || p.date,
       type: 'Payment',
       ref: p.id,
       description: `Payment received${p.method ? ` via ${p.method}` : ''}${p.reference ? ` (Ref: ${p.reference})` : ''}`,
@@ -104,6 +105,7 @@ export const buildVendorLedger = (vendor, grns = [], vendorPayments = [], purcha
     .map(g => ({
       id: `grn-${g.id}`,
       date: g.receivedDate || g.createdAt,
+      at: g.createdAt || g.receivedDate,
       type: 'Goods Received',
       ref: g.id,
       description: `GRN ${g.id}${g.poId ? ` (PO ${g.poId})` : ''}`,
@@ -116,6 +118,7 @@ export const buildVendorLedger = (vendor, grns = [], vendorPayments = [], purcha
     .map(p => ({
       id: `vpay-${p.id}`,
       date: p.date || p.createdAt,
+      at: p.createdAt || p.date,
       type: 'Payment',
       ref: p.id,
       description: `Payment made${p.method ? ` via ${p.method}` : ''}${p.reference ? ` (Ref: ${p.reference})` : ''}`,
@@ -129,6 +132,7 @@ export const buildVendorLedger = (vendor, grns = [], vendorPayments = [], purcha
     .map(r => ({
       id: `pr-${r.id}`,
       date: r.date || r.createdAt,
+      at: r.createdAt || r.date,
       type: 'Purchase Return',
       ref: r.id,
       description: `Return ${r.id}${r.reason ? ` — ${r.reason}` : ''}`,
@@ -136,7 +140,11 @@ export const buildVendorLedger = (vendor, grns = [], vendorPayments = [], purcha
       credit: Number(r.value || 0)
     }));
 
-  const rows = [...debitRows, ...paymentRows, ...returnRows].sort((a, b) => new Date(a.date) - new Date(b.date));
+  // By business date, then by when each entry was actually recorded, so a
+  // payment and a return on the same day run in the order they happened.
+  const day = (d) => String(d || '').slice(0, 10);
+  const rows = [...debitRows, ...paymentRows, ...returnRows].sort((a, b) =>
+    day(a.date).localeCompare(day(b.date)) || (new Date(a.at) - new Date(b.at)));
 
   let balance = 0;
   return rows.map(row => {
