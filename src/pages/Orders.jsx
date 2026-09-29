@@ -19,6 +19,7 @@ import LastChanged from '../components/audit/LastChanged';
 import { localDay, orderDateToSave } from '../utils/orderDate';
 import { sellableQty } from '../utils/expiry';
 import SalesReturnModal from '../components/SalesReturnModal';
+import { canStepTo, stepRefusal, lockingInvoice } from '../utils/orderFlow';
 
 // Delivered — fully, or any units — is final: no cancel, no going back (054).
 const isDelivered = (o) => Boolean(o && (o.fulfilledAt || Number(o.deliveredQty || 0) > 0 || o.status === 'Delivered' || o.status === 'Partially Delivered'));
@@ -53,7 +54,7 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded, invoices } = useData();
   // From Master Lists. The stepper and the dropdown show the label; every
   // check in this file — STATUS_OWNERS, the stock guards, the delivery
   // branches — still compares the stored key, which cannot be renamed.
@@ -171,8 +172,11 @@ const Orders = () => {
   // Once stock has physically moved or the order has been billed, quantity is
   // frozen: editing it would desynchronise inventory and the invoice already
   // raised. Amendments go through Split or a fresh order instead.
+  // Once billed, what was billed is fixed (061); the database refuses it too.
+  const billedBy = lockingInvoice(editingOrder, invoices);
   const isQuantityLocked = () => {
     if (!editingOrder) return false;
+    if (billedBy) return true;
     if (Number(formData.deliveredQty || 0) > 0) return true;
     return ['Shipped', 'Partially Delivered', 'Delivered'].includes(formData.status);
   };
@@ -199,6 +203,11 @@ const Orders = () => {
     if (editingOrder && isDelivered(editingOrder) && targetStatus !== editingOrder.status
         && !(editingOrder.status === 'Partially Delivered' && targetStatus === 'Delivered')) {
       setStatusError(`Order ${editingOrder.id} has been delivered, so it cannot be ${targetStatus === 'Cancelled' ? 'cancelled' : `moved back to ${targetStatus}`}. Record a sales return (the ↩ button on the order) or issue a credit note instead.`);
+      return;
+    }
+    // One stage at a time, as the database enforces (062): no skipping, no going back.
+    if (editingOrder && !canStepTo(editingOrder.status, targetStatus) && !isDelivered(editingOrder)) {
+      setStatusError(stepRefusal(editingOrder.id, editingOrder.status, targetStatus));
       return;
     }
     if (!canSetOrderStatus(user?.role, targetStatus)) {
@@ -278,6 +287,8 @@ const Orders = () => {
   const canPartialDeliver = () => {
     if (!editingOrder || !isSingleProduct(formData)) return false;
     if (['Delivered', 'Cancelled'].includes(formData.status)) return false;
+    // A delivery instalment follows Shipped (062).
+    if (!['Shipped', 'Partially Delivered'].includes(editingOrder.status)) return false;
     const remaining = orderRemainingQty(formData);
     const avail = getAvailableQty(formData.product);
     return remaining > 0 && avail > 0 && avail < remaining; // short but some stock
@@ -869,7 +880,8 @@ const Orders = () => {
                         const isCompleted = idx < activeIdx;
                         const isActive = idx === activeIdx;
 
-                        const isAllowed = canSetOrderStatus(user?.role, status);
+                        const isAllowed = canSetOrderStatus(user?.role, status)
+                          && (!editingOrder || canStepTo(editingOrder.status, status));
 
                         return (
                           <button
@@ -1103,6 +1115,7 @@ const Orders = () => {
                       </div>
                     ) : (
                       <select
+                        disabled={Boolean(billedBy)}
                         value={formData.product || ''}
                         onChange={e => {
                           if (e.target.value === '__ADD_NEW__') {
@@ -1200,8 +1213,11 @@ const Orders = () => {
                 </div>
                 <div>
                   <label htmlFor="orders-order-value" className="block text-sm font-medium text-slate-300 mb-1.5">Order Value (₹)</label>
-                  <input id="orders-order-value" type="number" required value={formData.value} onChange={e => setFormData({ ...formData, value: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
-                  {getUnitRate(formData.product, formData) > 0 && (
+                  <input id="orders-order-value" type="number" required disabled={Boolean(billedBy)} value={formData.value} onChange={e => setFormData({ ...formData, value: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white disabled:opacity-60" />
+                  {billedBy && (
+                    <p className="mt-1 text-[11px] text-amber-500">Invoiced as {billedBy.id}: value, quantity and items can no longer change. To correct it, record a sales return or issue a credit note.</p>
+                  )}
+                  {!billedBy && getUnitRate(formData.product, formData) > 0 && (
                     <p className="mt-1 text-[11px] text-slate-500">
                       Auto-calculated at ₹{getUnitRate(formData.product, formData).toLocaleString('en-IN')} / unit ({rateLabel(formData)}). Editable if negotiated.
                     </p>
@@ -1265,7 +1281,7 @@ const Orders = () => {
                 {!(editingOrder && isSalesOnlyRole) && (
                   <div>
                     <label htmlFor="orders-status" className="block text-sm font-medium text-slate-300 mb-1.5">Status</label>
-                    <select id="orders-status" value={formData.status} onChange={e => attemptSetStatus(e.target.value)} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
+                    <select id="orders-status" value={formData.status} disabled={!editingOrder} title={!editingOrder ? 'A new order starts at Pending' : undefined} onChange={e => attemptSetStatus(e.target.value)} className="w-full glass-input rounded-lg px-4 py-2.5 text-white disabled:opacity-60">
                       {statusOptions.map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                     </select>
                     {statusError && (

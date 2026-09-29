@@ -346,3 +346,19 @@ SELECT public.recompute_invoice_statuses();
 `060_highest_sequential_id.sql`: `highest_sequential_id(table, prefix)` returns the highest id number in use across the whole table. It covers leads, expenses, purchase orders, GRNs and complaints, is for signed-in users only, and returns one number and no rows.
 - The app asks it when a new id clashes. Before this, a Sales Executive could not add a lead: they can see only their own leads, so every id the app tried (L1…L8) was already taken by another rep's.
 - Safe with the older app, which never calls it.
+
+## Batch 5, group 1: order rules in the database
+
+`061_invoiced_order_locked.sql` (Phase 2 B10): once any invoice (proforma or tax) names an order, its value, quantity, product and line items are read-only for every signed-in user, Admin included.
+- The refusal names the invoice and points to a sales return or credit note.
+- Lines are compared by product, quantity and unit price, so the order form resending the same lines with a status change still saves.
+- O113 and O118 keep the values Phase 2 gave them, as evidence.
+
+`062_order_status_flow.sql` (Phase 2 A09): the order stages are enforced for every signed-in user.
+- **One step at a time.** Pending → Processing → Ready for Dispatch → Shipped → Delivered, with Shipped → Partially Delivered → Delivered. Cancelled is allowed before delivery. No skipping, no going back, no reviving a cancelled order.
+- **Each step by its owner.** Sales roles take Processing, the Warehouse Manager takes Ready for Dispatch, and the Dispatch Team takes Shipped and Delivered. Cancelling belongs to the sales roles, or to the partner for its own order. Admin may take any single step but may not skip.
+- **Address and pincode.** Required from Processing on, and they can't be cleared later.
+- **New orders start at Pending.** The one exception is a split's backorder, which starts at Processing.
+- **Partner orders.** They now need the Processing step before the warehouse can take them: a sales role or an Admin sends them there.
+
+Database maintenance (no signed-in user) passes both. Deploy the matching app code: the order screen offers only the next step, locks billed fields, and shows these refusals as written.

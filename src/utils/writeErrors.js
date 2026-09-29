@@ -87,11 +87,16 @@ export function explainForeignKey(error, row) {
  * pass through as they are. Everything else is translated rather than shown as
  * raw SQL.
  */
+const ORDER_RULE = /^(Order \S+ (is |has been |was |needs )|Only .+ can move an order to |A new order starts at Pending|A backorder can only)/;
+
 export function plainDatabaseError(error, action = 'save this') {
   if (!error) return `Could not ${action}.`;
   const code = error.code;
   const message = String(error.message || '');
   if (code === 'P0001') return message;
+  // The order rules (054, 061, 062) refuse with a sentence meant for the
+  // person at the screen — which stage comes next, which invoice locks it.
+  if (ORDER_RULE.test(message)) return message;
   if (code === '42501' || /row-level security/i.test(message)) {
     return /needs full Accounting access|cannot (raise|convert) invoices/i.test(message)
       ? message

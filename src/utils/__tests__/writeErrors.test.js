@@ -114,4 +114,14 @@ describe('plainDatabaseError - what Dispatch and Accounts are told', () => {
     expect(plainDatabaseError({ code: 'XX000', message: 'boom' }, 'deliver this order')).toBe('Could not deliver this order: boom');
     expect(plainDatabaseError(null, 'deliver this order')).toBe('Could not deliver this order.');
   });
+
+  it('passes the order rules through as written (054, 061, 062)', () => {
+    const say = (message, code = '42501') => plainDatabaseError({ code, message }, 'save this order');
+    expect(say('Order O126 is Processing; the next step is Ready for Dispatch. It cannot go to Shipped from here.'))
+      .toBe('Order O126 is Processing; the next step is Ready for Dispatch. It cannot go to Shipped from here.');
+    expect(say('Order O118 has been invoiced (INV-1), so its value, quantity and items can no longer change.')).toMatch(/^Order O118 has been invoiced/);
+    expect(say('Only Dispatch Team, Admin can move an order to Shipped (your role: Warehouse Manager).')).toMatch(/^Only Dispatch Team/);
+    expect(say('Order O128 needs a delivery address and a pincode before it can be Processing.', '23514')).toMatch(/^Order O128 needs/);
+    expect(say('new row violates row-level security policy for table "orders"')).toBe('Your role is not allowed to save this order.');
+  });
 });

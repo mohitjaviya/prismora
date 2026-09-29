@@ -1443,7 +1443,21 @@ export const DataProvider = ({ children }) => {
       return result;
     }
 
-    const saved = await persist('orders update', supabase.from('orders').update(orderRow(updatedData)).eq('id', id));
+    // The database decides the stage rules and the invoiced lock (061, 062),
+    // so its refusal is shown as it is and the row goes back to what it was.
+    const res = await journaled(`update order ${id}`, async () => {
+      const { data, error } = await supabase.from('orders').update(orderRow(updatedData)).eq('id', id).select('id');
+      if (error || !data?.length) {
+        if (oldOrder) setOrders(prev => {
+          const next = prev.map(o => (o.id === id ? oldOrder : o));
+          localStorage.setItem('prismora_orders', JSON.stringify(next));
+          return next;
+        });
+        return { ok: false, error: error ? plainDatabaseError(error, 'save this order') : 'The order could not be updated — it may have been changed or removed elsewhere. Reload and try again.' };
+      }
+      return { ok: true };
+    });
+    const saved = res.ok;
     if (saved && oldOrder && oldOrder.status !== updatedData.status) {
       const who = updatedData.customerName || oldOrder.customerName;
       const owner = updatedData.assignedTo || oldOrder.assignedTo;
@@ -1451,7 +1465,7 @@ export const DataProvider = ({ children }) => {
       else if (updatedData.status === 'Ready for Dispatch') logEvent('order_ready_for_dispatch', `Order Ready for Dispatch: ${who}`, owner, id);
       else if (updatedData.status === 'Shipped') logEvent('order_shipped', `Order Shipped: ${who}`, owner, id);
     }
-    return { ok: saved, error: saved ? null : 'The change could not be saved.' };
+    return res;
   };
 
   // Partial delivery: record that `deliverQty` more units of a (single-product)
