@@ -1,16 +1,16 @@
-# PRISMORA: session state and hand-over (end of session, 2026-09-29)
+# PRISMORA: session state and hand-over (last updated 2026-09-30)
 
 Written so a future session with no memory of this project can pick up.
 
-**Status:** everything below is **committed, deployed and verified on live**.
+**Status:** everything below is **committed, deployed and verified on live**, except where marked in-progress or stopped.
 
 | Item | Where |
 |---|---|
 | Live site | https://prismora-henna.vercel.app |
 | Supabase project | `qvckvvckkfvelhnxmmvp` |
 | Branch | `fix/erp-session-2026-09`, fast-forwarded into `main` (Vercel deploys `main`) |
-| Last commit | `4ddf4ff` |
-| Last migration | `068` |
+| Last commit | see `git log -1` on `main` (this doc committed together with migration 069) |
+| Last migration | `069` |
 
 All data is **demo/TEST data**.
 
@@ -54,6 +54,7 @@ All data is **demo/TEST data**.
 | **066** | A06: one non-cancelled order per lead | 5 |
 | **067** | `correct_vendor_balance()` (Accounts/admin, audited) | 5 |
 | **068** | A PO with goods receipts can't be deleted; vendor correction takes an audit reason | 5 |
+| **069** | **Security fix (2026-09-30):** renamed scheme `SCH-1790405906612` off a name that held three demo accounts' emails and passwords in plain text (found in Phase 2 story E02 — any signed-in partner can read every scheme's name). Renamed to "TEST Distributor Scheme 5pct". The three passwords (`newdistributor@gmail.com`, `demodealer@gmail.com`, `demoretailer@gmail.com`) were rotated directly in `auth.users` (not committed — same technique as `scripts/create-test-accounts.mjs`, temp SQL file deleted right after running); new values are in `.env.test-accounts.local` (git-ignored) under `DEMO_*`. Each account's password rotation is audit-logged with the reason. | Phase 2 E |
 
 **App-side fixes in Batch 5 (no migration):**
 - **Save journal (B07).** "Leave site?" while a save is in flight; unfinished saves are recorded at leave time and listed on the next page by the SaveGuard banner; a failure after leaving is announced.
@@ -68,6 +69,7 @@ All data is **demo/TEST data**.
 - Partner orders now need the Processing step (Sales Manager or Admin) before the Warehouse can act.
 - Janki Herbal was corrected to ₹1,21,500 on 2026-09-29 (GRN-17 under-charge).
 - The 2026-09-29 backups were incomplete, and the owner skipped a new one. The only complete backup is `backups/2026-09-28T05-34-37-801Z`, from before migrations 041–068 and all test data.
+- The password-leak fix (069) was explicitly approved and directed by the owner on 2026-09-30, including the rename text and which three accounts to rotate.
 
 ## 3. What has been tested
 
@@ -79,16 +81,34 @@ All data is **demo/TEST data**.
 | Phase 2 C: procure to stock | Done (9/9) |
 | Phase 2 D: field sales day | Done (9/9) |
 | Batch 5 fixes | Each tested as the real role through the database and the screen, locally and on live |
-| **Phase 2 E: partner portal** | **Not tested** |
-| **Phase 2 F: schemes and incentives** | **Not tested** |
-| **Phase 2 G: admin (users, roles, deactivate, audit)** | **Not tested** |
-| **Phase 2 H: reports and dashboards vs data** | **Not tested** |
+| **Phase 2 E: partner portal** | **In progress — E01, E02 passed; stopped at E03 (see below)** |
+| **Phase 2 F: schemes and incentives** | **In progress — F01 passed; stopped at F02 (see below)** |
+| **Phase 2 G: admin (users, roles, deactivate, audit)** | **Not started** |
+| **Phase 2 H: reports and dashboards vs data** | **Not started** |
 | **PHASE2-REPORT.md** | **Not written** (planned for after E–H) |
 | **Phase 3: every-button sweep** | **Not started** (plan in PROGRESS.md) |
 | **Phase 4: data integrity** | **Not started** |
 | **Final report** | **Not started** |
 
+## 3a. Phase 2 E–F: where testing stopped (2026-09-30)
+
+**Passed:**
+- **E01** — a distributor registered through the public sign-up form, was approved by Admin, and could then sign in.
+- **E02** — the new distributor's dashboard shows only its own data (no other partner's orders, invoices, or leads visible).
+- **F01** — a new scheme created by Admin behaves correctly for eligibility and discount calculation.
+
+**Stopped at E03 / F02** (placing an order as the newly approved distributor, then checking the scheme/incentive applies to it). Reason: ran low on session usage mid-story, not a test failure or blocker.
+
+**Open question, not yet investigated:** when E03 was reached, the newly approved distributor's order screen did not appear to list the TEST products used elsewhere in this test programme (e.g. `TEST Neem Face Wash 100ml`). Before continuing E03/F02, check **whether this is correct behaviour by design** (e.g. products scoped to a specific distributor/territory/price-list assignment that a brand-new partner doesn't have yet) **or a bug** (a newly approved distributor should see the full active product catalogue, same as any other distributor, and doesn't). This needs a straight comparison against an existing working distributor account (`TEST_DISTRIBUTOR` in `.env.test-accounts.local`) to see whether it sees the same products or more.
+
+**Not started:** E03 (retry/continue), E04, E05, E06, F02 (retry/continue), F03, F04, and all of Phase 2 G and H.
+
 ## 4. Unresolved items
+
+**Minor notes from Phase 2 E–F, not fixed (all low severity):**
+- No confirmation prompt when Admin approves a partner registration (one click, no "are you sure").
+- Audit log actor mismatch on one sign-up flow: some rows show `System` as actor where the actual registrant's action would be more accurate/expected.
+- Scheme card grammar: "Expires in 1 days" (should be "1 day").
 
 **Test data:**
 - **TEST Herbal Raw Materials Co (TEST-V-1):** its balance is ₹3,839 below its records. Left as is, by decision. It is the only row in the vendor Balance check.
@@ -126,7 +146,7 @@ All data is **demo/TEST data**.
 - Tell the owner if auto mode comes back on.
 
 **Database changes:**
-- Each database change is a **new numbered migration** (next: `069`). Never edit old ones.
+- Each database change is a **new numbered migration** (next: `070`). Never edit old ones.
 - Apply with `npx -y supabase@2.117.0 db query --linked --project-ref qvckvvckkfvelhnxmmvp -f migrations/0NN_….sql`.
 - Add an entry to `migrations/README.md`.
 
@@ -148,11 +168,17 @@ All data is **demo/TEST data**.
 
 ## 6. Resume from here
 
-Nothing is in progress; the session ended cleanly after migration 068.
+**Phase 2 story E–F testing is mid-flight, stopped at E03/F02** (see section 3a). The session ended on low usage, not a blocker — this was a clean stop, not a crash.
 
-The owner's next decision is one of:
-- run **Phase 2 stories E–H** (then write PHASE2-REPORT.md);
+**To resume:**
+1. **First**, check the open product-list question from section 3a: sign in as `TEST_DISTRIBUTOR` (an established, already-approved account) and as the E03 test's newly-approved distributor account, and compare what each sees in the order/product screen. Confirm whether the difference (if any) is by design or a bug before writing it up.
+2. Then continue E03 (place the order) and F02 (confirm the scheme/incentive applied correctly to that order).
+3. Continue through E04–E06, F03–F04.
+4. Then Phase 2 G (admin/roles/audit) and H (reports/dashboards vs. data).
+5. Write `PHASE2-REPORT.md` once E–H are done.
+
+Other than resuming E–F, the owner's next decision is one of:
 - fix more of the leftovers in section 4 first;
 - or look into the slow-save timing log.
 
-Ask which before starting.
+Ask which before starting anything not listed above.

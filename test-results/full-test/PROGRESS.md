@@ -188,8 +188,8 @@ For each role:
 ### E. Partner portal
 | ID | Step | Status |
 |---|---|---|
-| P2-E01 | Register a new TEST distributor; admin approves | not started |
-| P2-E02 | Distributor checks the dashboard, price list, schemes, own orders, ledger and stock | not started |
+| P2-E01 | Register a new TEST distributor; admin approves | pass |
+| P2-E02 | Distributor checks the dashboard, price list, schemes, own orders, ledger and stock | pass (but can read the password-bearing scheme — CRITICAL finding) |
 | P2-E03 | Distributor places an order; the price is taken from the tier | not started |
 | P2-E04 | Distributor raises a complaint; Customer Support resolves it | not started |
 | P2-E05 | Distributor raises a claim; Accounts settles; expense shows "Booked automatically" | not started |
@@ -198,7 +198,7 @@ For each role:
 ### F. Schemes and incentives
 | ID | Step | Status |
 |---|---|---|
-| P2-F01 | Create a TEST scheme (discount %, and free goods) | not started |
+| P2-F01 | Create a TEST scheme (discount %, and free goods) | pass |
 | P2-F02 | Qualifying orders: incentive amount correct; created at order time (D-23) | not started |
 | P2-F03 | Mark Paid; free goods stock movement (D-23) | not started |
 | P2-F04 | "Book them" (missing payouts): amounts correct, not attributed to the clicker | not started |
@@ -308,6 +308,18 @@ Phase 0 adds 7 items, all pass.
 
 - Group 1 (B10 + A09): migrations 061 and 062, commit 96a31e8, deployed and verified live. Details in FIX-BATCH-5.md. Group 1 follow-up (063, c35de96) and Group 2 (064, 065, 67f2e0d) deployed and verified live. Group 3 investigated (not reproduced; see FIX-BATCH-5.md). Group 4 a–d done (066, 067, b1fe5ec), deployed and verified live. GRN-17 explained (Admin User's test PO-10, deleted after receipt). **Batch 5 complete; next decision is the owner's (Phase 2 E–H or more fixes).**
 - Scratch scripts: `scratchpad/b5/` (the temp scratchpad was wiped once; helpers were recreated there).
+
+## Phase 2 E–H run (started 2026-09-30)
+
+- E01 pass: TEST P2E Distributor 35167 = DIST-1790706652956 / user U1790706652956, registered on the public page, approved by Admin. Login kept in scratchpad `p3/newdist.json`; the password is never printed.
+- E02 pass. **CRITICAL finding:** scheme SCH-1790405906612's name contains three accounts' passwords, and every partner can read it (database, plus the Schemes "All" filter and Export).
+- F01 pass: scheme SCH-1790706947005, "TEST P2F Neem 5 pct 35167" (5% on TEST Neem, distributors, min ₹500, 30 Sept → 31 Oct).
+- **STOPPED at E03/F02** (the new distributor's first order). The ordering script (`p3/f2.mjs`) failed 3 times; stopped per the rules.
+  - Cause of the last failure: the partner's Place New Order list did not offer the TEST products, so nothing was added and no order request was sent.
+  - Earlier failures: empty CLI replies (the read helper now retries).
+- Not yet run: E03, E04, E05, E06, F02, F03, F04; G, H.
+- **CRITICAL finding fixed 2026-09-30 (migration 069):** scheme SCH-1790405906612 renamed to "TEST Distributor Scheme 5pct"; the three exposed demo account passwords (newdistributor@, demodealer@, demoretailer@gmail.com) rotated and audit-logged. See SESSION-STATE.md.
+- Open question before resuming E03/F02: does the newly-approved distributor correctly see TEST products, or only certain products by design? Not yet investigated — check against `TEST_DISTRIBUTOR` first.
 
 ## Phase 1 fixes: done (2026-09-28)
 
