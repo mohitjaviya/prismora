@@ -160,4 +160,70 @@ Every save was re-read from the database, polling for up to 30–40 s; the scree
 
 O113 and O118 are untouched.
 
-## Next: group E–F. Stopped here for the owner's decision on fixing the CRITICAL findings first.
+## Group E–F: done (2026-09-30 and 2026-10-02)
+
+Tested on the live site as each real role (own logins), every save re-read from the database. Nothing was fixed. New records are named TEST…. Per-test detail: `phase2/story-E*.json`, `phase2/story-F*.json`; screenshots in `screenshots/phase2/`.
+
+**The open question from the last session is answered:** the new distributor *does* see the TEST products. The partner order list shows the whole catalogue (no filter by status, category or partner type) and the new distributor can read all 29 products. My test script chose options by exact product name, but each option is valued by product id and labelled "name — ₹price". It was a test-script fault, not an app bug.
+
+| Story | Planned | Pass | Fail | Not run |
+|---|---|---|---|---|
+| E. Partner portal | 6 | 5 (E01–E05) | 0 | 1 (E06 as planned: partner confirms receipt; I ran the "Booked automatically" label check instead, as you scoped it, and it passed) |
+| F. Schemes and incentives | 4 | 3 (F01, F03, F04) | 1 (F02) | 0 (but F03's free-goods stock movement was not tested) |
+
+### Failures and findings, most severe first
+
+| # | Severity | Test | Role / screen | What happens | Expected | Evidence |
+|---|---|---|---|---|---|---|
+| 1 | **HIGH** | P2-F02 | New DISTRIBUTOR, order screen | The distributor places O145 (₹1,400, with ₹1,100 of TEST Neem). It qualifies for the active scheme (5% on TEST Neem, min ₹500, valid 30 Sept–31 Oct), but **no incentive is created**, with no message to anyone. | A ₹55 incentive, created at order time. | Incentives are written by the *placing user's browser*, and the database allows writes to `distributor_incentives` only for staff with Incentives access, never partners (policy `distributor_incentives_write`). The partner's own insert of the ₹55 row: **403** "violates row-level security". The partner's log and activity-event writes are refused too, so nothing is recorded. The same order placed **by Admin for the distributor (O146)** produced the correct ₹55 incentive. So **every scheme incentive on partner-placed orders is silently missed.** Screenshots: `E03-new-distributor-order-placed.png`, `F02-admin-order-saved.png`. |
+| 2 | MEDIUM | P2-E03c | New DISTRIBUTOR, sign-up and order | A self-registered distributor has **no address, pincode or territory** (the sign-up form has no address field), so its first order O145 has an empty delivery address and no assignee. Moving it to Processing is refused ("needs a delivery address and a pincode", 062), and the partner order screen has no address field. | The order carries an address, or the partner is asked for one. | O145: `deliveryAddress ""`, `assignedTo null`; Admin PATCH → Processing: HTTP 400. Staff must add the address on the order. |
+| 3 | MEDIUM | P2-E05 | New DISTRIBUTOR, Claims; ACCOUNTS | The claim form accepts any amount ≥ 1 against any of the partner's orders. The distributor claimed ₹55 on O145, which earned **no** incentive (finding 1), and Accounts could settle it, which **booked a real ₹55 expense (EXP-CLM-1790930578599)**. Nothing checks the claim against an earned incentive. | The claim is tied to what the scheme actually earned. | CLM-1790930578599 Pending → Settled; the expense row shows "Booked automatically". |
+| 4 | LOW | P2-E02 | New DISTRIBUTOR, database | Partners can read **every scheme row** at the database level: Inactive ones and ones meant for Dealers or Retailers only. The screen hides them, which is how the password-bearing scheme name got exposed (since fixed, migration 069). | Only the schemes that apply to the partner. | The new distributor's token read both existing schemes (one Inactive). |
+| 5 | LOW | P2-E04 | New DISTRIBUTOR, Complaints | A complaint raised by a distributor is **assigned to the distributor's own user** (CMP-4 `assignedTo U1790706652956`), not to a support person or nobody. | Unassigned, or a support assignee. | The database row. |
+| 6 | LOW | P2-F03 | ACCOUNTS, Expenses | Accounts can delete an auto-booked payout's expense with only the generic "Delete this expense record?". The incentive stays Paid and shows as a missing payout until someone presses "Book them". | A warning that the expense belongs to a paid payout. | EXP-INC-… deleted; incentive stayed Paid. |
+| – | Known | (SESSION-STATE §4) | | No confirmation when Admin approves a partner; audit actor "System" vs the registrant on sign-up; "Expires in 1 days". Still tracked, not fixed. | | |
+
+### What passed
+
+- **E01:** the registration was Pending (distributor and user); signing in while Pending is refused ("Your account is awaiting admin approval"); Admin's Approve made both Active; the distributor then signed in to its own dashboard. Audit rows: the sign-up as "System" and the registrant, then "TEST Admin … via approval of distributors DIST-…".
+- **E02:** the new distributor sees only its own data.
+  - **Through its own token:** it reads 1 distributor row, 1 user row, no orders, invoices, payments, leads, complaints or other partners' data.
+  - **On screen:** Dashboard, Price List, Schemes, Orders, Ledger and Stock open, and Leads, Accounting and Distributors send it back to its dashboard.
+- **E03:** the order was priced by the database at the distributor tier (10 × ₹110 + 2 × ₹150 = ₹1,400, **12 units**, Pending) and **visible** to Admin, Super Admin, Director, Sales Manager, Accounts, Warehouse, Dispatch, Customer Support and Purchase Manager (Purchases view); **hidden** from Sales Exec 1/2, Sales and the other distributors. The new distributor sees only its own.
+- **E04:** CMP-4 was raised from the distributor's screen (customer name pre-filled and locked) and is visible to Admin, Customer Support, Sales Manager, Sales Exec and Director. Customer Support moved it Registered → Under Review → Resolved with notes. Each step is audited as "TEST Customer Support", and the distributor reads the resolution through its own login.
+- **E05:** CLM-1790930578599 (₹55, TEST scheme, order O145) was raised by the distributor, then Settled by Accounts. That booked EXP-CLM-1790930578599 (Scheme Claim ₹55), audited as TEST Accounts.
+- **"Booked automatically" (E06 label check):** on Accounting → Expenses, **exactly 2 of 14 rows** carry the label: EXP-INC-… (an old incentive) and EXP-CLM-… (this claim). Field expenses (EXP-FLD-…) and manually entered rows show the person. No non-system row is mislabelled.
+- **F01:** the scheme (SCH-1790706947005, 5% on TEST Neem, min ₹500, 30 Sept–31 Oct) was saved exactly as entered.
+- **F02, staff path:** the incentive for Admin's order O146 (₹1,100) is **₹55 = 5% × ₹1,100** (only the TEST Neem lines count), status Earned, created at order time.
+- **F03:** Accounts marked it Paid, which booked EXP-INC-… ₹55 ("Scheme Incentive"). Accounts then deleted that expense, which leaves a Paid payout with no expense. Admin's Accounting banner then said "One payout is missing from the books — ₹55", and **"Book them" booked 1 payout worth ₹55**, the incentive's own value.
+- **F04:** the booked expense has `createdBy` blank and `assignedTo` blank. Admin (the person who pressed) is not credited anywhere on the row, and it reads "Booked automatically". The audit log does name the person who pressed (TEST Admin created it), which is correct. The database's last-changed stamp (`updatedBy`) is Admin, which feeds "Last changed by" and not the Recorded-by column.
+- **The distributor sees its incentive** (₹55, Paid, on O146) through its own login.
+
+### Database checks at the end of E–F
+
+- **Balance check, read with the Accounts login:** partner balances all match, vendor balances all match, and the distributor's balance is ₹0. No negative stock. Audit rows without a person in the last 3 hours: 0.
+- **Paid incentives or settled claims with no expense:** 0.
+- **Correction to my earlier readings:** the drift functions answer only a signed-in Accounting viewer. The "0 drift rows" lines that I took with the plain SQL role in earlier stories could not have shown a drift. The Accounting panel readings in Accounts' browser ("All balances match") are the valid ones, and the Accounts-token reading above confirms the current state.
+- **Vendors:** TEST-V-1 no longer drifts. On 2026-10-01 the owner's own "Account" user ran the vendor Correct balance tool on it (₹1,000 → ₹4,839), and Admin User received two Janki receipts (GRN-18 ₹20,000 via PO-10, GRN-19 ₹2,000 via PO-11), which moved Janki to ₹1,43,500 with its records.
+
+### Test data created in E–F (all TEST)
+
+| Type | Records |
+|---|---|
+| Distributor | TEST P2E Distributor 35167 = DIST-1790706652956, user U1790706652956, login `test.p2e.dist.35167@prismora.test` (password only in `.env.test-accounts.local`) |
+| Scheme | SCH-1790706947005 |
+| Orders | O145 (Pending, ₹1,400, no address), O146 (Pending, ₹1,100) |
+| Incentive | INC-1790930000025-SCH-1790706947005 (Paid) |
+| Complaint | CMP-4 (Resolved) |
+| Claim | CLM-1790930578599 (Settled) |
+| Expenses | EXP-CLM-1790930578599, EXP-INC-1790930000025-SCH-1790706947005 |
+
+### Suggested fix order (for what E–F found)
+
+1. **F02:** make incentive creation a database function that runs when a partner order is created or delivered (as the partner-order pricing already is), so partner-placed orders earn incentives and a refused write can't be silent. A backfill for existing partner orders that qualified would then be a decision for the owner.
+2. **E03 address:** carry the address from a partner's registration (or ask for it on the first order).
+3. **E05 claims:** tie a claim to the incentive it comes from, or check the amount against what was earned.
+4. **Scheme rows:** limit partners' read access to schemes that apply to them.
+
+## Next: stories G–H. Waiting for "continue".
+

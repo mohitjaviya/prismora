@@ -190,18 +190,18 @@ For each role:
 |---|---|---|
 | P2-E01 | Register a new TEST distributor; admin approves | pass |
 | P2-E02 | Distributor checks the dashboard, price list, schemes, own orders, ledger and stock | pass (but can read the password-bearing scheme — CRITICAL finding) |
-| P2-E03 | Distributor places an order; the price is taken from the tier | not started |
-| P2-E04 | Distributor raises a complaint; Customer Support resolves it | not started |
-| P2-E05 | Distributor raises a claim; Accounts settles; expense shows "Booked automatically" | not started |
-| P2-E06 | Distributor confirms receipt of a delivered order | not started |
+| P2-E03 | Distributor places an order; the price is taken from the tier | pass (order created, priced and visible correctly; no address on a self-registered partner) |
+| P2-E04 | Distributor raises a complaint; Customer Support resolves it | pass |
+| P2-E05 | Distributor raises a claim; Accounts settles; expense shows "Booked automatically" | pass |
+| P2-E06 | Distributor confirms receipt of a delivered order | not run as planned (partner confirms receipt of a delivered order needs a delivered order for the new distributor); the "Booked automatically" label check was run instead, at the owner's scope: pass |
 
 ### F. Schemes and incentives
 | ID | Step | Status |
 |---|---|---|
 | P2-F01 | Create a TEST scheme (discount %, and free goods) | pass |
-| P2-F02 | Qualifying orders: incentive amount correct; created at order time (D-23) | not started |
-| P2-F03 | Mark Paid; free goods stock movement (D-23) | not started |
-| P2-F04 | "Book them" (missing payouts): amounts correct, not attributed to the clicker | not started |
+| P2-F02 | Qualifying orders: incentive amount correct; created at order time (D-23) | fail on partner path (HIGH); pass on staff path |
+| P2-F03 | Mark Paid; free goods stock movement (D-23) | pass for Mark Paid + Book them (Discount incentive, ₹55); free-goods stock movement NOT tested (no free-goods scheme created) |
+| P2-F04 | "Book them" (missing payouts): amounts correct, not attributed to the clicker | pass |
 
 ### G. Admin
 | ID | Step | Status |
@@ -317,7 +317,8 @@ Phase 0 adds 7 items, all pass.
 - **STOPPED at E03/F02** (the new distributor's first order). The ordering script (`p3/f2.mjs`) failed 3 times; stopped per the rules.
   - Cause of the last failure: the partner's Place New Order list did not offer the TEST products, so nothing was added and no order request was sent.
   - Earlier failures: empty CLI replies (the read helper now retries).
-- Not yet run: E03, E04, E05, E06, F02, F03, F04; G, H.
+- **E–F finished 2026-10-02** (product-list question answered: a test-script fault, not an app issue; the partner list shows every product, valued by id). Results and findings are in PHASE2-PROGRESS.md. E01–E05 pass; F01, F03, F04 pass; **F02 fails (HIGH): partner-placed orders create no incentive.** New distributor login (TEST_P2E_DIST_*) is in `.env.test-accounts.local`.
+- Not yet run: G, H (and E06 as planned, F03 free goods).
 - **CRITICAL finding fixed 2026-09-30 (migration 069):** scheme SCH-1790405906612 renamed to "TEST Distributor Scheme 5pct"; the three exposed demo account passwords (newdistributor@, demodealer@, demoretailer@gmail.com) rotated and audit-logged. See SESSION-STATE.md.
 - Open question before resuming E03/F02: does the newly-approved distributor correctly see TEST products, or only certain products by design? Not yet investigated — check against `TEST_DISTRIBUTOR` first.
 

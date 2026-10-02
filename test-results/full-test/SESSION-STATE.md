@@ -1,4 +1,4 @@
-# PRISMORA: session state and hand-over (last updated 2026-09-30)
+# PRISMORA: session state and hand-over (last updated 2026-10-02)
 
 Written so a future session with no memory of this project can pick up.
 
@@ -81,8 +81,8 @@ All data is **demo/TEST data**.
 | Phase 2 C: procure to stock | Done (9/9) |
 | Phase 2 D: field sales day | Done (9/9) |
 | Batch 5 fixes | Each tested as the real role through the database and the screen, locally and on live |
-| **Phase 2 E: partner portal** | **In progress — E01, E02 passed; stopped at E03 (see below)** |
-| **Phase 2 F: schemes and incentives** | **In progress — F01 passed; stopped at F02 (see below)** |
+| **Phase 2 E: partner portal** | **Done 2026-10-02: E01–E05 pass** (E06 as planned, a partner confirming receipt, not run; the "Booked automatically" label check was run and passed). See 3a. |
+| **Phase 2 F: schemes and incentives** | **Done 2026-10-02: F01, F03, F04 pass; F02 FAILS (HIGH)** (free-goods stock movement not tested). See 3a. |
 | **Phase 2 G: admin (users, roles, deactivate, audit)** | **Not started** |
 | **Phase 2 H: reports and dashboards vs data** | **Not started** |
 | **PHASE2-REPORT.md** | **Not written** (planned for after E–H) |
@@ -90,18 +90,37 @@ All data is **demo/TEST data**.
 | **Phase 4: data integrity** | **Not started** |
 | **Final report** | **Not started** |
 
-## 3a. Phase 2 E–F: where testing stopped (2026-09-30)
+## 3a. Phase 2 E–F: results (2026-10-02)
+
+Full write-up: `PHASE2-PROGRESS.md`, section "Group E–F". In short:
+
+**The product-list question is answered:** a newly approved distributor *does* see the TEST products (the partner order list shows the whole catalogue). The earlier stop was a test-script fault: options are valued by product id and labelled "name — ₹price".
+
+**Findings (nothing fixed; for a later fix batch):**
+- **HIGH, F02:** partner-placed orders create **no scheme incentive**. Incentives are written by the placing user's browser, and the database allows writes to `distributor_incentives` only for staff with Incentives access, never partners, so the write is refused silently. The same order placed by Admin for the distributor produced the correct ₹55. Suggested: create incentives in the database when a partner order is created or delivered.
+- **MEDIUM:** a self-registered partner has no address, pincode or territory, so its first order has an empty delivery address and no assignee and can't be sent to Processing (062's rule).
+- **MEDIUM:** a scheme claim isn't tied to an earned incentive (any amount accepted; the ₹55 claim on an order with no incentive was settled and booked a real expense).
+- **LOW:** partners can read every scheme row at the database level (Inactive, and Dealer/Retailer-only).
+- **LOW:** a distributor's complaint is assigned to the distributor's own user.
+- **LOW:** Accounts can delete an auto-booked payout's expense with only a generic confirm.
 
 **Passed:**
-- **E01** — a distributor registered through the public sign-up form, was approved by Admin, and could then sign in.
-- **E02** — the new distributor's dashboard shows only its own data (no other partner's orders, invoices, or leads visible).
-- **F01** — a new scheme created by Admin behaves correctly for eligibility and discount calculation.
+- Registration, approval and sign-in (E01).
+- The distributor sees only its own data (E02).
+- Order created and priced correctly, and visible only to the right roles (E03).
+- Complaint raised and resolved by Customer Support (E04).
+- Claim raised and settled by Accounts (E05).
+- "Booked automatically" is on exactly the 2 system-made expenses and no others.
+- F01: the scheme was saved exactly as entered.
+- F02, staff path: the incentive is ₹55 = 5% × ₹1,100.
+- F03: "Mark Paid" and "Book them" correct (₹55).
+- F04: the booking is not credited to the person who pressed it.
 
-**Stopped at E03 / F02** (placing an order as the newly approved distributor, then checking the scheme/incentive applies to it). Reason: ran low on session usage mid-story, not a test failure or blocker.
+**Test data left (all TEST):** TEST P2E Distributor 35167 (DIST-1790706652956; login `TEST_P2E_DIST_*` in `.env.test-accounts.local`), scheme SCH-1790706947005, orders O145 and O146 (Pending), incentive INC-1790930000025-SCH-1790706947005 (Paid), CMP-4, CLM-1790930578599, expenses EXP-CLM-… and EXP-INC-….
 
-**Open question, not yet investigated:** when E03 was reached, the newly approved distributor's order screen did not appear to list the TEST products used elsewhere in this test programme (e.g. `TEST Neem Face Wash 100ml`). Before continuing E03/F02, check **whether this is correct behaviour by design** (e.g. products scoped to a specific distributor/territory/price-list assignment that a brand-new partner doesn't have yet) **or a bug** (a newly approved distributor should see the full active product catalogue, same as any other distributor, and doesn't). This needs a straight comparison against an existing working distributor account (`TEST_DISTRIBUTOR` in `.env.test-accounts.local`) to see whether it sees the same products or more.
+**Not started:** Phase 2 G (admin: users, roles, deactivate, audit) and H (reports and dashboards vs data).
 
-**Not started:** E03 (retry/continue), E04, E05, E06, F02 (retry/continue), F03, F04, and all of Phase 2 G and H.
+**Caveat on earlier balance checks:** `partner_balance_drift()` and `vendor_balance_drift()` answer only a signed-in Accounting viewer. A reading taken with the plain SQL role (the supabase CLI) is always empty, so the "0 drift rows" lines taken that way in earlier stories were not evidence. Valid readings are the Accounting panel in Accounts' browser and `rpc` calls with the Accounts token. The current state was re-read properly on 2026-10-02: all partner and vendor balances match.
 
 ## 4. Unresolved items
 
@@ -111,7 +130,7 @@ All data is **demo/TEST data**.
 - Scheme card grammar: "Expires in 1 days" (should be "1 day").
 
 **Test data:**
-- **TEST Herbal Raw Materials Co (TEST-V-1):** its balance is ₹3,839 below its records. Left as is, by decision. It is the only row in the vendor Balance check.
+- **TEST Herbal Raw Materials Co (TEST-V-1):** RESOLVED by the owner's own "Account" user on 2026-10-01, who ran the vendor Correct balance tool on it (₹1,000 → ₹4,839). The vendor Balance check is now clean. (Admin User also received two Janki receipts, GRN-18 and GRN-19, which moved Janki to ₹1,43,500, matching its records.)
 - **GRN-1 and GRN-2** (21 Sept, "janki herbals", ₹16,500, no PO): not attributed to any vendor. Not confirmed as Janki's, so not attached.
 - **GRN-17's Aloevera batch "abc765"** expired on its receipt date, so it was never sellable.
 
@@ -168,17 +187,11 @@ All data is **demo/TEST data**.
 
 ## 6. Resume from here
 
-**Phase 2 story E–F testing is mid-flight, stopped at E03/F02** (see section 3a). The session ended on low usage, not a blocker — this was a clean stop, not a crash.
+**Phase 2 E–F is finished (section 3a).** Next is **Phase 2 G (admin: create a user per role type, edit one, change a role's permissions and confirm it takes effect on refresh, deactivate and reactivate; every action audited with the admin's name and old → new) and H (every dashboard and report number against the database)**, then write `PHASE2-REPORT.md`. Details of the planned tests are in `PROGRESS.md` (rows P2-G01 onward, P2-H01 onward).
 
-**To resume:**
-1. **First**, check the open product-list question from section 3a: sign in as `TEST_DISTRIBUTOR` (an established, already-approved account) and as the E03 test's newly-approved distributor account, and compare what each sees in the order/product screen. Confirm whether the difference (if any) is by design or a bug before writing it up.
-2. Then continue E03 (place the order) and F02 (confirm the scheme/incentive applied correctly to that order).
-3. Continue through E04–E06, F03–F04.
-4. Then Phase 2 G (admin/roles/audit) and H (reports/dashboards vs. data).
-5. Write `PHASE2-REPORT.md` once E–H are done.
+**Before testing G–H:**
+- The test browser driver in the scratchpad gets wiped between sessions: recreate a small Chrome DevTools driver (sign in through `#login-email-address` / `#login-password`).
+- Logins are in `.env.test-accounts.local`: `TEST_<ROLE>_EMAIL` / `_PASSWORD`, and `TEST_P2E_DIST_*` for the new distributor.
+- Read balance-check functions with the Accounts login, not the plain SQL role (see the caveat in 3a).
 
-Other than resuming E–F, the owner's next decision is one of:
-- fix more of the leftovers in section 4 first;
-- or look into the slow-save timing log.
-
-Ask which before starting anything not listed above.
+**Owner decisions pending:** whether to fix the E–F findings (section 3a) before or after G–H. Ask which before starting anything beyond G–H.
