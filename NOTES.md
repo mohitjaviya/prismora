@@ -2,7 +2,7 @@
 
 Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `FIX-BATCH-5.md`.
 
-## Fixed (all live, migrations 040–070)
+## Fixed (all live, migrations 040–072)
 - Security/RLS: reps see own data; partners locked down; deactivated users cut off (043–045)
 - Orders: invoiced = locked, no cancel/delete; stages enforced in DB; one order per lead (061–063, 066)
 - Saves: leads numbered by DB; save journal + "Leave site?" + SaveGuard banner (`utils/writeJournal.js`, `components/SaveGuard.jsx`) (064)
@@ -11,6 +11,10 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 - Double-click guards (Leads/Orders), confirms on Mark as Paid / Cancel Order
 - Password leak: scheme `SCH-1790405906612` renamed, 3 demo passwords rotated (069)
 - Fix batch 6 (070, commit 0695930, live 2026-10-02): F02 incentives raised by DB trigger `orders_earn_incentives` (partner orders now earn; browser no longer writes them); backorder invoice billed to the parent's company via `splitFromOrderId`; `order_one_per_lead` re-checked on `leadId` UPDATE; parent can't be cancelled/deleted while a backorder is open (`order_backorder_open_guard`, also on the Orders screen). 32/32 role checks in `test-results/full-test/fix-batch-6/api.mjs`, confirmed in the DB.
+
+- Fix batch 7 (071+072, create-user v6, commit f5e8924, live 2026-10-02): G findings 1–4. DB guards: only a Super Admin grants Super Admin/Admin/Director or touches a Super Admin account/role; nobody deletes own account or the last active Super Admin; a Settings-full role can't remove its own Settings/switch off/delete itself; deleting a profile deletes its login. create-user checks the caller's current status and real Settings=full permission (a Director is refused), that the role exists, password = 8+ with letter and number. Delete User waits for the database and shows refusals; Add User form offers an Admin only the roles the server allows; Super Admin rows have no controls for non-Super-Admins. Proof: `guards-dryrun.mjs` (33 scenarios as real roles in an always-rolled-back transaction), `g71-api.mjs` 51/51, browser checks `g72-ui*.mjs`.
+- **Incident during batch 7 (resolved):** migration 071 as first applied did NOT work (guards were SECURITY DEFINER, so their `current_user` test let everyone through; fixed by 072). My follow-up API test ran against the real rows and succeeded in: editing then deleting the real Super Admin role row, promoting TEST Admin to Super Admin, and creating a TEST Super Admin profile. All restored the same hour from backup `2026-10-02T10-42-24-127Z` (role row re-inserted, TEST Admin back to Admin, test rows deleted); verified: 15 roles, Super Admin settings=full, only 3 real admin accounts. Lesson: test destructive guards first in a rolled-back transaction (`guards-dryrun.mjs`), never on real role/user rows.
+- Known gap (not fixed): the login is matched to a profile by e-mail, so a profile whose e-mail was edited no longer matches its login, and deleting it leaves the original login behind (and the user is locked out in the meantime). Consider locking e-mail edits in Team Members.
 
 ## Open
 - HIGH: slow saves (5–40 s, 4–26 s after sign-in); cause unknown, not reproducible now.
@@ -29,7 +33,7 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 - Test-only phases: report findings, fix only on owner approval.
 
 ## Next (priority)
-1. Phase 2 H (every dashboard/report number vs the database); write `PHASE2-REPORT.md`. Phase 2 G is done (2026-10-02), waiting for owner's decision on the G findings.
+1. Phase 2 H (every dashboard/report number vs the database); write `PHASE2-REPORT.md`. Phase 2 G is done and its findings fixed (2026-10-02).
 2. Phase 3 (every-button sweep), Phase 4 (integrity); final report.
 3. Later batch: slow saves, self-registered partner address/territory, claims tied to earned incentives, missing confirms, Phase 1 leftovers.
 4. Optional: delete the batch 6 TEST rows on owner's OK.
