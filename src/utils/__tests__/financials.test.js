@@ -26,9 +26,10 @@ describe('profitAndLoss (Accounting\'s definition)', () => {
     expect(r.invoicedPaid).toBeCloseTo(1000 + 2560 * 280 / 2951, 6);
     expect(r.gstCollected).toBeCloseTo(120 + 391 * 280 / 2951, 6);
   });
-  it('takes off credit notes, except those against a proforma', () => {
-    expect(r.creditNoteValue).toBe(150);
-    expect(r.netSales).toBeCloseTo(r.invoicedPaid - 150, 6);
+  it('takes off credit notes without their GST, except those against a proforma', () => {
+    // C1: 100 against a 1000 + 120 invoice → 100 × 1000/1120; C3 has no invoice → 50 as recorded
+    expect(r.creditNoteValue).toBeCloseTo(100 * 1000 / 1120 + 50, 6);
+    expect(r.netSales).toBeCloseTo(r.invoicedPaid - (100 * 1000 / 1120 + 50), 6);
   });
   it('profit is net sales less expenses less goods (received − returned)', () => {
     expect(r.purchaseCost).toBe(630);

@@ -219,7 +219,7 @@ export default function Reports() {
           });
           return [
             { metric: 'Invoiced and Paid (ex-GST)', value: paise(r.invoicedPaid) },
-            { metric: 'Less Credit Notes', value: -paise(r.creditNoteValue) },
+            { metric: 'Less Credit Notes (ex-GST)', value: -paise(r.creditNoteValue) },
             { metric: 'Net Sales', value: paise(r.netSales) },
             { metric: 'Expenses', value: paise(r.expenses) },
             { metric: 'Cost of Goods Purchased', value: paise(r.purchaseCost) },

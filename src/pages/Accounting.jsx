@@ -692,7 +692,7 @@ const Accounting = () => {
               <div className="mt-2 text-[11px] text-slate-500 leading-relaxed">
                 <div>Invoiced and paid: {formatCurrency(totalIncome)}</div>
                 {creditNoteValue > 0 && (
-                  <div className="text-amber-400">Less credit notes: &minus;{formatCurrency(creditNoteValue)}</div>
+                  <div className="text-amber-400">Less credit notes (ex-GST): &minus;{formatCurrency(creditNoteValue)}</div>
                 )}
                 {/* Shown apart from the figure above, because it is not the
                     business's money: it is collected and paid over. */}

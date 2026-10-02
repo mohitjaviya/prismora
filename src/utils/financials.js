@@ -8,7 +8,7 @@
  * payments. The owner's decisions, applied everywhere through this file:
  *
  *  · Revenue is Accounting's net sales: what tax invoices have been paid,
- *    without the GST (it is not the business's money), less credit notes.
+ *    without the GST (it is not the business's money), less credit notes (also without GST).
  *    Profit is net sales less expenses less the goods bought.
  *  · A proforma is not a tax invoice. It counts in no sales total, no
  *    receivable and no GST figure; its value is shown on its own as
@@ -41,6 +41,20 @@ export const salesCreditNotes = (creditNotes, invoices) => {
   return (creditNotes || []).filter(cn => !(cn?.invoiceId && proformaIds.has(cn.invoiceId)));
 };
 
+/**
+ * A credit note's value without GST. Notes are issued at the gross amount
+ * (₹5,040 against a ₹4,500 + ₹540 invoice), while sales are counted without
+ * GST, so taking the gross off overstated the returns. The GST part comes out
+ * in the proportion of the note's own invoice; a note against no invoice has
+ * no rate to go by and counts as recorded.
+ */
+export const creditNoteExGst = (cn, invoices) => {
+  const amount = n(cn?.amount);
+  const inv = cn?.invoiceId ? (invoices || []).find(i => i.id === cn.invoiceId) : null;
+  const total = inv ? invoiceTotal(inv) : 0;
+  return total > 0 ? amount * (n(inv.amount) / total) : amount;
+};
+
 /** Cost of goods: received on GRNs less goods sent back. Never below zero. */
 export const purchaseCostOf = (grn, purchaseReturns) => {
   const received = sum(grn, g => sum(g.items, i => n(i.quantity) * n(i.unitCost)));
@@ -56,7 +70,7 @@ export const profitAndLoss = ({ invoices = [], creditNotes = [], expenses = [], 
   const tax = (invoices || []).filter(i => !isProforma(i));
   const invoicedPaid = sum(tax, paidExGst);
   const gstCollected = sum(tax, paidGst);
-  const creditNoteValue = sum(salesCreditNotes(creditNotes, invoices), cn => n(cn.amount));
+  const creditNoteValue = sum(salesCreditNotes(creditNotes, invoices), cn => creditNoteExGst(cn, invoices));
   const netSales = invoicedPaid - creditNoteValue;
   const expenseValue = sum(expenses, e => n(e.amount));
   const goods = purchaseCostOf(grn, purchaseReturns);
@@ -122,7 +136,7 @@ export const partnerBalances = (...lists) => {
 
 /**
  * Net sales by month (Jan…Dec keys): paid tax-invoice value without GST in
- * the invoice's month, less credit notes in theirs.
+ * the invoice's month, less credit notes (without GST) in theirs.
  */
 export const netSalesByMonth = (invoices, creditNotes) => {
   const out = {};
@@ -132,7 +146,7 @@ export const netSalesByMonth = (invoices, creditNotes) => {
   });
   salesCreditNotes(creditNotes, invoices).filter(cn => cn.createdAt).forEach(cn => {
     const m = monthKey(cn.createdAt);
-    out[m] = (out[m] || 0) - n(cn.amount);
+    out[m] = (out[m] || 0) - creditNoteExGst(cn, invoices);
   });
   return out;
 };
