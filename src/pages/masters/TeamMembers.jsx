@@ -63,8 +63,10 @@ export default function TeamMembers() {
     if (editingUser) {
       // Supabase Auth only lets an account change its own password, so editing a
       // colleague saves their profile and leaves their password alone.
-      const { password, ...profileOnly } = payload;
-      updateUser(editingUser.id, editingUser.id === user?.id ? payload : profileOnly).then(ok => {
+      // The e-mail is never saved from here: it is what the person's sign-in is
+      // matched to, so changing the profile alone would lock them out (073).
+      const { password, email: _lockedEmail, ...profileOnly } = payload; // eslint-disable-line no-unused-vars
+      updateUser(editingUser.id, editingUser.id === user?.id && password ? { ...profileOnly, password } : profileOnly).then(ok => {
         if (!ok) { toast('The changes to ' + payload.name + ' were not saved — the database refused them.', 'error'); return; }
         if (password && editingUser.id !== user?.id) {
           toast('Profile saved. A password can only be changed by its own account holder, or reset from the Supabase dashboard.', 'success');
@@ -237,7 +239,7 @@ export default function TeamMembers() {
               </div>
               <form onSubmit={handleUserSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
                 <div><label htmlFor="teammembers-full-name" className={labelCls}>Full Name *</label><input id="teammembers-full-name" required type="text" value={userForm.name} onChange={e => setUserForm({ ...userForm, name: e.target.value })} placeholder="e.g. Rahul Sharma" className={inputCls} /></div>
-                <div><label htmlFor="teammembers-email-address" className={labelCls}>Email Address *</label><input id="teammembers-email-address" required type="email" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="rahul@prismora.com" className={inputCls} /></div>
+                <div><label htmlFor="teammembers-email-address" className={labelCls}>Email Address *</label><input id="teammembers-email-address" required type="email" disabled={!!editingUser} value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="rahul@prismora.com" className={inputCls + (editingUser ? ' opacity-60 cursor-not-allowed' : '')} />{editingUser && <p className="mt-1 text-[11px] text-slate-500">The e-mail is their sign-in and cannot be changed. For a different e-mail, add a new user and deactivate this one.</p>}</div>
                 <div><label htmlFor="teammembers-password" className={labelCls}>{editingUser ? 'New Password (optional)' : 'Password *'}</label><input id="teammembers-password" required={!editingUser} type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className={inputCls} /></div>
                 <div>
                   <label htmlFor="teammembers-role" className={labelCls}>Role *</label>
