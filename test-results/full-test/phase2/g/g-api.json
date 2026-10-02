@@ -1,0 +1,745 @@
+{
+ "tag": "817145",
+ "created": {
+  "sales_manager": {
+   "id": "U1790936820362",
+   "email": "test.g.sales_manager.817145@prismora.test",
+   "role": "Sales Manager"
+  },
+  "sales_executive": {
+   "id": "U1790936822015",
+   "email": "test.g.sales_executive.817145@prismora.test",
+   "role": "Sales Executive"
+  },
+  "purchase_manager": {
+   "id": "U1790936823124",
+   "email": "test.g.purchase_manager.817145@prismora.test",
+   "role": "Purchase Manager"
+  },
+  "warehouse_manager": {
+   "id": "U1790936824233",
+   "email": "test.g.warehouse_manager.817145@prismora.test",
+   "role": "Warehouse Manager"
+  },
+  "accounts": {
+   "id": "U1790936825768",
+   "email": "test.g.accounts.817145@prismora.test",
+   "role": "Accounts"
+  },
+  "dispatch_team": {
+   "id": "U1790936826753",
+   "email": "test.g.dispatch_team.817145@prismora.test",
+   "role": "Dispatch Team"
+  },
+  "customer_support": {
+   "id": "U1790936827764",
+   "email": "test.g.customer_support.817145@prismora.test",
+   "role": "Customer Support"
+  },
+  "sales": {
+   "id": "U1790936829716",
+   "email": "test.g.sales.817145@prismora.test",
+   "role": "Sales"
+  },
+  "director": {
+   "id": "U1790936839116",
+   "email": "test.g.director.817145@prismora.test",
+   "role": "Director"
+  },
+  "admin": {
+   "id": "U1790936840068",
+   "email": "test.g.admin.817145@prismora.test",
+   "role": "Admin"
+  },
+  "super_admin": {
+   "id": "U1790936841626",
+   "email": "test.g.super_admin.817145@prismora.test",
+   "role": "Super Admin"
+  },
+  "p_distributor": {
+   "id": "U1790936844278",
+   "email": "test.g.p_distributor.817145@prismora.test",
+   "role": "Distributor"
+  },
+  "p_dealer": {
+   "id": "U1790936845668",
+   "email": "test.g.p_dealer.817145@prismora.test",
+   "role": "Dealer"
+  },
+  "p_retailer": {
+   "id": "U1790936847170",
+   "email": "test.g.p_retailer.817145@prismora.test",
+   "role": "Retailer"
+  },
+  "weak": {
+   "id": "U1790936853220",
+   "email": "test.g.weak.817145@prismora.test",
+   "role": "Accounts"
+  },
+  "bydirector": {
+   "id": "U1790936856111",
+   "email": "test.g.bydirector.817145@prismora.test",
+   "role": "Accounts"
+  },
+  "bogus": {
+   "id": "U1790936857125",
+   "email": "test.g.bogus.817145@prismora.test",
+   "role": "TEST Bogus Role 817145"
+  },
+  "rolemember": {
+   "id": "U1790936923446",
+   "email": "test.g.rolemember.817145@prismora.test",
+   "role": "TEST G Role 817145"
+  },
+  "adminrole_member": {
+   "id": "U1790936930316",
+   "email": "test.g.adminrole_member.817145@prismora.test",
+   "role": "TEST G AdminRole 817145"
+  },
+  "byinactive": {
+   "id": "U1790936935743",
+   "email": "test.g.byinactive.817145@prismora.test",
+   "role": "Accounts"
+  }
+ },
+ "recs": {
+  "distributor": "TEST-G-DIST-817145",
+  "dealer": "TEST-G-DEAL-817145",
+  "retailer": "TEST-G-RET-817145"
+ },
+ "roleId": "TEST G Role 817145",
+ "adminRoleId": "TEST G AdminRole 817145",
+ "pend": "TEST-G-PEND-817145",
+ "out": [
+  {
+   "id": "G01 Admin creates a Sales Manager",
+   "pass": true,
+   "detail": "200 U1790936820362"
+  },
+  {
+   "id": "G01 Admin creates a Sales Executive",
+   "pass": true,
+   "detail": "200 U1790936822015"
+  },
+  {
+   "id": "G01 Admin creates a Purchase Manager",
+   "pass": true,
+   "detail": "200 U1790936823124"
+  },
+  {
+   "id": "G01 Admin creates a Warehouse Manager",
+   "pass": true,
+   "detail": "200 U1790936824233"
+  },
+  {
+   "id": "G01 Admin creates a Accounts",
+   "pass": true,
+   "detail": "200 U1790936825768"
+  },
+  {
+   "id": "G01 Admin creates a Dispatch Team",
+   "pass": true,
+   "detail": "200 U1790936826753"
+  },
+  {
+   "id": "G01 Admin creates a Customer Support",
+   "pass": true,
+   "detail": "200 U1790936827764"
+  },
+  {
+   "id": "G01 Admin creates a Sales",
+   "pass": true,
+   "detail": "200 U1790936829716"
+  },
+  {
+   "id": "G01 Admin creates a Manager",
+   "pass": true,
+   "detail": "200 U1790936833836"
+  },
+  {
+   "id": "G01 Admin may NOT create a Director",
+   "pass": true,
+   "detail": "403 Only a Super Admin can create an administrator."
+  },
+  {
+   "id": "G01 Admin may NOT create a Admin",
+   "pass": true,
+   "detail": "403 Only a Super Admin can create an administrator."
+  },
+  {
+   "id": "G01 Admin may NOT create a Super Admin",
+   "pass": true,
+   "detail": "403 Only a Super Admin can create an administrator."
+  },
+  {
+   "id": "G01 Super Admin creates a Director",
+   "pass": true,
+   "detail": "200 U1790936839116"
+  },
+  {
+   "id": "G01 Super Admin creates a Admin",
+   "pass": true,
+   "detail": "200 U1790936840068"
+  },
+  {
+   "id": "G01 Super Admin creates a Super Admin",
+   "pass": true,
+   "detail": "200 U1790936841626"
+  },
+  {
+   "id": "G01 Admin creates a Distributor login linked to its record",
+   "pass": true,
+   "detail": "200 linked to TEST-G-DIST-817145"
+  },
+  {
+   "id": "G01 Admin creates a Dealer login linked to its record",
+   "pass": true,
+   "detail": "200 linked to TEST-G-DEAL-817145"
+  },
+  {
+   "id": "G01 Admin creates a Retailer login linked to its record",
+   "pass": true,
+   "detail": "200 linked to TEST-G-RET-817145"
+  },
+  {
+   "id": "G01 a partner role without its record is refused",
+   "pass": true,
+   "detail": "400 A Distributor account has to be attached to a distributor record. Create it from that record's own screen."
+  },
+  {
+   "id": "G01 a staff role attached to a partner record is refused",
+   "pass": true,
+   "detail": "400 A staff account cannot be attached to a partner record."
+  },
+  {
+   "id": "G01 a second login for the same partner is refused",
+   "pass": true,
+   "detail": "409 test.g.p_distributor.817145@prismora.test can already sign in for that distributor."
+  },
+  {
+   "id": "G01 a login for a Pending partner is refused",
+   "pass": true,
+   "detail": "400 That dealer is pending. Approve it first, then create the login."
+  },
+  {
+   "id": "G01 a login for a record that does not exist is refused",
+   "pass": true,
+   "detail": "400 That dealer record does not exist."
+  },
+  {
+   "id": "G01 a password under 8 characters is refused",
+   "pass": true,
+   "detail": "400 The password must be at least 8 characters."
+  },
+  {
+   "id": "G01 server accepts an all-letters password (only the screen enforces letter+number)",
+   "pass": null,
+   "detail": "200 accepted"
+  },
+  {
+   "id": "G01 a duplicate e-mail is refused",
+   "pass": true,
+   "detail": "400 A user with this email address has already been registered"
+  },
+  {
+   "id": "G01 a Sales Manager cannot create accounts",
+   "pass": true,
+   "detail": "403 Only an administrator can create an account."
+  },
+  {
+   "id": "G01 a Sales Executive cannot create accounts",
+   "pass": true,
+   "detail": "403 Only an administrator can create an account."
+  },
+  {
+   "id": "G01 a Director (settings = none, no Team Members screen) CAN create accounts through the function",
+   "pass": null,
+   "detail": "200 created U1790936856111"
+  },
+  {
+   "id": "G01 server accepts a role name that does not exist in the roles table",
+   "pass": null,
+   "detail": "200 created U1790936857125"
+  },
+  {
+   "id": "G01 DB + sign-in: sales_manager (Sales Manager)",
+   "pass": true,
+   "detail": "row=Sales Manager/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: sales_executive (Sales Executive)",
+   "pass": true,
+   "detail": "row=Sales Executive/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: purchase_manager (Purchase Manager)",
+   "pass": true,
+   "detail": "row=Purchase Manager/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: warehouse_manager (Warehouse Manager)",
+   "pass": true,
+   "detail": "row=Warehouse Manager/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: accounts (Accounts)",
+   "pass": true,
+   "detail": "row=Accounts/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: dispatch_team (Dispatch Team)",
+   "pass": true,
+   "detail": "row=Dispatch Team/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: customer_support (Customer Support)",
+   "pass": true,
+   "detail": "row=Customer Support/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: sales (Sales)",
+   "pass": true,
+   "detail": "row=Sales/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: manager (Manager)",
+   "pass": true,
+   "detail": "row=Manager/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: director (Director)",
+   "pass": true,
+   "detail": "row=Director/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: admin (Admin)",
+   "pass": true,
+   "detail": "row=Admin/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: super_admin (Super Admin)",
+   "pass": true,
+   "detail": "row=Super Admin/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: p_distributor (Distributor)",
+   "pass": true,
+   "detail": "row=Distributor/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: p_dealer (Dealer)",
+   "pass": true,
+   "detail": "row=Dealer/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: p_retailer (Retailer)",
+   "pass": true,
+   "detail": "row=Retailer/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: weak (Accounts)",
+   "pass": false,
+   "detail": "row=Accounts/Active signin=400 Invalid login credentials sees-self=false"
+  },
+  {
+   "id": "G01 DB + sign-in: bydirector (Accounts)",
+   "pass": true,
+   "detail": "row=Accounts/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G01 DB + sign-in: bogus (TEST Bogus Role 817145)",
+   "pass": true,
+   "detail": "row=TEST Bogus Role 817145/Active signin=ok sees-self=true"
+  },
+  {
+   "id": "G02 Admin renames a user",
+   "pass": true,
+   "detail": "200 [{\"id\":\"U1790936822015\",\"name\":\"TEST G renamed 817145\",\"email\":\"test.g.sales_exe"
+  },
+  {
+   "id": "G02 Admin changes a user's role Sales Executive → Accounts",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "G02 Admin assigns a team to a manager",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "G02 a user cannot make themselves Admin",
+   "pass": true,
+   "detail": "403 rows=You can change only your own name. An administrator changes everything else."
+  },
+  {
+   "id": "G02 …and the DB still says Sales Executive",
+   "pass": true,
+   "detail": "Sales Executive"
+  },
+  {
+   "id": "G02 a user cannot rename someone else",
+   "pass": true,
+   "detail": "200 rows=0"
+  },
+  {
+   "id": "G02 a user may rename themselves",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "G02 a user cannot change their own status",
+   "pass": true,
+   "detail": "403 You can change only your own name. An administrator changes everything else."
+  },
+  {
+   "id": "G02 ESCALATION: Admin promotes a user to Super Admin by direct API call",
+   "pass": null,
+   "detail": "200 ACCEPTED, role is now Super Admin"
+  },
+  {
+   "id": "G02 ESCALATION: Admin deactivates a Super Admin account by direct API call",
+   "pass": null,
+   "detail": "200 ACCEPTED"
+  },
+  {
+   "id": "G02 ESCALATION: Admin changes a Super Admin's profile e-mail by direct API call",
+   "pass": null,
+   "detail": "200 ACCEPTED"
+  },
+  {
+   "id": "G02 Admin cannot change another account's password (auth admin API)",
+   "pass": true,
+   "detail": "403 {\"code\":403,\"error_code\":\"not_admin\",\"msg\":\"User not allowed\"}"
+  },
+  {
+   "id": "G03 Admin creates a TEST role",
+   "pass": true,
+   "detail": "201 [{\"id\":\"TEST G Role 817145\",\"name\":\"TEST G Role 817145\",\"level\":\"staff\",\"descrip"
+  },
+  {
+   "id": "G03 a user can be created in the new role",
+   "pass": true,
+   "detail": "200 {\"ok\":true,\"id\":\"U1790936923446\",\"email\":\"test.g.rolemember.817145@prismora.test"
+  },
+  {
+   "id": "G03 before: the user cannot read schemes",
+   "pass": true,
+   "detail": "200 rows=0"
+  },
+  {
+   "id": "G03 Admin changes the role: schemes none → view",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "G03 after (same session, no re-login): the user can read schemes",
+   "pass": true,
+   "detail": "200 rows=3"
+  },
+  {
+   "id": "G03 view is not edit: the same user cannot write a scheme",
+   "pass": true,
+   "detail": "403"
+  },
+  {
+   "id": "G03 reverted: the user loses schemes again",
+   "pass": true,
+   "detail": "200 rows=0"
+  },
+  {
+   "id": "G03 Admin edits the Super Admin role row by direct API call",
+   "pass": null,
+   "detail": "200 ACCEPTED (app_access still treats Super Admin as full)"
+  },
+  {
+   "id": "G03 a user whose role has settings=full removes settings from their own role (self-lock-out)",
+   "pass": null,
+   "detail": "200 ACCEPTED, no database guard"
+  },
+  {
+   "id": "G04 before: Dispatch user can read orders",
+   "pass": true,
+   "detail": "200 rows=2"
+  },
+  {
+   "id": "G04 Admin deactivates the user",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "G04 the open session is cut off at once (no rows)",
+   "pass": true,
+   "detail": "200 rows=0"
+  },
+  {
+   "id": "G04 other tables too, and the profile read",
+   "pass": true,
+   "detail": "invoices rows=0 own-profile rows=1"
+  },
+  {
+   "id": "G04 a fresh sign-in by a deactivated user at the auth level",
+   "pass": null,
+   "detail": "token issued (data stays blocked; the app signs them out)"
+  },
+  {
+   "id": "G04 fresh token reads nothing",
+   "pass": true,
+   "detail": "200 rows=0"
+  },
+  {
+   "id": "G04 Admin reactivates the user",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "G04 the same session works again (same token, no re-login)",
+   "pass": true,
+   "detail": "200 rows=2"
+  },
+  {
+   "id": "G04 Admin cannot deactivate their own account",
+   "pass": true,
+   "detail": "403 You cannot change the status of your own account. Ask another administrator."
+  },
+  {
+   "id": "G04 a DEACTIVATED Admin calls create-user with their still-valid token",
+   "pass": null,
+   "detail": "200 ACCEPTED, account created: U1790936935743"
+  },
+  {
+   "id": "G04 a deactivated Admin cannot edit users through the database",
+   "pass": true,
+   "detail": "200 read-rows=1"
+  },
+  {
+   "id": "G04 Admin deletes a user profile (row removed)",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "G04 after delete, the login (auth account) still exists and signs in",
+   "pass": null,
+   "detail": "YES, login remains with no profile"
+  },
+  {
+   "id": "G05 users U1790936820362 created {\"role\":\"Sales Manager\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936822015 created {\"role\":\"Sales Executive\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936823124 created {\"role\":\"Purchase Manager\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936824233 created {\"role\":\"Warehouse Manager\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936825768 created {\"role\":\"Accounts\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936826753 created {\"role\":\"Dispatch Team\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936827764 created {\"role\":\"Customer Support\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936829716 created {\"role\":\"Sales\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936833836 created {\"role\":\"Manager\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936839116 created {\"role\":\"Director\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Super Admin\" (Super Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936840068 created {\"role\":\"Admin\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Super Admin\" (Super Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936841626 created {\"role\":\"Super Admin\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Super Admin\" (Super Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936844278 created {\"role\":\"Distributor\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936845668 created {\"role\":\"Dealer\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936847170 created {\"role\":\"Retailer\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936853220 created {\"role\":\"Accounts\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936856111 created {\"role\":\"Accounts\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Director\" (Director) via=-"
+  },
+  {
+   "id": "G05 users U1790936857125 created {\"role\":\"TEST Bogus Role 817145\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936822015 changed {\"name\":[\"TEST G sales_executive 817145\",\"TEST G renamed 817",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936822015 changed {\"role\":[\"Sales Executive\",\"Accounts\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936822015 changed {\"role\":[\"Accounts\",\"Sales Executive\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936820362 changed {\"managedUsers\":[[],[\"U1790936822015\"]]}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936822015 changed {\"name\":[\"TEST G renamed 817145\",\"TEST G self-renamed 817145",
+   "pass": true,
+   "detail": "actor=\"TEST G self-renamed 817145\" (Sales Executive) via=-"
+  },
+  {
+   "id": "G05 users U1790936824233 changed {\"role\":[\"Warehouse Manager\",\"Super Admin\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936824233 changed {\"role\":[\"Super Admin\",\"Warehouse Manager\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Super Admin\" (Super Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936841626 changed {\"status\":[\"Active\",\"Inactive\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936841626 changed {\"status\":[\"Inactive\",\"Active\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Super Admin\" (Super Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936841626 changed {\"email\":[\"test.g.super_admin.817145@prismora.test\",\"test.g.",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936841626 changed {\"email\":[\"test.g.hijack.817145@prismora.test\",\"test.g.super",
+   "pass": true,
+   "detail": "actor=\"TEST Super Admin\" (Super Admin) via=-"
+  },
+  {
+   "id": "G05 roles TEST G Role 817145 created {\"id\":\"TEST G Role 817145\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936923446 created {\"role\":\"TEST G Role 817145\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 roles TEST G Role 817145 changed {\"permissions\":[{\"sfa\":\"none\",\"leads\":\"view\",\"stock\":\"none\",",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 roles TEST G Role 817145 changed {\"permissions\":[{\"sfa\":\"none\",\"leads\":\"view\",\"stock\":\"none\",",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 roles Super Admin changed {\"permissions\":[{\"sfa\":\"full\",\"leads\":\"full\",\"stock\":\"full\",",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 roles Super Admin changed {\"permissions\":[{\"sfa\":\"full\",\"leads\":\"full\",\"stock\":\"full\",",
+   "pass": true,
+   "detail": "actor=\"TEST Super Admin\" (Super Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936930316 created {\"role\":\"TEST G AdminRole 817145\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 roles TEST G AdminRole 81714 changed {\"permissions\":[{\"sfa\":\"none\",\"leads\":\"view\",\"stock\":\"none\",",
+   "pass": true,
+   "detail": "actor=\"TEST G adminrole_member 817145\" (TEST G AdminRole 817145) via=-"
+  },
+  {
+   "id": "G05 users U1790936826753 changed {\"status\":[\"Active\",\"Inactive\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936826753 changed {\"status\":[\"Inactive\",\"Active\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936840068 changed {\"status\":[\"Active\",\"Inactive\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Super Admin\" (Super Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936935743 created {\"role\":\"Accounts\"}",
+   "pass": true,
+   "detail": "actor=\"TEST G admin 817145\" (Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936840068 changed {\"status\":[\"Inactive\",\"Active\"]}",
+   "pass": true,
+   "detail": "actor=\"TEST Super Admin\" (Super Admin) via=-"
+  },
+  {
+   "id": "G05 users U1790936833836 deleted {\"id\":\"U1790936833836\"}",
+   "pass": true,
+   "detail": "actor=\"TEST Admin\" (Admin) via=-"
+  },
+  {
+   "id": "G05 the audit log is readable by Admin and not by a Sales Manager",
+   "pass": true,
+   "detail": "Admin rows=1 SalesManager rows=0"
+  }
+ ]
+}

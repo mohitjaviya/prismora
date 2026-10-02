@@ -29,7 +29,7 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 - Test-only phases: report findings, fix only on owner approval.
 
 ## Next (priority)
-1. Phase 2 G (admin/roles/audit) in progress, then H (reports vs DB); write `PHASE2-REPORT.md`. Stop after G and report before H.
+1. Phase 2 H (every dashboard/report number vs the database); write `PHASE2-REPORT.md`. Phase 2 G is done (2026-10-02), waiting for owner's decision on the G findings.
 2. Phase 3 (every-button sweep), Phase 4 (integrity); final report.
 3. Later batch: slow saves, self-registered partner address/territory, claims tied to earned incentives, missing confirms, Phase 1 leftovers.
 4. Optional: delete the batch 6 TEST rows on owner's OK.

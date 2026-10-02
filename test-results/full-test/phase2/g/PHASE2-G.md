@@ -1,0 +1,18 @@
+# Phase 2 story G — admin: users, roles, permissions, deactivate, audit
+
+Run 2026-10-02 against the live site and database. Test-only: nothing was fixed.
+Scripts: `g-api.mjs` (as real roles), browser checks via Chrome. Result: API 114/115 (the one FAIL is a test slip: the "weak password" user had a different password than my check used), browser 12/12. All TEST G data deleted afterwards (21 profiles, 22 logins, 2 roles, partner records); 3 real admin accounts and Super Admin permissions untouched.
+
+## What works
+- G01: create-user makes a working login + profile for every role type: Sales Manager, Sales Executive, Purchase Manager, Warehouse Manager, Accounts, Dispatch Team, Customer Support, Sales, Manager, Director, Admin, Super Admin, and Distributor/Dealer/Retailer linked to a record. Each signs in and sees its own profile. Refused with clear messages: Admin creating Director/Admin/Super Admin, partner role without a record, staff role with a partner record, second login for one partner, Pending partner, missing record, password < 8, duplicate e-mail, Sales Manager / Sales Executive as caller.
+- G02: Admin edits name, role, managed team; a user cannot change own role/status or rename others (database message), may rename self. Another account's password cannot be changed (auth admin API 403; screen says so and the old password keeps working).
+- G03: a TEST role's permission changed on the Roles screen takes effect for a signed-in user on their next page load, no re-login (schemes none → view: route opens, data shows, no edit; revert: denied again). The Super Admin role is locked on the screen.
+- G04: Deactivate/Reactivate on the Team Members screen. Open session is cut off (no rows) at once and signed out by the app; a fresh sign-in shows "Your account has been deactivated. Contact your administrator."; reactivating restores the same session. An Admin cannot deactivate their own account.
+- G05: every create / change / delete (users and roles) has an audit row with the acting admin's name and role and correct old → new values (names, roles, status, managedUsers, full permissions JSON). The audit log is readable by Admin and not by Sales Manager.
+
+## Findings (not fixed — owner decides)
+1. **HIGH — Admin can make anyone Super Admin through the API.** `users_update` only checks `is_app_admin()` (settings = full), so an Admin can set any user's role to Super Admin (including themselves), deactivate or change the e-mail of a Super Admin account, and edit the Super Admin role row. The screen and the create-user function refuse these; the database does not. Fix idea: a trigger that lets only a Super Admin change role to/from an admin role, or edit a Super Admin row or role.
+2. **HIGH — create-user trusts the role name only.** A deactivated Admin with a still-valid token created an account; a Director (settings none, no Team Members screen) can create accounts; a role that does not exist is accepted; a letters-only password is accepted (only the screen enforces letter + number). Fix idea: the function checks the caller is Active and has settings = full, that the role exists in `roles`, and the password policy.
+3. **MEDIUM — Delete user.** The screen removes the row before the database answers and ignores a refusal; the sign-in (auth account) is left behind and still signs in with no profile, and its e-mail cannot be reused.
+4. **LOW — no database guard against a settings = full role removing its own settings** (the Roles screen blocks it).
+5. **LOW — the Add User form offers Super Admin and Director to an Admin**, though the server refuses them.
