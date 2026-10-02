@@ -6,11 +6,14 @@ import { BarChart3, Download, TrendingUp, Package2, Wallet, Users, Star, Chevron
 import { Button, PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { isConvertedLead } from '../utils/leadStatus';
-import { isOpen, amountPaid } from '../utils/invoiceStatus';
+import { amountPaid, amountDue, invoiceTotal } from '../utils/invoiceStatus';
+import { profitAndLoss, salesCreditNotes, openTaxInvoices } from '../utils/financials';
 import { taxInvoices, registerRow, gstHsnSummary } from '../utils/gstReport';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
+
+const paise = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
@@ -25,7 +28,7 @@ const CATEGORIES = [
 ];
 
 export default function Reports() {
-  const { leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories, companySettings } = useData();
+  const { leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories, companySettings, creditNotes, grn, purchaseReturns } = useData();
   // Seller details, only for an invoice from before they were stored on it.
   const gstSeller = useMemo(() => companySettings || {}, [companySettings]);
   const { user, users: teamUsers } = useAuth();
@@ -50,7 +53,7 @@ export default function Reports() {
       {
         key: 'sales_summary',
         label: 'Sales Summary',
-        desc: 'Monthly revenue, orders count, and average order value.',
+        desc: 'Value of orders booked by month (not cancelled), order count and average order. Booked, not invoiced: net sales are in Financial → P&L.',
         generate: () => {
           const byMonth = {};
           orders.filter(o => o.status !== 'Cancelled' && inRange(o.date || o.createdAt)).forEach(o => {
@@ -62,12 +65,12 @@ export default function Reports() {
           return Object.values(byMonth).map(r => ({ ...r, avgOrder: r.orders ? r.revenue / r.orders : 0 }));
         },
         columns: ['month', 'revenue', 'orders', 'avgOrder'],
-        labels: ['Month', 'Revenue (₹)', 'Orders', 'Avg Order (₹)'],
+        labels: ['Month', 'Order Value (₹)', 'Orders', 'Avg Order (₹)'],
       },
       {
         key: 'product_sales',
         label: 'Sales by Product',
-        desc: 'Revenue and quantity sold per product.',
+        desc: 'Order value and quantity booked per product.',
         generate: () => {
           const byProduct = {};
           orders.filter(o => o.status !== 'Cancelled' && inRange(o.date || o.createdAt)).forEach(o => {
@@ -79,12 +82,12 @@ export default function Reports() {
           return Object.values(byProduct).sort((a, b) => b.revenue - a.revenue);
         },
         columns: ['product', 'revenue', 'qty'],
-        labels: ['Product', 'Revenue (₹)', 'Qty Sold'],
+        labels: ['Product', 'Order Value (₹)', 'Qty Sold'],
       },
       {
         key: 'city_sales',
         label: 'Sales by City / Territory',
-        desc: 'Revenue breakdown by city.',
+        desc: 'Order value booked by city.',
         generate: () => {
           const byCity = {};
           orders.filter(o => o.status !== 'Cancelled' && inRange(o.date || o.createdAt)).forEach(o => {
@@ -96,7 +99,7 @@ export default function Reports() {
           return Object.values(byCity).sort((a, b) => b.revenue - a.revenue);
         },
         columns: ['city', 'revenue', 'orders'],
-        labels: ['City', 'Revenue (₹)', 'Orders'],
+        labels: ['City', 'Order Value (₹)', 'Orders'],
       },
       {
         key: 'order_status',
@@ -172,16 +175,17 @@ export default function Reports() {
       {
         key: 'outstanding_receivables',
         label: 'Outstanding Receivables',
-        desc: 'Unpaid invoices (Sent / Unpaid status).',
-        generate: () => invoices
-          .filter(isOpen)
-          .map(i => {
-            const subtotalVal = Number(i.amount || 0);
-            const taxVal = Number(i.tax || 0);
-            return { id: i.id, customer: i.customerName, total: subtotalVal + taxVal, status: i.status, date: formatDate(i.createdAt) };
-          }),
-        columns: ['id', 'customer', 'total', 'status', 'date'],
-        labels: ['Invoice ID', 'Customer', 'Amount (₹)', 'Status', 'Date'],
+        desc: 'Tax invoices not yet settled, with what is still due after part-payments and credit notes.',
+        // What is still due, as Accounting shows it: part-payments and credit
+        // notes taken off; proformas are not receivables.
+        generate: () => openTaxInvoices(invoices)
+          .map(i => ({
+            id: i.id, customer: i.customerName,
+            total: invoiceTotal(i), paid: amountPaid(i), due: amountDue(i),
+            status: i.status, date: formatDate(i.createdAt)
+          })),
+        columns: ['id', 'customer', 'total', 'paid', 'due', 'status', 'date'],
+        labels: ['Invoice ID', 'Customer', 'Invoice Total (₹)', 'Received (₹)', 'Due (₹)', 'Status', 'Date'],
       },
       {
         key: 'expense_report',
@@ -202,15 +206,26 @@ export default function Reports() {
       {
         key: 'pl_report',
         label: 'P&L Summary',
-        desc: 'Revenue vs. expenses summary.',
+        desc: 'Net sales less expenses and goods bought — the Accounting figures. GST and proformas are not sales.',
+        // Accounting's definition (utils/financials.js). It used to be
+        // everything paid, GST and proformas included, less expenses only.
         generate: () => {
-          const revenue = invoices.filter(i => inRange(i.createdAt)).reduce((s, i) => s + amountPaid(i), 0);
-          const exp = expenses.filter(e => inRange(e.date)).reduce((s, e) => s + (e.amount || 0), 0);
+          const r = profitAndLoss({
+            invoices: invoices.filter(i => inRange(i.createdAt)),
+            creditNotes: salesCreditNotes(creditNotes, invoices).filter(cn => inRange(cn.createdAt)),
+            expenses: expenses.filter(e => inRange(e.date)),
+            grn: grn.filter(g => inRange(g.receivedDate || g.createdAt)),
+            purchaseReturns: purchaseReturns.filter(pr => inRange(pr.date || pr.createdAt)),
+          });
           return [
-            { metric: 'Total Revenue (Paid Invoices)', value: revenue },
-            { metric: 'Total Expenses', value: exp },
-            { metric: 'Gross Profit', value: revenue - exp },
-            { metric: 'Profit Margin %', value: revenue ? ((revenue - exp) / revenue * 100).toFixed(2) + '%' : '0%' },
+            { metric: 'Invoiced and Paid (ex-GST)', value: paise(r.invoicedPaid) },
+            { metric: 'Less Credit Notes', value: -paise(r.creditNoteValue) },
+            { metric: 'Net Sales', value: paise(r.netSales) },
+            { metric: 'Expenses', value: paise(r.expenses) },
+            { metric: 'Cost of Goods Purchased', value: paise(r.purchaseCost) },
+            { metric: 'Net Profit', value: paise(r.netProfit) },
+            { metric: 'Profit Margin %', value: r.margin.toFixed(2) + '%' },
+            { metric: 'GST Collected, to Remit (not income)', value: paise(r.gstCollected) },
           ];
         },
         columns: ['metric', 'value'],
@@ -304,7 +319,7 @@ export default function Reports() {
       {
         key: 'sales_exec_report',
         label: 'Sales Executive Performance',
-        desc: 'Revenue, leads, and conversion per salesperson.',
+        desc: 'Order value booked, leads and conversion per salesperson.',
         generate: () => {
           return (teamUsers || []).filter(u => isSalesRole(u.role) || u.role === 'Sales Manager' || u.role === 'Manager').map(u => {
             const userOrders = orders.filter(o => o.assignedTo === u.id && o.status !== 'Cancelled' && inRange(o.date || o.createdAt));
@@ -321,7 +336,7 @@ export default function Reports() {
           }).sort((a, b) => b.revenue - a.revenue);
         },
         columns: ['name', 'role', 'revenue', 'orders', 'leads', 'converted', 'convRate'],
-        labels: ['Name', 'Role', 'Revenue (₹)', 'Orders', 'Leads', 'Converted', 'Conv. Rate'],
+        labels: ['Name', 'Role', 'Order Value (₹)', 'Orders', 'Leads', 'Converted', 'Conv. Rate'],
       },
       {
         key: 'distributor_report',
@@ -351,7 +366,7 @@ export default function Reports() {
         labels: ['Scheme', 'Type', 'Applicable To', 'Discount', 'Free Goods', 'Min Order', 'Valid From', 'Valid To'],
       },
     ],
-  }), [leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories, teamUsers, dateFrom, dateTo, gstSeller]);
+  }), [leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories, teamUsers, dateFrom, dateTo, gstSeller, creditNotes, grn, purchaseReturns]);
 
   const currentReports = reports[activeCategory] || [];
   const activeReportDef = currentReports.find(r => r.key === activeReport);

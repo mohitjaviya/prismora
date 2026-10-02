@@ -10,7 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
 import { isConvertedLead } from '../utils/leadStatus';
 import { isExpired } from '../utils/expiry';
-import { isOpen, amountPaid } from '../utils/invoiceStatus';
+import { profitAndLoss, receivables, partnerBalances } from '../utils/financials';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -28,6 +28,7 @@ export default function DirectorDashboard() {
   const {
     orders, invoices, expenses, inventory, productCatalog,
     distributors, dealers, retailers, leads,
+    creditNotes, grn, purchaseReturns,
   } = useData();
   const { users } = useAuth();
 
@@ -84,41 +85,22 @@ export default function DirectorDashboard() {
   }, [distributors, dealers, retailers]);
 
   // ── Collections (receivables across all channels + invoices) ─────────────
+  // What partners owe is the balances above zero; one in credit does not
+  // reduce what the others owe (it used to show −₹52.6k). Ageing and overdue
+  // are what tax invoices still have due, part-payments taken off — the same
+  // figures Accounting shows (utils/financials.js).
   const collections = useMemo(() => {
-    const channelOutstanding =
-      distributors.reduce((s, d) => s + (d.outstandingAmount || 0), 0) +
-      dealers.reduce((s, d) => s + (d.outstandingAmount || 0), 0) +
-      retailers.reduce((s, r) => s + (r.outstandingAmount || 0), 0);
-
-    const unpaid = invoices.filter(isOpen);
-    const overdueVal = unpaid.reduce((s, i) => {
-      const due = i.dueDate ? new Date(i.dueDate) : null;
-      return (due && due < now) ? s + Number(i.amount || 0) + Number(i.tax || 0) : s;
-    }, 0);
-
-    // Ageing buckets on unpaid invoices
-    const buckets = { '0-30': 0, '30-60': 0, '60-90': 0, '90+': 0 };
-    unpaid.forEach(i => {
-      const created = new Date(i.createdAt);
-      const days = Math.floor((now - created) / 86400000);
-      const amt = Number(i.amount || 0) + Number(i.tax || 0);
-      if (days <= 30) buckets['0-30'] += amt;
-      else if (days <= 60) buckets['30-60'] += amt;
-      else if (days <= 90) buckets['60-90'] += amt;
-      else buckets['90+'] += amt;
-    });
-
-    return { channelOutstanding, overdueVal, overdueCount: unpaid.length, buckets };
+    const balances = partnerBalances(distributors, dealers, retailers);
+    const owedOnInvoices = receivables(invoices, now);
+    return { ...balances, overdueVal: owedOnInvoices.overdue, buckets: owedOnInvoices.buckets };
   }, [distributors, dealers, retailers, invoices, now]);
 
   // ── Finance ──────────────────────────────────────────────────────────────
-  const finance = useMemo(() => {
-    const revenue = invoices.reduce((s, i) => s + amountPaid(i), 0);
-    const exp = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
-    const profit = revenue - exp;
-    const margin = revenue ? ((profit / revenue) * 100).toFixed(1) : 0;
-    return { revenue, exp, profit, margin };
-  }, [invoices, expenses]);
+  // Accounting's figures, not a sum of the cockpit's own.
+  const finance = useMemo(
+    () => profitAndLoss({ invoices, creditNotes, expenses, grn, purchaseReturns }),
+    [invoices, creditNotes, expenses, grn, purchaseReturns]
+  );
 
   // ── Inventory health ─────────────────────────────────────────────────────
   const invHealth = useMemo(() => {
@@ -214,9 +196,9 @@ export default function DirectorDashboard() {
   };
 
   const kpiCards = [
-    { label: "Today's Sale", value: compactCurrency(sales.today), icon: <TrendingUp size={20} className="text-brand-accent" />, sub: 'orders placed today' },
-    { label: 'This Month', value: compactCurrency(sales.mtd), icon: <TrendingUp size={20} className="text-blue-400" />, sub: `${now.toLocaleString('default', { month: 'long' })} ${thisYear}` },
-    { label: 'This Year', value: compactCurrency(sales.ytd), icon: <TrendingUp size={20} className="text-emerald-400" />, sub: `${thisYear} to date` },
+    { label: "Today's Orders", value: compactCurrency(sales.today), icon: <TrendingUp size={20} className="text-brand-accent" />, sub: 'order value booked today' },
+    { label: 'Orders This Month', value: compactCurrency(sales.mtd), icon: <TrendingUp size={20} className="text-blue-400" />, sub: `${now.toLocaleString('default', { month: 'long' })} ${thisYear}` },
+    { label: 'Orders This Year', value: compactCurrency(sales.ytd), icon: <TrendingUp size={20} className="text-emerald-400" />, sub: `${thisYear} to date` },
   ];
 
   return (
@@ -242,7 +224,7 @@ export default function DirectorDashboard() {
         {/* Target vs Achievement */}
         <div className="glass-panel rounded-2xl p-5 border border-brand-accent/20 bg-brand-accent/5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1"><Target size={13} />YTD Target</span>
+            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1"><Target size={13} />YTD Order Target</span>
             <button onClick={() => { setEditingTarget(true); setTempTarget(String(target)); }} className="text-[10px] text-brand-accent hover:underline">Edit</button>
           </div>
           {editingTarget ? (
@@ -286,29 +268,34 @@ export default function DirectorDashboard() {
       {/* Finance row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="glass-panel rounded-2xl p-4 border border-white/5">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide flex items-center gap-1"><IndianRupee size={12} />Revenue (Paid)</p>
-          <p className="text-xl font-extrabold text-emerald-400 mt-1">{compactCurrency(finance.revenue)}</p>
+          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide flex items-center gap-1"><IndianRupee size={12} />Net Sales (Paid)</p>
+          <p className="text-xl font-extrabold text-emerald-400 mt-1">{compactCurrency(finance.netSales)}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">ex-GST, less credit notes</p>
         </div>
         <div className="glass-panel rounded-2xl p-4 border border-white/5">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide flex items-center gap-1"><ArrowDownRight size={12} />Expenses</p>
-          <p className="text-xl font-extrabold text-rose-400 mt-1">{compactCurrency(finance.exp)}</p>
+          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide flex items-center gap-1"><ArrowDownRight size={12} />Costs</p>
+          <p className="text-xl font-extrabold text-rose-400 mt-1">{compactCurrency(finance.expenses + finance.purchaseCost)}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">expenses {compactCurrency(finance.expenses)} · goods {compactCurrency(finance.purchaseCost)}</p>
         </div>
         <div className="glass-panel rounded-2xl p-4 border border-white/5">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide flex items-center gap-1"><ArrowUpRight size={12} />Gross Profit</p>
-          <p className={`text-xl font-extrabold mt-1 ${finance.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{compactCurrency(finance.profit)}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">{finance.margin}% margin</p>
+          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide flex items-center gap-1"><ArrowUpRight size={12} />Net Profit</p>
+          <p className={`text-xl font-extrabold mt-1 ${finance.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{compactCurrency(finance.netProfit)}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">{finance.margin.toFixed(1)}% margin</p>
         </div>
         <div className="glass-panel rounded-2xl p-4 border border-white/5">
           <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide flex items-center gap-1"><Wallet size={12} />Total Outstanding</p>
-          <p className="text-xl font-extrabold text-amber-400 mt-1">{compactCurrency(collections.channelOutstanding)}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">{collections.overdueCount} invoices unpaid</p>
+          <p className="text-xl font-extrabold text-amber-400 mt-1">{compactCurrency(collections.owed)}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">owed by {collections.owingCount} partners</p>
+          {collections.creditHeld > 0 && (
+            <p className="text-[10px] text-slate-500">Total Credit Held: {compactCurrency(collections.creditHeld)} ({collections.creditCount} partners)</p>
+          )}
         </div>
       </div>
 
       {/* Charts: monthly trend + top products */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 glass-panel rounded-2xl p-5 border border-white/5">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-brand-accent" />Sales Trend — {thisYear}</h3>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-brand-accent" />Orders Booked — {thisYear}</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height={256}>
               <BarChart data={monthlyTrend} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>

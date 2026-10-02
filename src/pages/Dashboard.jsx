@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
 import { MONTHS, monthKey } from '../utils/months';
 import { isOpenLead, conversionRate as rateOf } from '../utils/leadStatus';
+import { profitAndLoss, salesCreditNotes } from '../utils/financials';
 import DistributorDashboard from './DistributorDashboard';
 import DealerDashboard from './DealerDashboard';
 import RetailerDashboard from './RetailerDashboard';
@@ -14,8 +15,8 @@ import DirectorDashboard from './DirectorDashboard';
 
 
 const Dashboard = () => {
-  const { leads, orders } = useData();
-  const { user, canAccessData } = useAuth();
+  const { leads, orders, invoices, creditNotes } = useData();
+  const { user, canAccessData, canAccess } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [monthlyTarget, setMonthlyTarget] = useState(() => {
     const saved = localStorage.getItem('prismora_monthly_target');
@@ -111,11 +112,35 @@ const Dashboard = () => {
     ? Math.round(((currentRev - lastRev) / lastRev) * 100) 
     : (currentRev > 0 ? 100 : 0);
 
+  // Revenue is Accounting's net sales (utils/financials.js) — paid tax
+  // invoices without GST, less credit notes — so this card and Accounting
+  // can never disagree. It used to sum the value of every order not
+  // cancelled, Pending and never-invoiced ones included. Someone who cannot
+  // see the accounts sees no invoices, so they get the value of the orders
+  // they can see, under that name.
+  const seesAccounts = canAccess('accounting');
+  const inMonth = (dateStr, m, y) => { const d = getMonthYear(dateStr); return d.m === m && d.y === y; };
+  const netSalesIn = (m, y) => profitAndLoss({
+    invoices: invoices.filter(i => inMonth(i.createdAt, m, y)),
+    creditNotes: salesCreditNotes(creditNotes, invoices).filter(cn => inMonth(cn.createdAt, m, y)),
+  }).netSales;
+  const salesCard = seesAccounts
+    ? (() => {
+      const cur = netSalesIn(currentMonth, currentYear);
+      const last = netSalesIn(lastMonth, lastMonthYear);
+      return {
+        title: 'Net Sales (Paid)',
+        value: formatCurrency(profitAndLoss({ invoices, creditNotes }).netSales),
+        mom: last ? Math.round(((cur - last) / Math.abs(last)) * 100) : (cur > 0 ? 100 : 0),
+      };
+    })()
+    : { title: 'Orders Booked', value: formatCurrency(totalRevenue), mom: revMoM };
+
   const kpis = [
     { title: 'Total Leads', value: totalLeads.toLocaleString('en-IN'), icon: Users, tone: 'accent', mom: leadsMoM },
     { title: 'Conversion Rate', value: `${conversionRate}%`, icon: TrendingUp, tone: 'success', mom: convMoM },
     { title: 'Pipeline Value', value: formatCurrency(pipelineValue), icon: DollarSign, tone: 'info', mom: pipelineMoM },
-    { title: 'Total Revenue', value: formatCurrency(totalRevenue), icon: ShoppingBag, tone: 'accent', mom: revMoM },
+    { ...salesCard, icon: ShoppingBag, tone: 'accent' },
   ];
 
   // Prepare chart data from real database records
@@ -217,7 +242,7 @@ const Dashboard = () => {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue Target</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Order Target</span>
                     {isAdminRole(user?.role) && (
                       <button
                         onClick={() => { setEditingTarget(true); setTempTarget(String(monthlyTarget)); }}
@@ -287,7 +312,7 @@ const Dashboard = () => {
             )}
             <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
               <TrendingUp size={20} className="text-brand-accent" />
-              {selectedMonth ? `Product Breakdown: ${selectedMonth}` : 'Revenue Trend (YTD)'}
+              {selectedMonth ? `Product Breakdown: ${selectedMonth}` : 'Orders Booked (YTD)'}
             </h3>
             <div className="h-72">
               {(selectedMonth ? drilldownData : salesData).length === 0 ? (

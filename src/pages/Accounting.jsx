@@ -21,7 +21,8 @@ import ExpensesTable from '../components/accounting/ExpensesTable';
 import CreditNotesTable from '../components/accounting/CreditNotesTable';
 import BalanceCheckPanel from '../components/accounting/BalanceCheckPanel';
 import { INDIAN_STATES, supplyTypeFor, invoiceGst } from '../utils/gst';
-import { INVOICE_STATUSES, isSettled, isOpen, amountPaid, amountDue } from '../utils/invoiceStatus';
+import { INVOICE_STATUSES, isSettled, isOpen, amountDue } from '../utils/invoiceStatus';
+import { profitAndLoss, proformaSummary, receivables, netSalesByMonth } from '../utils/financials';
 
 
 const Accounting = () => {
@@ -98,50 +99,28 @@ const Accounting = () => {
   const [expenseDescription, setExpenseDescription] = useState('');
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Financial Calculations
-  // What has been received, part-payments included (057), split between the
-  // goods and the GST in the invoice's own proportion.
-  const paidShare = (inv) => {
-    const total = Number(inv.amount || 0) + Number(inv.tax || 0);
-    return total > 0 ? amountPaid(inv) / total : 0;
-  };
-  const totalIncome = invoices.reduce((sum, inv) => sum + Number(inv.amount || 0) * paidShare(inv), 0);
-  const totalTax = invoices.reduce((sum, inv) => sum + Number(inv.tax || 0) * paidShare(inv), 0);
-
-  // GST collected is not the business's money. It is held on behalf of the
-  // government and paid over, so it belongs on neither the revenue line nor
-  // the profit line. It is still shown, because it has to be remitted and
-  // knowing how much is owed matters -- it just is not earnings.
-  const gstCollected = totalTax;
-
-  // A credit note is a sales return: goods came back or a bill was reduced, so
-  // the income it cancels was never earned. It reduced the partner's balance
-  // and nothing else, which left profit overstated by every note ever issued.
-  const creditNoteValue = (creditNotes || []).reduce((sum, cn) => sum + (Number(cn?.amount) || 0), 0);
-
-  const netSales = totalIncome - creditNoteValue;
-  const totalRevenue = netSales;
-
-  const totalExpensesValue = expenses
-    .reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
-
-  // ── Cost of the goods themselves ────────────────────────────────────────
-  // Nothing from the purchase side reached this screen: net profit was income
-  // minus operating expenses, with the entire cost of buying stock left out. A
-  // business that had bought Rs.2,75,000 of goods and sold none of it still
-  // showed a profit. Goods received is the point the cost is incurred — a PO is
-  // only an intention, so Draft and Cancelled orders are rightly not counted.
-  // Plain reductions rather than useMemo: this component returns early when
-  // there is no user, so every hook after that point is a conditional hook —
-  // the count would change between renders and React would throw. These are
-  // sums over a handful of rows and cost nothing to redo.
-  const goodsReceivedValue = (grn || []).reduce((sum, g) =>
-    sum + (g.items || []).reduce((s, i) => s + (Number(i.quantity || 0) * Number(i.unitCost || 0)), 0), 0);
-
-  // Goods sent back are a cost we no longer carry.
-  const purchaseReturnsValue = (purchaseReturns || []).reduce((sum, r) => sum + Number(r.value || 0), 0);
-
-  const purchaseCost = Math.max(0, goodsReceivedValue - purchaseReturnsValue);
+  // Financial Calculations — one definition, shared with the Director's
+  // cockpit, the Dashboard and the Reports (utils/financials.js):
+  //  · income is what tax invoices have been paid, part-payments included
+  //    (057), without the GST — GST is held for the government and remitted,
+  //    not earnings, so it is shown but on neither the revenue nor profit line;
+  //  · a credit note is a sales return, so the income it cancels is taken off;
+  //  · the goods bought are a cost: received on GRNs, less goods sent back
+  //    (a PO is only an intention, so Draft and Cancelled orders don't count);
+  //  · a proforma is not a tax invoice and is in none of it — shown apart as
+  //    pending invoicing.
+  // Plain calls rather than useMemo: this component returns early when there
+  // is no user, so every hook after that point would be a conditional hook.
+  const pnl = profitAndLoss({ invoices, creditNotes, expenses, grn, purchaseReturns });
+  const totalIncome = pnl.invoicedPaid;
+  const gstCollected = pnl.gstCollected;
+  const creditNoteValue = pnl.creditNoteValue;
+  const totalRevenue = pnl.netSales;
+  const totalExpensesValue = pnl.expenses;
+  const goodsReceivedValue = pnl.goodsReceived;
+  const purchaseReturnsValue = pnl.goodsReturned;
+  const purchaseCost = pnl.purchaseCost;
+  const proformas = proformaSummary(invoices);
 
   // What is still owed to vendors — the mirror of outstanding receivables,
   // which this screen already showed on its own.
@@ -160,11 +139,13 @@ const Accounting = () => {
   });
   const missingPayoutValue = unbookedTotal(missingPayouts);
 
-  const netProfit = totalRevenue - totalExpensesValue - purchaseCost;
-  const profitMargin = totalRevenue ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
+  const netProfit = pnl.netProfit;
+  const profitMargin = pnl.margin.toFixed(1);
 
-  const unpaidInvoices = invoices.filter(isOpen);
-  const outstandingAmount = unpaidInvoices.reduce((sum, inv) => sum + amountDue(inv), 0);
+  // What tax invoices still have due; a proforma is not a receivable.
+  const owed = receivables(invoices);
+  const unpaidInvoices = owed.invoices;
+  const outstandingAmount = owed.due;
 
   /**
    * What the Generate Invoice form will charge, worked out the way the
@@ -256,13 +237,11 @@ const Accounting = () => {
       data[m] = { month: m, Income: 0, Expenses: 0 };
     });
 
-    invoices.forEach(inv => {
-      if (amountPaid(inv) > 0 && inv.createdAt) {
-        const m = monthKey(inv.createdAt);
-        if (data[m]) {
-          data[m].Income += amountPaid(inv);
-        }
-      }
+    // Income is net sales, as on the card above: paid tax invoices without
+    // GST, less credit notes. It used to be everything paid, GST and proformas
+    // included.
+    Object.entries(netSalesByMonth(invoices, creditNotes)).forEach(([m, v]) => {
+      if (data[m]) data[m].Income += v;
     });
 
     expenses.forEach(exp => {
@@ -275,7 +254,7 @@ const Accounting = () => {
     });
 
     // Only display months with active income or expenses
-    const activeMonths = MONTHS.map(m => data[m]).filter(d => d.Income > 0 || d.Expenses > 0);
+    const activeMonths = MONTHS.map(m => data[m]).filter(d => d.Income !== 0 || d.Expenses !== 0);
     return activeMonths.length > 0 ? activeMonths : MONTHS.map(m => data[m]);
   };
 
@@ -796,7 +775,12 @@ const Accounting = () => {
               <p className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight break-all">
                 {formatCurrency(outstandingAmount)}
               </p>
-              <p className="mt-2 text-xs text-slate-500">{unpaidInvoices.length} invoices pending payment</p>
+              <p className="mt-2 text-xs text-slate-500">{unpaidInvoices.length} tax invoices pending payment</p>
+              {proformas.count > 0 && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Pending invoicing: {proformas.count} proformas, {formatCurrency(proformas.value)} ({formatCurrency(proformas.received)} received). Not counted in sales or receivables until converted to a tax invoice.
+                </p>
+              )}
             </div>
           </div>
 
