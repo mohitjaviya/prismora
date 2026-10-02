@@ -48,3 +48,10 @@
 - For bigger changes, show a short plan and wait for my approval before editing code.
 - Keep responses short. Don't repeat code or explanations I've already seen.
 - One task per session. If I switch to an unrelated task, remind me to /clear first.
+
+## Working rules
+- Check /usage and /context periodically; flag me if context is approaching 80-100k tokens so we can wrap up and /clear instead of continuing.
+- When resuming after /clear, always start by reading NOTES.md and CLAUDE.md first before doing anything else.
+- Prefer being pointed at specific files over searching broadly.
+- For any migration or deploy, briefly state the plan before running commands, not after.
+- Stop rules stay as before: blocked/denied commands, failing writes, same script failing 3 times in a row.
