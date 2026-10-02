@@ -6,6 +6,7 @@ import { downloadCSV } from '../../utils/exportUtils';
 import { useConfirm } from '../../context/DialogContext';
 import { useToast } from '../../context/DialogContext';
 import { Badge, Button, DataTable, IconButton, PageHeader } from '../../components/ui';
+import { rolesAssignableBy, mayManageAccount } from '../../utils/roleUtils';
 
 /**
  * The people who can sign in, and what each of them may reach.
@@ -32,7 +33,7 @@ const passwordPolicyError = (pw) => {
 // screen. They are created from the partner's own row instead, by the key
 // button on Distributors, Dealers and Retailers.
 const PARTNER_ROLES = ['Distributor', 'Dealer', 'Retailer'];
-const selectableRoles = USER_ROLES.filter(r => !PARTNER_ROLES.includes(r));
+const staffRoles = USER_ROLES.filter(r => !PARTNER_ROLES.includes(r));
 
 const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
@@ -45,8 +46,11 @@ export default function TeamMembers() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [userForm, setUserForm] = useState(BLANK_USER_FORM);
+  // What the server and database will accept from this person: only a Super
+  // Admin hands out Super Admin, Admin or Director (071).
+  const selectableRoles = rolesAssignableBy(user?.role, staffRoles, editingUser?.role);
 
-  const openUserAdd = () => { setEditingUser(null); setUserForm(BLANK_USER_FORM); setIsUserModalOpen(true); };
+  const openUserAdd = () => { setEditingUser(null); setUserForm({ ...BLANK_USER_FORM, role: rolesAssignableBy(user?.role, staffRoles).includes('Sales Executive') ? 'Sales Executive' : (rolesAssignableBy(user?.role, staffRoles)[0] || '') }); setIsUserModalOpen(true); };
   const openUserEdit = (u) => { setEditingUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, managedUsers: u.managedUsers || [], password: '' }); setIsUserModalOpen(true); };
 
   const handleUserSubmit = (e) => {
@@ -101,6 +105,18 @@ export default function TeamMembers() {
     })) return;
     const ok = await updateUser(u.id, { status: active ? 'Active' : 'Inactive' });
     toast(ok ? `${u.name} is now ${active ? 'active' : 'inactive'}.` : `${u.name} could not be ${active ? 'reactivated' : 'deactivated'}.`, ok ? 'success' : 'error');
+  };
+
+  // The row stays until the database has deleted it, and a refusal is shown.
+  // Deleting also removes their sign-in, so the e-mail can be used again.
+  const removeUser = async (u) => {
+    if (!await confirm({
+      title: `Delete ${u.name}?`,
+      body: 'Their profile and their sign-in are removed, and the e-mail can be used again. Their records stay. Use Deactivate instead to keep the account.',
+      danger: true, confirmLabel: 'Delete',
+    })) return;
+    const res = await deleteUser(u.id);
+    toast(res?.ok ? `${u.name} was deleted.` : `${u.name} was not deleted: ${res?.error || 'the database refused it.'}`, res?.ok ? 'success' : 'error');
   };
 
   const toggleManagedUser = (userId) => {
@@ -160,13 +176,13 @@ export default function TeamMembers() {
       key: 'actions', header: '', align: 'center', width: 'w-28',
       render: u => (
         <div className="flex items-center justify-center gap-0.5">
-          <IconButton icon={Edit2} title="Edit user" size="sm" tone="accent" onClick={() => openUserEdit(u)} />
-          {u.id !== user.id && (u.status === 'Inactive'
+          {mayManageAccount(user?.role, u.role) && <IconButton icon={Edit2} title="Edit user" size="sm" tone="accent" onClick={() => openUserEdit(u)} />}
+          {u.id !== user.id && mayManageAccount(user?.role, u.role) && (u.status === 'Inactive'
             ? <IconButton icon={UserCheck} title="Reactivate user" size="sm" tone="accent" onClick={() => setActive(u, true)} />
             : u.status !== 'Pending' && <IconButton icon={UserX} title="Deactivate user" size="sm" tone="danger" onClick={() => setActive(u, false)} />)}
-          {u.id !== user.id && (
+          {u.id !== user.id && mayManageAccount(user?.role, u.role) && (
             <IconButton icon={Trash2} title="Delete user" size="sm" tone="danger"
-              onClick={async () => { if (await confirm({ title: 'Delete this user?', danger: true, confirmLabel: 'Delete' })) deleteUser(u.id); }} />
+              onClick={() => removeUser(u)} />
           )}
         </div>
       ),

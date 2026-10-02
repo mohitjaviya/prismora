@@ -1,0 +1,304 @@
+{
+ "tag": "955555",
+ "U": {
+  "adm": {
+   "id": "U1790938962469",
+   "email": "test.g71.adm.955555@prismora.test",
+   "role": "Admin"
+  },
+  "acc": {
+   "id": "U1790938963737",
+   "email": "test.g71.acc.955555@prismora.test",
+   "role": "Accounts"
+  },
+  "del": {
+   "id": "U1790938965980",
+   "email": "test.g71.del.955555@prismora.test",
+   "role": "Accounts"
+  },
+  "byadm": {
+   "id": "U1790938975775",
+   "email": "test.g71.byadm.955555@prismora.test"
+  },
+  "good": {
+   "id": "U1790938982578",
+   "email": "test.g71.good.955555@prismora.test"
+  },
+  "sadir": {
+   "id": "U1790938984617",
+   "email": "test.g71.sadir.955555@prismora.test"
+  },
+  "del2": {
+   "id": "U1790938987206",
+   "email": "test.g71.del.955555@prismora.test"
+  },
+  "member": {
+   "id": "U1790938990233",
+   "email": "test.g71.member.955555@prismora.test",
+   "role": "TEST G71 AdminRole 955555"
+  },
+  "reemail": {
+   "id": "U1790938994105",
+   "email": "test.g71.reemail.955555@prismora.test",
+   "role": "Accounts"
+  }
+ },
+ "rid": "TEST G71 AdminRole 955555",
+ "out": [
+  {
+   "id": "setup: Super Admin creates sa2 (Super Admin)",
+   "pass": true,
+   "detail": "200 U1790938959876"
+  },
+  {
+   "id": "setup: Super Admin creates adm (Admin)",
+   "pass": true,
+   "detail": "200 U1790938962469"
+  },
+  {
+   "id": "setup: Super Admin creates acc (Accounts)",
+   "pass": true,
+   "detail": "200 U1790938963737"
+  },
+  {
+   "id": "setup: Super Admin creates del (Accounts)",
+   "pass": true,
+   "detail": "200 U1790938965980"
+  },
+  {
+   "id": "1a Admin cannot make a user Super Admin",
+   "pass": true,
+   "detail": "403 Only a Super Admin can give the role Super Admin."
+  },
+  {
+   "id": "1b Admin cannot give the role Admin",
+   "pass": true,
+   "detail": "403 Only a Super Admin can give the role Admin."
+  },
+  {
+   "id": "1b Admin cannot give the role Director",
+   "pass": true,
+   "detail": "403 Only a Super Admin can give the role Director."
+  },
+  {
+   "id": "1c an Admin-role account cannot promote themselves",
+   "pass": true,
+   "detail": "403 Only a Super Admin can give the role Super Admin."
+  },
+  {
+   "id": "1d Director cannot either (no rows or refused)",
+   "pass": true,
+   "detail": "200 rows=0"
+  },
+  {
+   "id": "1e Admin cannot deactivate a Super Admin account",
+   "pass": true,
+   "detail": "403 Only a Super Admin can change or delete a Super Admin account."
+  },
+  {
+   "id": "1e Admin cannot change the e-mail of a Super Admin account",
+   "pass": true,
+   "detail": "403 Only a Super Admin can change or delete a Super Admin account."
+  },
+  {
+   "id": "1e Admin cannot rename a Super Admin account",
+   "pass": true,
+   "detail": "403 Only a Super Admin can change or delete a Super Admin account."
+  },
+  {
+   "id": "1e Admin cannot demote a Super Admin account",
+   "pass": true,
+   "detail": "403 Only a Super Admin can change or delete a Super Admin account."
+  },
+  {
+   "id": "1f Admin cannot delete a Super Admin account",
+   "pass": true,
+   "detail": "403 Only a Super Admin can change or delete a Super Admin account."
+  },
+  {
+   "id": "1g Admin cannot insert a Super Admin profile directly",
+   "pass": true,
+   "detail": "403 Only a Super Admin can give the role Super Admin."
+  },
+  {
+   "id": "1k …and the Super Admin account is unchanged in the database",
+   "pass": true,
+   "detail": "{\"role\":\"Super Admin\",\"status\":\"Active\",\"email\":\"test.g71.sa2.955555@prismora.test\",\"name\":\"TEST G71 sa2 955555\"}"
+  },
+  {
+   "id": "1l Admin can still edit an ordinary user (name + role)",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "1m Admin can still deactivate / reactivate an ordinary user",
+   "pass": true,
+   "detail": "200/200"
+  },
+  {
+   "id": "1n Super Admin can give and take back the Director role",
+   "pass": true,
+   "detail": "200/200"
+  },
+  {
+   "id": "1o Super Admin can deactivate / reactivate another Super Admin",
+   "pass": true,
+   "detail": "200/200"
+  },
+  {
+   "id": "1p nobody can delete their own account (Admin)",
+   "pass": true,
+   "detail": "403 You cannot delete your own account. Ask another administrator."
+  },
+  {
+   "id": "2a Director (settings = none) is refused",
+   "pass": true,
+   "detail": "403 Your role does not have permission to create accounts."
+  },
+  {
+   "id": "2b Sales Manager is refused",
+   "pass": true,
+   "detail": "403 Your role does not have permission to create accounts."
+  },
+  {
+   "id": "2c an active Admin-role account still can create accounts",
+   "pass": true,
+   "detail": "200 U1790938975775"
+  },
+  {
+   "id": "2d the same Admin, now deactivated, with the SAME still-valid token, is refused",
+   "pass": true,
+   "detail": "403 Your account is not active, so it cannot create accounts."
+  },
+  {
+   "id": "2e …and no account was created",
+   "pass": true,
+   "detail": "rows=0"
+  },
+  {
+   "id": "2f a role that does not exist is refused",
+   "pass": true,
+   "detail": "400 \"TEST Bogus Role 955555\" is not a role that can be given. Pick one from the list."
+  },
+  {
+   "id": "2g a password that is letters only is refused",
+   "pass": true,
+   "detail": "400 The password must include at least one letter and one number."
+  },
+  {
+   "id": "2g a password that is digits only is refused",
+   "pass": true,
+   "detail": "400 The password must include at least one letter and one number."
+  },
+  {
+   "id": "2g a password that is under 8 characters is refused",
+   "pass": true,
+   "detail": "400 The password must be at least 8 characters."
+  },
+  {
+   "id": "2h a letters-and-numbers password is accepted",
+   "pass": true,
+   "detail": "200 created"
+  },
+  {
+   "id": "2i Admin still cannot create a Director",
+   "pass": true,
+   "detail": "403 Only a Super Admin can create an administrator."
+  },
+  {
+   "id": "2j Super Admin can create a Director",
+   "pass": true,
+   "detail": "200 created"
+  },
+  {
+   "id": "3a before: the user signs in",
+   "pass": true,
+   "detail": "ok"
+  },
+  {
+   "id": "3b Admin deletes the profile (row returned)",
+   "pass": true,
+   "detail": "200 rows=1"
+  },
+  {
+   "id": "3c the profile is gone AND the login is gone (no sign-in with no profile)",
+   "pass": true,
+   "detail": "profile-rows=0 signin=400 Invalid login credentials"
+  },
+  {
+   "id": "3d the e-mail can be used again",
+   "pass": true,
+   "detail": "200 created"
+  },
+  {
+   "id": "3e …and the new account signs in",
+   "pass": true,
+   "detail": "ok"
+  },
+  {
+   "id": "3f a refused delete returns no row (so the screen keeps it)",
+   "pass": true,
+   "detail": "403 Only a Super Admin can change or delete a Super Admin account."
+  },
+  {
+   "id": "3g Super Admin can delete a (non-last) Super Admin account, login included",
+   "pass": true,
+   "detail": "200 rows=1"
+  },
+  {
+   "id": "4a TEST role with Settings = full created",
+   "pass": true,
+   "detail": "201"
+  },
+  {
+   "id": "4b a user in that role signs in",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "4c the member cannot take Settings from their own role",
+   "pass": true,
+   "detail": "403 This is your own role. Taking away Settings, switching it off or renaming it would lock you out, and"
+  },
+  {
+   "id": "4d …nor switch it off",
+   "pass": true,
+   "detail": "403 This is your own role. Taking away Settings, switching it off or renam"
+  },
+  {
+   "id": "4e …nor delete it",
+   "pass": true,
+   "detail": "403 This is your own role. Deleting it would lock you out, and nobody coul"
+  },
+  {
+   "id": "4f …but can change other things on it (description)",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "4g the role still has Settings = full in the database",
+   "pass": true,
+   "detail": "full"
+  },
+  {
+   "id": "4h an Admin (a different role) CAN change that role",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "5a partner balances still match",
+   "pass": true,
+   "detail": "[]"
+  },
+  {
+   "id": "5b the delete is in the audit log under the Admin's name",
+   "pass": true,
+   "detail": "[\"created:TEST Super Admin\",\"deleted:TEST Admin\"]"
+  },
+  {
+   "id": "5c KNOWN GAP: delete after the profile e-mail was edited leaves the original login",
+   "pass": true,
+   "detail": "login still signs in: true (edited profile e-mail no longer matches the login)"
+  }
+ ]
+}

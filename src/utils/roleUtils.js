@@ -197,3 +197,26 @@ export const orphanedRoles = (users, roles) => {
   });
   return out;
 };
+
+/**
+ * Roles only a Super Admin may hand out — the same list create-user and the
+ * database guard (071) use. Everyone else's options leave these out, so the
+ * form never offers what the server will refuse.
+ */
+export const SUPER_ADMIN_ONLY_ROLES = ['Super Admin', 'Admin', 'Director'];
+
+/**
+ * The roles `actorRole` may pick on the Add/Edit User form. When editing,
+ * the person's current role stays in the list so the select shows it truthfully
+ * and saving without touching it does not change it.
+ */
+export const rolesAssignableBy = (actorRole, roleNames, currentRole = null) => {
+  const allowed = actorRole === 'Super Admin'
+    ? roleNames
+    : roleNames.filter(r => !SUPER_ADMIN_ONLY_ROLES.includes(r));
+  return currentRole && !allowed.includes(currentRole) ? [currentRole, ...allowed] : allowed;
+};
+
+/** Only a Super Admin may change, deactivate or delete a Super Admin account (071). */
+export const mayManageAccount = (actorRole, targetRole) =>
+  targetRole !== 'Super Admin' || actorRole === 'Super Admin';

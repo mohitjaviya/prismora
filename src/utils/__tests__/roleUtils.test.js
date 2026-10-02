@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MODULES, accessFor, levelFor, grantedCount, isAdminLevel, isUnrestrictedRole, rejectPermissionChange,
-  fallbackRoles, roleSummary, peopleByRole, holdersOf, orphanedRoles,
+  fallbackRoles, roleSummary, peopleByRole, holdersOf, orphanedRoles, rolesAssignableBy, mayManageAccount,
 } from '../roleUtils';
 
 const FALLBACK = {
@@ -261,5 +261,24 @@ describe('orphanedRoles - accounts locked out by a role that does not exist', ()
 
   it('reports nothing when every role is known', () => {
     expect(orphanedRoles([{ id: 1, role: 'Super Admin' }], roles)).toEqual({});
+  });
+});
+
+describe('who may be given which role, and whose account may be touched (071)', () => {
+  const ALL = ['Super Admin', 'Director', 'Sales Manager', 'Accounts'];
+  it('a Super Admin may pick any role', () => {
+    expect(rolesAssignableBy('Super Admin', ALL)).toEqual(ALL);
+  });
+  it('an Admin is not offered Super Admin or Director', () => {
+    expect(rolesAssignableBy('Admin', ALL)).toEqual(['Sales Manager', 'Accounts']);
+  });
+  it('editing keeps the person\'s current role visible even when it is not pickable', () => {
+    expect(rolesAssignableBy('Admin', ALL, 'Director')).toEqual(['Director', 'Sales Manager', 'Accounts']);
+    expect(rolesAssignableBy('Admin', ALL, 'Accounts')).toEqual(['Sales Manager', 'Accounts']);
+  });
+  it('only a Super Admin may manage a Super Admin account', () => {
+    expect(mayManageAccount('Admin', 'Super Admin')).toBe(false);
+    expect(mayManageAccount('Super Admin', 'Super Admin')).toBe(true);
+    expect(mayManageAccount('Admin', 'Director')).toBe(true);
   });
 });

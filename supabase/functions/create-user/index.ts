@@ -17,7 +17,17 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
+// Roles only a Super Admin may hand out. This is about who may be CREATED; who
+// may call this function at all is decided below from the caller's live profile
+// and role permissions, not from their role's name.
 const ADMIN_ROLES = ['Super Admin', 'Director', 'Admin'];
+
+// Same rule as the Add User form: 8+ characters with a letter and a number.
+const passwordProblem = (pw: string): string | null => {
+  if (pw.length < 8) return 'The password must be at least 8 characters.';
+  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return 'The password must include at least one letter and one number.';
+  return null;
+};
 
 // A partner role is only meaningful with a record behind it. Every portal
 // screen finds its partner with distributors.find(d => d.id === user.distributorId),
@@ -67,13 +77,28 @@ Deno.serve(async (req) => {
   const admin = createClient(url, serviceKey);
 
   const { data: caller, error: callerError } = await admin
-    .from('users').select('id, role').ilike('email', auth.user.email).maybeSingle();
+    .from('users').select('id, role, status').ilike('email', auth.user.email).maybeSingle();
 
   if (callerError) return json({ error: 'Could not verify your account.' }, 500);
-  if (!caller || !ADMIN_ROLES.includes(caller.role)) {
-    // Checked here rather than trusted from the request. A role sent by the
-    // browser is a claim; this is the stored fact.
-    return json({ error: 'Only an administrator can create an account.' }, 403);
+  if (!caller) return json({ error: 'Only an administrator can create an account.' }, 403);
+
+  // A token stays valid for up to an hour after an account is switched off, so
+  // the stored status is checked on every call, not the sign-in.
+  if ((caller.status ?? 'Active') !== 'Active') {
+    return json({ error: 'Your account is not active, so it cannot create accounts.' }, 403);
+  }
+
+  // What the caller's role can do right now, from the roles table — the same
+  // test the database uses for "administers users" (settings = full), not the
+  // role's name. A Director's name sounds senior; its Settings access is none.
+  const { data: callerRole, error: callerRoleError } = await admin
+    .from('roles').select('id, active, permissions').eq('id', caller.role).maybeSingle();
+  if (callerRoleError) return json({ error: 'Could not verify your permissions.' }, 500);
+  const mayAdminister = caller.role === 'Super Admin'
+    ? callerRole?.active !== false
+    : callerRole?.active !== false && callerRole?.permissions?.settings === 'full';
+  if (!mayAdminister) {
+    return json({ error: 'Your role does not have permission to create accounts.' }, 403);
   }
 
   // ── 2. What are they asking for? ───────────────────────────────────────
@@ -88,12 +113,20 @@ Deno.serve(async (req) => {
   if (!email || !password || !name || !role) {
     return json({ error: 'Name, email, password and role are all required.' }, 400);
   }
-  if (password.length < 8) {
-    return json({ error: 'The password must be at least 8 characters.' }, 400);
-  }
+  const pwProblem = passwordProblem(password);
+  if (pwProblem) return json({ error: pwProblem }, 400);
   if (ADMIN_ROLES.includes(role) && caller.role !== 'Super Admin') {
     // Only the top of the tree may create another account at the top.
     return json({ error: 'Only a Super Admin can create an administrator.' }, 403);
+  }
+
+  // The role has to exist and be switched on. A made-up name creates an
+  // account that signs in and can reach nothing.
+  const { data: targetRole, error: targetRoleError } = await admin
+    .from('roles').select('id, active').eq('id', role).maybeSingle();
+  if (targetRoleError) return json({ error: 'Could not check the role.' }, 500);
+  if (!targetRole || targetRole.active === false) {
+    return json({ error: `"${role}" is not a role that can be given. Pick one from the list.` }, 400);
   }
 
   // ── 2a. A partner role needs the record it belongs to ──────────────────

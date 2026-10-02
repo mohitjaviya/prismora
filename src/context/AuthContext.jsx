@@ -726,13 +726,22 @@ export const AuthProvider = ({ children }) => {
     return true;
   };
 
+  // The row leaves the screen only once the database has deleted it, and a
+  // refusal comes back in words. The database also removes the person's
+  // sign-in with their profile (071), so the e-mail is free again.
   const deleteUser = async (id) => {
+    const { data, error } = await supabase.from('users').delete().eq('id', id).select('id');
+    if (error || !data?.length) {
+      const reason = error?.message || 'You may not delete this user, or they no longer exist.';
+      console.error('[Prismora] Could not delete the user:', reason);
+      return { ok: false, error: reason };
+    }
     setUsers(prev => {
       const next = prev.filter(u => u.id !== id);
       localStorage.setItem('prismora_users', JSON.stringify(next));
       return next;
     });
-    try { await supabase.from('users').delete().eq('id', id); } catch { /* ok */ }
+    return { ok: true };
   };
 
   // RBAC Helper: Check if current user can see data assigned to `ownerId`
