@@ -16,7 +16,7 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 - HIGH: slow saves (5–40 s, 4–26 s after sign-in); cause unknown, not reproducible now.
 - MEDIUM: self-registered partner has no address/territory (`DistributorSignup.jsx`); claims not tied to earned incentives (`Claims.jsx`).
 - LOW: partners can read all schemes; complaint auto-assigned to the partner; deleting auto-booked expense has weak confirm.
-- Batch 6 leftovers: O145 (partner order before the fix) still has no incentive, kept as F02 evidence; O140 is an open backorder of delivered O139 (old data, untouched); test rows O152–O178, leads L28/L29 and incentives on O165/O169 are TEST data from batch 6, not deleted. Live check was the deployed bundle plus DB, not a browser run: the old e2e harness (`test-results/full-test/e2e.mjs`, `rest-as.mjs`) and Playwright are gone; `fix-batch-6/rest-as.mjs` replaces the REST helper.
+- Batch 6 follow-ups (done 2026-10-02): Sales Manager lead check proven (insert refused with 'Lead L30 has already been converted to order O179'; Sales Manager has no UPDATE right on orders so a lead edit changes 0 rows; Admin/Super Admin/Dispatch/Warehouse get the same clear refusal). Browser check on live: Admin placed an order for TEST P2E Distributor (single product, qty 10 = ₹1,100) and the Incentives screen showed ₹55 Discount Earned. Batch 6 TEST data deleted (orders O152–O182, leads L28–L30, 5 incentives, 4 invoices, 4 stock movements; 6 units put back on TEST-INV-1 → 439); before/after snapshot showed nothing else changed. O145 and O140 left as they are on purpose. Browser tooling: `playwright-core` is installed only in the session scratchpad (Chrome at C:/Program Files/Google/Chrome), not in the repo.
 - Small: no confirm on partner approval; audit actor "System" at sign-up; "Expires in 1 days".
 - Phase 1 leftovers: see `FIX-SUMMARY.md` (D-08, D-13, D-14, D-24, D-25, forms validation).
 - Fixed this session: split backorders no longer copy the parent's `leadId` (`DataContext.jsx`, commit ac5d2b9; 066 had broken splits of lead-sourced orders). Verified live.
@@ -29,7 +29,7 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 - Test-only phases: report findings, fix only on owner approval.
 
 ## Next (priority)
-1. Phase 2 G (admin/roles/audit) and H (reports vs DB); write `PHASE2-REPORT.md`. (Stopped after batch 6, waiting for go-ahead.)
+1. Phase 2 G (admin/roles/audit) in progress, then H (reports vs DB); write `PHASE2-REPORT.md`. Stop after G and report before H.
 2. Phase 3 (every-button sweep), Phase 4 (integrity); final report.
 3. Later batch: slow saves, self-registered partner address/territory, claims tied to earned incentives, missing confirms, Phase 1 leftovers.
 4. Optional: delete the batch 6 TEST rows on owner's OK.
