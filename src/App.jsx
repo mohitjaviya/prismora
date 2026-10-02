@@ -14,6 +14,7 @@ const Leads = lazy(() => import('./pages/Leads'));
 const Orders = lazy(() => import('./pages/Orders'));
 const Geography = lazy(() => import('./pages/Geography'));
 const Settings = lazy(() => import('./pages/Settings'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 const Masters = lazy(() => import('./pages/Masters'));
 const TeamMembers = lazy(() => import('./pages/masters/TeamMembers'));
 const ProductCatalog = lazy(() => import('./pages/masters/ProductCatalog'));
@@ -165,6 +166,7 @@ function AppRoutes() {
         <Route path="masters/products" element={<PermissionGuard module="settings"><ProductCatalog /></PermissionGuard>} />
         <Route path="masters/roles" element={<PermissionGuard module="settings"><Roles /></PermissionGuard>} />
         <Route path="profile" element={<Profile />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
     </Suspense>

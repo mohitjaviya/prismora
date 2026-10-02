@@ -8,20 +8,12 @@ import { PageHeader, DataTable, Button, Card, StatCard, SearchInput, Select } fr
 import { downloadCSV } from '../utils/exportUtils';
 import { sendEmailAlert, templates } from '../utils/notificationUtils';
 import { optionsFor } from '../utils/masterLists';
-import { isExpired, isExpiringSoon, daysToExpiry as expiryDays, EXPIRING_SOON_DAYS } from '../utils/expiry';
+import { isExpired, daysToExpiry as expiryDays, EXPIRING_SOON_DAYS, stockStatus } from '../utils/expiry';
 
 const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Expired', 'Out of Stock'];
 
-// Expired comes first: an expired batch is not stock that can be sold, however
-// much of it there is (D-18, utils/expiry.js, the rule deliveries follow too).
-const getStockStatus = (item) => {
-  if (item.quantity === 0) return 'Out of Stock';
-  if (isExpired(item)) return 'Expired';
-  if (isExpiringSoon(item)) return 'Expiring Soon';
-  if (item.quantity <= item.reorderLevel * 0.5) return 'Critical';
-  if (item.quantity <= item.reorderLevel) return 'Low Stock';
-  return 'OK';
-};
+// The status rule lives in utils/expiry.js, shared with the Reports low-stock list.
+const getStockStatus = stockStatus;
 
 const statusConfig = {
   'OK':            { cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: <CheckCircle size={12} /> },

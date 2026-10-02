@@ -9,9 +9,16 @@ import { isConvertedLead } from '../utils/leadStatus';
 import { amountPaid, amountDue, invoiceTotal } from '../utils/invoiceStatus';
 import { profitAndLoss, salesCreditNotes, openTaxInvoices } from '../utils/financials';
 import { taxInvoices, registerRow, gstHsnSummary } from '../utils/gstReport';
+import { orderLines } from '../utils/billing';
+import { needsReorder } from '../utils/expiry';
 
-const formatCurrency = (val) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
+// Paise shown where there are any (₹30.50, not ₹31), so a column on screen
+// adds up to the same total as its CSV (H15).
+const formatCurrency = (val) => {
+  const v = Math.round((Number(val) || 0) * 100) / 100;
+  const paiseDigits = Number.isInteger(v) ? 0 : 2;
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: paiseDigits, maximumFractionDigits: paiseDigits }).format(v);
+};
 
 const paise = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -73,11 +80,15 @@ export default function Reports() {
         desc: 'Order value and quantity booked per product.',
         generate: () => {
           const byProduct = {};
+          // By the order's own lines: a multi-item order used to count as one
+          // product named "X +2 more items" (H10).
           orders.filter(o => o.status !== 'Cancelled' && inRange(o.date || o.createdAt)).forEach(o => {
-            const key = o.product || 'Unknown';
-            if (!byProduct[key]) byProduct[key] = { product: key, revenue: 0, qty: 0 };
-            byProduct[key].revenue += (o.value || 0);
-            byProduct[key].qty += (o.quantity || 0);
+            orderLines(o).forEach(line => {
+              const key = line.name || 'Unknown';
+              if (!byProduct[key]) byProduct[key] = { product: key, revenue: 0, qty: 0 };
+              byProduct[key].revenue += line.amount;
+              byProduct[key].qty += line.quantity;
+            });
           });
           return Object.values(byProduct).sort((a, b) => b.revenue - a.revenue);
         },
@@ -131,7 +142,9 @@ export default function Reports() {
         key: 'low_stock',
         label: 'Low Stock / Reorder Report',
         desc: 'Items at or below reorder level.',
-        generate: () => inventory.filter(i => i.quantity <= i.reorderLevel).map(i => ({
+        // The Inventory screen's rule (needsReorder): an expired batch is not
+        // stock to reorder against — it is on the Expiry report (H12).
+        generate: () => inventory.filter(needsReorder).map(i => ({
           product: i.product, batch: i.batchNumber, warehouse: i.warehouse,
           qty: i.quantity, reorderLevel: i.reorderLevel, deficit: i.reorderLevel - i.quantity
         })).sort((a, b) => a.qty - b.qty),

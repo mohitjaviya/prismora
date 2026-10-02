@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { daysToExpiry, isExpired, isExpiringSoon, sellableQty, expiredQty } from '../expiry';
+import { daysToExpiry, isExpired, isExpiringSoon, sellableQty, expiredQty, stockStatus, needsReorder } from '../expiry';
 
 const NOW = new Date(2026, 8, 28, 15, 0);                 // 28 Sep 2026, afternoon, local
 const day = (y, m, d) => new Date(y, m - 1, d).toISOString();
@@ -34,5 +34,23 @@ describe('expiry', () => {
     ];
     expect(sellableQty(inv, 'Gel', NOW)).toBe(305);
     expect(expiredQty(inv, 'Gel', NOW)).toBe(285);
+  });
+});
+
+describe('stockStatus / needsReorder (H12: Inventory and Reports agree)', () => {
+  const now = new Date();
+  const ymd = (days) => new Date(now.getTime() + days * 86400000).toISOString().slice(0, 10);
+  it('an expired batch is Expired, not low, so it is not on the reorder list', () => {
+    const b = { quantity: 10, reorderLevel: 10, expiryDate: ymd(-5) };
+    expect(stockStatus(b)).toBe('Expired');
+    expect(needsReorder(b)).toBe(false);
+  });
+  it('low, critical and out of stock need reordering', () => {
+    expect(needsReorder({ quantity: 9, reorderLevel: 10, expiryDate: ymd(400) })).toBe(true);
+    expect(stockStatus({ quantity: 4, reorderLevel: 10, expiryDate: ymd(400) })).toBe('Critical');
+    expect(needsReorder({ quantity: 0, reorderLevel: 10, expiryDate: ymd(-5) })).toBe(true);
+  });
+  it('healthy stock does not', () => {
+    expect(needsReorder({ quantity: 50, reorderLevel: 10, expiryDate: ymd(400) })).toBe(false);
   });
 });

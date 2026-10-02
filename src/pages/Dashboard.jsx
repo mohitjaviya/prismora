@@ -8,6 +8,7 @@ import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '..
 import { MONTHS, monthKey } from '../utils/months';
 import { isOpenLead, conversionRate as rateOf } from '../utils/leadStatus';
 import { profitAndLoss, salesCreditNotes } from '../utils/financials';
+import { orderLines } from '../utils/billing';
 import DistributorDashboard from './DistributorDashboard';
 import DealerDashboard from './DealerDashboard';
 import RetailerDashboard from './RetailerDashboard';
@@ -167,7 +168,9 @@ const Dashboard = () => {
         const date = new Date(order.date);
         const monthStr = monthKey(date);
         if (monthStr === selectedMonth) {
-          productsInMonth[order.product] = (productsInMonth[order.product] || 0) + (order.value || 0);
+          orderLines(order).forEach(line => {
+            productsInMonth[line.name] = (productsInMonth[line.name] || 0) + line.amount;
+          });
         }
       }
     });
@@ -183,11 +186,15 @@ const Dashboard = () => {
     }
   };
 
-  // Product Demand Data
-  const productDemandMap = visibleOrders.reduce((acc, order) => {
-    acc[order.product] = (acc[order.product] || 0) + order.quantity;
-    return acc;
-  }, {});
+  // Product Demand Data: units on orders that still stand (a cancelled order
+  // is no demand, H11), by each order's own lines — a multi-item order used
+  // to appear as a product named "X +2 more items" (H10).
+  const productDemandMap = visibleOrders
+    .filter(o => o.status !== 'Cancelled')
+    .reduce((acc, order) => {
+      orderLines(order).forEach(line => { acc[line.name] = (acc[line.name] || 0) + line.quantity; });
+      return acc;
+    }, {});
   
   const productData = Object.keys(productDemandMap).map(key => ({
     name: key,

@@ -44,3 +44,24 @@ export const sellableQty = (inventory, product, now = new Date()) => (inventory 
 export const expiredQty = (inventory, product, now = new Date()) => (inventory || [])
   .filter(b => b.product === product && isExpired(b, now))
   .reduce((sum, b) => sum + (Number(b.quantity) || 0), 0);
+
+/**
+ * A batch's stock status, as the Inventory screen shows it. Expired comes
+ * before low: an expired batch is not stock that can be sold, however much of
+ * it there is (D-18, the rule deliveries follow too).
+ */
+export const stockStatus = (item) => {
+  if (item.quantity === 0) return 'Out of Stock';
+  if (isExpired(item)) return 'Expired';
+  if (isExpiringSoon(item)) return 'Expiring Soon';
+  if (item.quantity <= item.reorderLevel * 0.5) return 'Critical';
+  if (item.quantity <= item.reorderLevel) return 'Low Stock';
+  return 'OK';
+};
+
+/**
+ * Needs reordering: low, critical or out. Shared by the Inventory "Low /
+ * Critical" card and the Reports low-stock list (Phase 2 H12: Reports also
+ * listed an expired batch, 10 vs 9; it belongs on the Expiry report).
+ */
+export const needsReorder = (item) => ['Low Stock', 'Critical', 'Out of Stock'].includes(stockStatus(item));
