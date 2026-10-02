@@ -1,0 +1,130 @@
+{
+ "tag": "881953",
+ "out": [
+  {
+   "id": "Admin: creates the account",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "Admin: changing the e-mail is refused with a clear message",
+   "pass": true,
+   "detail": "403 A user's e-mail cannot be changed: it is what their sign-in is matched to, so the person w"
+  },
+  {
+   "id": "Admin: …even if only the letter case changes",
+   "pass": true,
+   "detail": "403"
+  },
+  {
+   "id": "Admin: the e-mail in the database is unchanged",
+   "pass": true,
+   "detail": "test.g73.old.admin.881953@prismora.test"
+  },
+  {
+   "id": "Admin: the OLD login still works and sees its own profile (not locked out)",
+   "pass": true,
+   "detail": "signin=true profile-rows=1"
+  },
+  {
+   "id": "Admin: other edits still work (name)",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "Admin: a NEW account for the new e-mail is created and signs in",
+   "pass": true,
+   "detail": "200 signin=true"
+  },
+  {
+   "id": "Admin: deactivating the old account cuts it off at once",
+   "pass": true,
+   "detail": "200 old rows=0"
+  },
+  {
+   "id": "Admin: the new account is unaffected",
+   "pass": true,
+   "detail": "200 rows=2"
+  },
+  {
+   "id": "Admin: deleting the old account removes profile AND login",
+   "pass": true,
+   "detail": "200 old signin=refused"
+  },
+  {
+   "id": "Admin: the new account still signs in after the old one is deleted",
+   "pass": true,
+   "detail": "signin=true"
+  },
+  {
+   "id": "Admin: the old e-mail can be used again",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "Super Admin: creates the account",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "Super Admin: changing the e-mail is refused with a clear message",
+   "pass": true,
+   "detail": "403 A user's e-mail cannot be changed: it is what their sign-in is matched to, so the person w"
+  },
+  {
+   "id": "Super Admin: …even if only the letter case changes",
+   "pass": true,
+   "detail": "403"
+  },
+  {
+   "id": "Super Admin: the e-mail in the database is unchanged",
+   "pass": true,
+   "detail": "test.g73.old.superadmin.881953@prismora.test"
+  },
+  {
+   "id": "Super Admin: the OLD login still works and sees its own profile (not locked out)",
+   "pass": true,
+   "detail": "signin=true profile-rows=1"
+  },
+  {
+   "id": "Super Admin: other edits still work (name)",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "Super Admin: a NEW account for the new e-mail is created and signs in",
+   "pass": true,
+   "detail": "200 signin=true"
+  },
+  {
+   "id": "Super Admin: deactivating the old account cuts it off at once",
+   "pass": true,
+   "detail": "200 old rows=0"
+  },
+  {
+   "id": "Super Admin: the new account is unaffected",
+   "pass": true,
+   "detail": "200 rows=2"
+  },
+  {
+   "id": "Super Admin: deleting the old account removes profile AND login",
+   "pass": true,
+   "detail": "200 old signin=refused"
+  },
+  {
+   "id": "Super Admin: the new account still signs in after the old one is deleted",
+   "pass": true,
+   "detail": "signin=true"
+  },
+  {
+   "id": "Super Admin: the old e-mail can be used again",
+   "pass": true,
+   "detail": "200"
+  },
+  {
+   "id": "partner balances still match",
+   "pass": true,
+   "detail": "[]"
+  }
+ ]
+}
