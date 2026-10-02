@@ -7,6 +7,7 @@ import { Button, PageHeader } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { isConvertedLead } from '../utils/leadStatus';
 import { isOpen, amountPaid } from '../utils/invoiceStatus';
+import { taxInvoices, registerRow, gstHsnSummary } from '../utils/gstReport';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -24,7 +25,9 @@ const CATEGORIES = [
 ];
 
 export default function Reports() {
-  const { leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories } = useData();
+  const { leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories, companySettings } = useData();
+  // Seller details, only for an invoice from before they were stored on it.
+  const gstSeller = useMemo(() => companySettings || {}, [companySettings]);
   const { user, users: teamUsers } = useAuth();
 
   const [activeCategory, setActiveCategory] = useState('sales');
@@ -152,23 +155,19 @@ export default function Reports() {
       {
         key: 'invoice_report',
         label: 'Invoice Register',
-        desc: 'All GST invoices with status and amounts.',
-        generate: () => invoices.filter(i => inRange(i.createdAt)).map(i => {
-          const subtotalVal = Number(i.amount || 0);
-          const taxVal = Number(i.tax || 0);
-          const totalVal = subtotalVal + taxVal;
-          const cgstVal = taxVal / 2;
-          const sgstVal = taxVal / 2;
+        desc: 'Tax invoices with the CGST / SGST / IGST each was issued with. Proformas are not tax invoices and are left out.',
+        generate: () => taxInvoices(invoices).filter(i => inRange(i.createdAt)).map(i => {
+          const r = registerRow(i, gstSeller);
           const dist = distributors?.find(d => d.name?.toLowerCase() === i.customerName?.toLowerCase());
           const gstinVal = dist?.gstin || i.customerGSTIN || '—';
           return {
-            id: i.id, customer: i.customerName, gstin: gstinVal,
-            subtotal: subtotalVal, cgst: cgstVal, sgst: sgstVal, total: totalVal,
+            id: i.id, customer: i.customerName, gstin: gstinVal, placeOfSupply: r.placeOfSupply,
+            subtotal: r.subtotal, cgst: r.cgst, sgst: r.sgst, igst: r.igst, total: r.total,
             status: i.status, date: formatDate(i.createdAt)
           };
         }),
-        columns: ['id', 'customer', 'gstin', 'subtotal', 'cgst', 'sgst', 'total', 'status', 'date'],
-        labels: ['Invoice ID', 'Customer', 'GSTIN', 'Subtotal (₹)', 'CGST (₹)', 'SGST (₹)', 'Total (₹)', 'Status', 'Date'],
+        columns: ['id', 'customer', 'gstin', 'placeOfSupply', 'subtotal', 'cgst', 'sgst', 'igst', 'total', 'status', 'date'],
+        labels: ['Invoice ID', 'Customer', 'GSTIN', 'Place of Supply', 'Subtotal (₹)', 'CGST (₹)', 'SGST (₹)', 'IGST (₹)', 'Total (₹)', 'Status', 'Date'],
       },
       {
         key: 'outstanding_receivables',
@@ -220,30 +219,11 @@ export default function Reports() {
       {
         key: 'gst_summary',
         label: 'GST / HSN Summary (GSTR-1)',
-        desc: 'Tax collected grouped by HSN code and GST rate, with CGST/SGST/IGST split.',
-        generate: () => {
-          const byHsn = {};
-          invoices.filter(i => inRange(i.createdAt)).forEach(inv => {
-            const order = orders.find(o => o.id === inv.orderId);
-            const prod = order ? productCatalog.find(p => p.name === order.product) : null;
-            const hsn = prod?.hsnCode || '30049011';
-            const rate = prod?.gstPct ?? (Number(inv.amount) ? Math.round((Number(inv.tax || 0) / Number(inv.amount)) * 100) : 0);
-            const key = `${hsn}-${rate}`;
-            const taxable = Number(inv.amount || 0);
-            const tax = Number(inv.tax || 0);
-            const intrastate = (order?.state || 'Gujarat').toLowerCase() === 'gujarat';
-            if (!byHsn[key]) byHsn[key] = { hsn, rate: `${rate}%`, taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 };
-            byHsn[key].taxable += taxable;
-            byHsn[key].cgst += intrastate ? tax / 2 : 0;
-            byHsn[key].sgst += intrastate ? tax / 2 : 0;
-            byHsn[key].igst += intrastate ? 0 : tax;
-            byHsn[key].total += taxable + tax;
-          });
-          return Object.values(byHsn).map(r => ({
-            ...r,
-            taxable: Math.round(r.taxable), cgst: Math.round(r.cgst), sgst: Math.round(r.sgst), igst: Math.round(r.igst), total: Math.round(r.total)
-          })).sort((a, b) => b.total - a.total);
-        },
+        desc: 'Tax invoices by HSN code and GST rate, with the CGST / SGST / IGST each invoice was issued with. Proformas are left out.',
+        generate: () => gstHsnSummary(
+          invoices.filter(i => inRange(i.createdAt)),
+          { orders, productCatalog, seller: gstSeller }
+        ),
         columns: ['hsn', 'rate', 'taxable', 'cgst', 'sgst', 'igst', 'total'],
         labels: ['HSN Code', 'GST Rate', 'Taxable Value (₹)', 'CGST (₹)', 'SGST (₹)', 'IGST (₹)', 'Total (₹)'],
       },
@@ -371,7 +351,7 @@ export default function Reports() {
         labels: ['Scheme', 'Type', 'Applicable To', 'Discount', 'Free Goods', 'Min Order', 'Valid From', 'Valid To'],
       },
     ],
-  }), [leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories, teamUsers, dateFrom, dateTo]);
+  }), [leads, orders, invoices, expenses, inventory, distributors, complaints, schemes, productCatalog, territories, teamUsers, dateFrom, dateTo, gstSeller]);
 
   const currentReports = reports[activeCategory] || [];
   const activeReportDef = currentReports.find(r => r.key === activeReport);
