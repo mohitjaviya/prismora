@@ -21,7 +21,7 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 - Invoice for a backorder (migration 039 `insert_invoice_for_order`): bills the person, not the company, because the backorder has `leadId` null. Fix: use the parent's company via `splitFromOrderId`. Preferred over a new `sourceLeadId` field.
 - 066 trigger gaps (`order_one_per_lead`): an UPDATE that sets `leadId` is not checked; no guard when the parent is cancelled while its backorder is still open.
 - Fixed this session: split backorders no longer copy the parent's `leadId` (`DataContext.jsx`, commit ac5d2b9; 066 had broken splits of lead-sourced orders). Verified live.
-- Test rows left (TEST, same Supabase project as live): O147, O148 (cancelled probe), O149, O150, O151. Delete only with owner OK.
+- Test rows O147–O151 (split tests) were deleted on the owner's OK; the database was checked afterwards (no orphaned invoices, stock entries or lead links).
 
 ## Decisions
 - Partner orders need Processing step (Sales Manager/Admin) first.
