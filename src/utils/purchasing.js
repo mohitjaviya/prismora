@@ -85,3 +85,13 @@ export function stockAfterAdjustment(quantity, adjustment) {
   if (!Number.isFinite(from) || !Number.isFinite(by)) return null;
   return Math.max(0, from + by);
 }
+
+/**
+ * POs still waiting for goods: Confirmed, or Partially Received. "Ordered" is
+ * the name the first seed data used (migration 002) before Confirmed existed;
+ * those POs are still waiting for goods, so they count too (Phase 2 H8). The
+ * database receives goods only against Confirmed / Partially Received (051).
+ */
+export const AWAITING_GOODS_STATUSES = ['Confirmed', 'Partially Received', 'Ordered'];
+
+export const isAwaitingGoods = (po) => AWAITING_GOODS_STATUSES.includes(po?.status);

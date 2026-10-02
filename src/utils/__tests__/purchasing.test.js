@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  batchForReturn, isOverReturn, lineItemsValue, returnValue, stockAfterAdjustment, vendorBalanceAfterReturn,
+  batchForReturn, isAwaitingGoods, isOverReturn, lineItemsValue, returnValue, stockAfterAdjustment, vendorBalanceAfterReturn,
 } from '../purchasing';
 
 describe('returnValue', () => {
@@ -126,5 +126,14 @@ describe('lineItemsValue, as addGRN uses it', () => {
 
   it('rounds to paise rather than carrying float noise into a balance', () => {
     expect(lineItemsValue([{ quantity: 3, unitCost: 33.333 }])).toBe(100);
+  });
+});
+
+describe('isAwaitingGoods (H8)', () => {
+  it('counts Confirmed, Partially Received and the older name Ordered', () => {
+    expect(['Confirmed', 'Partially Received', 'Ordered'].map(status => isAwaitingGoods({ status }))).toEqual([true, true, true]);
+  });
+  it('does not count Draft, GRN Done, Closed or Cancelled', () => {
+    expect(['Draft', 'GRN Done', 'Closed', 'Cancelled'].some(status => isAwaitingGoods({ status }))).toBe(false);
   });
 });

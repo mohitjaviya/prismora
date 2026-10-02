@@ -11,7 +11,8 @@ import {
 } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import { Button, IconButton, PageHeader } from '../components/ui';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadCSV, itemsText } from '../utils/exportUtils';
+import { isAwaitingGoods } from '../utils/purchasing';
 import { buildVendorLedger } from '../utils/distributorUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
 
@@ -19,6 +20,8 @@ import { optionsFor, badgeStyle } from '../utils/masterLists';
 const statusConfig = {
   'Draft':      { cls: 'bg-slate-500/10 text-slate-400 border-slate-500/20', icon: <FileText size={12} /> },
   'Confirmed':  { cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20',    icon: <CheckCircle size={12} /> },
+  // Older name for Confirmed, still on two seeded POs (see isAwaitingGoods).
+  'Ordered':    { cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20',    icon: <CheckCircle size={12} /> },
   'Partially Received': { cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20', icon: <Truck size={12} /> },
   'GRN Done':   { cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: <Truck size={12} /> },
   'Closed':     { cls: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: <CheckCircle size={12} /> },
@@ -107,7 +110,7 @@ export default function Purchases() {
   // KPIs
   const kpis = useMemo(() => ({
     total: purchaseOrders.length,
-    pending: purchaseOrders.filter(p => p.status === 'Confirmed' || p.status === 'Partially Received').length,
+    pending: purchaseOrders.filter(isAwaitingGoods).length,
     // Only committed spend counts — a Draft was never sent to the vendor and a
     // Cancelled PO represents no obligation, so including either overstates spend.
     thisMonth: purchaseOrders.filter(p => {
@@ -215,7 +218,7 @@ export default function Purchases() {
         PO: po.id,
         Vendor: vendorNameFor(po.vendorId),
         Items: (po.items || []).length,
-        Total: po.totalAmount,
+        Total: po.total,
         Status: po.status,
         Expected: formatDate(po.expectedDate),
         Created: formatDate(po.createdAt),
@@ -228,8 +231,7 @@ export default function Purchases() {
         Contact: v.contactPerson,
         Phone: v.phone,
         Email: v.email,
-        City: v.city,
-        State: v.state,
+        Address: v.address,
         Outstanding: v.outstandingAmount,
       })), 'PRISMORA_Vendors');
     }
@@ -245,8 +247,8 @@ export default function Purchases() {
     return downloadCSV((purchaseReturns || []).map(r => ({
       Return: r.id,
       Vendor: vendorNameFor(r.vendorId),
-      Product: r.product,
-      Quantity: r.quantity,
+      Items: itemsText(r.items),
+      Quantity: (r.items || []).reduce((s, i) => s + Number(i.quantity || 0), 0),
       Value: r.value,
       Reason: r.reason,
       Date: formatDate(r.date || r.createdAt),
