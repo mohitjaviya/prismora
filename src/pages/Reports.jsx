@@ -225,7 +225,7 @@ export default function Reports() {
             { metric: 'Cost of Goods Purchased', value: paise(r.purchaseCost) },
             { metric: 'Net Profit', value: paise(r.netProfit) },
             { metric: 'Profit Margin %', value: r.margin.toFixed(2) + '%' },
-            { metric: 'GST Collected, to Remit (not income)', value: paise(r.gstCollected) },
+            { metric: 'GST to Remit, net of credit notes (not income)', value: paise(r.gstCollected) },
           ];
         },
         columns: ['metric', 'value'],

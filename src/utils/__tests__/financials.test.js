@@ -24,7 +24,10 @@ describe('profitAndLoss (Accounting\'s definition)', () => {
   it('counts paid tax invoices without GST; proformas never', () => {
     // 1000 settled + 2560 × 280/2951 paid
     expect(r.invoicedPaid).toBeCloseTo(1000 + 2560 * 280 / 2951, 6);
-    expect(r.gstCollected).toBeCloseTo(120 + 391 * 280 / 2951, 6);
+    expect(r.gstOnPayments).toBeCloseTo(120 + 391 * 280 / 2951, 6);
+    // less the GST in C1 (100 × 120/1120); C3 has no invoice, so no GST to take out
+    expect(r.creditNoteGst).toBeCloseTo(100 * 120 / 1120, 6);
+    expect(r.gstCollected).toBeCloseTo(120 + 391 * 280 / 2951 - 100 * 120 / 1120, 6);
   });
   it('takes off credit notes without their GST, except those against a proforma', () => {
     // C1: 100 against a 1000 + 120 invoice → 100 × 1000/1120; C3 has no invoice → 50 as recorded

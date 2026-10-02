@@ -69,14 +69,19 @@ export const purchaseCostOf = (grn, purchaseReturns) => {
 export const profitAndLoss = ({ invoices = [], creditNotes = [], expenses = [], grn = [], purchaseReturns = [] } = {}) => {
   const tax = (invoices || []).filter(i => !isProforma(i));
   const invoicedPaid = sum(tax, paidExGst);
-  const gstCollected = sum(tax, paidGst);
-  const creditNoteValue = sum(salesCreditNotes(creditNotes, invoices), cn => creditNoteExGst(cn, invoices));
+  const notes = salesCreditNotes(creditNotes, invoices);
+  const creditNoteValue = sum(notes, cn => creditNoteExGst(cn, invoices));
+  // A credit note gives back the GST on what it cancels, so that GST is no
+  // longer owed: the GST to remit is what was collected less the notes' share.
+  const gstOnPayments = sum(tax, paidGst);
+  const creditNoteGst = sum(notes, cn => n(cn.amount) - creditNoteExGst(cn, invoices));
+  const gstCollected = gstOnPayments - creditNoteGst;
   const netSales = invoicedPaid - creditNoteValue;
   const expenseValue = sum(expenses, e => n(e.amount));
   const goods = purchaseCostOf(grn, purchaseReturns);
   const netProfit = netSales - expenseValue - goods.cost;
   return {
-    invoicedPaid, gstCollected, creditNoteValue, netSales,
+    invoicedPaid, gstOnPayments, creditNoteGst, gstCollected, creditNoteValue, netSales,
     expenses: expenseValue,
     goodsReceived: goods.received, goodsReturned: goods.returned, purchaseCost: goods.cost,
     netProfit,

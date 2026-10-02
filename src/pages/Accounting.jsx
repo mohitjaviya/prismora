@@ -696,7 +696,7 @@ const Accounting = () => {
                 )}
                 {/* Shown apart from the figure above, because it is not the
                     business's money: it is collected and paid over. */}
-                <div>GST collected, to remit: {formatCurrency(gstCollected)}</div>
+                <div>GST to remit (net of credit notes): {formatCurrency(gstCollected)}</div>
               </div>
             </div>
 
