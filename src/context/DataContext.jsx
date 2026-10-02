@@ -1928,6 +1928,9 @@ export const DataProvider = ({ children }) => {
       value: splitItems.reduce((s, i) => s + (i.total || 0), 0),
       status: 'Processing',
       splitFromOrderId: id,
+      // One order per lead (066): the backorder is tied to its parent by
+      // splitFromOrderId and must not claim the lead the parent converted.
+      leadId: null,
       receivedByDistributor: false,
       receivedAt: null,
       createdAt: new Date().toISOString()
