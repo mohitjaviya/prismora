@@ -1,0 +1,1 @@
+select "invoiceType", "supplyType", "placeOfSupply", count(*) n, sum(tax) tax, sum(cgst) cgst, sum(sgst) sgst, sum(igst) igst, sum(case when abs(coalesce(cgst,0)+coalesce(sgst,0)+coalesce(igst,0)-tax)>0.5 then 1 else 0 end) split_mismatch from invoices group by 1,2,3 order by 1,2,3;

@@ -1,0 +1,1 @@
+select "distributorId", count(*) orders, sum(coalesce("deliveredQty",quantity)) qty, sum(case when "receivedAt" is null then coalesce("deliveredQty",quantity) else 0 end) unconfirmed from orders where status='Delivered' and "distributorId" in ('D-TEST-1','D-TEST-2') and "dealerId" is null and "retailerId" is null group by 1;

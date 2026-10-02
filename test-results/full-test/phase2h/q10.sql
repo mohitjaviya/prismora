@@ -1,0 +1,1 @@
+select i.id, i."sellerState", i."placeOfSupply", i."supplyType", i.tax, i.igst, o.state order_state, i."orderId" from invoices i left join orders o on o.id=i."orderId" where i.tax>0 and ((i."supplyType"='inter') <> (coalesce(o.state,'Gujarat') <> 'Gujarat') or i."sellerState" <> 'Gujarat') order by i.id;

@@ -2,7 +2,7 @@
 
 Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `FIX-BATCH-5.md`.
 
-## Fixed (all live, migrations 040–073)
+## Fixed (all live, migrations 040–074)
 - Security/RLS: reps see own data; partners locked down; deactivated users cut off (043–045)
 - Orders: invoiced = locked, no cancel/delete; stages enforced in DB; one order per lead (061–063, 066)
 - Saves: leads numbered by DB; save journal + "Leave site?" + SaveGuard banner (`utils/writeJournal.js`, `components/SaveGuard.jsx`) (064)
@@ -30,11 +30,25 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 ## Decisions
 - Partner orders need Processing step (Sales Manager/Admin) first.
 - Janki balance corrected to ₹1,21,500; GRN-1/GRN-2 ("janki herbals") not attached.
-- Latest backup: `backups/2026-10-02T09-38-09-985Z` (taken before 070).
+- Latest backup: `backups/2026-10-02T18-38-14-389Z` (taken before 074).
 - Test-only phases: report findings, fix only on owner approval.
 
+## Phase 2 H — CLOSED (2026-10-03): H1–H16 fixed and live, H17 parked
+Report: `test-results/full-test/PHASE2-REPORT.md`; evidence and check scripts: `test-results/full-test/phase2h/` (each group checked local + live, as real roles, against SQL).
+- Owner decisions applied everywhere: revenue/profit = Accounting's definition (net sales = paid tax invoices ex-GST − credit notes ex-GST; profit = net sales − expenses − goods bought); proformas out of every sales, receivable and GST figure (shown apart as "Pending invoicing"); Total Outstanding = positive partner balances only, "Total Credit Held" shown separately.
+- Group 1 GST reports (6704a25): `utils/gstReport.js`; Invoice Register + GSTR-1 read stored CGST/SGST/IGST, proformas excluded. Live = DB: CGST/SGST ₹4,392.50, IGST ₹683, 52 tax invoices.
+- Group 2 money figures (f8e0c51, 96ec499, d0ec8fd): `utils/financials.js` is the one source for Accounting, Director, Dashboard, Reports. Live = DB (2026-10-03): net sales ₹24,019.69, net profit −₹2,20,699.31, GST to remit ₹2,582.11 (net of credit-note GST), receivables ₹42,167 (22), Total Outstanding ₹27,513, Credit Held ₹80,096.20. Order-value figures relabelled "Orders Booked"/"Order Value".
+- Group 3 purchases/exports (12ae89a, migration 074): PO export Total, Vendors Address, Returns Items/Quantity fixed; Orders CSV items readable; "Ordered" POs renamed Confirmed (074, audited, backup `2026-10-02T18-38-14-389Z`), TEST-PO-1 receivable (proven, rolled back). TEST-PO-PM cancelled through the app by TEST Purchase Manager on the owner's OK (2026-10-03; DB: Cancelled, audited, no GRN, vendor balance unchanged ₹4,839).
+- Group 4 product/display (fb20a79): product figures by line items, cancelled excluded; one low-stock rule (`stockStatus`/`needsReorder`, Reports 9 = Inventory 9); paise shown in Reports; "Page not found" page.
+
+## Awaiting business decision (not a bug)
+- **H17 TDS report is empty — awaiting accountant input.** Not a filter bug: the report covers Rent, Salaries, Marketing, Logistics (offered only in Accounting's Log Expense form) and no expense has been logged under them. Actual expenses come from SFA field expenses (master list `expense_category`: Travel, Fuel, Food & Meals, …) and auto-booked scheme payouts (Scheme Incentive / Scheme Claim). The accountant must decide whether partner payouts or any SFA categories carry TDS (and at which section/rate) before the report's category map changes. Do nothing until then.
+
+## Not yet covered by a check (future)
+- Dealer/Retailer Incentives and Stock pages (script didn't wait for "Loading…"); Director "Top States" and Admin "Lead Status" charts (checked from code/data only); Reports date-range filters (all checks ran unfiltered).
+- Small bug seen 2026-10-03: the PO cancel note is dated in UTC ("Cancelled on 2026-10-02" at 00:xx IST on 3 Oct).
+
 ## Next (priority)
-1. Phase 2 H (every dashboard/report number vs the database); write `PHASE2-REPORT.md`. Phase 2 G is done and its findings fixed (2026-10-02).
-2. Phase 3 (every-button sweep), Phase 4 (integrity); final report.
-3. Later batch: slow saves, self-registered partner address/territory, claims tied to earned incentives, missing confirms, Phase 1 leftovers.
-4. Optional: delete the batch 6 TEST rows on owner's OK.
+1. Phase 3 (every-button sweep), Phase 4 (integrity); final report.
+2. Later batch: slow saves, self-registered partner address/territory, claims tied to earned incentives, missing confirms, Phase 1 leftovers, PO cancel-note date (UTC).
+3. Optional: delete the batch 6 TEST rows on owner's OK.
