@@ -3,7 +3,6 @@ import { supabase } from '../supabaseClient';
 import { linkedExpenseId, expenseForIncentive, expenseForClaim, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { amountDue, isSettled } from '../utils/invoiceStatus';
 import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
-import { isSchemeEligible, getSchemeMatchValue } from '../utils/schemeUtils';
 import { returnValue as computeReturnValue, batchForReturn } from '../utils/purchasing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
@@ -1371,7 +1370,11 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_orders', JSON.stringify(next));
       return next;
     });
-    if (newOrder.distributorId || newOrder.dealerId || newOrder.retailerId) generateIncentivesForOrder(newOrder);
+    // The database raises the order's scheme incentives as it saves it (070),
+    // for a partner's own order too — a partner may not write them from here.
+    if (newOrder.distributorId || newOrder.dealerId || newOrder.retailerId) {
+      reloadRows('distributor_incentives', setDistributorIncentives, 'prismora_distributor_incentives', 'orderId', [newId]);
+    }
     return newId;
   };
 
@@ -3732,55 +3735,9 @@ export const DataProvider = ({ children }) => {
     return true;
   };
 
-  // ── Distributor/Dealer/Retailer Incentives (auto-generated from Schemes) ───
-  const generateIncentivesForOrder = (order) => {
-    const partyType = order.distributorId ? 'Distributor' : order.dealerId ? 'Dealer' : order.retailerId ? 'Retailer' : null;
-    if (!partyType) return;
-
-    const matchingSchemes = schemes.filter(s =>
-      [partyType, 'All'].includes(s.applicableTo) && isSchemeEligible(s, order)
-    );
-
-    matchingSchemes.forEach(async (scheme) => {
-      const alreadyExists = distributorIncentives.some(i => i.orderId === order.id && i.schemeId === scheme.id);
-      if (alreadyExists) return;
-
-      const matchValue = getSchemeMatchValue(scheme, order);
-      const incentiveType = scheme.discountPct > 0 ? 'Discount' : scheme.freeGoodsQty > 0 ? 'Free Goods' : 'Cash';
-      const incentiveValue = scheme.discountPct > 0
-        ? Math.round(matchValue * (Number(scheme.discountPct) / 100))
-        : Number(scheme.freeGoodsQty || 0);
-
-      const newId = `INC-${Date.now()}-${scheme.id}`;
-      const newIncentive = {
-        id: newId,
-        distributorId: order.distributorId || null,
-        dealerId: order.dealerId || null,
-        retailerId: order.retailerId || null,
-        schemeId: scheme.id,
-        schemeName: scheme.name,
-        orderId: order.id,
-        orderValue: Number(order.value || 0),
-        incentiveType,
-        incentiveValue,
-        // Copied from the scheme rather than looked up through schemeId later:
-        // a scheme edited next quarter must not rewrite what was given away
-        // last quarter.
-        incentiveProduct: incentiveType === 'Free Goods' ? (scheme.freeGoodsProduct || null) : null,
-        status: 'Earned',
-        createdAt: new Date().toISOString()
-      };
-      setDistributorIncentives(prev => {
-        const next = [newIncentive, ...prev];
-        localStorage.setItem('prismora_distributor_incentives', JSON.stringify(next));
-        return next;
-      });
-      await persistOptional('distributor_incentives', ['incentiveProduct'], 'the incentive',
-        (shape) => supabase.from('distributor_incentives').insert([shape(newIncentive)]));
-      logEvent('incentive_earned', `Incentive earned on order ${order.id} via scheme ${scheme.name}`, null, newId);
-    });
-  };
-
+  // ── Distributor/Dealer/Retailer Incentives ───────────────────────────────
+  // Earned in the database when the order is saved (070, orders_earn_incentives),
+  // by the rules in utils/schemeUtils.js.
   const markIncentivePaid = async (id) => {
     const incentive = distributorIncentives.find(i => i.id === id);
     if (!incentive) return false;

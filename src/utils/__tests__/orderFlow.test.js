@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canStepTo, nextStepsFor, stepRefusal, lockingInvoice } from '../orderFlow';
+import { canStepTo, nextStepsFor, stepRefusal, lockingInvoice, openBackorderOf } from '../orderFlow';
 
 describe('order stages (062)', () => {
   it('moves one step at a time', () => {
@@ -36,5 +36,18 @@ describe('order stages (062)', () => {
     expect(lockingInvoice({ id: 'O1' }, invoices)?.id).toBe('INV-1');
     expect(lockingInvoice({ id: 'O2' }, invoices)).toBeNull();
     expect(lockingInvoice(null, invoices)).toBeNull();
+  });
+
+  it('finds a backorder still open on the parent (070)', () => {
+    const orders = [
+      { id: 'O2', splitFromOrderId: 'O1', status: 'Processing' },
+      { id: 'O3', splitFromOrderId: 'O9', status: 'Delivered' },
+      { id: 'O4', splitFromOrderId: 'O9', status: 'Cancelled' },
+      { id: 'O5', splitFromOrderId: 'O8', status: 'Partially Delivered' },
+    ];
+    expect(openBackorderOf({ id: 'O1' }, orders)?.id).toBe('O2');
+    expect(openBackorderOf({ id: 'O9' }, orders)).toBeNull();
+    expect(openBackorderOf({ id: 'O8' }, orders)?.id).toBe('O5');
+    expect(openBackorderOf(null, orders)).toBeNull();
   });
 });

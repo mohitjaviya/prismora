@@ -19,7 +19,7 @@ import LastChanged from '../components/audit/LastChanged';
 import { localDay, orderDateToSave } from '../utils/orderDate';
 import { sellableQty } from '../utils/expiry';
 import SalesReturnModal from '../components/SalesReturnModal';
-import { canStepTo, stepRefusal, lockingInvoice } from '../utils/orderFlow';
+import { canStepTo, stepRefusal, lockingInvoice, openBackorderOf } from '../utils/orderFlow';
 import { changedFields, describeConflict, ORDER_FIELDS } from '../utils/staleEdit';
 
 // Delivered — fully, or any units — is final: no cancel, no going back (054).
@@ -210,6 +210,12 @@ const Orders = () => {
     // An invoiced order is reversed by a credit note, not cancelled (063).
     if (targetStatus === 'Cancelled' && billedBy && editingOrder?.status !== 'Cancelled') {
       setStatusError(`Order ${editingOrder.id} has been invoiced (${billedBy.id}), so it cannot be cancelled. To reverse it, issue a credit note (or record a sales return for goods already delivered).`);
+      return;
+    }
+    // A backorder still being fulfilled keeps its parent alive (070).
+    const openChild = targetStatus === 'Cancelled' && editingOrder?.status !== 'Cancelled' && openBackorderOf(editingOrder, orders);
+    if (openChild) {
+      setStatusError(`Order ${editingOrder.id} has an open backorder ${openChild.id} (${openChild.status || 'Pending'}). Deliver or cancel the backorder first.`);
       return;
     }
     // One stage at a time, as the database enforces (062): no skipping, no going back.

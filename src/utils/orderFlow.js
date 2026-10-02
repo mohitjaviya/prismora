@@ -22,6 +22,14 @@ export function stepRefusal(orderId, from, to) {
   return `Order ${orderId} is ${from}; the next step is ${next.length ? next.join(' or ') : 'none'}. It cannot go to ${to} from here.`;
 }
 
+/**
+ * A backorder split from this order that is still being fulfilled, if any.
+ * While one is open the order cannot be cancelled or deleted (070).
+ */
+export const openBackorderOf = (order, orders) =>
+  (order?.id && (orders || []).find(o => o.splitFromOrderId === order.id
+    && !['Delivered', 'Cancelled'].includes(o.status || 'Pending'))) || null;
+
 /** The invoice that locks an order's value, quantity and items (061), if any. */
 export const lockingInvoice = (order, invoices) =>
   (order?.id && (invoices || []).find(i => i.orderId === order.id)) || null;

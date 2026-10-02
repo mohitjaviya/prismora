@@ -1,0 +1,175 @@
+{
+ "tag": "632467",
+ "out": [
+  {
+   "id": "1a partner (P2E Distributor) can place an order",
+   "pass": true,
+   "detail": "201 O165"
+  },
+  {
+   "id": "1b the order earned the P2F scheme incentive (partner could not write it before)",
+   "pass": true,
+   "detail": "order value 1100; incentive [[\"SCH-1790706947005\",\"Discount\",55,\"Earned\"]]"
+  },
+  {
+   "id": "1c the partner can read its own incentive",
+   "pass": true,
+   "detail": "200 rows=1"
+  },
+  {
+   "id": "1d the partner still cannot write incentives itself",
+   "pass": true,
+   "detail": "403 new row violates row-level security policy for table \"distributor_incentives\""
+  },
+  {
+   "id": "1e order with no targeted product earns nothing",
+   "pass": true,
+   "detail": "O166: 0 incentives"
+  },
+  {
+   "id": "1f targeted line below the scheme minimum earns nothing",
+   "pass": true,
+   "detail": "O167 value 110: 0 incentives"
+  },
+  {
+   "id": "1g a Dealer order does not earn a Distributor-only scheme",
+   "pass": true,
+   "detail": "O168: 0 incentives"
+  },
+  {
+   "id": "1h a staff-placed order for the same partner earns it too (same rule both ways)",
+   "pass": true,
+   "detail": "O169 [55]"
+  },
+  {
+   "id": "1i the earn function is not callable by users",
+   "pass": true,
+   "detail": "403"
+  },
+  {
+   "id": "1j still exactly one incentive per order+scheme",
+   "pass": true,
+   "detail": "1"
+  },
+  {
+   "id": "2a parent order from a lead (with company) created",
+   "pass": true,
+   "detail": "O170 lead L28"
+  },
+  {
+   "id": "2b Sales Manager sends the parent to Processing (sales_move_order)",
+   "pass": true,
+   "detail": "204 null"
+  },
+  {
+   "id": "2c backorder created with no lead of its own",
+   "pass": true,
+   "detail": "O171 leadId=null"
+  },
+  {
+   "id": "2d Warehouse → Dispatch → Dispatch deliver the backorder",
+   "pass": true,
+   "detail": "200/200/200 "
+  },
+  {
+   "id": "2e the backorder invoice is billed to the PARENT'S COMPANY, the person is the contact",
+   "pass": true,
+   "detail": "billed=\"TEST Company 632467\" contact=\"TEST Person 632467\""
+  },
+  {
+   "id": "2f a backorder of a parent with no lead is billed to the person, as before",
+   "pass": true,
+   "detail": "billed=\"TEST NoLead 632467\" contact=\"null\""
+  },
+  {
+   "id": "3a pointing another order at an already-converted lead is refused (Admin)",
+   "pass": true,
+   "detail": "409 Lead L28 has already been converted to order O170. Open that order instead."
+  },
+  {
+   "id": "3b …and for Sales Manager (cannot move a lead onto it either: refused or no access)",
+   "pass": true,
+   "detail": "200 []"
+  },
+  {
+   "id": "3c the refused order still has no lead in the database",
+   "pass": true,
+   "detail": "leadId=null"
+  },
+  {
+   "id": "3d pointing it at a free lead works",
+   "pass": true,
+   "detail": "200 [{\"id\":\"O174\",\"customerName\":\"TEST Other 632467\",\"companyName\":\"TEST Company 632"
+  },
+  {
+   "id": "3e editing the lead-holding order without changing its lead is unaffected",
+   "pass": true,
+   "detail": "200 [{\"id\":\"O170\",\"customerName\":\"TEST Person 632467\",\"companyName\":\"TEST Company 63"
+  },
+  {
+   "id": "3f the original insert rule (066) still holds",
+   "pass": true,
+   "detail": "409 Lead L28 has already been converted to order O170. Open that order instead."
+  },
+  {
+   "id": "4a parent + open backorder set up",
+   "pass": true,
+   "detail": "O175 ← O176"
+  },
+  {
+   "id": "4b Sales Manager (sales_move_order) cannot cancel a Pending parent whose backorder is open",
+   "pass": true,
+   "detail": "400 Order O177 has an open backorder O178 (Processing). Deliver or cancel the backorder first."
+  },
+  {
+   "id": "4c …nor Admin",
+   "pass": true,
+   "detail": "400 Order O175 has an open backorder O176 (Processing). Deliver or cancel the backorder first."
+  },
+  {
+   "id": "4d …nor delete it",
+   "pass": true,
+   "detail": "400 Order O175 has an open backorder O176 (Processing). Deliver or cancel the backorder first."
+  },
+  {
+   "id": "4e parent still Processing in the database",
+   "pass": true,
+   "detail": "Processing"
+  },
+  {
+   "id": "4f cancelling the backorder first is allowed",
+   "pass": true,
+   "detail": "200 [{\"id\":\"O176\",\"customerName\":\"TEST Parent 632467\",\"companyName\":null,\"product\":\""
+  },
+  {
+   "id": "4g2 …and the Pending parent once its own backorder is cancelled via the owner role",
+   "pass": true,
+   "detail": "400 (still has an open backorder O178)"
+  },
+  {
+   "id": "4g now the parent can be cancelled",
+   "pass": true,
+   "detail": "200 [{\"id\":\"O175\",\"customerName\":\"TEST Parent 632467\",\"companyName\":null,\"product\":\""
+  },
+  {
+   "id": "4h a parent whose backorder is Delivered can be cancelled",
+   "pass": true,
+   "detail": "200 [{\"id\":\"O170\",\"customerName\":\"TEST Person 632467\",\"companyName\":\"TEST Company 63"
+  },
+  {
+   "id": "5a partner balances still match (Accounts)",
+   "pass": true,
+   "detail": "[]"
+  }
+ ],
+ "ids": {
+  "o1id": "O165",
+  "Pid": "O170",
+  "Bid": "O171",
+  "Xid": "O174",
+  "Qid": "O175",
+  "QBid": "O176",
+  "L1": "L28",
+  "L2": "L29"
+ }
+}
