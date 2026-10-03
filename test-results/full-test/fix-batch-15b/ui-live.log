@@ -1,0 +1,9 @@
+B1 start Main Warehouse 4
+PASS V0 Edit form offers the warehouse
+
+UI: 1 pass, 0 fail
+PASS U2 expired batch: later expiry refused with the reason, form left open
+PASS U2 DB expiry unchanged (2026-09-28)
+
+UI: 3 pass, 0 fail
+0 live chunk with the 081 Edit-form move: Inventory-Dfui3RjI.js
