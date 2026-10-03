@@ -364,7 +364,11 @@ export default function Inventory() {
                                 </button>
                               )}
                               <button onClick={() => openEdit(item)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors" title="Edit"><Edit2 size={14} /></button>
-                              <button onClick={async () => { if (await confirm({ title: 'Delete this inventory batch?', danger: true, confirmLabel: 'Delete' })) deleteInventoryItem(item.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={14} /></button>
+                              <button onClick={async () => {
+                                if (!await confirm({ title: 'Delete this inventory batch?', danger: true, confirmLabel: 'Delete' })) return;
+                                const res = await deleteInventoryItem(item.id);
+                                toast(res?.ok ? 'Stock batch deleted.' : (res?.error || 'The batch could not be deleted.'), res?.ok ? 'success' : 'error');
+                              }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={14} /></button>
                             </div>
                           </td>
                         )}

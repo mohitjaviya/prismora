@@ -585,7 +585,9 @@ export default function Geography() {
                                   const body = linked
                                     ? `${linked} will lose their territory and show "—" in its place. This cannot be undone.`
                                     : 'Nothing refers to this territory.';
-                                  if (await confirm({ title: `Delete ${t.name}?`, body, danger: true, confirmLabel: 'Delete' })) deleteTerritory(t.id);
+                                  if (!await confirm({ title: `Delete ${t.name}?`, body, danger: true, confirmLabel: 'Delete' })) return;
+                                  const res = await deleteTerritory(t.id);
+                                  toast(res?.ok ? `${t.name} deleted.` : (res?.error || 'The territory could not be deleted.'), res?.ok ? 'success' : 'error');
                                 }}
                                 className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                               >

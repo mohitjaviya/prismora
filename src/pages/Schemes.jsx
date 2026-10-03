@@ -154,7 +154,24 @@ export default function Schemes() {
     setIsModalOpen(false);
   };
 
-  const toggleStatus = (s) => updateScheme(s.id, { status: s.status === 'Active' ? 'Inactive' : 'Active' });
+  // Single clicks wait for the database too: the button is off while it
+  // answers, and the outcome is said either way.
+  const [busyId, setBusyId] = useState(null);
+  const toggleStatus = async (s) => {
+    if (busyId) return;
+    const status = s.status === 'Active' ? 'Inactive' : 'Active';
+    setBusyId(s.id);
+    const res = await updateScheme(s.id, { status });
+    setBusyId(null);
+    toast(res?.ok ? `${s.name} is now ${status}.` : (res?.error || 'The scheme was not changed.'), res?.ok ? 'success' : 'error');
+  };
+  const removeScheme = async (s) => {
+    if (busyId || !await confirm({ title: 'Delete scheme?', danger: true, confirmLabel: 'Delete' })) return;
+    setBusyId(s.id);
+    const res = await deleteScheme(s.id);
+    setBusyId(null);
+    toast(res?.ok ? `${s.name} deleted.` : (res?.error || 'The scheme could not be deleted.'), res?.ok ? 'success' : 'error');
+  };
 
   const applicableColors = {
     'All': 'bg-blue-500/10 text-blue-300 border-blue-500/20',
@@ -321,11 +338,11 @@ export default function Schemes() {
                     </div>
                     {canManage && (
                       <div className="flex gap-1.5">
-                        <button onClick={() => toggleStatus(s)} className={`p-1.5 rounded-lg transition-colors ${s.status === 'Active' ? 'text-emerald-400 hover:bg-emerald-400/10' : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'}`} title={s.status === 'Active' ? 'Deactivate' : 'Activate'}>
+                        <button onClick={() => toggleStatus(s)} disabled={busyId === s.id} className={`p-1.5 rounded-lg transition-colors ${s.status === 'Active' ? 'text-emerald-400 hover:bg-emerald-400/10' : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'}`} title={s.status === 'Active' ? 'Deactivate' : 'Activate'}>
                           <CheckCircle size={14} />
                         </button>
                         <button onClick={() => openEdit(s)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors" title="Edit scheme"><Edit2 size={14} /></button>
-                        <button onClick={async () => { if (await confirm({ title: 'Delete scheme?', danger: true, confirmLabel: 'Delete' })) deleteScheme(s.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete scheme"><Trash2 size={14} /></button>
+                        <button onClick={() => removeScheme(s)} disabled={busyId === s.id} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete scheme"><Trash2 size={14} /></button>
                       </div>
                     )}
                   </div>

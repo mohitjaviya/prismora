@@ -278,7 +278,7 @@ const Leads = () => {
     downloadCSV(formattedData, 'PRISMORA_Leads');
   };
 
-  const onDragEnd = (result) => {
+  const onDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (destination.droppableId === source.droppableId) return;
@@ -293,8 +293,12 @@ const Leads = () => {
       if (!targetLead.orderCreated) { beginConversion(targetLead, destination.droppableId); return; }
     }
 
-    // The droppableId is the status string
-    updateLead(draggableId, { status: destination.droppableId });
+    // The droppableId is the status string. The card moves at once and goes
+    // back if the database refuses (updateLead); say which happened.
+    const moved = leads.find(l => l.id === draggableId);
+    const res = await updateLead(draggableId, { status: destination.droppableId });
+    if (res?.ok) toast(`${moved?.name || draggableId} → ${destination.droppableId}.`, 'success');
+    else toast(res?.conflict ? 'Someone else changed this lead just now; it shows their version.' : (res?.error || 'The lead was not moved.'), 'error');
   };
 
   // Colours come from Master Lists, where whoever added the status chose one.
@@ -365,6 +369,9 @@ const Leads = () => {
       key: 'actions', header: '', align: 'right', width: 'w-24',
       render: l => (
         <div className="flex items-center justify-end gap-0.5">
+          {/* View-only roles open the lead (row click) but get no Edit/Delete
+              that the database would refuse. */}
+          {canEditLeads && <>
           <IconButton icon={Edit2} title="Edit lead" size="sm" tone="accent"
             onClick={e => { e.stopPropagation(); handleOpenModal(l); }} />
           <IconButton icon={Trash2} title="Delete lead" size="sm" tone="danger"
@@ -374,6 +381,7 @@ const Leads = () => {
               const r = await deleteLead(l.id);
               toast(r?.ok ? 'Lead and its files deleted.' : (r?.error || 'The lead could not be deleted.'), r?.ok ? 'success' : 'error');
             }} />
+          </>}
         </div>
       ),
     },
@@ -395,7 +403,7 @@ const Leads = () => {
           icon: User,
           title: 'No leads yet',
           hint: 'A lead is anyone who might become a customer. Add the first one and it will show up here with its follow-up date.',
-          action: <Button variant="primary" icon={Plus} onClick={() => handleOpenModal()}>Add Lead</Button>,
+          action: canEditLeads ? <Button variant="primary" icon={Plus} onClick={() => handleOpenModal()}>Add Lead</Button> : undefined,
         }}
       />
     </div>
@@ -425,7 +433,7 @@ const Leads = () => {
                       const isDueSoon = daysUntilFollowUp !== null && daysUntilFollowUp <= 2 && isOpenLead(lead);
 
                       return (
-                        <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                        <Draggable key={lead.id} draggableId={lead.id} index={index} isDragDisabled={!canEditLeads}>
                           {(provided, snapshot) => (
                             <div
                               id={`lead-board-${lead.id}`}
@@ -438,12 +446,15 @@ const Leads = () => {
                               <div className="flex justify-between items-start mb-2">
                                 <h4 className="font-bold text-white text-sm">{lead.name}</h4>
                                 <div className="flex gap-2">
+                                  {canEditLeads && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleOpenModal(lead); }}
                                     className="text-slate-400 hover:text-blue-400 transition-colors"
+                                    title="Edit lead"
                                   >
                                     <Edit2 size={14} />
                                   </button>
+                                  )}
                                 </div>
                               </div>
                               <p className="text-xs text-slate-400 mb-2">{lead.company}</p>
@@ -505,7 +516,7 @@ const Leads = () => {
             )}
 
             <Button icon={Download} onClick={handleExport}>Export</Button>
-            <Button variant="primary" icon={Plus} onClick={() => handleOpenModal()}>Add Lead</Button>
+            {canEditLeads && <Button variant="primary" icon={Plus} onClick={() => handleOpenModal()}>Add Lead</Button>}
           </>
         }
       />
@@ -530,7 +541,7 @@ const Leads = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                {canEditLeads && <button
                   onClick={() => {
                     const leadToEdit = selectedLeadView;
                     setSelectedLeadView(null);
@@ -539,7 +550,7 @@ const Leads = () => {
                   className="bg-brand-primary-lighter hover:bg-white/10 text-brand-accent px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
                 >
                   <Edit2 size={14} /> Edit
-                </button>
+                </button>}
                 <button onClick={() => setSelectedLeadView(null)} className="text-slate-400 hover:text-white p-2 rounded-lg transition-colors bg-white/5 hover:bg-white/10">
                   <X size={20} />
                 </button>

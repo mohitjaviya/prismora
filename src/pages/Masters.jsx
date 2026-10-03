@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Layers, Plus, Trash2, Lock, Check, X, ChevronUp, ChevronDown, AlertTriangle, Search, Palette, Download } from 'lucide-react';
 import { downloadCSV } from '../utils/exportUtils';
+import { useConfirm } from '../context/DialogContext';
 import { Button, PageHeader } from '../components/ui';
 import { MASTER_LISTS, optionsFor, badgeStyle } from '../utils/masterLists';
 
@@ -26,6 +27,9 @@ const PRESET_COLOURS = [
  */
 export default function Masters() {
   const { masters, addMasterOption, updateMasterOption, deleteMasterOption } = useData();
+  // The app's dialog: the browser's own confirm() printed the options object
+  // as "[object Object]".
+  const confirm = useConfirm();
   const { canAccess } = useAuth();
 
   const [activeList, setActiveList] = useState(MASTER_LISTS[0].id);
@@ -88,8 +92,8 @@ export default function Masters() {
     const i = ordered.findIndex(r => r.id === row.id);
     const j = i + direction;
     if (i < 0 || j < 0 || j >= ordered.length) return;
-    await updateMasterOption(ordered[i].id, { sort: j });
-    await updateMasterOption(ordered[j].id, { sort: i });
+    const first = await say(await updateMasterOption(ordered[i].id, { sort: j }));
+    if (first.ok) await say(await updateMasterOption(ordered[j].id, { sort: i }));
   };
 
   // The chosen list, not all twelve: they have nothing in common but the shape
@@ -245,7 +249,7 @@ export default function Masters() {
                     {row.locked && <Lock size={12} className="text-amber-400/70 flex-shrink-0" title="The app reads this value" />}
 
                     <button
-                      onClick={() => updateMasterOption(row.id, { active: row.active === false })}
+                      onClick={async () => say(await updateMasterOption(row.id, { active: row.active === false }))}
                       className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors flex-shrink-0 ${
                         row.active === false
                           ? 'border-white/10 text-slate-400 hover:text-white'
@@ -304,7 +308,7 @@ export default function Masters() {
                     <button
                       key={hex}
                       title={name}
-                      onClick={() => updateMasterOption(row.id, { color: hex })}
+                      onClick={async () => say(await updateMasterOption(row.id, { color: hex }))}
                       className={`w-7 h-7 rounded-lg border-2 transition-transform hover:scale-110 ${
                         row.color === hex ? 'border-white' : 'border-transparent'
                       }`}
@@ -315,7 +319,7 @@ export default function Masters() {
                 <div className="flex items-center gap-2 mb-3">
                   <input
                     value={row.color || ''}
-                    onChange={e => updateMasterOption(row.id, { color: e.target.value })}
+                    onChange={async e => say(await updateMasterOption(row.id, { color: e.target.value }))}
                     placeholder="#64748b"
                     className="w-28 glass-input rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
                   />
@@ -329,7 +333,7 @@ export default function Masters() {
                 <label htmlFor="masters-description" className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Description</label>
                 <input id="masters-description"
                   defaultValue={row.description || ''}
-                  onBlur={e => updateMasterOption(row.id, { description: e.target.value })}
+                  onBlur={async e => say(await updateMasterOption(row.id, { description: e.target.value }))}
                   placeholder="What this option means — for whoever picks it"
                   className="w-full glass-input rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600"
                 />

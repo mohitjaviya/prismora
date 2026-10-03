@@ -99,8 +99,9 @@ export default function Distributors() {
     setIsModalOpen(false);
   };
 
-  const approveDistributor = (d) => {
-    updateDistributor(d.id, { status: 'Active' });
+  const approveDistributor = async (d) => {
+    const res = await updateDistributor(d.id, { status: 'Active' });
+    toast(res?.ok ? `${d.name} approved.` : (res?.error || 'The approval was not saved.'), res?.ok ? 'success' : 'error');
     // Its Pending login is activated by the database when the partner is (043),
     // so approving does not also need rights over user accounts.
   };
@@ -108,8 +109,13 @@ export default function Distributors() {
   const rejectDistributor = async (d) => {
     if (!await confirm({ title: `Reject and remove the registration for "${d.name}"?`, danger: true, confirmLabel: 'Remove' })) return;
     const linkedUser = users.find(u => u.distributorId === d.id);
-    if (linkedUser) deleteUser(linkedUser.id);
-    deleteDistributor(d.id);
+    // Each step waits; a refused login removal stops before the partner goes.
+    if (linkedUser) {
+      const u = await deleteUser(linkedUser.id);
+      if (!u?.ok) { toast(`Not removed: ${u?.error || 'the login could not be deleted.'}`, 'error'); return; }
+    }
+    const res = await deleteDistributor(d.id);
+    toast(res?.ok ? `Registration for ${d.name} removed.` : (res?.error || 'The registration could not be removed.'), res?.ok ? 'success' : 'error');
   };
 
   /**
@@ -138,7 +144,9 @@ export default function Distributors() {
       confirmLabel: 'Delete',
       danger: true,
     });
-    if (ok) deleteDistributor(d.id);
+    if (!ok) return;
+    const res = await deleteDistributor(d.id);
+    toast(res?.ok ? `${d.name} deleted.` : (res?.error || 'It could not be deleted.'), res?.ok ? 'success' : 'error');
   };
 
   const ledgerEntries = useMemo(() => viewingDist ? buildLedgerEntries(viewingDist, invoices, distributorPayments, orders, creditNotes) : [], [viewingDist, invoices, distributorPayments, orders, creditNotes]);

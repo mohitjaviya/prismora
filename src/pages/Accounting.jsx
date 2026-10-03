@@ -935,7 +935,9 @@ const Accounting = () => {
                 size="sm"
                 tone="danger"
                 onClick={async () => {
-                  if (await confirm({ title: 'Delete this expense record?', danger: true, confirmLabel: 'Delete' })) deleteExpense(exp.id);
+                  if (!await confirm({ title: 'Delete this expense record?', danger: true, confirmLabel: 'Delete' })) return;
+                  const res = await deleteExpense(exp.id);
+                  toast(res?.ok ? 'Expense deleted.' : (res?.error || 'The expense could not be deleted.'), res?.ok ? 'success' : 'error');
                 }}
               />
             )}

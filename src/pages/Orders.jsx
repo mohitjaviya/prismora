@@ -351,6 +351,12 @@ const Orders = () => {
   // Sales roles hand off fulfillment entirely — they get one action
   // ("Assign to Warehouse Manager") instead of the full pipeline stepper.
   const isSalesOnlyRole = STATUS_STAGE_OWNERS['Processing'].includes(user?.role);
+  // Only Orders = full may change an order's details (the database refuses
+  // anyone else, orders_update). Others open it read-only; a sales role still
+  // moves a Pending order on with the status buttons (sales_move_order).
+  const canEditOrders = canAccess('orders', 'full');
+  const detailsReadOnly = !!editingOrder && !canEditOrders;
+  const canSubmitOrder = !detailsReadOnly || (isSalesOnlyRole && editingOrder?.status === 'Pending');
   const visibleOrders = (salespersonFilter
     ? baseVisibleOrders.filter(o => o.assignedTo === salespersonFilter)
     : baseVisibleOrders)
@@ -809,10 +815,12 @@ const Orders = () => {
             <IconButton icon={Undo2} title="Sales return" size="sm" tone="accent"
               onClick={e => { e.stopPropagation(); setReturningOrder(o); }} />
           )}
-          <IconButton icon={Edit2} title="Edit order" size="sm" tone="accent"
-            onClick={e => { e.stopPropagation(); handleOpenModal(o); }} />
+          {canEditOrders && (
+            <IconButton icon={Edit2} title="Edit order" size="sm" tone="accent"
+              onClick={e => { e.stopPropagation(); handleOpenModal(o); }} />
+          )}
           {/* Owner's decision (078): Dispatch moves orders along but does not delete them. */}
-          {!isDelivered(o) && user?.role !== 'Dispatch Team' && (
+          {canEditOrders && !isDelivered(o) && user?.role !== 'Dispatch Team' && (
             <IconButton icon={Trash2} title="Delete order" size="sm" tone="danger"
               onClick={async e => {
                 e.stopPropagation();
@@ -873,7 +881,7 @@ const Orders = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-brand-primary/80 backdrop-blur-sm">
           <div className="bg-brand-primary-light border border-slate-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center sticky top-0 bg-brand-primary-light z-10">
-              <h2 className="text-xl font-bold text-white">{editingOrder ? 'Edit Order' : 'Add New Order'}</h2>
+              <h2 className="text-xl font-bold text-white">{detailsReadOnly ? 'Order Details' : editingOrder ? 'Edit Order' : 'Add New Order'}</h2>
               {editingOrder && <LastChanged record={editingOrder} users={mockUsers} className="mt-0.5" />}
               <button onClick={closeModal} className="text-slate-400 hover:text-white transition-colors">✕</button>
             </div>
@@ -977,6 +985,11 @@ const Orders = () => {
                 </div>
               )}
 
+              {detailsReadOnly && (
+                <p className="text-xs text-slate-400 -mt-2">View only: the order desk (Orders = full) changes order details.</p>
+              )}
+              {/* Disabled as a block for view-only roles, so nothing looks editable that would be refused. */}
+              <fieldset disabled={detailsReadOnly} className="space-y-6 border-0 p-0 m-0 min-w-0">
               {editingOrder && formData.splitFromOrderId && (
                 <div className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/20 rounded-xl px-4 py-3 text-sm text-cyan-400 font-medium -mt-2">
                   This order was split from <strong>{formData.splitFromOrderId}</strong> (backordered remainder awaiting restock).
@@ -1340,11 +1353,15 @@ const Orders = () => {
                 </div>
               </div>
 
+              </fieldset>
+
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
                 <button type="button" onClick={closeModal} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium">Cancel</button>
+                {canSubmitOrder && (
                 <button type="submit" disabled={isSaving} className="px-5 py-2 bg-brand-accent text-brand-primary font-bold rounded-lg hover:bg-brand-accent-light hover:shadow-lg hover:shadow-brand-accent/20 transition-all disabled:opacity-60 disabled:cursor-wait">
                   {isSaving ? 'Saving…' : editingOrder ? 'Update Order' : 'Save Order'}
                 </button>
+                )}
               </div>
             </form>
           </div>

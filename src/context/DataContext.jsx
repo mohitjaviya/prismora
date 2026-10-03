@@ -1620,8 +1620,11 @@ export const DataProvider = ({ children }) => {
   // Returns true, or the database's refusal as a sentence (a duplicate
   // option is refused by 078's case-blind unique indexes).
   const persistMaster = async (label, build) => {
-    const { error } = await build(withoutAbsent);
-    if (!error) return true;
+    const { error, data } = await build(withoutAbsent);
+    if (!error) {
+      if (Array.isArray(data) && data.length === 0) return `Not saved: your role may not change master lists, or ${label} no longer exists.`;
+      return true;
+    }
 
     const message = String(error.message || '');
     const culprit = OPTIONAL_MASTER_COLUMNS.find(c => message.includes(`'${c}'`));
@@ -1668,7 +1671,7 @@ export const DataProvider = ({ children }) => {
     setMasters(next);
     localStorage.setItem('prismora_masters', JSON.stringify(next));
     const saved = await persistMaster('the new option',
-      (shape) => supabase.from('masters').insert([shape(row)]));
+      (shape) => supabase.from('masters').insert([shape(row)]).select('id'));
     if (saved !== true) {
       setMasters(masters);
       localStorage.setItem('prismora_masters', JSON.stringify(masters));
@@ -1708,7 +1711,7 @@ export const DataProvider = ({ children }) => {
     setMasters(next);
     localStorage.setItem('prismora_masters', JSON.stringify(next));
     const saved = await persistMaster('the change',
-      (shape) => supabase.from('masters').update(shape(masterRow(patch))).eq('id', id));
+      (shape) => supabase.from('masters').update(shape(masterRow(patch))).eq('id', id).select('id'));
     if (saved !== true) {
       setMasters(masters);
       localStorage.setItem('prismora_masters', JSON.stringify(masters));
@@ -1723,15 +1726,12 @@ export const DataProvider = ({ children }) => {
     if (before.locked) {
       return { ok: false, error: 'This one is part of a workflow and cannot be removed. Switch it off instead.' };
     }
+    const res = await confirmSave('masters delete', 'remove this option',
+      () => supabase.from('masters').delete().eq('id', id).select('id'));
+    if (!res.ok) return res;
     const next = masters.filter(m => m.id !== id);
     setMasters(next);
     localStorage.setItem('prismora_masters', JSON.stringify(next));
-    const saved = await persist('masters delete', supabase.from('masters').delete().eq('id', id));
-    if (!saved) {
-      setMasters(masters);
-      localStorage.setItem('prismora_masters', JSON.stringify(masters));
-      return { ok: false, error: 'Could not save — see the banner above.' };
-    }
     logEvent('master_removed', `Removed "${before.label}" from ${before.list}`, null, id);
     return { ok: true };
   };
@@ -2658,11 +2658,9 @@ export const DataProvider = ({ children }) => {
     // could never fire, so a refused delete removed the expense from the
     // screen and left it in the books -- and it came back on the next refresh,
     // by which time the accounting totals had been read without it.
-    const { error } = await supabase.from('expenses').delete().eq('id', id);
-    if (error) {
-      console.error('[Prismora] Could not delete the expense, so nothing has been changed:', error);
-      return { ok: false, error: 'The expense could not be deleted.' };
-    }
+    const res = await confirmSave('expenses delete', 'delete this expense',
+      () => supabase.from('expenses').delete().eq('id', id).select('id'));
+    if (!res.ok) return res;
 
     setExpenses(prev => prev.filter(exp => exp.id !== id));
     const local = localStorage.getItem('prismora_expenses');
@@ -2715,13 +2713,16 @@ export const DataProvider = ({ children }) => {
 
   const deleteInventoryItem = async (id) => {
     const item = inventory.find(i => i.id === id);
+    const res = await confirmSave('inventory delete', 'delete this stock batch',
+      () => supabase.from('inventory').delete().eq('id', id).select('id'));
+    if (!res.ok) return res;
     setInventory(prev => {
       const next = prev.filter(i => i.id !== id);
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-    await persist('inventory delete', supabase.from('inventory').delete().eq('id', id));
     if (item) logEvent('inventory_deleted', `Stock removed: ${item.product}`, null, id);
+    return { ok: true };
   };
 
   const adjustStock = async (id, adjustment, reason) => {
@@ -2902,12 +2903,17 @@ export const DataProvider = ({ children }) => {
     : Promise.resolve();
 
   const deleteVendor = async (id) => {
+    // Gone from the screen only once the database has removed it; a refusal
+    // (still in use, not allowed) comes back as a sentence.
+    const res = await confirmSave('vendors delete', 'delete this vendor',
+      () => supabase.from('vendors').delete().eq('id', id).select('id'));
+    if (!res.ok) return res;
     setVendors(prev => {
-      const next = prev.filter(v => v.id !== id);
+      const next = prev.filter(x => x.id !== id);
       localStorage.setItem('prismora_vendors', JSON.stringify(next));
       return next;
     });
-    await persist('vendors delete', supabase.from('vendors').delete().eq('id', id));
+    return { ok: true };
   };
 
   // ── Purchase Orders ───────────────────────────────────────────────────────
@@ -2931,13 +2937,16 @@ export const DataProvider = ({ children }) => {
   };
 
   const updatePurchaseOrderStatus = async (id, status) => {
+    const res = await confirmSave('purchase_orders update', `mark this purchase order ${status}`,
+      () => supabase.from('purchase_orders').update({ status }).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setPurchaseOrders(prev => {
       const next = prev.map(po => po.id === id ? { ...po, status } : po);
       localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
       return next;
     });
-    await persist('purchase_orders update', supabase.from('purchase_orders').update({ status }).eq('id', id));
     logEvent('po_status_update', `Purchase Order ${id} → ${status}`, null, id);
+    return res;
   };
 
   /**
@@ -3038,7 +3047,8 @@ export const DataProvider = ({ children }) => {
 
     const vendor = vendors.find(v => v.id === payment.vendorId);
     // Withdrawing the payment puts the balance back in the same transaction (065).
-    const { error } = await supabase.from('vendor_payments').delete().eq('id', id);
+    const { data: gone, error } = await supabase.from('vendor_payments').delete().eq('id', id).select('id');
+    if (!error && !gone?.length) return { ok: false, error: 'Not withdrawn: your role may not withdraw payments, or it no longer exists.' };
     if (error) {
       console.error('[Prismora] Could not delete the vendor payment:', error);
       return { ok: false, error: plainDatabaseError(error, 'withdraw this payment') };
@@ -3170,12 +3180,17 @@ export const DataProvider = ({ children }) => {
   };
 
   const deleteDistributor = async (id) => {
+    // Gone from the screen only once the database has removed it; a refusal
+    // (still in use, not allowed) comes back as a sentence.
+    const res = await confirmSave('distributors delete', 'delete this distributor',
+      () => supabase.from('distributors').delete().eq('id', id).select('id'));
+    if (!res.ok) return res;
     setDistributors(prev => {
-      const next = prev.filter(d => d.id !== id);
+      const next = prev.filter(x => x.id !== id);
       localStorage.setItem('prismora_distributors', JSON.stringify(next));
       return next;
     });
-    await persist('distributors delete', supabase.from('distributors').delete().eq('id', id));
+    return { ok: true };
   };
 
   // ── Dealers ──────────────────────────────────────────────────────────────
@@ -3210,12 +3225,17 @@ export const DataProvider = ({ children }) => {
   };
 
   const deleteDealer = async (id) => {
+    // Gone from the screen only once the database has removed it; a refusal
+    // (still in use, not allowed) comes back as a sentence.
+    const res = await confirmSave('dealers delete', 'delete this dealer',
+      () => supabase.from('dealers').delete().eq('id', id).select('id'));
+    if (!res.ok) return res;
     setDealers(prev => {
-      const next = prev.filter(d => d.id !== id);
+      const next = prev.filter(x => x.id !== id);
       localStorage.setItem('prismora_dealers', JSON.stringify(next));
       return next;
     });
-    await persist('dealers delete', supabase.from('dealers').delete().eq('id', id));
+    return { ok: true };
   };
 
   // ── Retailers ────────────────────────────────────────────────────────────
@@ -3250,12 +3270,17 @@ export const DataProvider = ({ children }) => {
   };
 
   const deleteRetailer = async (id) => {
+    // Gone from the screen only once the database has removed it; a refusal
+    // (still in use, not allowed) comes back as a sentence.
+    const res = await confirmSave('retailers delete', 'delete this retailer',
+      () => supabase.from('retailers').delete().eq('id', id).select('id'));
+    if (!res.ok) return res;
     setRetailers(prev => {
-      const next = prev.filter(r => r.id !== id);
+      const next = prev.filter(x => x.id !== id);
       localStorage.setItem('prismora_retailers', JSON.stringify(next));
       return next;
     });
-    await persist('retailers delete', supabase.from('retailers').delete().eq('id', id));
+    return { ok: true };
   };
 
   // ── Schemes ───────────────────────────────────────────────────────────────
@@ -3287,12 +3312,17 @@ export const DataProvider = ({ children }) => {
   };
 
   const deleteScheme = async (id) => {
+    // Gone from the screen only once the database has removed it; a refusal
+    // (still in use, not allowed) comes back as a sentence.
+    const res = await confirmSave('schemes delete', 'delete this scheme',
+      () => supabase.from('schemes').delete().eq('id', id).select('id'));
+    if (!res.ok) return res;
     setSchemes(prev => {
-      const next = prev.filter(s => s.id !== id);
+      const next = prev.filter(x => x.id !== id);
       localStorage.setItem('prismora_schemes', JSON.stringify(next));
       return next;
     });
-    await persist('schemes delete', supabase.from('schemes').delete().eq('id', id));
+    return { ok: true };
   };
 
   // ── Complaints ────────────────────────────────────────────────────────────
@@ -3380,12 +3410,17 @@ export const DataProvider = ({ children }) => {
   };
 
   const deleteTerritory = async (id) => {
+    // Gone from the screen only once the database has removed it; a refusal
+    // (still in use, not allowed) comes back as a sentence.
+    const res = await confirmSave('territories delete', 'delete this territory',
+      () => supabase.from('territories').delete().eq('id', id).select('id'));
+    if (!res.ok) return res;
     setTerritories(prev => {
-      const next = prev.filter(t => t.id !== id);
+      const next = prev.filter(x => x.id !== id);
       localStorage.setItem('prismora_territories', JSON.stringify(next));
       return next;
     });
-    await persist('territories delete', supabase.from('territories').delete().eq('id', id));
+    return { ok: true };
   };
 
   // ── SFA Beat Plans ─────────────────────────────────────────────────────────

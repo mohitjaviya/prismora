@@ -89,6 +89,15 @@ export default function Purchases() {
   const [isSavingGRN, setIsSavingGRN] = useState(false);
   // Which of the vendor / PO / payment forms is waiting for the database.
   const [savingForm, setSavingForm] = useState(null);
+  // PO Confirm / Close wait for the database and say how it went.
+  const [busyPO, setBusyPO] = useState(null);
+  const setPOStatus = async (po, status) => {
+    if (busyPO) return;
+    setBusyPO(po.id);
+    const res = await updatePurchaseOrderStatus(po.id, status);
+    setBusyPO(null);
+    toast(res?.ok ? `${po.id} ${status}.` : (res?.error || `${po.id} was not changed.`), res?.ok ? 'success' : 'error');
+  };
   const [grnError, setGrnError] = useState('');
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
@@ -146,7 +155,7 @@ export default function Purchases() {
     });
     if (!ok) return;
 
-    const result = await deleteVendorPayment(row.id);
+    const result = await deleteVendorPayment(row.ref);
     if (result?.ok) toast(`Payment withdrawn and ${formatCurrency(row.credit)} put back.`, 'success');
     else toast(result?.error || 'The payment could not be withdrawn.', 'error');
   };
@@ -491,13 +500,13 @@ export default function Purchases() {
                         <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
                             {canManage && po.status === 'Draft' && (
-                              <button onClick={() => updatePurchaseOrderStatus(po.id, 'Confirmed')} className="px-2 py-1 text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-colors">Confirm</button>
+                              <button onClick={() => setPOStatus(po, 'Confirmed')} disabled={busyPO === po.id} className="px-2 py-1 text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-colors">Confirm</button>
                             )}
                             {canRecordGRN && (po.status === 'Confirmed' || po.status === 'Partially Received') && (
                               <button onClick={() => openGRN(po)} className="px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-colors">GRN</button>
                             )}
                             {canManage && po.status === 'GRN Done' && (
-                              <button onClick={() => updatePurchaseOrderStatus(po.id, 'Closed')} className="px-2 py-1 text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-lg hover:bg-purple-500/20 transition-colors">Close</button>
+                              <button onClick={() => setPOStatus(po, 'Closed')} disabled={busyPO === po.id} className="px-2 py-1 text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-lg hover:bg-purple-500/20 transition-colors">Close</button>
                             )}
                             {/* Cancelled was a defined status with no way to
                                 reach it, so the only way out of a PO was to
@@ -557,7 +566,13 @@ export default function Purchases() {
                         <button onClick={() => setViewingVendor(v)} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="View Ledger"><Eye size={14} /></button>
                         {canManage && <>
                           <button onClick={() => openEditVendor(v)} className="p-1.5 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors" title="Edit vendor"><Edit2 size={14} /></button>
-                          <button onClick={async () => { if (await confirm({ title: 'Delete vendor?', danger: true, confirmLabel: 'Delete' })) deleteVendor(v.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete vendor"><Trash2 size={14} /></button>
+                          <button onClick={async () => {
+                            if (!await confirm({ title: 'Delete vendor?', danger: true, confirmLabel: 'Delete' })) return;
+                            // A vendor with payments, receipts or returns is refused by the
+                            // database; say why rather than letting the row vanish and return.
+                            const res = await deleteVendor(v.id);
+                            toast(res?.ok ? `${v.name} deleted.` : (res?.error || 'The vendor could not be deleted.'), res?.ok ? 'success' : 'error');
+                          }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete vendor"><Trash2 size={14} /></button>
                         </>}
                       </div>
                     </td>
@@ -910,7 +925,9 @@ export default function Purchases() {
                         </div>
                         {/* Only a payment. A GRN line comes from goods received
                             and a return has its own row on the Returns tab. */}
-                        {canManage && String(row.id).startsWith('VPAY-') && (
+                        {/* A ledger row's id is "vpay-<payment id>"; the payment
+                            itself is its ref (buildVendorLedger). */}
+                        {canManage && row.type === 'Payment' && row.ref && (
                           <IconButton icon={Trash2} title="Withdraw this payment" size="sm" tone="danger"
                             onClick={() => handleDeletePayment(row)} />
                         )}

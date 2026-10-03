@@ -132,6 +132,12 @@ export function plainDatabaseError(error, action = 'save this') {
   if (code === '23505' && /invoices_one_per_order/.test(message)) {
     return 'That order already has an invoice. An order can have only one.';
   }
+  // A delete refused because other records still point at the row: name them.
+  const fk = code === '23503' && message.match(/is still referenced from table "([^"]+)"|violates foreign key constraint "[^"]+" on table "([^"]+)"/);
+  if (fk && /^delete/.test(action)) {
+    const table = (fk[1] || fk[2] || 'other records').replace(/_/g, ' ');
+    return `Cannot ${action}: it still has ${table} recorded against it. Remove or move those first${/vendor/.test(action) ? ', or set the vendor to Inactive instead' : ''}.`;
+  }
   if (code === '23505' && /masters_list_(key|label)_ci/.test(message)) {
     return 'That list already has this option (ignoring capitals). Use the existing one.';
   }

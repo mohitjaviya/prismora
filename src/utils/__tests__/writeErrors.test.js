@@ -140,6 +140,11 @@ describe('plainDatabaseError - what Dispatch and Accounts are told', () => {
     expect(check('products_prices_not_negative')).toBe('Prices and the GST rate cannot be negative.');
   });
 
+  it('names what still points at a row a delete was refused for', () => {
+    const err = { code: '23503', message: 'update or delete on table "vendors" violates foreign key constraint "vendor_payments_vendorId_fkey" on table "vendor_payments"' };
+    expect(plainDatabaseError(err, 'delete this vendor')).toBe('Cannot delete this vendor: it still has vendor payments recorded against it. Remove or move those first, or set the vendor to Inactive instead.');
+  });
+
   it('explains the master-data rules (078)', () => {
     const check = (name) => plainDatabaseError({ code: '23514', message: `new row for relation "x" violates check constraint "${name}"` }, 'save this');
     expect(check('schemes_discount_0_100')).toMatch(/between 0 and 100/);

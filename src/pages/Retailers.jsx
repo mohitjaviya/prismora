@@ -102,8 +102,9 @@ export default function Retailers() {
     setIsModalOpen(false);
   };
 
-  const approveRetailer = (r) => {
-    updateRetailer(r.id, { status: 'Active' });
+  const approveRetailer = async (r) => {
+    const res = await updateRetailer(r.id, { status: 'Active' });
+    toast(res?.ok ? `${r.name} approved.` : (res?.error || 'The approval was not saved.'), res?.ok ? 'success' : 'error');
     // Its Pending login is activated by the database when the partner is (043),
     // so approving does not also need rights over user accounts.
   };
@@ -111,8 +112,13 @@ export default function Retailers() {
   const rejectRetailer = async (r) => {
     if (!await confirm({ title: `Reject and remove the registration for "${r.name}"?`, danger: true, confirmLabel: 'Remove' })) return;
     const linkedUser = users.find(u => u.retailerId === r.id);
-    if (linkedUser) deleteUser(linkedUser.id);
-    deleteRetailer(r.id);
+    // Each step waits; a refused login removal stops before the partner goes.
+    if (linkedUser) {
+      const u = await deleteUser(linkedUser.id);
+      if (!u?.ok) { toast(`Not removed: ${u?.error || 'the login could not be deleted.'}`, 'error'); return; }
+    }
+    const res = await deleteRetailer(r.id);
+    toast(res?.ok ? `Registration for ${r.name} removed.` : (res?.error || 'The registration could not be removed.'), res?.ok ? 'success' : 'error');
   };
 
   /**
@@ -141,7 +147,9 @@ export default function Retailers() {
       confirmLabel: 'Delete',
       danger: true,
     });
-    if (ok) deleteRetailer(r.id);
+    if (!ok) return;
+    const res = await deleteRetailer(r.id);
+    toast(res?.ok ? `${r.name} deleted.` : (res?.error || 'It could not be deleted.'), res?.ok ? 'success' : 'error');
   };
 
   const ledgerEntries = useMemo(() => viewingRetailer ? buildLedgerEntries(viewingRetailer, invoices, distributorPayments, orders, creditNotes) : [], [viewingRetailer, invoices, distributorPayments, orders, creditNotes]);
