@@ -1,0 +1,3 @@
+L16 column before: Lead Created | DB: Lead Created
+save requests intercepted: 1; column right after drop: Lead Created; message: TEST C8 refusal: this lead cannot move now.; column after refusal: Lead Created; DB status: Lead Created
+PASS C8 refusal shown, card back in Lead Created, DB unchanged

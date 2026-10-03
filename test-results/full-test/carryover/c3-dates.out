@@ -1,0 +1,13 @@
+k | v
+orders_by_date_type | timestamp with time zone
+orders_with_date | 123
+orders_early_ist | 0
+invoices_early_ist | 5 e.g. INV-1790188774227
+leads_early_ist | 4
+credit_notes_early_ist | 0
+expenses_date_type | timestamp with time zone
+invoice_days | 2026-09-24:1 2026-09-29:4
+(8 rows)
+early_ones | orders_early | tax_inv_0929_app_rule | tax_inv_0929_ist
+INV-1790621645160 00:24, INV-1790621954342 00:29, INV-1790621973293 00:29, INV-1790622335658 00:35 | 8 | 8 | 12
+(1 rows)

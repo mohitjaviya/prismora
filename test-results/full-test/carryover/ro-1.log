@@ -1,0 +1,30 @@
+PASS C1.1 empty sign-in stays on the login page (browser requires the fields)
+PASS C1.2 wrong password refused: "Invalid email address or password. Please check your credentials."
+PASS C1.3 /register loads (Partner Registration)
+PASS C1.3 /register-distributor loads (Distributor Registration)
+PASS C1.3 /register-dealer loads (Dealer Registration)
+PASS C1.3 /register-retailer loads (Retailer Registration)
+PASS C1.4 empty sign-up submit stays on the form
+NOTE C1.4b sign-up fields: distributorsignup-business-name, distributorsignup-gstin, distributorsignup-contact-person, distributorsignup-phone, distributorsignup-email-address, distributorsignup-password, website
+PASS C1.5 no page errors on login/register (none)
+PASS C1.6 Admin sidebar: 29 links all open (none bad)
+PASS C1.7 topbar search "TEST" shows lead/order results
+PASS C1.8 bell opens the notifications panel
+PASS C1.9 theme toggle switches <html> class (light -> dark)
+PASS C1.10 AI widget opens
+PASS C1.11 Sign Out returns to /login
+PASS C1.12 shell page errors: none
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByText('Invoice Register').first()[22m
+
+    at D:\PRISMORA\test-results\full-test\carryover\ro.mjs:107:67 {
+  log: [ "  - waiting for getByText('Invoice Register').first()" ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.12.0

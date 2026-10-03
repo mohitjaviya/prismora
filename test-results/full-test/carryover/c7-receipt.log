@@ -1,0 +1,7 @@
+R1-own-delivered-O100    OK      rows=1 CHECK [{"rec":true,"at_set":true,"src":"partner"}]\
+R2-twice                 OK      rows=1 CHECK [{"rec":true,"at_set":true,"src":"partner"}]\
+R3-other-partner-O118    REFUSED Order O118 is not one of yours.\
+R4-own-pending-O54       REFUSED Order O54 is Pending — receipt can be confirmed once it has been shipped.\
+R5-direct-update         OK      rows=0 CHECK [{"rec":false,"at_set":false,"src":null}]\
+R6-staff-calls-it        REFUSED Order O100 is not one of yours.\
+browser: O100 detail offers "Confirm Receipt": true

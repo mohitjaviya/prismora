@@ -1,0 +1,26 @@
+NOTE C5.1 Director Top States on screen: Gujarat value : ₹1,83,860 | Punjab value : ₹90,000 | Maharashtra value : ₹11,870 | Unknown value : ₹8,275
+NOTE C5.1 DB (non-cancelled order value by state): Gujarat=183860 | Punjab=90000 | Maharashtra=11870 | Unknown=8275
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.hover: Element is outside of the viewport
+Call log:
+[2m  - waiting for locator('div').filter({ has: locator('h3').filter({ hasText: 'Lead Status' }) }).last().locator('.recharts-pie-sector').first()[22m
+[2m    - locator resolved to <g tabindex="-1" class="recharts-layer recharts-pie-sector">…</g>[22m
+[2m  - attempting hover action[22m
+[2m    - scrolling into view if needed[22m
+[2m    - done scrolling[22m
+
+    at D:\PRISMORA\test-results\full-test\carryover\ro.mjs:150:72 {
+  log: [
+    "  - waiting for locator('div').filter({ has: locator('h3').filter({ hasText: 'Lead Status' }) }).last().locator('.recharts-pie-sector').first()",
+    '    - locator resolved to <g tabindex="-1" class="recharts-layer recharts-pie-sector">…</g>',
+    '  - attempting hover action',
+    '    - scrolling into view if needed',
+    '    - done scrolling'
+  ],
+  name: 'Error'
+}
+
+Node.js v24.12.0

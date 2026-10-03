@@ -1,0 +1,10 @@
+Balm units at start: 55
+scheme: created
+order 1: O316
+order 2: O317
+incentives earned: INC-1791053037371-SCH-TEST-C6 O316 Free Goods 2 TEST Unrated Balm 25g Earned | INC-1791053037731-SCH-TEST-C6 O317 Free Goods 2 TEST Unrated Balm 25g Earned
+ACCOUNTS: incentive INC-1791053037371-SCH-TEST-C6 paid=true; Balm 55 -> 55; movement rows: none; expense: none; screen: (no warning on screen); requests: -
+ADMIN: incentive INC-1791053037731-SCH-TEST-C6 paid=true; Balm 55 -> 53; movement rows: adjustment -2 by U-TEST-ADMIN; expense: none; screen: (no warning on screen); requests: -
+{"orders":["O316","O317"],"results":{"ACCOUNTS":{"incId":"INC-1791053037371-SCH-TEST-C6","paid":true,"before":55,"after":55,"mv":[],"exp":[],"shown":"(no warning on screen)","problems":[]},"ADMIN":{"incId":"INC-1791053037731-SCH-TEST-C6","paid":true,"before":55,"after":53,"mv":["adjustment -2 by U-TEST-ADMIN"],"exp":[],"shown":"(no warning on screen)","problems":[]}}}
+put back: {"id":"INV-ITEM-1791003445167-bda0","quantity":6} | incentives: 2 | orders: 2 | scheme: 1
+55 | 0 | 0 | 0 | 0

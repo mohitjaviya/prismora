@@ -1,0 +1,12 @@
+state | v
+Gujarat | 183860
+Punjab | 90000
+Maharashtra | 11870
+Unknown | 8275
+(4 rows)
+count | status
+13 | First Order
+17 | Lead Created
+1 | Meeting
+1 | Negotiation
+(4 rows)
