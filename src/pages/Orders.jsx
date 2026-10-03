@@ -80,6 +80,10 @@ const Orders = () => {
   const inventoryRef = useRef(inventory);
   useEffect(() => { inventoryRef.current = inventory; }, [inventory]);
   const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+  // A second click while the first split is saving made a second backorder
+  // (O189). The ref stops it before React re-renders; the state greys the button.
+  const [isSplitting, setIsSplitting] = useState(false);
+  const splittingRef = useRef(false);
 
   // Recording a receipt on a customer's behalf. Staff only: a party signed into
   // their own portal confirms it themselves, and that is the stronger claim.
@@ -281,9 +285,17 @@ const Orders = () => {
   };
 
   const confirmSplitOrder = async () => {
-    if (!editingOrder) return;
+    if (!editingOrder || splittingRef.current) return;
+    splittingRef.current = true;
+    setIsSplitting(true);
+    let result;
+    try {
+      result = await splitOrder(editingOrder.id, splitQuantities);
+    } finally {
+      splittingRef.current = false;
+      setIsSplitting(false);
+    }
     // A refused split used to close both dialogs as though it had worked.
-    const result = await splitOrder(editingOrder.id, splitQuantities);
     if (result && !result.ok) {
       toast(result.error || 'The order could not be split.', 'error');
       return;
@@ -372,7 +384,7 @@ const Orders = () => {
   const [formData, setFormData] = useState({
     customerName: '', companyName: '', product: '', quantity: '', value: '',
     state: '', city: '', deliveryAddress: '', deliveryPincode: '', status: 'Pending',
-    assignedTo: isSalesRole(user?.role) ? user.id : '',
+    assignedTo: (isSalesRole(user?.role) || isManagerRole(user?.role)) ? user.id : '',
     date: '', phone: '', email: ''
   });
 
@@ -542,7 +554,7 @@ const Orders = () => {
       setFormData({
         customerName: '', companyName: '', product: '', quantity: '', value: '',
         state: '', city: '', deliveryAddress: '', deliveryPincode: '', status: 'Pending',
-        assignedTo: isSalesRole(user?.role) ? user.id : '',
+        assignedTo: (isSalesRole(user?.role) || isManagerRole(user?.role)) ? user.id : '',
         date: localDay(new Date()),
         phone: '', email: ''
       });
@@ -1297,9 +1309,13 @@ const Orders = () => {
                 {!isSalesRole(user?.role) && (
                   <div>
                     <label htmlFor="orders-assign-to" className="block text-sm font-medium text-slate-300 mb-1.5">Assign To</label>
-                    <select id="orders-assign-to" value={formData.assignedTo} onChange={e => setFormData({ ...formData, assignedTo: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
-                      <option value="" className="bg-brand-primary">Select Salesperson</option>
-                      {getAssignableUsers().map(u => (
+                    <select id="orders-assign-to" value={formData.assignedTo || ''} onChange={e => setFormData({ ...formData, assignedTo: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white">
+                      <option value="" className="bg-brand-primary">{isManagerRole(user?.role) ? 'Me (if left blank)' : 'Select Salesperson'}</option>
+                      {/* A manager's own order is theirs unless they hand it on (076 does the same in the DB). */}
+                      {isManagerRole(user?.role) && user?.id && (
+                        <option value={user.id} className="bg-brand-primary">Me ({user.name})</option>
+                      )}
+                      {getAssignableUsers().filter(u => u.id !== user?.id).map(u => (
                         <option key={u.id} value={u.id} className="bg-brand-primary">{u.name}</option>
                       ))}
                     </select>
@@ -1472,8 +1488,8 @@ const Orders = () => {
               ))}
             </div>
             <div className="px-6 py-4 border-t border-slate-700 flex justify-end gap-3">
-              <button type="button" onClick={() => setIsSplitModalOpen(false)} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium">Cancel</button>
-              <button type="button" onClick={confirmSplitOrder} className="px-5 py-2 bg-brand-accent text-brand-primary font-bold rounded-lg hover:bg-brand-accent-light transition-all">Confirm Split</button>
+              <button type="button" onClick={() => setIsSplitModalOpen(false)} disabled={isSplitting} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={confirmSplitOrder} disabled={isSplitting} className="px-5 py-2 bg-brand-accent text-brand-primary font-bold rounded-lg hover:bg-brand-accent-light transition-all disabled:opacity-60 disabled:cursor-wait">{isSplitting ? 'Splitting…' : 'Confirm Split'}</button>
             </div>
           </div>
         </div>, document.body

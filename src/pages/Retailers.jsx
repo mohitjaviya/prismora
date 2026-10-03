@@ -486,7 +486,7 @@ export default function Retailers() {
                       matched a territory record — so a partner order could not be
                       routed to the rep who owns that area. */}
                   <select id="retailers-territory-zone" value={form.territoryId || ''} onChange={e => setForm(f => ({ ...f, ...territoryFields(territories, e.target.value) }))} className={inputCls} style={{ colorScheme: 'dark' }}>
-                    <option value="" className="bg-brand-primary">{territories.length === 0 ? 'No territories set up yet' : 'Select a territory…'}</option>
+                    <option value="" className="bg-brand-primary">{territories.length === 0 ? 'No territories set up yet' : 'Same as the dealer (if left blank)'}</option>
                     {territories.map(t => (
                       <option key={t.id} value={t.id} className="bg-brand-primary">{t.name} ({t.state})</option>
                     ))}

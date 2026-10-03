@@ -1957,7 +1957,11 @@ export const DataProvider = ({ children }) => {
     if (createError || !createdRow?.id) {
       await persist('orders insert', Promise.resolve({ error: createError || { message: 'The database did not return the backorder.' } }), splitRow);
       console.error(`[Prismora] The backorder for ${id} could not be created, so the order has been left whole.`);
-      return { ok: false, error: 'The backorder could not be created, so nothing was split.' };
+      // One open backorder per parent (076): say which one, not just "failed".
+      const already = createError?.code === '23505'
+        ? (/open backorder/.test(createError.message || '') ? createError.message : `Order ${id} already has an open backorder. Finish or cancel it before splitting again.`)
+        : null;
+      return { ok: false, error: already || 'The backorder could not be created, so nothing was split.' };
     }
     const newOrderId = createdRow.id;
     splitOrderObj.id = newOrderId;
@@ -3106,6 +3110,8 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('dealers', ['territoryId'], 'the dealer',
       (shape) => supabase.from('dealers').insert([shape(newDealer)]));
+    // Left blank, the territory is the distributor's (076): show what was saved.
+    if (!newDealer.territoryId) await reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [newId]);
     logEvent('dealer_added', `New dealer: ${dealerData.name}${territorySuffix(territories, dealerData)}`, null, newId);
     return newId;
   };
@@ -3118,6 +3124,7 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('dealers', ['territoryId'], 'the dealer',
       (shape) => supabase.from('dealers').update(shape(updatedData)).eq('id', id));
+    if ('territoryId' in updatedData && !updatedData.territoryId) await reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [id]);
   };
 
   const deleteDealer = async (id) => {
@@ -3140,6 +3147,8 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('retailers', ['territoryId'], 'the retailer',
       (shape) => supabase.from('retailers').insert([shape(newRetailer)]));
+    // Left blank, the territory is the dealer's (076): show what was saved.
+    if (!newRetailer.territoryId) await reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [newId]);
     logEvent('retailer_added', `New retailer: ${retailerData.name}${territorySuffix(territories, retailerData)}`, null, newId);
     return newId;
   };
@@ -3152,6 +3161,7 @@ export const DataProvider = ({ children }) => {
     });
     await persistOptional('retailers', ['territoryId'], 'the retailer',
       (shape) => supabase.from('retailers').update(shape(updatedData)).eq('id', id));
+    if ('territoryId' in updatedData && !updatedData.territoryId) await reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [id]);
   };
 
   const deleteRetailer = async (id) => {
