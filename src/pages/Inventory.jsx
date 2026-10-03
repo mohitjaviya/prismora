@@ -120,50 +120,58 @@ export default function Inventory() {
   const openTransfer = (item) => { setTransferItem(item); setTransferForm({ toWarehouse: warehouses.find(w => w !== item.warehouse) || '', quantity: '', notes: '' }); };
   const openCount = (item) => { setCountItem(item); setCountedQty(String(item.quantity)); };
 
+  // Every form here waits for the database: the button says "Saving…", a
+  // refusal is shown and the dialog stays open, and it closes only once saved.
+  const [saving, setSaving] = useState(null);
+  const finish = (result, okText, close) => {
+    setSaving(null);
+    if (!result?.ok) { toast(result?.error || result?.reason || 'Not saved.', 'error'); return; }
+    toast(okText, 'success');
+    close();
+  };
+
   const handleTransfer = async (e) => {
     e.preventDefault();
-    // Both this and transferStock used to return on the same conditions and
-    // say nothing, so an impossible transfer closed the dialog exactly as a
-    // successful one did. transferStock now gives back a reason; this shows it
-    // and keeps the dialog open so the number can be corrected.
+    if (saving) return;
+    // An impossible transfer gives back a reason; this shows it and keeps the
+    // dialog open so the number can be corrected.
+    setSaving('transfer');
     const result = await transferStock(
       transferItem?.id, transferForm.toWarehouse, Number(transferForm.quantity), transferForm.notes);
-
-    if (!result?.ok) {
-      toast(result?.reason || 'That transfer could not be made.', 'error');
-      return;
-    }
-    toast(`Moved ${transferForm.quantity} ${transferItem.product} to ${transferForm.toWarehouse}.`, 'success');
-    setTransferItem(null);
+    finish(result, `Moved ${transferForm.quantity} ${transferItem?.product} to ${transferForm.toWarehouse}.`, () => setTransferItem(null));
   };
 
-  const handleCount = (e) => {
+  const handleCount = async (e) => {
     e.preventDefault();
-    if (!countItem) return;
+    if (!countItem || saving) return;
     const counted = Number(countedQty);
     const variance = counted - countItem.quantity;
-    if (variance !== 0) adjustStock(countItem.id, variance, `Cycle count reconciliation (system ${countItem.quantity} → counted ${counted})`);
-    setCountItem(null);
+    if (variance === 0) { toast('Count matches the system: nothing to change.', 'success'); setCountItem(null); return; }
+    setSaving('count');
+    const result = await adjustStock(countItem.id, variance, `Cycle count reconciliation (system ${countItem.quantity} → counted ${counted})`);
+    finish(result, `Stock set to ${counted} for ${countItem.product}.`, () => setCountItem(null));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return;
     const payload = {
       ...form,
       quantity: Number(form.quantity), reorderLevel: Number(form.reorderLevel),
       unitCost: Number(form.unitCost || 0),
       expiryDate: form.expiryDate ? new Date(form.expiryDate).toISOString() : null
     };
-    if (editingItem) updateInventoryItem(editingItem.id, payload);
-    else addInventoryItem(payload);
-    setIsAddOpen(false);
+    setSaving('batch');
+    const result = editingItem ? await updateInventoryItem(editingItem.id, payload) : await addInventoryItem(payload);
+    finish(result, editingItem ? 'Stock batch saved.' : `Stock batch for ${payload.product} added.`, () => setIsAddOpen(false));
   };
 
-  const handleAdjust = (e) => {
+  const handleAdjust = async (e) => {
     e.preventDefault();
-    if (!adjustingItem || !adjustForm.reason.trim()) return;
-    adjustStock(adjustingItem.id, Number(adjustForm.adjustment), adjustForm.reason);
-    setIsAdjustOpen(false);
+    if (!adjustingItem || !adjustForm.reason.trim() || saving) return;
+    setSaving('adjust');
+    const result = await adjustStock(adjustingItem.id, Number(adjustForm.adjustment), adjustForm.reason);
+    finish(result, `Stock for ${adjustingItem.product} is now ${result?.quantity}.`, () => setIsAdjustOpen(false));
   };
 
   const handleExport = () => {
@@ -432,7 +440,7 @@ export default function Inventory() {
               </div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsAddOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingItem ? 'Save Changes' : 'Add Batch'}</button>
+                <button type="submit" disabled={!!saving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{saving === 'batch' ? 'Saving…' : editingItem ? 'Save Changes' : 'Add Batch'}</button>
               </div>
             </form>
           </div>
@@ -471,7 +479,7 @@ export default function Inventory() {
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsAdjustOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Apply Adjustment</button>
+                <button type="submit" disabled={!!saving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{saving === 'adjust' ? 'Saving…' : 'Apply Adjustment'}</button>
               </div>
             </form>
           </div>
@@ -508,7 +516,7 @@ export default function Inventory() {
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setTransferItem(null)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Transfer</button>
+                <button type="submit" disabled={!!saving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{saving === 'transfer' ? 'Saving…' : 'Transfer'}</button>
               </div>
             </form>
           </div>
@@ -540,7 +548,7 @@ export default function Inventory() {
               )}
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setCountItem(null)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Reconcile Count</button>
+                <button type="submit" disabled={!!saving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{saving === 'count' ? 'Saving…' : 'Reconcile Count'}</button>
               </div>
             </form>
           </div>

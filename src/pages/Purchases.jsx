@@ -87,6 +87,8 @@ export default function Purchases() {
   const [isPOModalOpen, setIsPOModalOpen] = useState(false);
   const [isGRNModalOpen, setIsGRNModalOpen] = useState(false);
   const [isSavingGRN, setIsSavingGRN] = useState(false);
+  // Which of the vendor / PO / payment forms is waiting for the database.
+  const [savingForm, setSavingForm] = useState(null);
   const [grnError, setGrnError] = useState('');
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
@@ -187,10 +189,11 @@ export default function Purchases() {
     setIsReturnModalOpen(false);
   };
 
-  const handleRecordPayment = (e) => {
+  const handleRecordPayment = async (e) => {
     e.preventDefault();
-    if (!viewingVendor) return;
-    addVendorPayment({
+    if (!viewingVendor || savingForm) return;
+    setSavingForm('payment');
+    const r = await addVendorPayment({
       vendorId: viewingVendor.id,
       amount: Number(paymentForm.amount),
       method: paymentForm.method,
@@ -199,6 +202,9 @@ export default function Purchases() {
       notes: paymentForm.notes,
       recordedBy: user?.id
     });
+    setSavingForm(null);
+    if (!r?.ok) { toast(r?.error || 'The payment could not be recorded.', 'error'); return; }
+    toast(`Payment of ${formatCurrency(paymentForm.amount)} recorded.`, 'success');
     setIsPaymentModalOpen(false);
     setPaymentForm({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '' });
   };
@@ -272,10 +278,12 @@ export default function Purchases() {
   const updateLineItem = (idx, key, val) => setPOForm(f => ({ ...f, items: f.items.map((item, i) => i === idx ? { ...item, [key]: val } : item) }));
   const poTotal = poForm.items.reduce((s, i) => s + (Number(i.quantity) * Number(i.unitCost) || 0), 0);
 
-  const handleSubmitPO = (e) => {
+  const handleSubmitPO = async (e) => {
     e.preventDefault();
+    if (savingForm) return;
     const vendor = vendors.find(v => v.id === poForm.vendorId);
-    addPurchaseOrder({
+    setSavingForm('po');
+    const r = await addPurchaseOrder({
       vendorId: poForm.vendorId,
       vendorName: vendor?.name || poForm.vendorName,
       items: poForm.items.map(i => ({ ...i, quantity: Number(i.quantity), unitCost: Number(i.unitCost) })),
@@ -284,6 +292,9 @@ export default function Purchases() {
       notes: poForm.notes,
       assignedTo: user.id
     });
+    setSavingForm(null);
+    if (!r?.ok) { toast(r?.error || 'The purchase order could not be saved.', 'error'); return; }
+    toast(`${r.id} created.`, 'success');
     setPOForm({ vendorId: '', vendorName: '', expectedDate: '', notes: '', items: [{ ...BLANK_LINE }] });
     setIsPOModalOpen(false);
   };
@@ -354,13 +365,17 @@ export default function Purchases() {
 
   const openAddVendor = () => { setEditingVendor(null); setVendorForm({ name: '', gstin: '', phone: '', email: '', address: '', contactPerson: '', status: 'Active' }); setIsVendorModalOpen(true); };
   const openEditVendor = (v) => { setEditingVendor(v); setVendorForm({ name: v.name, gstin: v.gstin || '', phone: v.phone || '', email: v.email || '', address: v.address || '', contactPerson: v.contactPerson || '', status: v.status || 'Active' }); setIsVendorModalOpen(true); };
-  const handleSubmitVendor = (e) => {
+  const handleSubmitVendor = async (e) => {
     e.preventDefault();
+    if (savingForm) return;
     const payload = { ...vendorForm, gstin: normaliseGstin(vendorForm.gstin) };
     const problem = contactProblem(payload, editingVendor);
     if (problem) { toast(problem, 'error'); return; }
-    if (editingVendor) updateVendor(editingVendor.id, payload);
-    else addVendor(payload);
+    setSavingForm('vendor');
+    const r = editingVendor ? await updateVendor(editingVendor.id, payload) : await addVendor(payload);
+    setSavingForm(null);
+    if (!r?.ok) { toast(r?.error || 'The vendor could not be saved.', 'error'); return; }
+    toast(editingVendor ? 'Vendor saved.' : `Vendor ${payload.name} added.`, 'success');
     setIsVendorModalOpen(false);
   };
 
@@ -762,7 +777,7 @@ export default function Purchases() {
 
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsPOModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Create Purchase Order</button>
+                <button type="submit" disabled={!!savingForm} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{savingForm === 'po' ? 'Saving…' : 'Create Purchase Order'}</button>
               </div>
             </form>
           </div>
@@ -953,7 +968,7 @@ export default function Purchases() {
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Record Payment</button>
+                <button type="submit" disabled={!!savingForm} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{savingForm === 'payment' ? 'Saving…' : 'Record Payment'}</button>
               </div>
             </form>
           </div>
@@ -980,7 +995,7 @@ export default function Purchases() {
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsVendorModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingVendor ? 'Save Changes' : 'Add Vendor'}</button>
+                <button type="submit" disabled={!!savingForm} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{savingForm === 'vendor' ? 'Saving…' : editingVendor ? 'Save Changes' : 'Add Vendor'}</button>
               </div>
             </form>
           </div>
@@ -1105,7 +1120,16 @@ export default function Purchases() {
                 The order stays on file as Cancelled with your reason. Nothing is deleted and no stock moves.
               </p>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); cancelPurchaseOrder(cancellingPO.id, cancelReason); setCancellingPO(null); }} className="p-6 space-y-4">
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (savingForm) return;
+              setSavingForm('cancel');
+              const r = await cancelPurchaseOrder(cancellingPO.id, cancelReason);
+              setSavingForm(null);
+              if (!r?.ok) { toast(r?.error || 'The purchase order could not be cancelled.', 'error'); return; }
+              toast(`${cancellingPO.id} cancelled.`, 'success');
+              setCancellingPO(null);
+            }} className="p-6 space-y-4">
               <div>
                 <label htmlFor="purchases-reason-2" className={labelCls}>Reason *</label>
                 <select id="purchases-reason-2" required value={cancelReason} onChange={e => setCancelReason(e.target.value)} className={inputCls}>
@@ -1116,7 +1140,7 @@ export default function Purchases() {
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setCancellingPO(null)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Keep it</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-rose-500 text-white font-semibold rounded-xl hover:bg-rose-600 transition-colors">Cancel PO</button>
+                <button type="submit" disabled={!!savingForm} className="px-4 py-2 text-sm bg-rose-500 text-white font-semibold rounded-xl hover:bg-rose-600 transition-colors disabled:opacity-60">{savingForm === 'cancel' ? 'Saving…' : 'Cancel PO'}</button>
               </div>
             </form>
           </div>

@@ -84,11 +84,14 @@ export default function Claims() {
 
   const openAdd = () => { setForm(BLANK_FORM); setIsModalOpen(true); };
 
-  const handleSubmit = (e) => {
+  const [isSaving, setIsSaving] = useState(false);
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     const scheme = schemes.find(s => s.id === form.schemeId);
     if (!scheme || !party) return;
-    addSchemeClaim({
+    setIsSaving(true);
+    const r = await addSchemeClaim({
       distributorId: user?.role === 'Distributor' ? party.id : null,
       dealerId: user?.role === 'Dealer' ? party.id : null,
       retailerId: user?.role === 'Retailer' ? party.id : null,
@@ -98,6 +101,9 @@ export default function Claims() {
       amount: Number(form.amount),
       notes: form.notes
     });
+    setIsSaving(false);
+    if (!r?.ok) { toast(r?.error || 'The claim could not be submitted.', 'error'); return; }
+    toast(`Claim ${r.id} submitted.`, 'success');
     setIsModalOpen(false);
   };
 
@@ -258,7 +264,7 @@ export default function Claims() {
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Submit Claim</button>
+                <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : 'Submit Claim'}</button>
               </div>
             </form>
           </div>

@@ -51,6 +51,7 @@ export default function Retailers() {
   const [editingRetailer, setEditingRetailer] = useState(null);
   const [viewingRetailer, setViewingRetailer] = useState(null);
   const [form, setForm] = useState(BLANK_FORM);
+  const [isSaving, setIsSaving] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '' });
@@ -86,13 +87,18 @@ export default function Retailers() {
   const openAdd = () => { setEditingRetailer(null); setForm(BLANK_FORM); setIsModalOpen(true); };
   const openEdit = (r) => { setEditingRetailer(r); setForm({ name: r.name, gstin: r.gstin || '', parentDealerId: r.parentDealerId || '', state: r.state || '', city: r.city || '', territoryId: r.territoryId || '', phone: r.phone || '', email: r.email || '', contactPerson: r.contactPerson || '', address: r.address || '', pincode: r.pincode || '', creditLimit: r.creditLimit || 50000, status: r.status || 'Active' }); setIsModalOpen(true); };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     const payload = { ...form, gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
     const problem = contactProblem(payload, editingRetailer) || (payload.creditLimit < 0 ? 'Credit limit cannot be negative.' : null);
     if (problem) { toast(problem, 'error'); return; }
-    if (editingRetailer) updateRetailer(editingRetailer.id, payload);
-    else addRetailer(payload);
+    // Waits for the database: closes only once it is saved, else says why.
+    setIsSaving(true);
+    const r = editingRetailer ? await updateRetailer(editingRetailer.id, payload) : await addRetailer(payload);
+    setIsSaving(false);
+    if (!r?.ok) { toast(r?.error || 'The retailer could not be saved.', 'error'); return; }
+    toast(editingRetailer ? 'Retailer saved.' : `Retailer ${payload.name} added.`, 'success');
     setIsModalOpen(false);
   };
 
@@ -530,7 +536,7 @@ export default function Retailers() {
               </div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingRetailer ? 'Save Changes' : 'Add Retailer'}</button>
+                <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : editingRetailer ? 'Save Changes' : 'Add Retailer'}</button>
               </div>
             </form>
           </div>

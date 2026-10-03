@@ -53,6 +53,7 @@ export default function Complaints() {
   const [form, setForm] = useState(BLANK_FORM);
   const [resolveForm, setResolveForm] = useState(BLANK_RESOLVE);
   const [isSavingAdd, setIsSavingAdd] = useState(false);
+  const [isSavingResolve, setIsSavingResolve] = useState(false);
 
   const isParty = ['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
   const distributor = useMemo(() => distributors?.find(d => d.id === user?.distributorId), [distributors, user]);
@@ -126,9 +127,14 @@ export default function Complaints() {
     setForm(BLANK_FORM);
   };
 
-  const handleSubmitResolve = (e) => {
+  const handleSubmitResolve = async (e) => {
     e.preventDefault();
-    updateComplaintStatus(targetComplaint.id, resolveForm.status, resolveForm.resolution);
+    if (isSavingResolve) return;
+    setIsSavingResolve(true);
+    const r = await updateComplaintStatus(targetComplaint.id, resolveForm.status, resolveForm.resolution);
+    setIsSavingResolve(false);
+    if (!r?.ok) { toast(r?.error || 'The complaint could not be updated.', 'error'); return; }
+    toast(`Complaint ${targetComplaint.id} → ${resolveForm.status}.`, 'success');
     setIsResolveOpen(false);
   };
 
@@ -340,7 +346,7 @@ export default function Complaints() {
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsResolveOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Save Update</button>
+                <button type="submit" disabled={isSavingResolve} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingResolve ? 'Saving…' : 'Save Update'}</button>
               </div>
             </form>
           </div>

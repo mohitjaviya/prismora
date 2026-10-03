@@ -34,6 +34,7 @@ export default function DistributorOrders() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [cart, setCart] = useState([]);
+  const [isPlacing, setIsPlacing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [qty, setQty] = useState('');
   const [viewingOrder, setViewingOrder] = useState(null);
@@ -74,7 +75,8 @@ export default function DistributorOrders() {
 
   const openOrderModal = () => { setCart([]); setSelectedProduct(''); setQty(''); setIsModalOpen(true); };
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
+    if (isPlacing) return;
     if (!distributor || cart.length === 0) return;
     // Routed by the partner's own territory, so a state can hold more than
     // one. Matching on state alone gave whichever territory happened to be
@@ -89,7 +91,8 @@ export default function DistributorOrders() {
     // An empty assignedTo is invisible to every sales role and every manager,
     // so an order used to land where only an administrator would ever see it.
     const routing = assigneeForPortalOrder([distributor], territories);
-    addOrder({
+    setIsPlacing(true);
+    const newId = await addOrder({
       customerName: distributor.name,
       companyName: distributor.name,
       product: cart.length === 1 ? cart[0].name : `${cart[0].name} +${cart.length - 1} more item${cart.length > 2 ? 's' : ''}`,
@@ -110,6 +113,10 @@ export default function DistributorOrders() {
       email: distributor.email,
       date: new Date().toISOString()
     });
+    setIsPlacing(false);
+    // Waits for the database: the cart stays as it was if the order is refused.
+    if (!newId) { toast('The order was not placed: the database refused it. Your cart is unchanged; try again or contact us.', 'error'); return; }
+    toast(`Order ${newId} placed.`, 'success');
     setIsModalOpen(false);
     setCart([]);
   };
@@ -263,7 +270,7 @@ export default function DistributorOrders() {
                 </div>
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                  <button type="button" disabled={cart.length === 0} onClick={handleSubmitOrder} className="px-5 py-2 text-sm btn-accent rounded-xl disabled:opacity-40 disabled:cursor-not-allowed">Submit Order</button>
+                  <button type="button" disabled={cart.length === 0 || isPlacing} onClick={handleSubmitOrder} className="px-5 py-2 text-sm btn-accent rounded-xl disabled:opacity-40 disabled:cursor-not-allowed">{isPlacing ? 'Saving…' : 'Submit Order'}</button>
                 </div>
               </div>
             </div>

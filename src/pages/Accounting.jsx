@@ -64,6 +64,7 @@ const Accounting = () => {
   // Modals state
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isSavingExpense, setIsSavingExpense] = useState(false);
   const [printInvoice, setPrintInvoice] = useState(null);
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [creditForm, setCreditForm] = useState({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
@@ -352,22 +353,27 @@ const Accounting = () => {
   };
 
   // Handles adding an expense
-  const handleAddExpenseSubmit = (e) => {
+  const handleAddExpenseSubmit = async (e) => {
     e.preventDefault();
+    if (isSavingExpense) return;
     const amount = Number(expenseAmount);
-    
+
     if (isNaN(amount) || amount <= 0) {
       toast("Please enter a valid amount.", 'error');
       return;
     }
 
-    addExpense({
+    setIsSavingExpense(true);
+    const result = await addExpense({
       category: expenseCategory,
       amount,
       description: expenseDescription,
       date: new Date(expenseDate).toISOString(),
       assignedTo: user.id
     });
+    setIsSavingExpense(false);
+    if (!result?.ok) { toast(result?.error || 'The expense could not be saved.', 'error'); return; }
+    toast(`Expense ${result.id} saved.`, 'success');
 
     // Reset and close
     setExpenseAmount('');
@@ -1370,9 +1376,10 @@ const Accounting = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm btn-accent rounded-xl"
+                  disabled={isSavingExpense}
+                  className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60"
                 >
-                  Save Expense
+                  {isSavingExpense ? 'Saving…' : 'Save Expense'}
                 </button>
               </div>
             </form>

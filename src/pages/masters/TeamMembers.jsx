@@ -46,6 +46,7 @@ export default function TeamMembers() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [userForm, setUserForm] = useState(BLANK_USER_FORM);
+  const [isSavingUser, setIsSavingUser] = useState(false);
   // What the server and database will accept from this person: only a Super
   // Admin hands out Super Admin, Admin or Director (071), or any role with
   // Settings = full (077).
@@ -55,8 +56,11 @@ export default function TeamMembers() {
   const openUserAdd = () => { const assignable = rolesAssignableBy(user?.role, staffRoles, null, fullSettingsRoles); setEditingUser(null); setUserForm({ ...BLANK_USER_FORM, role: assignable.includes('Sales Executive') ? 'Sales Executive' : (assignable[0] || '') }); setIsUserModalOpen(true); };
   const openUserEdit = (u) => { setEditingUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, managedUsers: u.managedUsers || [], password: '' }); setIsUserModalOpen(true); };
 
-  const handleUserSubmit = (e) => {
+  // Waits for the database (or create-user): the form stays open with the
+  // reason on a refusal and closes only once saved.
+  const handleUserSubmit = async (e) => {
     e.preventDefault();
+    if (isSavingUser) return;
     if ((!editingUser || userForm.password) && passwordPolicyError(userForm.password)) {
       toast(passwordPolicyError(userForm.password), 'error');
       return;
@@ -68,28 +72,28 @@ export default function TeamMembers() {
       // The e-mail is never saved from here: it is what the person's sign-in is
       // matched to, so changing the profile alone would lock them out (073).
       const { password, email: _lockedEmail, ...profileOnly } = payload; // eslint-disable-line no-unused-vars
-      updateUser(editingUser.id, editingUser.id === user?.id && password ? { ...profileOnly, password } : profileOnly).then(ok => {
-        if (!ok) { toast('The changes to ' + payload.name + ' were not saved — the database refused them.', 'error'); return; }
-        if (password && editingUser.id !== user?.id) {
-          toast('Profile saved. A password can only be changed by its own account holder, or reset from the Supabase dashboard.', 'success');
-        }
-      });
+      setIsSavingUser(true);
+      const ok = await updateUser(editingUser.id, editingUser.id === user?.id && password ? { ...profileOnly, password } : profileOnly);
+      setIsSavingUser(false);
+      if (!ok) { toast('The changes to ' + payload.name + ' were not saved — the database refused them.', 'error'); return; }
+      toast(password && editingUser.id !== user?.id
+        ? 'Profile saved. A password can only be changed by its own account holder, or reset from the Supabase dashboard.'
+        : payload.name + ' saved.', 'success');
     } else {
       // The login is made server-side by the create-user function, which holds
       // the key that can do it. Falls back to the manual two-step where that
       // function has not been deployed.
-      createUserAccount(payload).then(result => {
-        if (result.ok) { toast(payload.name + ' can now sign in with ' + payload.email + '.', 'success'); return; }
-        if (result.needsDeploy) {
-          addUser({ ...payload, createAuthAccount: false });
-          toast('Profile created for ' + payload.email + ', but their login was not.' +
-            String.fromCharCode(10, 10) +
-            'The create-user function has not been deployed yet, so add the same email in ' +
-            'Supabase → Authentication → Users (tick Auto Confirm) and they can sign in.', 'success');
-          return;
-        }
-        toast('Could not create the account: ' + result.error, 'error');
-      });
+      setIsSavingUser(true);
+      const result = await createUserAccount(payload);
+      setIsSavingUser(false);
+      if (result.ok) toast(payload.name + ' can now sign in with ' + payload.email + '.', 'success');
+      else if (result.needsDeploy) {
+        addUser({ ...payload, createAuthAccount: false });
+        toast('Profile created for ' + payload.email + ', but their login was not.' +
+          String.fromCharCode(10, 10) +
+          'The create-user function has not been deployed yet, so add the same email in ' +
+          'Supabase → Authentication → Users (tick Auto Confirm) and they can sign in.', 'success');
+      } else { toast('Could not create the account: ' + result.error, 'error'); return; }
     }
     setIsUserModalOpen(false);
   };
@@ -273,7 +277,7 @@ export default function TeamMembers() {
 
                 <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                   <button type="button" onClick={() => setIsUserModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                  <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingUser ? 'Save Changes' : 'Create User'}</button>
+                  <button type="submit" disabled={isSavingUser} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingUser ? 'Saving…' : editingUser ? 'Save Changes' : 'Create User'}</button>
                 </div>
               </form>
             </div>

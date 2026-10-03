@@ -39,6 +39,7 @@ export default function ProductCatalog() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [productForm, setProductForm] = useState(BLANK_PRODUCT_FORM);
+  const [isSaving, setIsSaving] = useState(false);
   const [viewingQrProduct, setViewingQrProduct] = useState(null);
 
   const openProductAdd = () => { setEditingProduct(null); setProductForm(BLANK_PRODUCT_FORM); setIsProductModalOpen(true); };
@@ -65,11 +66,14 @@ export default function ProductCatalog() {
     };
     const problem = productPriceProblem(payload);
     if (problem) { toast(problem, 'error'); return; }
-    if (editingProduct) {
-      // A rename is refused while the name is in use (078); keep the form open.
-      const r = await updateProduct(editingProduct.id, payload);
-      if (!r?.ok) { toast(r?.error || 'The product could not be saved.', 'error'); return; }
-    } else addProduct(payload);
+    if (isSaving) return;
+    // Waits for the database (a rename is refused while the name is in use,
+    // 078); keeps the form open with the reason, closes only once saved.
+    setIsSaving(true);
+    const r = editingProduct ? await updateProduct(editingProduct.id, payload) : await addProduct(payload);
+    setIsSaving(false);
+    if (!r?.ok) { toast(r?.error || 'The product could not be saved.', 'error'); return; }
+    toast(editingProduct ? 'Product saved.' : `Product ${payload.name} added.`, 'success');
     setIsProductModalOpen(false);
   };
 
@@ -216,7 +220,7 @@ export default function ProductCatalog() {
                 </div>
                 <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                   <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                  <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingProduct ? 'Save Changes' : 'Create Product'}</button>
+                  <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : editingProduct ? 'Save Changes' : 'Create Product'}</button>
                 </div>
               </form>
             </div>

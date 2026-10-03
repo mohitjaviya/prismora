@@ -155,6 +155,32 @@ const writeComplaint = (err, row) => {
 
 const persist = (label, query, row) => journaled(label, () => persistNow(label, query, row));
 
+/**
+ * A save the screen waits for: { ok: true, data } or { ok: false, error }
+ * with the database's reason as a sentence. `run` is the query (or a function
+ * returning it); an update should ask for its row back with .select(), since
+ * RLS refuses an update by changing nothing and reporting no error.
+ */
+const confirmSave = (label, action, run) => journaled(label, async () => {
+  try {
+    const { data, error } = await (typeof run === 'function' ? run() : run);
+    if (error) {
+      console.error(`[Prismora] Could not save ${label}:`, error.message || error);
+      return { ok: false, error: plainDatabaseError(error, action) };
+    }
+    if (Array.isArray(data) && data.length === 0) {
+      return { ok: false, error: `Not saved: your role may not ${action}, or the record no longer exists.` };
+    }
+    return { ok: true, data };
+  } catch (err) {
+    console.error(`[Prismora] Could not save ${label}:`, err?.message || err);
+    return { ok: false, error: plainDatabaseError(err, action) };
+  }
+});
+
+/** persistOptional answers true or the refusal sentence; as a result object. */
+const asResult = (saved) => (saved === true ? { ok: true } : { ok: false, error: saved || 'The database did not save it.' });
+
 const persistNow = async (label, query, row) => {
   try {
     const { error } = await query;
@@ -2056,14 +2082,19 @@ export const DataProvider = ({ children }) => {
       return blankIdsToNull(copy);
     };
 
-    const { error } = await build(shape);
-    if (!error) return true;
+    const { error, data } = await build(shape);
+    if (!error) {
+      // An update that RLS refuses changes nothing and reports nothing; a
+      // write that asks for its row back (.select) can tell.
+      if (Array.isArray(data) && data.length === 0) return `Not saved: your role may not change ${label}, or it no longer exists.`;
+      return true;
+    }
 
     const message = String(error.message || '');
     const culprit = optional.find(c => message.includes(`'${c}'`));
     if (!culprit || missing.has(culprit)) {
       console.error(`[Prismora] Could not save ${label}:`, message || error);
-      return false;
+      return plainDatabaseError(error, `save ${label}`);
     }
 
     console.warn(`[Prismora] The ${table} table has no '${culprit}' column, so it is being left out. ` +
@@ -2072,6 +2103,10 @@ export const DataProvider = ({ children }) => {
     return persistOptional(table, optional, label, build);
   };
 
+  // persistOptional as a save the screen waits for: { ok, error }, journaled.
+  const saveOptional = (journalLabel, table, optional, label, build) =>
+    journaled(journalLabel, async () => asResult(await persistOptional(table, optional, label, build)));
+
   const addProduct = async (productData) => {
     // Callers pass either a full product object (Settings' catalog form) or just
     // a product-name string (Orders and Leads, which save custom typed products).
@@ -2079,26 +2114,32 @@ export const DataProvider = ({ children }) => {
     // nameless catalog row, so normalise to an object first.
     const normalized = typeof productData === 'string' ? { name: productData } : (productData || {});
     const name = String(normalized.name || '').trim();
-    if (!name) return;
+    if (!name) return { ok: false, error: 'Give the product a name.' };
 
     // Orders/Leads call this on every save, not only for genuinely new products —
     // bail out if this name is already catalogued so we don't pile up duplicates.
-    if (productCatalog.some(p => String(p?.name || '').toLowerCase() === name.toLowerCase())) return;
+    if (productCatalog.some(p => String(p?.name || '').toLowerCase() === name.toLowerCase())) {
+      return { ok: false, error: `A product named "${name}" is already in the catalogue.` };
+    }
 
     const newId = `P${Date.now()}`;
     const newProduct = { ...normalized, name, id: newId, createdAt: new Date().toISOString() };
+
+    // Shown in the catalogue only once the database has it.
+    let failure = null;
+    const ok = await journaled('products insert', () => persistProduct('the new product',
+      (shape) => supabase.from('products').insert([shape(newProduct)]),
+      (error) => { failure = error; }));
+    if (!ok) return { ok: false, error: plainDatabaseError(failure, 'add this product') };
 
     setProductCatalog(prev => {
       const next = [newProduct, ...prev];
       localStorage.setItem('prismora_product_catalog', JSON.stringify(next));
       return next;
     });
-
     setProducts(prev => (prev.includes(name) ? prev : [...prev, name]));
-
-    await persistProduct('the new product',
-      (shape) => supabase.from('products').insert([shape(newProduct)]));
     logEvent('product_added', `Added product: ${name}`, null, newId);
+    return { ok: true, id: newId };
   };
 
   // Waits for the database: it refuses a rename while stock, orders, schemes
@@ -2599,16 +2640,17 @@ export const DataProvider = ({ children }) => {
     const draft = stamp({ ...expenseData, createdAt: new Date().toISOString() });
     // addGRN checks this same flag; this did not. A refused expense stayed on
     // screen and in the month's totals, and was gone on the next refresh.
-    const { id: newId, saved } = await journaled(`New expense ${expenseData.category || ''} ₹${expenseData.amount}`,
+    const { id: newId, saved, error } = await journaled(`New expense ${expenseData.category || ''} ₹${expenseData.amount}`,
       () => insertWithFreeId('expenses insert', 'expenses', 'EXP-', maxId + 1, draft, (r) => r, 8, ['createdBy']),
       (r) => Boolean(r?.saved));
-    if (!saved) return null;
+    if (!saved) return { ok: false, error: error ? plainDatabaseError(error, 'log this expense') : 'The expense could not be saved.' };
     const newExpense = { ...draft, id: newId };
     setExpenses(prev => [newExpense, ...prev]);
     const local = localStorage.getItem('prismora_expenses');
     const existing = local ? JSON.parse(local) : [];
     localStorage.setItem('prismora_expenses', JSON.stringify([newExpense, ...existing]));
     logEvent('expense_new', `Logged expense: ${expenseData.category} - ${newExpense.amount}`, expenseData.assignedTo, newId);
+    return { ok: true, id: newId };
   };
 
   const deleteExpense = async (id) => {
@@ -2645,35 +2687,30 @@ export const DataProvider = ({ children }) => {
   const addInventoryItem = async (itemData) => {
     const newId = `INV-ITEM-${Date.now()}`;
     const newItem = { ...itemData, id: newId, createdAt: new Date().toISOString() };
+    // A batch added and not stored looked identical to one that was, until
+    // it was gone on the next refresh: shown only once the database has it.
+    const res = await confirmSave('inventory insert', 'add this stock batch',
+      () => supabase.from('inventory').insert([newItem]).select('id'));
+    if (!res.ok) return res;
     setInventory(prev => {
       const next = [newItem, ...prev];
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-    // supabase-js returns { error }; it does not throw, so the catch that used
-    // to be here never ran and "table may not exist yet" swallowed every
-    // refusal equally. A batch added and not stored looks identical to one
-    // that was, until it is gone on the next refresh.
-    const { error } = await supabase.from('inventory').insert([newItem]);
-    if (error) {
-      console.error('[Prismora] The stock batch was not stored:', error.message || error);
-      setInventory(prev => {
-        const next = prev.filter(i => i.id !== newId);
-        localStorage.setItem('prismora_inventory', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
     logEvent('inventory_added', `Stock added: ${itemData.product} Batch:${itemData.batchNumber || 'N/A'}`, null, newId);
+    return { ok: true, id: newId };
   };
 
   const updateInventoryItem = async (id, updatedData) => {
+    const res = await confirmSave('inventory update', 'change this stock batch',
+      () => supabase.from('inventory').update(blankIdsToNull(updatedData)).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setInventory(prev => {
       const next = prev.map(item => item.id === id ? { ...item, ...updatedData } : item);
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-    await persist('inventory update', supabase.from('inventory').update(blankIdsToNull(updatedData)).eq('id', id));
+    return res;
   };
 
   const deleteInventoryItem = async (id) => {
@@ -2689,16 +2726,19 @@ export const DataProvider = ({ children }) => {
 
   const adjustStock = async (id, adjustment, reason) => {
     const item = inventory.find(i => i.id === id);
-    if (!item) return;
+    if (!item) return { ok: false, error: 'That stock batch no longer exists.' };
     const newQty = quantityAfterAdjustment(item.quantity, adjustment);
-    if (newQty === null) return;
+    if (newQty === null) return { ok: false, error: 'Enter a whole number to adjust by.' };
+    const res = await confirmSave('inventory update', 'adjust this stock',
+      () => supabase.from('inventory').update({ quantity: newQty }).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setInventory(prev => {
       const next = prev.map(i => i.id === id ? { ...i, quantity: newQty } : i);
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-    await persist('inventory update', supabase.from('inventory').update({ quantity: newQty }).eq('id', id));
     logEvent('stock_adjusted', `Stock ${adjustment > 0 ? '+' : ''}${adjustment} for ${item.product}: ${reason}`, null, id);
+    return { ok: true, quantity: newQty };
   };
 
   /**
@@ -2796,6 +2836,20 @@ export const DataProvider = ({ children }) => {
       reserved: 0, transit: 0, createdAt: new Date().toISOString()
     };
 
+    // Two writes, each confirmed. If the second is refused the first has
+    // happened: say so, and show what the database now holds.
+    const out = await confirmSave('inventory update', 'move this stock',
+      () => supabase.from('inventory').update({ quantity: newSrcQty }).eq('id', batchId).select('id'));
+    if (!out.ok) return out;
+    const into = dest
+      ? await confirmSave('inventory update', 'move this stock',
+        () => supabase.from('inventory').update({ quantity: moved.to }).eq('id', dest.id).select('id'))
+      : await confirmSave('inventory insert', 'move this stock',
+        () => supabase.from('inventory').insert([newDestItem]).select('id'));
+    if (!into.ok) {
+      await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [batchId]);
+      return { ok: false, error: `${into.error} ${qty} unit(s) were taken off ${src.warehouse} but not added to ${toWarehouse}: correct the stock by hand.` };
+    }
     setInventory(prev => {
       let next = prev.map(i => i.id === batchId ? { ...i, quantity: newSrcQty } : i);
       if (dest) next = next.map(i => i.id === dest.id ? { ...i, quantity: moved.to } : i);
@@ -2803,10 +2857,6 @@ export const DataProvider = ({ children }) => {
       localStorage.setItem('prismora_inventory', JSON.stringify(next));
       return next;
     });
-
-    await persist('inventory update', supabase.from('inventory').update({ quantity: newSrcQty }).eq('id', batchId));
-    if (dest) { await persist('inventory update', supabase.from('inventory').update({ quantity: moved.to }).eq('id', dest.id)); }
-    else { await persist('inventory insert', supabase.from('inventory').insert([newDestItem])); }
     logEvent('stock_transfer', `Transferred ${qty} of ${src.product} from ${src.warehouse} → ${toWarehouse}${notes ? ` (${notes})` : ''}`, null, batchId);
     return { ok: true };
   };
@@ -2815,13 +2865,17 @@ export const DataProvider = ({ children }) => {
   const addVendor = async (vendorData) => {
     const newId = `V${Date.now()}`;
     const newVendor = { ...vendorData, id: newId, createdAt: new Date().toISOString() };
+    const res = await confirmSave('vendors insert', 'add this vendor',
+      () => supabase.from('vendors').insert([newVendor]).select('id'));
+    if (!res.ok) return res;
     setVendors(prev => {
       const next = [newVendor, ...prev];
       localStorage.setItem('prismora_vendors', JSON.stringify(next));
       return next;
     });
-    await persist('vendors insert', supabase.from('vendors').insert([newVendor]));
+    await reloadRows('vendors', setVendors, 'prismora_vendors', 'id', [newId]);
     logEvent('vendor_added', `Vendor added: ${vendorData.name}`, null, newId);
+    return { ok: true, id: newId };
   };
 
   const updateVendor = async (id, updatedData) => {
@@ -2829,12 +2883,16 @@ export const DataProvider = ({ children }) => {
     // back the figure it happened to load.
     const changes = { ...(updatedData || {}) };
     delete changes.outstandingAmount;
+    const res = await confirmSave('vendors update', 'change this vendor',
+      () => supabase.from('vendors').update(blankIdsToNull(changes)).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setVendors(prev => {
       const next = prev.map(v => v.id === id ? { ...v, ...changes } : v);
       localStorage.setItem('prismora_vendors', JSON.stringify(next));
       return next;
     });
-    await persist('vendors update', supabase.from('vendors').update(blankIdsToNull(changes)).eq('id', id));
+    await reloadVendor(id);
+    return res;
   };
 
   // What a vendor is owed is moved by the database with the receipt, return or
@@ -2859,9 +2917,9 @@ export const DataProvider = ({ children }) => {
       return !isNaN(num) && num > max ? num : max;
     }, 0);
     const draft = stamp({ ...poData, status: 'Draft', createdAt: new Date().toISOString() });
-    const { id: newId, saved } = await insertWithFreeId('purchase_orders insert', 'purchase_orders', 'PO-', maxId + 1, draft,
+    const { id: newId, saved, error } = await insertWithFreeId('purchase_orders insert', 'purchase_orders', 'PO-', maxId + 1, draft,
       purchaseOrderRow, 8, ['createdBy']);
-    if (!saved) return null;
+    if (!saved) return { ok: false, error: error ? plainDatabaseError(error, 'create this purchase order') : 'The purchase order could not be saved.' };
     const newPO = { ...purchaseOrderRow(draft), id: newId };
     setPurchaseOrders(prev => {
       const next = [newPO, ...prev];
@@ -2869,7 +2927,7 @@ export const DataProvider = ({ children }) => {
       return next;
     });
     logEvent('po_created', `Purchase Order ${newId} created for ${poData.vendorName}`, poData.assignedTo, newId);
-    return newId;
+    return { ok: true, id: newId };
   };
 
   const updatePurchaseOrderStatus = async (id, status) => {
@@ -2893,26 +2951,20 @@ export const DataProvider = ({ children }) => {
    */
   const cancelPurchaseOrder = async (id, reason) => {
     const before = purchaseOrders.find(po => po.id === id);
-    if (!before) return null;
+    if (!before) return { ok: false, error: 'That purchase order no longer exists.' };
     const stamped = `Cancelled on ${new Date().toISOString().slice(0, 10)}: ${reason || 'no reason given'}`;
     const notes = before.notes ? `${before.notes}\n${stamped}` : stamped;
 
+    const res = await confirmSave('purchase_orders cancel', 'cancel this purchase order',
+      () => supabase.from('purchase_orders').update({ status: 'Cancelled', notes }).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setPurchaseOrders(prev => {
       const next = prev.map(po => po.id === id ? { ...po, status: 'Cancelled', notes } : po);
       localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
       return next;
     });
-    const ok = await persist('purchase_orders cancel', supabase.from('purchase_orders').update({ status: 'Cancelled', notes }).eq('id', id));
-    if (!ok) {
-      setPurchaseOrders(prev => {
-        const next = prev.map(po => po.id === id ? before : po);
-        localStorage.setItem('prismora_purchase_orders', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
     logEvent('po_cancelled', `Purchase Order ${id} cancelled — ${reason || 'no reason given'}`, null, id);
-    return id;
+    return { ok: true, id };
   };
 
   // Removed from screen only once the database has removed it: a PO with
@@ -3006,29 +3058,22 @@ export const DataProvider = ({ children }) => {
   const addVendorPayment = async (paymentData) => {
     const newId = `VPAY-${Date.now()}`;
     const newPayment = vendorPaymentRow({ ...paymentData, id: newId, createdAt: new Date().toISOString() });
+    // A refused payment shows nothing and moves no balance (065 moves it in
+    // the same statement as the row).
+    const res = await confirmSave(`Vendor payment ₹${paymentData.amount}`, 'record this payment',
+      () => supabase.from('vendor_payments').insert([newPayment]).select('id'));
+    if (!res.ok) return res;
     setVendorPayments(prev => {
       const next = [newPayment, ...prev];
       localStorage.setItem('prismora_vendor_payments', JSON.stringify(next));
       return next;
     });
-    const saved = await persist(`Vendor payment ₹${paymentData.amount}`, supabase.from('vendor_payments').insert([newPayment]));
-    if (!saved) {
-      // The balance write below is a separate statement and would go through on
-      // its own, so a refused payment used to still reduce what the vendor is
-      // owed — money moving off the back of a record that does not exist, and
-      // no payment left to explain it. Take the row back and change nothing.
-      setVendorPayments(prev => {
-        const next = prev.filter(p => p.id !== newId);
-        localStorage.setItem('prismora_vendor_payments', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
 
     // The payable came down with the payment, in the database (065).
     const vendor = vendors.find(v => v.id === paymentData.vendorId);
     await reloadVendor(paymentData.vendorId);
     logEvent('vendor_payment', `Payment of ₹${paymentData.amount} recorded for ${vendor?.name || paymentData.vendorId}`, paymentData.recordedBy, newId);
+    return { ok: true, id: newId };
   };
 
   // ── Purchase Returns ──────────────────────────────────────────────────────
@@ -3092,28 +3137,36 @@ export const DataProvider = ({ children }) => {
   };
 
   // ── Distributors ──────────────────────────────────────────────────────────
+  // Partner, scheme, vendor … saves wait for the database and answer
+  // { ok, error }: the screen shows the refusal and keeps the form open,
+  // and nothing appears in the list until it is really saved.
   const addDistributor = async (distData) => {
     const newId = `DIST-${Date.now()}`;
     const newDist = { ...distData, id: newId, outstandingAmount: 0, createdAt: new Date().toISOString() };
+    const res = await saveOptional('distributors insert', 'distributors', ['territoryId'], 'the distributor',
+      (shape) => supabase.from('distributors').insert([shape(newDist)]).select('id'));
+    if (!res.ok) return res;
     setDistributors(prev => {
       const next = [newDist, ...prev];
       localStorage.setItem('prismora_distributors', JSON.stringify(next));
       return next;
     });
-    await persistOptional('distributors', ['territoryId'], 'the distributor',
-      (shape) => supabase.from('distributors').insert([shape(newDist)]));
+    await reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [newId]);
     logEvent('distributor_added', `New distributor: ${distData.name}${territorySuffix(territories, distData)}`, null, newId);
-    return newId;
+    return { ok: true, id: newId };
   };
 
   const updateDistributor = async (id, updatedData) => {
+    const res = await saveOptional('distributors update', 'distributors', ['territoryId'], 'the distributor',
+      (shape) => supabase.from('distributors').update(shape(updatedData)).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setDistributors(prev => {
       const next = prev.map(d => d.id === id ? { ...d, ...updatedData } : d);
       localStorage.setItem('prismora_distributors', JSON.stringify(next));
       return next;
     });
-    await persistOptional('distributors', ['territoryId'], 'the distributor',
-      (shape) => supabase.from('distributors').update(shape(updatedData)).eq('id', id));
+    await reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [id]);
+    return res;
   };
 
   const deleteDistributor = async (id) => {
@@ -3129,28 +3182,31 @@ export const DataProvider = ({ children }) => {
   const addDealer = async (dealerData) => {
     const newId = `DEAL-${Date.now()}`;
     const newDealer = { ...dealerData, id: newId, outstandingAmount: 0, createdAt: new Date().toISOString() };
+    const res = await saveOptional('dealers insert', 'dealers', ['territoryId'], 'the dealer',
+      (shape) => supabase.from('dealers').insert([shape(newDealer)]).select('id'));
+    if (!res.ok) return res;
     setDealers(prev => {
       const next = [newDealer, ...prev];
       localStorage.setItem('prismora_dealers', JSON.stringify(next));
       return next;
     });
-    await persistOptional('dealers', ['territoryId'], 'the dealer',
-      (shape) => supabase.from('dealers').insert([shape(newDealer)]));
     // Left blank, the territory is the distributor's (076): show what was saved.
-    if (!newDealer.territoryId) await reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [newId]);
+    await reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [newId]);
     logEvent('dealer_added', `New dealer: ${dealerData.name}${territorySuffix(territories, dealerData)}`, null, newId);
-    return newId;
+    return { ok: true, id: newId };
   };
 
   const updateDealer = async (id, updatedData) => {
+    const res = await saveOptional('dealers update', 'dealers', ['territoryId'], 'the dealer',
+      (shape) => supabase.from('dealers').update(shape(updatedData)).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setDealers(prev => {
       const next = prev.map(d => d.id === id ? { ...d, ...updatedData } : d);
       localStorage.setItem('prismora_dealers', JSON.stringify(next));
       return next;
     });
-    await persistOptional('dealers', ['territoryId'], 'the dealer',
-      (shape) => supabase.from('dealers').update(shape(updatedData)).eq('id', id));
-    if ('territoryId' in updatedData && !updatedData.territoryId) await reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [id]);
+    await reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [id]);
+    return res;
   };
 
   const deleteDealer = async (id) => {
@@ -3166,28 +3222,31 @@ export const DataProvider = ({ children }) => {
   const addRetailer = async (retailerData) => {
     const newId = `RET-${Date.now()}`;
     const newRetailer = { ...retailerData, id: newId, outstandingAmount: 0, createdAt: new Date().toISOString() };
+    const res = await saveOptional('retailers insert', 'retailers', ['territoryId'], 'the retailer',
+      (shape) => supabase.from('retailers').insert([shape(newRetailer)]).select('id'));
+    if (!res.ok) return res;
     setRetailers(prev => {
       const next = [newRetailer, ...prev];
       localStorage.setItem('prismora_retailers', JSON.stringify(next));
       return next;
     });
-    await persistOptional('retailers', ['territoryId'], 'the retailer',
-      (shape) => supabase.from('retailers').insert([shape(newRetailer)]));
     // Left blank, the territory is the dealer's (076): show what was saved.
-    if (!newRetailer.territoryId) await reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [newId]);
+    await reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [newId]);
     logEvent('retailer_added', `New retailer: ${retailerData.name}${territorySuffix(territories, retailerData)}`, null, newId);
-    return newId;
+    return { ok: true, id: newId };
   };
 
   const updateRetailer = async (id, updatedData) => {
+    const res = await saveOptional('retailers update', 'retailers', ['territoryId'], 'the retailer',
+      (shape) => supabase.from('retailers').update(shape(updatedData)).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setRetailers(prev => {
       const next = prev.map(r => r.id === id ? { ...r, ...updatedData } : r);
       localStorage.setItem('prismora_retailers', JSON.stringify(next));
       return next;
     });
-    await persistOptional('retailers', ['territoryId'], 'the retailer',
-      (shape) => supabase.from('retailers').update(shape(updatedData)).eq('id', id));
-    if ('territoryId' in updatedData && !updatedData.territoryId) await reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [id]);
+    await reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [id]);
+    return res;
   };
 
   const deleteRetailer = async (id) => {
@@ -3203,24 +3262,28 @@ export const DataProvider = ({ children }) => {
   const addScheme = async (schemeData) => {
     const newId = `SCH-${Date.now()}`;
     const newScheme = { ...schemeData, id: newId, createdAt: new Date().toISOString() };
+    const res = await saveOptional('schemes insert', 'schemes', ['freeGoodsProduct'], 'the scheme',
+      (shape) => supabase.from('schemes').insert([shape(newScheme)]).select('id'));
+    if (!res.ok) return res;
     setSchemes(prev => {
       const next = [newScheme, ...prev];
       localStorage.setItem('prismora_schemes', JSON.stringify(next));
       return next;
     });
-    await persistOptional('schemes', ['freeGoodsProduct'], 'the scheme',
-      (shape) => supabase.from('schemes').insert([shape(newScheme)]));
     logEvent('scheme_created', `Scheme created: ${schemeData.name}`, null, newId);
+    return { ok: true, id: newId };
   };
 
   const updateScheme = async (id, updatedData) => {
+    const res = await saveOptional('schemes update', 'schemes', ['freeGoodsProduct'], 'the scheme',
+      (shape) => supabase.from('schemes').update(shape(updatedData)).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setSchemes(prev => {
       const next = prev.map(s => s.id === id ? { ...s, ...updatedData } : s);
       localStorage.setItem('prismora_schemes', JSON.stringify(next));
       return next;
     });
-    await persistOptional('schemes', ['freeGoodsProduct'], 'the scheme',
-      (shape) => supabase.from('schemes').update(shape(updatedData)).eq('id', id));
+    return res;
   };
 
   const deleteScheme = async (id) => {
@@ -3257,13 +3320,16 @@ export const DataProvider = ({ children }) => {
   };
 
   const updateComplaintStatus = async (id, status, resolution = '') => {
+    const res = await confirmSave('complaints update', 'update this complaint',
+      () => supabase.from('complaints').update({ status, resolution }).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setComplaints(prev => {
       const next = prev.map(c => c.id === id ? { ...c, status, resolution } : c);
       localStorage.setItem('prismora_complaints', JSON.stringify(next));
       return next;
     });
-    await persist('complaints update', supabase.from('complaints').update({ status, resolution }).eq('id', id));
     logEvent('complaint_updated', `Complaint ${id} → ${status}`, null, id);
+    return res;
   };
 
   // Only Super Admin and Admin may delete (077). RLS refuses anyone else by
@@ -3289,22 +3355,28 @@ export const DataProvider = ({ children }) => {
   const addTerritory = async (territoryData) => {
     const newId = `T-${Date.now()}`;
     const newTerritory = { ...territoryData, id: newId, createdAt: new Date().toISOString() };
+    const res = await confirmSave('territories insert', 'add this territory',
+      () => supabase.from('territories').insert([newTerritory]).select('id'));
+    if (!res.ok) return res;
     setTerritories(prev => {
       const next = [newTerritory, ...prev];
       localStorage.setItem('prismora_territories', JSON.stringify(next));
       return next;
     });
-    await persist('territories insert', supabase.from('territories').insert([newTerritory]));
     logEvent('territory_created', `Territory created: ${territoryData.name}`, null, newId);
+    return { ok: true, id: newId };
   };
 
   const updateTerritory = async (id, updatedData) => {
+    const res = await confirmSave('territories update', 'change this territory',
+      () => supabase.from('territories').update(blankIdsToNull(updatedData)).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setTerritories(prev => {
       const next = prev.map(t => t.id === id ? { ...t, ...updatedData } : t);
       localStorage.setItem('prismora_territories', JSON.stringify(next));
       return next;
     });
-    await persist('territories update', supabase.from('territories').update(blankIdsToNull(updatedData)).eq('id', id));
+    return res;
   };
 
   const deleteTerritory = async (id) => {
@@ -3320,25 +3392,18 @@ export const DataProvider = ({ children }) => {
   const addBeatPlan = async (beatData) => {
     const newId = `B-${Date.now()}`;
     const newBeat = { ...beatData, id: newId, status: 'Planned', createdAt: new Date().toISOString() };
+    // Shown only once the database has it: a refused beat used to appear for
+    // a few seconds and then vanish on the next load.
+    const res = await confirmSave('beat_plans insert', 'assign this beat',
+      () => supabase.from('beat_plans').insert([blankIdsToNull(newBeat)]).select('id'));
+    if (!res.ok) return res;
     setBeatPlans(prev => {
       const next = [newBeat, ...prev];
       localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
       return next;
     });
-    const saved = await persist('beat_plans insert', supabase.from('beat_plans').insert([blankIdsToNull(newBeat)]));
-    if (!saved) {
-      // Keeping a row the database refused is what made a new beat appear for a
-      // few seconds and then vanish on the next load. Take it back now, while
-      // the person is still looking at the screen and the banner explains why.
-      setBeatPlans(prev => {
-        const next = prev.filter(b => b.id !== newId);
-        localStorage.setItem('prismora_beat_plans', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
     logEvent('beat_plan_created', `Beat Plan assigned for date ${beatData.date}`, beatData.executiveId, newId);
-    return newId;
+    return { ok: true, id: newId };
   };
 
   /**
@@ -3398,42 +3463,30 @@ export const DataProvider = ({ children }) => {
     const newId = `ATT-${Date.now()}`;
     // Shaped, so one field the table does not have cannot void the whole punch.
     const newRecord = attendanceRow({ ...attendanceData, id: newId, createdAt: new Date().toISOString() });
+    // A punch nobody recorded is worse than a punch that visibly failed: the
+    // salesperson believes they are marked present. Shown once it is saved.
+    const res = await confirmSave('attendance insert', 'punch in',
+      () => supabase.from('attendance').insert([newRecord]).select('id'));
+    if (!res.ok) return res;
     setAttendance(prev => {
       const next = [newRecord, ...prev];
       localStorage.setItem('prismora_attendance', JSON.stringify(next));
       return next;
     });
-    const saved = await persist('attendance insert', supabase.from('attendance').insert([newRecord]));
-    if (!saved) {
-      // A punch nobody recorded is worse than a punch that visibly failed: the
-      // salesperson believes they are marked present for the day. Take it back
-      // while they are still on the screen, with the banner saying why.
-      setAttendance(prev => {
-        const next = prev.filter(a => a.id !== newId);
-        localStorage.setItem('prismora_attendance', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
     logEvent('attendance_checkin', `User checked in: ${attendanceData.status}`, attendanceData.userId, newId);
-    return newId;
+    return { ok: true, id: newId };
   };
 
   const updateAttendanceRecord = async (id, updatedData) => {
-    const before = attendance.find(a => a.id === id);
+    const res = await confirmSave('attendance update', 'update this attendance',
+      () => supabase.from('attendance').update(attendanceRow(updatedData)).eq('id', id).select('id'));
+    if (!res.ok) return res;
     setAttendance(prev => {
       const next = prev.map(a => a.id === id ? { ...a, ...updatedData } : a);
       localStorage.setItem('prismora_attendance', JSON.stringify(next));
       return next;
     });
-    const saved = await persist('attendance update', supabase.from('attendance').update(attendanceRow(updatedData)).eq('id', id));
-    if (!saved && before) {
-      setAttendance(prev => {
-        const next = prev.map(a => a.id === id ? before : a);
-        localStorage.setItem('prismora_attendance', JSON.stringify(next));
-        return next;
-      });
-    }
+    return res;
   };
 
   // ── SFA Visit Reports ──────────────────────────────────────────────────────
@@ -3527,13 +3580,15 @@ export const DataProvider = ({ children }) => {
   const addSFAExpense = async (expData) => {
     const newId = `EXP-${Date.now()}`;
     const newExp = { ...expData, id: newId, status: 'Pending', createdAt: new Date().toISOString() };
+    const res = await confirmSave(`Expense claim ₹${expData.amount}${expData.description ? ` "${String(expData.description).slice(0, 40)}"` : ''}`,
+      'submit this expense', () => supabase.from('sfa_expenses').insert([blankIdsToNull(newExp)]).select('id'));
+    if (!res.ok) return res;
     setSfaExpenses(prev => {
       const next = [newExp, ...prev];
       localStorage.setItem('prismora_sfa_expenses', JSON.stringify(next));
       return next;
     });
-    await persist(`Expense claim ₹${expData.amount}${expData.description ? ` "${String(expData.description).slice(0, 40)}"` : ''}`,
-      supabase.from('sfa_expenses').insert([blankIdsToNull(newExp)]));
+    return { ok: true, id: newId };
   };
 
   // Approving books the claim in Accounting → Expenses, and moving it back out
@@ -3689,13 +3744,16 @@ export const DataProvider = ({ children }) => {
   const addSchemeClaim = async (claimData) => {
     const newId = `CLM-${Date.now()}`;
     const newClaim = { ...claimData, id: newId, status: 'Pending', createdAt: new Date().toISOString() };
+    const res = await confirmSave('scheme_claims insert', 'submit this claim',
+      () => supabase.from('scheme_claims').insert([blankIdsToNull(newClaim)]).select('id'));
+    if (!res.ok) return res;
     setSchemeClaims(prev => {
       const next = [newClaim, ...prev];
       localStorage.setItem('prismora_scheme_claims', JSON.stringify(next));
       return next;
     });
-    await persist('scheme_claims insert', supabase.from('scheme_claims').insert([blankIdsToNull(newClaim)]));
     logEvent('scheme_claim_submitted', `Scheme claim submitted for ${claimData.schemeName}`, null, newId);
+    return { ok: true, id: newId };
   };
 
   const updateSchemeClaimStatus = async (id, status, reviewNotes = '') => {

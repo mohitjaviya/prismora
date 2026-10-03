@@ -6,7 +6,7 @@ import { useAuth, isSalesRole } from '../context/AuthContext';
 import { 
   ArrowUpDown, Plus, Edit2, Trash2, MapPin, Globe, ChevronRight, X, Compass, Check
 } from 'lucide-react';
-import { useConfirm } from '../context/DialogContext';
+import { useConfirm, useToast } from '../context/DialogContext';
 import { Button, PageHeader } from '../components/ui';
 import { territoryFor, territoryDependants } from '../utils/territory';
 import { createPortal } from 'react-dom';
@@ -40,6 +40,8 @@ export default function Geography() {
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const toast = useToast();
   const [editingTerritory, setEditingTerritory] = useState(null);
   const [formData, setFormData] = useState(BLANK_TERRITORY_FORM);
   // Districts saved by the old free-text box that match no real district, so
@@ -228,8 +230,9 @@ export default function Geography() {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     const districtList = formData.districts;
     // The picker replaced a `required` textarea, so the browser no longer
     // enforces this. A zone covering nothing matches no order and reports zero
@@ -243,11 +246,12 @@ export default function Geography() {
       executiveId: formData.executiveId
     };
 
-    if (editingTerritory) {
-      updateTerritory(editingTerritory.id, payload);
-    } else {
-      addTerritory(payload);
-    }
+    // Waits for the database: closes only once saved, else says why.
+    setIsSaving(true);
+    const r = editingTerritory ? await updateTerritory(editingTerritory.id, payload) : await addTerritory(payload);
+    setIsSaving(false);
+    if (!r?.ok) { toast(r?.error || 'The territory could not be saved.', 'error'); return; }
+    toast(editingTerritory ? 'Territory saved.' : `Territory ${payload.name} created.`, 'success');
     setIsModalOpen(false);
   };
 
@@ -884,11 +888,12 @@ export default function Geography() {
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   type="submit"
-                  className="px-4 py-2 text-sm btn-accent rounded-xl"
+                  disabled={isSaving}
+                  className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60"
                 >
-                  {editingTerritory ? 'Save Changes' : 'Create Territory'}
+                  {isSaving ? 'Saving…' : editingTerritory ? 'Save Changes' : 'Create Territory'}
                 </button>
               </div>
             </form>

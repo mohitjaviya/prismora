@@ -51,6 +51,7 @@ export default function Dealers() {
   const [editingDealer, setEditingDealer] = useState(null);
   const [viewingDealer, setViewingDealer] = useState(null);
   const [form, setForm] = useState(BLANK_FORM);
+  const [isSaving, setIsSaving] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '' });
@@ -86,13 +87,18 @@ export default function Dealers() {
   const openAdd = () => { setEditingDealer(null); setForm(BLANK_FORM); setIsModalOpen(true); };
   const openEdit = (d) => { setEditingDealer(d); setForm({ name: d.name, gstin: d.gstin || '', parentDistributorId: d.parentDistributorId || '', state: d.state || '', city: d.city || '', territoryId: d.territoryId || '', phone: d.phone || '', email: d.email || '', contactPerson: d.contactPerson || '', address: d.address || '', pincode: d.pincode || '', creditLimit: d.creditLimit || 100000, status: d.status || 'Active' }); setIsModalOpen(true); };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     const payload = { ...form, gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
     const problem = contactProblem(payload, editingDealer) || (payload.creditLimit < 0 ? 'Credit limit cannot be negative.' : null);
     if (problem) { toast(problem, 'error'); return; }
-    if (editingDealer) updateDealer(editingDealer.id, payload);
-    else addDealer(payload);
+    // Waits for the database: closes only once it is saved, else says why.
+    setIsSaving(true);
+    const r = editingDealer ? await updateDealer(editingDealer.id, payload) : await addDealer(payload);
+    setIsSaving(false);
+    if (!r?.ok) { toast(r?.error || 'The dealer could not be saved.', 'error'); return; }
+    toast(editingDealer ? 'Dealer saved.' : `Dealer ${payload.name} added.`, 'success');
     setIsModalOpen(false);
   };
 
@@ -534,7 +540,7 @@ export default function Dealers() {
               </div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingDealer ? 'Save Changes' : 'Add Dealer'}</button>
+                <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : editingDealer ? 'Save Changes' : 'Add Dealer'}</button>
               </div>
             </form>
           </div>

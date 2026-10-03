@@ -56,6 +56,7 @@ export default function Schemes() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingScheme, setEditingScheme] = useState(null);
   const [form, setForm] = useState(BLANK_FORM);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Performance analytics per scheme — reuses distributor_incentives, which
   // already records every auto-generated incentive per order/party/scheme.
@@ -130,8 +131,9 @@ export default function Schemes() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     const payload = {
       ...form,
       discountPct: Number(form.discountPct || 0),
@@ -143,8 +145,12 @@ export default function Schemes() {
     };
     const problem = schemeProblem(payload);
     if (problem) { toast(problem, 'error'); return; }
-    if (editingScheme) updateScheme(editingScheme.id, payload);
-    else addScheme(payload);
+    // Waits for the database: closes only once it is saved, else says why.
+    setIsSaving(true);
+    const r = editingScheme ? await updateScheme(editingScheme.id, payload) : await addScheme(payload);
+    setIsSaving(false);
+    if (!r?.ok) { toast(r?.error || 'The scheme could not be saved.', 'error'); return; }
+    toast(editingScheme ? 'Scheme saved.' : `Scheme ${payload.name} added.`, 'success');
     setIsModalOpen(false);
   };
 
@@ -405,7 +411,7 @@ export default function Schemes() {
               </div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">{editingScheme ? 'Save Changes' : 'Create Scheme'}</button>
+                <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : editingScheme ? 'Save Changes' : 'Create Scheme'}</button>
               </div>
             </form>
           </div>

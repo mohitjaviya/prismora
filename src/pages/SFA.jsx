@@ -88,6 +88,8 @@ export default function SFA() {
   const [expenseForm, setExpenseForm] = useState({ date: todayStr, category: 'Travel', amount: '', description: '', receiptName: '', receiptData: '' });
   const [selectedAttendanceUser, setSelectedAttendanceUser] = useState('');
   const [isPunchingIn, setIsPunchingIn] = useState(false);
+  // Which SFA form (punch out, beat, expense) is waiting for the database.
+  const [savingSfa, setSavingSfa] = useState(null);
   // Filing a visit takes a moment — it writes a report, an outcome, and
   // sometimes an order. Without a guard the button stays live throughout, and
   // an impatient second click files the whole lot again: three reports for the
@@ -203,9 +205,10 @@ export default function SFA() {
   // ── Attendance ──────────────────────────────────────────────────────────
   const handlePunchIn = (e) => {
     e.preventDefault();
+    if (isPunchingIn) return;
     setIsPunchingIn(true);
-    const doSave = (punchLat, punchLng, punchAccuracy) => {
-      addAttendanceRecord({
+    const doSave = async (punchLat, punchLng, punchAccuracy) => {
+      const r = await addAttendanceRecord({
         userId: user.id,
         date: todayStr,
         status: 'Present',
@@ -216,8 +219,10 @@ export default function SFA() {
         punchInLng: punchLng,
         punchInAccuracy: punchAccuracy,
       });
-      setPunchNotes('');
       setIsPunchingIn(false);
+      if (!r?.ok) { toast(r?.error || 'Punch-in was not saved.', 'error'); return; }
+      toast(`Punched in${punchLat != null ? ' with location' : ' (no location)'}.`, 'success');
+      setPunchNotes('');
     };
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -229,18 +234,27 @@ export default function SFA() {
       doSave(null, null, null);
     }
   };
-  const handlePunchOut = () => {
-    if (!myAttendanceToday) return;
-    updateAttendanceRecord(myAttendanceToday.id, { checkOutTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), notes: myAttendanceToday.notes + ' | Checked out' + (punchNotes ? ': ' + punchNotes : '') });
+  const handlePunchOut = async () => {
+    if (!myAttendanceToday || savingSfa) return;
+    setSavingSfa('punchout');
+    const r = await updateAttendanceRecord(myAttendanceToday.id, { checkOutTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), notes: myAttendanceToday.notes + ' | Checked out' + (punchNotes ? ': ' + punchNotes : '') });
+    setSavingSfa(null);
+    if (!r?.ok) { toast(r?.error || 'Punch-out was not saved.', 'error'); return; }
+    toast('Punched out.', 'success');
     setPunchNotes('');
   };
 
   // ── Beat Plans ──────────────────────────────────────────────────────────
-  const handleCreateBeat = (e) => {
+  const handleCreateBeat = async (e) => {
     e.preventDefault();
+    if (savingSfa) return;
     const outletsList = beatForm.outlets.split(',').map(o => o.trim()).filter(Boolean);
-    addBeatPlan({ executiveId: beatForm.executiveId || user.id, date: beatForm.date,
+    setSavingSfa('beat');
+    const r = await addBeatPlan({ executiveId: beatForm.executiveId || user.id, date: beatForm.date,
       ...territoryFields(territories, beatForm.territoryId), outlets: outletsList });
+    setSavingSfa(null);
+    if (!r?.ok) { toast(r?.error || 'The beat was not saved.', 'error'); return; }
+    toast(`Beat assigned for ${beatForm.date}.`, 'success');
     setBeatForm({ executiveId: '', date: todayStr, territoryId: '', outlets: '' });
     setIsBeatModalOpen(false);
   };
@@ -424,9 +438,14 @@ export default function SFA() {
     reader.onload = (ev) => setExpenseForm(prev => ({ ...prev, receiptName: file.name, receiptData: ev.target.result }));
     reader.readAsDataURL(file);
   };
-  const handleExpenseSubmit = (e) => {
+  const handleExpenseSubmit = async (e) => {
     e.preventDefault();
-    addSFAExpense({ userId: user.id, date: expenseForm.date, category: expenseForm.category, amount: Number(expenseForm.amount), description: expenseForm.description, receiptName: expenseForm.receiptName, receiptData: expenseForm.receiptData });
+    if (savingSfa) return;
+    setSavingSfa('expense');
+    const r = await addSFAExpense({ userId: user.id, date: expenseForm.date, category: expenseForm.category, amount: Number(expenseForm.amount), description: expenseForm.description, receiptName: expenseForm.receiptName, receiptData: expenseForm.receiptData });
+    setSavingSfa(null);
+    if (!r?.ok) { toast(r?.error || 'The expense was not saved.', 'error'); return; }
+    toast(`Expense of ₹${expenseForm.amount} submitted for approval.`, 'success');
     setExpenseForm({ date: todayStr, category: 'Travel', amount: '', description: '', receiptName: '', receiptData: '' });
     setIsExpenseModalOpen(false);
   };
@@ -621,7 +640,7 @@ export default function SFA() {
                     {isPunchingIn ? <><RefreshCw size={15} className="animate-spin" />Getting your location…</> : <><LogIn size={16} />Punch In / Start Day</>}
                   </Button>
                 ) : !myAttendanceToday.checkOutTime ? (
-                  <Button variant="danger" size="lg" onClick={handlePunchOut} className="w-full"><LogOut size={16} />Punch Out / End Shift</Button>
+                  <Button variant="danger" size="lg" onClick={handlePunchOut} disabled={!!savingSfa} className="w-full"><LogOut size={16} />{savingSfa === 'punchout' ? 'Saving…' : 'Punch Out / End Shift'}</Button>
                 ) : null}
               </form>
             </div>
@@ -684,7 +703,10 @@ export default function SFA() {
                   </div>
                 ) : a.checkInTime && canEditSfa ? (
                   <button
-                    onClick={() => updateAttendanceRecord(a.id, { approved: true, approvedBy: user.name })}
+                    onClick={async () => {
+                      const r = await updateAttendanceRecord(a.id, { approved: true, approvedBy: user.name });
+                      if (!r?.ok) toast(r?.error || 'The approval was not saved.', 'error');
+                    }}
                     className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold transition-all inline-flex items-center gap-1"
                   >
                     <CheckSquare size={11} /> Approve
@@ -1429,7 +1451,7 @@ export default function SFA() {
               </div>
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                 <Button variant="secondary" onClick={() => setIsBeatModalOpen(false)}>Cancel</Button>
-                <Button type="submit" variant="primary">Schedule Route</Button>
+                <Button type="submit" variant="primary" disabled={!!savingSfa}>{savingSfa === 'beat' ? 'Saving…' : 'Schedule Route'}</Button>
               </div>
             </form>
           </div>
@@ -1729,7 +1751,7 @@ export default function SFA() {
               </div>
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                 <Button variant="secondary" onClick={() => setIsExpenseModalOpen(false)}>Cancel</Button>
-                <Button type="submit" variant="primary">Submit Claim</Button>
+                <Button type="submit" variant="primary" disabled={!!savingSfa}>{savingSfa === 'expense' ? 'Saving…' : 'Submit Claim'}</Button>
               </div>
             </form>
           </div>
