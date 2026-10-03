@@ -1,6 +1,8 @@
 // Fix batch 9 (migration 075) proven as the real roles. The migration is installed INSIDE a
 // transaction, each scenario runs in its own sub-transaction, and the block ends in RAISE EXCEPTION,
 // so nothing is kept. Usage: node dryrun.mjs [with|without]   ("without" = re-check once 075 is live)
+// Template for later dry runs: each step signs in with the user's e-mail AND auth id (sub), and a
+// step whose identity did not take is a FAIL, never a "refused".
 import { writeFileSync, readFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
@@ -111,14 +113,23 @@ S(SA, 'K10 Super Admin MRP +1 (allowed)', `UPDATE products SET mrp=coalesce(mrp,
 const mig = readFileSync('D:/PRISMORA/migrations/075_money_and_stock_integrity.sql', 'utf8')
   .replace(/^\s*BEGIN;\s*$/m, '').replace(/^\s*COMMIT;\s*$/m, '');
 const q = (s) => s.replace(/'/g, "''");
-let body = `DO $dry$ DECLARE rep text := ''; n int; a text; s text; BEGIN\n`;
+let body = `DO $dry$ DECLARE rep text := ''; n int; a text; s text; c text; BEGIN\n`;
 if (mode === 'with') body += `  EXECUTE $mig$${mig}$mig$;\n`;
 for (const st of steps) {
   body += `  BEGIN
     EXECUTE 'RESET ROLE';
     ${st.setup ? `EXECUTE '${q(st.setup)}';` : ''}
-    PERFORM set_config('request.jwt.claims', '{"role":"authenticated","email":"${st.email}"}', true);
+    -- The full identity a real sign-in carries: the e-mail AND the user id
+    -- (sub). Guards keyed on auth.uid() (B10 order lock, 061/063) see NULL
+    -- without sub and wave everything through as "maintenance".
+    SELECT jsonb_build_object('role', 'authenticated', 'email', lower(u.email), 'sub', u.id)::text INTO c
+      FROM auth.users u WHERE lower(u.email) = lower('${st.email}');
+    IF c IS NULL THEN RAISE EXCEPTION 'IDENTITY-NOT-SET: no sign-in for ${st.email}'; END IF;
+    PERFORM set_config('request.jwt.claims', c, true);
     EXECUTE 'SET LOCAL ROLE authenticated';
+    IF auth.uid() IS NULL OR public.current_app_email() IS NULL THEN
+      RAISE EXCEPTION 'IDENTITY-NOT-SET: auth.uid()=% email=%', auth.uid(), public.current_app_email();
+    END IF;
     EXECUTE '${q(st.stmt)}'; GET DIAGNOSTICS n = ROW_COUNT;
     EXECUTE 'RESET ROLE';
     PERFORM set_config('request.jwt.claims', '', true);
@@ -152,6 +163,8 @@ for (const line of text.split('\n')) {
   const st = byId[mm[1]]; seen++;
   const refused = mm[3].startsWith('REFUSED'), rows0 = /rows=0\b/.test(mm[3]) && !/^SELECT/.test(st.stmt.trim()) && !st.stmt.includes('SELECT record') && !st.stmt.includes('SELECT withdraw');
   let ok = mm[2] === 'refused' ? refused : (!refused && !rows0);
+  // A step that never ran as the user proves nothing, whatever it expected.
+  if (/IDENTITY-NOT-SET/.test(mm[3])) ok = false;
   if (ok && st.msg && refused && !mm[3].includes(st.msg)) ok = false;
   if (ok && st.assert && !/ASSERT=true/.test(mm[3])) ok = false;
   if (!ok) bad++;
