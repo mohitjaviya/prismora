@@ -48,7 +48,20 @@ Report: `test-results/full-test/PHASE2-REPORT.md`; evidence and check scripts: `
 - Dealer/Retailer Incentives and Stock pages (script didn't wait for "Loading…"); Director "Top States" and Admin "Lead Status" charts (checked from code/data only); Reports date-range filters (all checks ran unfiltered).
 - Small bug seen 2026-10-03: the PO cancel note is dated in UTC ("Cancelled on 2026-10-02" at 00:xx IST on 3 Oct).
 
+## Phase 3 — every-button sweep (IN PROGRESS, 2026-10-03): groups 1–3 done, 4–7 left
+Report: `test-results/full-test/phase3/PHASE3-REPORT.md`; scripts/logs in the same folder (`lib.mjs`, `crawl.mjs ROLE [paths]`, `*-w*.mjs` write tests). Order: SFA, Partner, Sales, **Orders, Purchases, Accounting, Admin** (Admin last). Report only, no fixes; stop and report after each group. All TEST-P3 rows deleted after each group, verified in the DB.
+- Tooling: `playwright-core` + `@supabase/supabase-js` copied into `phase3/node_modules`; BASE defaults to local dev `http://localhost:5174` (owner runs `npm run dev` themselves; a background dev server dies at 2 h). Live site writes are blocked by the permission classifier: use local. In Git Bash set `MSYS_NO_PATHCONV=1` before passing `/paths`. Settle waits for "Loading…" (Unicode ellipsis). Saves can take 8 s+: wait long enough before judging.
+- Done: G1 SFA (Sales Exec 1, Sales Manager), G2 Partner (Distributor, Dealer, Retailer), G3 Sales (Sales Manager, Sales Exec 1, Sales). GPS punch-in proven to save lat/lng in headed Chrome with location allowed (the empty save was headless only).
+Findings so far:
+- **HIGH: partner portal orders are ownerless.** Partners can't read `territories` (RLS returns []), so `assigneeForPortalOrder` gives assignedTo = null and territoryId = null, even though the TEST partners have a territory with an executive. The Sales Manager's Orders screen (`canAccessData(o.assignedTo)`) doesn't list them; only Admin/Dispatch do. This breaks the Fix Batch 5 Processing step. Historical: O37, O41, O43, O46, O129. **Owner: top priority for the post-Phase-3 fix batch.**
+- HIGH (open item, more evidence): slow saves. The stale-edit conflict flow showed "Saving…" for 7–8 s before the warning (twice); normal lead saves < 4 s.
+- MEDIUM: audit-event gap in all three groups. `logEvent` inserts into `events`, which needs the 'reports' permission, so it gets a 403 for Sales Exec and partners (expense, punch, early request, visit, order, complaint, claim, lead saves). It fails silently. The row-level `audit_log` does record table changes. Also LOW: a manager approving or rejecting an SFA expense or attendance writes no event.
+- LOW: Export on an empty list uses a native `alert()` (`utils/exportUtils.js:18`; Claims/Incentives/Complaints).
+- LOW: complaint double-click: the second insert gets a 409 (same CMP id) and fails quietly. Only one row is kept.
+- LOW: Assign Beat / Submit Claim / Punch In don't wait for the save (modal closes at once, no success or failure message).
+- Checked, not bugs: stale-edit warning works (just slow); single-product orders store items = [] by design; ERR_NAME_NOT_RESOLVED was a transient DNS blip (4 clean re-runs).
+
 ## Next (priority)
-1. Phase 3 (every-button sweep), Phase 4 (integrity); final report.
+1. Phase 3 groups 4–7 (Orders, Purchases, Accounting, Admin), Phase 4 (integrity); final report.
 2. Later batch: slow saves, self-registered partner address/territory, claims tied to earned incentives, missing confirms, Phase 1 leftovers, PO cancel-note date (UTC).
 3. Optional: delete the batch 6 TEST rows on owner's OK.
