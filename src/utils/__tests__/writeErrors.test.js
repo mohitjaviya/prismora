@@ -125,4 +125,18 @@ describe('plainDatabaseError - what Dispatch and Accounts are told', () => {
     expect(say('new row violates row-level security policy for table "orders"')).toBe('Your role is not allowed to save this order.');
     expect(say('Purchase order PO-9 has goods received against it (GRN-14), so it cannot be deleted. Close it instead.')).toMatch(/^Purchase order PO-9 has goods received/);
   });
+
+  it('passes the invoice and purchase-return guards through as written (075)', () => {
+    const say = (message) => plainDatabaseError({ code: '42501', message }, 'delete this invoice');
+    expect(say('Invoice INV-1 is an issued GST tax invoice, so it cannot be deleted. To reverse it, issue a credit note.')).toMatch(/^Invoice INV-1 is an issued/);
+    expect(say('Proforma INV-2 has a payment or credit note against it, so it cannot be deleted. Withdraw those first.')).toMatch(/^Proforma INV-2 has a payment/);
+    expect(say('Purchase returns are recorded and withdrawn only from Purchases → Returns, which checks the stock held.')).toMatch(/^Purchase returns are recorded/);
+  });
+
+  it('says which amount may not be zero or negative (075)', () => {
+    const check = (name) => plainDatabaseError({ code: '23514', message: `new row for relation "x" violates check constraint "${name}"` }, 'save this');
+    expect(check('expenses_amount_positive')).toBe('An expense must be more than zero.');
+    expect(check('vendor_payments_amount_positive')).toBe('A payment must be more than zero.');
+    expect(check('products_prices_not_negative')).toBe('Prices and the GST rate cannot be negative.');
+  });
 });

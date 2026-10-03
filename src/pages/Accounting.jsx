@@ -416,7 +416,7 @@ const Accounting = () => {
       if (!result?.ok) { toast(result?.error || 'The credit note could not be saved.', 'error'); return; }
       toast(result.credited
         ? `Credit note ${result.id} issued; ${formatCurrency(amount)} taken off the partner's balance.`
-        : `Credit note ${result.id} issued. No partner matched, so no balance was changed.`, 'success');
+        : `Credit note ${result.id} issued against a walk-in invoice; no partner balance to change.`, 'success');
       setCreditForm({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
       setIsCreditModalOpen(false);
     } finally {
@@ -541,18 +541,20 @@ const Accounting = () => {
       >
         <Printer size={16} />
       </button>
-      <button
+      {/* An issued GST invoice is never deleted; it is corrected by credit
+          note (075). A proforma can go while no money is against it. */}
+      {isProforma(inv) && <button
         onClick={async () => {
-          if (await confirm({ title: "Delete this invoice?", danger: true, confirmLabel: 'Delete' })) {
+          if (await confirm({ title: "Delete this proforma?", danger: true, confirmLabel: 'Delete' })) {
             const result = await deleteInvoice(inv.id);
             if (!result?.ok) toast(result?.error || 'The invoice could not be deleted.', 'error');
           }
         }}
         className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-        title="Delete Invoice"
+        title="Delete proforma"
       >
         <Trash2 size={16} />
-      </button>
+      </button>}
     </div>
   );
 

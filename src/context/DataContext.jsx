@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { linkedExpenseId, expenseForIncentive, expenseForClaim, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { amountDue, isSettled } from '../utils/invoiceStatus';
 import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
-import { returnValue as computeReturnValue, batchForReturn } from '../utils/purchasing';
+import { batchForReturn } from '../utils/purchasing';
 import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
@@ -449,11 +449,6 @@ const grnRow = shapeFor([
 const vendorPaymentRow = shapeFor([
   'id', 'vendorId', 'amount', 'method', 'reference', 'date', 'notes',
   'recordedBy', 'createdAt',
-]);
-
-const purchaseReturnRow = shapeFor([
-  'id', 'vendorId', 'vendorName', 'reason', 'items', 'value', 'notes',
-  'date', 'recordedBy', 'createdAt',
 ]);
 
 const inventoryRow = shapeFor([
@@ -2319,7 +2314,9 @@ export const DataProvider = ({ children }) => {
     const { error } = await supabase.from('invoices').delete().eq('id', id);
     if (error) {
       console.error('[Prismora] Could not delete the invoice, so nothing has been changed:', error);
-      return { ok: false, error: 'The invoice could not be deleted.' };
+      // An issued GST invoice, or a proforma with money against it, is refused
+      // by the database (075) with the reason.
+      return { ok: false, error: plainDatabaseError(error, 'delete this invoice') };
     }
 
     // The invoice's charge came off the partner in the database with the
@@ -3007,125 +3004,61 @@ export const DataProvider = ({ children }) => {
   // ── Purchase Returns ──────────────────────────────────────────────────────
   // Returning goods to a vendor reduces what we owe them (a credit on the
   // vendor ledger) and takes the returned units back out of inventory.
-  /**
-   * Withdraw a purchase return: the money and the goods.
-   *
-   * The hardest of the three to undo, because a return does two things. It
-   * credits the vendor, and it takes units out of a batch. Putting only one of
-   * them back would leave the books and the shelf disagreeing, which is worse
-   * than leaving the mistake alone.
-   *
-   * Order matters and is the same as the others: everything that can be put
-   * back goes first, and the row is deleted last. A row that survives a failed
-   * restore is a record of something that happened; a deleted row whose
-   * effects are still in place is not.
-   *
-   * Lines recorded before this existed carry no batchId. Those are returned to
-   * whichever batch of that product currently holds stock, which is the best
-   * available answer and may not be the batch they left — so it says so.
-   */
+  //
+  // Both are done by the database (075): it checks the quantity against what
+  // the vendor delivered and what is on the shelf, caps the unit cost at what
+  // the vendor charged, moves the stock and the vendor balance, and keeps a
+  // stock trail. Withdrawing puts back exactly what that trail says was taken.
+  // The browser only asks, then reads back the rows that changed.
+  const refreshAfterPurchaseReturn = async (vendorId, products) => {
+    await Promise.all([
+      reloadVendor(vendorId),
+      reloadRows('inventory', setInventory, 'prismora_inventory', 'product', products),
+    ]);
+  };
+
   const deletePurchaseReturn = async (id) => {
     const ret = purchaseReturns.find(r => r.id === id);
     if (!ret) return { ok: false, error: 'That return no longer exists.' };
 
-    const vendor = vendors.find(v => v.id === ret.vendorId);
-    const value = Number(ret.value || 0);
-    // The balance goes back with the return's removal, in the database (065).
-
-    let guessedBatch = false;
-    for (const line of (ret.items || [])) {
-      const qty = Number(line.quantity || 0);
-      if (qty <= 0) continue;
-
-      let batchId = line.batchId;
-      if (!batchId) {
-        const fallback = batchToReceiveInto(inventory, line.product, line.batchNumber);
-        batchId = fallback ? fallback.id : null;
-        guessedBatch = true;
-      }
-      if (!batchId) {
-        console.warn(`[Prismora] ${qty} of ${line.product} could not be put back: no batch to return them to.`);
-        continue;
-      }
-      await adjustStock(batchId, qty, `Purchase return ${id} withdrawn`);
-    }
-
-    const { error } = await supabase.from('purchase_returns').delete().eq('id', id);
+    const { error } = await supabase.rpc('withdraw_purchase_return', { p_id: id });
     if (error) {
-      console.error('[Prismora] Could not delete the purchase return:', error);
-      return { ok: false, error: 'The stock was put back, but the return could not be withdrawn. It will need removing by hand.' };
+      console.error('[Prismora] Could not withdraw the purchase return:', error);
+      return { ok: false, error: plainDatabaseError(error, 'withdraw this return') };
     }
-    await reloadVendor(ret.vendorId);
-
     setPurchaseReturns(prev => {
       const next = prev.filter(r => r.id !== id);
       localStorage.setItem('prismora_purchase_returns', JSON.stringify(next));
       return next;
     });
-    logEvent('purchase_return_deleted',
-      `Return ${id} to ${vendor?.name || ret.vendorName} withdrawn — ₹${value} and the units put back`, null, id);
+    await refreshAfterPurchaseReturn(ret.vendorId, (ret.items || []).map(l => l.product));
 
-    return {
-      ok: true,
-      guessedBatch,
-      note: guessedBatch
-        ? 'This return predates batch tracking, so the units went back to the current batch of each product rather than the one they left.'
-        : null,
-    };
+    const vendor = vendors.find(v => v.id === ret.vendorId);
+    logEvent('purchase_return_deleted',
+      `Return ${id} to ${vendor?.name || ret.vendorName} withdrawn — ₹${Number(ret.value || 0)} and the units put back`, null, id);
+    return { ok: true };
   };
 
   const addPurchaseReturn = async (returnData) => {
-    const newId = `PR-${Date.now()}`;
-    const returnValue = computeReturnValue(returnData.items);
-
-    // Which batch each line leaves, worked out before anything is written and
-    // recorded on the line itself. Without it a return knows how many units of
-    // a product went back but not where they came from, so withdrawing one
-    // later could only guess a batch — and guess a different one than it took
-    // the units from. `items` is jsonb, so this costs no migration.
-    const lines = (returnData.items || []).map(item => {
-      const qty = Number(item.quantity || 0);
-      const batch = qty > 0 ? batchForReturn(inventory, item.product) : null;
-      return { ...item, batchId: batch ? batch.id : null };
+    const { data, error } = await supabase.rpc('record_purchase_return', {
+      p_vendor_id: returnData.vendorId,
+      p_reason: returnData.reason,
+      p_items: returnData.items,
+      p_notes: returnData.notes || null,
+      p_date: returnData.date || null,
     });
-
-    const newReturn = purchaseReturnRow({
-      ...returnData, items: lines, id: newId, value: returnValue, createdAt: new Date().toISOString(),
-    });
-    setPurchaseReturns(prev => {
-      const next = [newReturn, ...prev];
-      localStorage.setItem('prismora_purchase_returns', JSON.stringify(next));
-      return next;
-    });
-    const saved = await persist('purchase_returns insert', supabase.from('purchase_returns').insert([newReturn]));
-    if (!saved) {
-      // Worse than the payment case: this one also takes the units out of
-      // inventory. A refused return used to credit the vendor and drop the
-      // stock anyway, leaving both wrong with nothing on record to reverse.
-      setPurchaseReturns(prev => {
-        const next = prev.filter(r => r.id !== newId);
-        localStorage.setItem('prismora_purchase_returns', JSON.stringify(next));
-        return next;
-      });
-      return null;
+    if (error) {
+      console.error('[Prismora] Could not record the purchase return:', error);
+      return { ok: false, error: plainDatabaseError(error, 'record this return') };
     }
 
-    // The payable came down with the return, in the database (065) — below
-    // zero if more was returned than owed, which is the vendor owing us.
+    await Promise.all([
+      reloadRows('purchase_returns', setPurchaseReturns, 'prismora_purchase_returns', 'id', [data.id]),
+      refreshAfterPurchaseReturn(returnData.vendorId, (returnData.items || []).map(l => l.product)),
+    ]);
     const vendor = vendors.find(v => v.id === returnData.vendorId);
-    await reloadVendor(returnData.vendorId);
-
-    // Remove the returned units from inventory (goods physically leave)
-    // Awaited in turn. These were fired off unawaited, so a failure here was
-    // unobservable and the function reported success regardless.
-    for (const line of lines) {
-      const qty = Number(line.quantity || 0);
-      if (qty <= 0 || !line.batchId) continue;
-      await adjustStock(line.batchId, -qty, `Purchase return to ${vendor?.name || returnData.vendorName || 'vendor'}`);
-    }
-
-    logEvent('purchase_return', `Return ${newId} to ${vendor?.name || returnData.vendorName} — ₹${returnValue}`, returnData.recordedBy, newId);
-    return newId;
+    logEvent('purchase_return', `Return ${data.id} to ${vendor?.name || returnData.vendorName} — ₹${data.value}`, returnData.recordedBy, data.id);
+    return { ok: true, id: data.id, value: data.value };
   };
 
   // ── Distributors ──────────────────────────────────────────────────────────

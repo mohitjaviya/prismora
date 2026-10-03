@@ -95,6 +95,7 @@ export default function Purchases() {
   const [grnTargetPO, setGrnTargetPO] = useState(null);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnForm, setReturnForm] = useState({ vendorId: '', reason: 'Damaged goods', product: '', quantity: '', unitCost: '', notes: '' });
+  const [savingReturn, setSavingReturn] = useState(false);
   // A PO could be created but never opened again — the list showed "1 items"
   // and there was no way to see which item, at what cost, or in which batch.
   const [viewingPO, setViewingPO] = useState(null);
@@ -147,7 +148,7 @@ export default function Purchases() {
     const ok = await confirm({
       title: 'Withdraw this return?',
       body: `${r.id} sent ${(r.items || []).reduce((s, i) => s + Number(i.quantity || 0), 0)} unit(s) back to `
-        + `${r.vendorName} and credited ${formatCurrency(r.value)}. Withdrawing it puts both the stock and the money back.`,
+        + `${r.vendorName} and credited ${formatCurrency(r.value)}. Withdrawing it puts back exactly the stock it took, and the money.`,
       confirmLabel: 'Withdraw',
       danger: true,
     });
@@ -155,14 +156,17 @@ export default function Purchases() {
 
     const result = await deletePurchaseReturn(r.id);
     if (!result?.ok) { toast(result?.error || 'The return could not be withdrawn.', 'error'); return; }
-    toast(result.note ? `Return ${r.id} withdrawn. ${result.note}` : `Return ${r.id} withdrawn.`,
-      result.guessedBatch ? 'info' : 'success');
+    toast(`Return ${r.id} withdrawn.`, 'success');
   };
 
-  const handleSubmitReturn = (e) => {
+  // The database checks the return (075); the form waits for its answer and
+  // stays open with the reason if it is refused.
+  const handleSubmitReturn = async (e) => {
     e.preventDefault();
+    if (savingReturn) return;
     const vendor = vendors.find(v => v.id === returnForm.vendorId);
-    addPurchaseReturn({
+    setSavingReturn(true);
+    const result = await addPurchaseReturn({
       vendorId: returnForm.vendorId,
       vendorName: vendor?.name || '',
       reason: returnForm.reason,
@@ -171,6 +175,9 @@ export default function Purchases() {
       date: new Date().toISOString(),
       recordedBy: user?.id
     });
+    setSavingReturn(false);
+    if (!result?.ok) { toast(result?.error || 'The return could not be recorded.', 'error'); return; }
+    toast(`Return ${result.id} recorded: ${formatCurrency(result.value)} credited.`, 'success');
     setReturnForm({ vendorId: '', reason: 'Damaged goods', product: '', quantity: '', unitCost: '', notes: '' });
     setIsReturnModalOpen(false);
   };
@@ -669,7 +676,7 @@ export default function Purchases() {
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsReturnModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Record Return</button>
+                <button type="submit" disabled={savingReturn} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{savingReturn ? 'Saving…' : 'Record Return'}</button>
               </div>
             </form>
           </div>
