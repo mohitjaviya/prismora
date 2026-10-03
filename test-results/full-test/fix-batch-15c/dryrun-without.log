@@ -1,0 +1,12 @@
+FAIL D1 PM receives 3 into a new batch, then deletes the GRN => DONE rows=1 ASSERT=false {PO Partially Received, vendor 4839.00, reversed 0}
+FAIL D2 PM receives 2 into existing batch N2 (25), then deletes => DONE rows=1 ASSERT=false {PO Partially Received, vendor 4839.00, reversed 0}
+FAIL D3 Admin deletes a two-line GRN: both lines reversed => DONE rows=1 ASSERT=false
+FAIL D4 Units since used (batch 3 -> 1): delete refused, nothing changes => DONE rows=1
+FAIL D5 GRN from before 081 (GRN-21, TEST-P3): delete refused => DONE rows=1
+FAIL D6 PO back from GRN Done to Partially Received when one of two GRNs goes => DONE rows=1 ASSERT=false {PO GRN Done, vendor 15339.00, reversed 0}
+FAIL D7 Receive again after deleting: the PO takes receipts again => REFUSED: Purchase order TEST-PO-1 is GRN Done; goods can be received only against a Confirmed or Partially Received PO.
+PASS D8 Warehouse (insert only) tries to delete a GRN: nothing removed => DONE rows=0 ASSERT=true
+FAIL D9 A closed PO keeps its status => DONE rows=1 ASSERT=false
+
+mode: without migration; 9/9 scenarios parsed; everything rolled back
+8 scenario(s) not as required

@@ -1,0 +1,12 @@
+PASS D1 PM receives 3 into a new batch, then deletes the GRN => DONE rows=1 ASSERT=true {PO Confirmed, vendor 4839.00, reversed 3}
+PASS D2 PM receives 2 into existing batch N2 (25), then deletes => DONE rows=1 ASSERT=true {PO Confirmed, vendor 4839.00, reversed 2}
+PASS D3 Admin deletes a two-line GRN: both lines reversed => DONE rows=1 ASSERT=true
+PASS D4 Units since used (batch 3 -> 1): delete refused, nothing changes => REFUSED: Goods receipt GRN-C4 added 3 units of TEST Neem Face Wash 100ml to batch TEST-C4, which now holds only 1 (the rest have been delivered, moved or adjusted), so the receipt cannot be removed. Record a purchase return instead.
+PASS D5 GRN from before 081 (GRN-21, TEST-P3): delete refused => REFUSED: Goods receipt GRN-21 was recorded before receipts were tied to their stock batches, so deleting it cannot take its 6 units back out. Correct the stock with Adjust, or record a purchase return.
+PASS D6 PO back from GRN Done to Partially Received when one of two GRNs goes => DONE rows=1 ASSERT=true {PO Partially Received, vendor 15339.00, reversed 50}
+PASS D7 Receive again after deleting: the PO takes receipts again => DONE rows=1 ASSERT=true
+PASS D8 Warehouse (insert only) tries to delete a GRN: nothing removed => DONE rows=0 ASSERT=true
+PASS D9 A closed PO keeps its status => DONE rows=1 ASSERT=true
+
+mode: with migration; 9/9 scenarios parsed; everything rolled back
+all as required
