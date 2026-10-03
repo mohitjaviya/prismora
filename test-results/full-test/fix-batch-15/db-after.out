@@ -1,0 +1,3 @@
+audit_mw | b1 | batches | exp_batch | leftovers | new_moves | units
+0 | 4 | 29 | 2026-09-28 | 0 | ["adjustment 2","transfer_out 1","transfer_in 1","transfer_out 1","transfer_in 1","cycle_count -2","adjustment 2","cycle_count -2","transfer_out 1","transfer_in 1","transfer_out 1","transfer_in 1"] | 2662
+(1 rows)

@@ -1,0 +1,6 @@
+B1 start 4
+PASS U1 Edit form shows quantity read-only
+PASS U2 expired batch: later expiry refused with the reason, form left open
+PASS U2 DB expiry unchanged (2026-09-28)
+
+UI: 3 pass, 0 fail
