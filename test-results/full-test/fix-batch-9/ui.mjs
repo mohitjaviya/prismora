@@ -59,6 +59,8 @@ const withdraw = async (id) => {
   return seenToasts(page);
 };
 
+// LIVE=1: only what changes nothing (refusals, which buttons show).
+if (!process.env.LIVE) {
 t = await openReturn(2, 50);
 const s2 = await waitState(s => Number(s.prs) === Number(s0.prs) + 1);
 const mv = db(`SELECT coalesce(sum(quantity),0) q FROM stock_movements WHERE "returnId"='${s2.last}' AND kind='purchase_return'`)[0].q;
@@ -81,6 +83,7 @@ for (const id of left) {
 const sEnd = await waitState(s => Number(s.prs) === 0);
 check('U3b TEST-P3 vendor back to the start of the batch (owed ₹400, B1+B2 = 10, no returns)', Number(sEnd.owed) === 400 && Number(sEnd.held) === 10 && Number(sEnd.prs) === 0,
   JSON.stringify(sEnd));
+}
 console.log('  page problems:', page.problems.filter(p => !/HTTP 400 POST .*record_purchase_return/.test(p)).slice(0, 5));
 await page.context().close();
 
@@ -114,8 +117,8 @@ const pfRow = page.locator('tr', { hasText: PF_PAY });
 const pfRows = await pfRow.count();
 if (pfRows) {
   await pfRow.locator('button[title="Delete proforma"]').first().click();
-  await page.getByRole('button', { name: 'Delete' }).last().click();
-  t = await seenToasts(page);
+  const d0 = Date.now(); await page.getByRole('button', { name: 'Delete' }).last().click();
+  t = await seenToasts(page, 40000); console.log('  (delete answer after ' + ((Date.now()-d0)/1000).toFixed(1) + ' s)');
 }
 const pfLeft = db(`SELECT count(*) n FROM invoices WHERE id='${PF_PAY}'`)[0].n;
 check('U6 Admin deletes a proforma with a payment: refused with the reason, still in DB', pfRows > 0 && /payment or credit note/.test(t) && Number(pfLeft) === 1, `rows found ${pfRows}; toast "${t.slice(0, 140)}"; in DB ${pfLeft}`);
