@@ -2,6 +2,13 @@
 
 Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `FIX-BATCH-5.md`.
 
+## PHASE 4 COMPLETE (2026-10-03) — report only, nothing fixed or deployed
+12/12 checks pass; 6 findings: P4-F1 MEDIUM (Krishna pharma ₹15,680 should be ₹3,080: CN-SR-1790658148634 has no partner, O5 has none), P4-F5 MEDIUM (expired batch's expiry date editable -> sellable again), P4-F2..F4, F6 LOW. Report: `test-results/full-test/phase4/PHASE4-REPORT.md`; notes/scripts `phase4/findings.md` (`q.mjs` read-only SQL, `rolerun.mjs` real roles rolled back, `cache.mjs` browser). Backup: `backups/2026-10-03T16-09-11-712Z`.
+**Final report (Phases 0–4):** `test-results/full-test/REPORT.md`, published privately at https://claude.ai/artifact/1Ey4puBzJJwdx9b3tnzfrA (source in the session scratchpad; republish from REPORT.md if it changes). PROGRESS.md updated (P2 G/H, P3, P4, FIN-01).
+**Data correction done (2026-10-03, migration 079, applied + confirmed):** O5, SR-1790658148634 and CN-SR-1790658148634 linked to Krishna pharma; balance ₹15,680 -> ₹3,080; INV-1790265113364 Partially Paid (₹12,600 credited, ₹3,080 due); audit rows tagged "correction 079: …"; partner_balance_drift as Accounts = 0 rows. Dry run first (`phase4/fix079-dryrun.mjs`), backup `backups/2026-10-03T16-54-17-755Z`, proof `phase4/fix079-confirm.out`.
+**O113 left as it is (owner, 2026-10-03):** it already has its own settled tax invoice INV-1790657046836 (₹2,754, from Phase 2 A09); delivering it adds no invoice (dry run: only 20 units of stock). The DB refuses cancelling an invoiced order; not bypassed. (REPORT.md's "would bill twice" wording was wrong.)
+Next (owner to choose): batch 15 stock in DB (expiry guard P4-F5, adjust/count/transfer as DB functions with stock_movements, audit masters/warehouses P4-F2); batch 16 partner flow (signup address/territory, claims tied to incentives, schemes RLS, complaint assignee); batch 17 screen clean-up (bell Overdue from DB + expired alert P4-F6, reminder placeholders, Profile revenue, confirms, PO cancel date IST, load once, LOW list); carry-over tests (P3-01..03, P3-35, report date filters, free goods). Next migration number: 080.
+
 ## Fixed (all live, migrations 040–078)
 
 **FIX BATCHES COMPLETE (2026-10-03). All done and live, each checked as real roles against the DB, local and live:**

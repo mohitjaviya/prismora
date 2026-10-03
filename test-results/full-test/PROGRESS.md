@@ -4,6 +4,8 @@ Statuses: `not started`, `pass`, `fail`, `blocked`, `n/a`. Failures go in REPORT
 
 ## Run log
 
+- 2026-10-03: **Phase 4 complete** (12/12 checks pass, 6 findings: 2 MEDIUM, 4 LOW; report only). See `phase4/PHASE4-REPORT.md`. Final `REPORT.md` covers Phases 0–4. Backup before Phase 4: `backups/2026-10-03T16-09-11-712Z`.
+
 - 2026-09-28: **Fix Batch 2** (roles): migration 046 applied to the Supabase project; app code committed locally, not deployed. See `FIX-BATCH-2.md`. Backup: `backups/2026-09-28T11-21-12-929Z`.
 - 2026-09-28: **Save protections and session gate** deployed (7a17779). The order-date fix (5b5d00b) is committed but not deployed.
 
@@ -206,23 +208,23 @@ For each role:
 ### G. Admin
 | ID | Step | Status |
 |---|---|---|
-| P2-G01 | Create a TEST user of each role type (Team Members / create-user) | not started |
-| P2-G02 | Edit one; try to change another user's password (refused with a message) | not started |
-| P2-G03 | Change a role's permissions (see P1-PERM) | not started |
-| P2-G04 | Deactivate a user (no control: D-07; use Delete) | not started |
-| P2-G05 | Each action is in the audit log with the admin's name and old → new | not started |
+| P2-G01 | Create a TEST user of each role type (Team Members / create-user) | pass (create-user for every role type; 114/115 API, 1 test slip) |
+| P2-G02 | Edit one; try to change another user's password (refused with a message) | pass |
+| P2-G03 | Change a role's permissions (see P1-PERM) | pass |
+| P2-G04 | Deactivate a user (no control: D-07; use Delete) | pass (Deactivate/Reactivate exists since batch 1) |
+| P2-G05 | Each action is in the audit log with the admin's name and old → new | pass |
 
 ### H. Reports and dashboards (any mismatch is CRITICAL)
 | ID | Check | Status |
 |---|---|---|
-| P2-H01 | Dashboard KPIs vs DB (orders, revenue, leads) | not started |
-| P2-H02 | Director cockpit: ageing, state sales, leaderboard vs DB | not started |
-| P2-H03 | Accounting Overview: net sales, GST collected, expenses, COGS, payables, profit, outstanding vs DB; chart income includes tax | not started |
-| P2-H04 | Reports: Sales Summary, by Product, by City, Order Status vs DB | not started |
-| P2-H05 | Reports: Stock Summary, Low Stock, Expiry vs inventory | not started |
-| P2-H06 | Reports: Invoice Register, Outstanding Receivables, Expense, P&L, TDS vs DB | not started |
-| P2-H07 | Reports: Lead Pipeline, Lead Source, Complaint Analysis, Sales Exec Performance, Distributor Outstanding, Active Schemes | not started |
-| P2-H08 | Partner dashboards: outstanding, orders and incentives vs DB | not started |
+| P2-H01 | Dashboard KPIs vs DB (orders, revenue, leads) | fail → fixed (H7 revenue label; Group 2) |
+| P2-H02 | Director cockpit: ageing, state sales, leaderboard vs DB | fail → fixed (H4, H5; Group 2) |
+| P2-H03 | Accounting Overview: net sales, GST collected, expenses, COGS, payables, profit, outstanding vs DB; chart income includes tax | fail → fixed (H6; Group 2) |
+| P2-H04 | Reports: Sales Summary, by Product, by City, Order Status vs DB | fail → fixed (H10, H11; Group 4) |
+| P2-H05 | Reports: Stock Summary, Low Stock, Expiry vs inventory | fail → fixed (H12; Group 4) |
+| P2-H06 | Reports: Invoice Register, Outstanding Receivables, Expense, P&L, TDS vs DB | fail → fixed (H1–H3, H13; Groups 1–2); TDS empty = H17, parked |
+| P2-H07 | Reports: Lead Pipeline, Lead Source, Complaint Analysis, Sales Exec Performance, Distributor Outstanding, Active Schemes | pass |
+| P2-H08 | Partner dashboards: outstanding, orders and incentives vs DB | pass |
 
 ## Phase 3: Every-button sweep (per screen in MAP §2)
 
@@ -236,62 +238,62 @@ For each screen:
 
 | ID | Screen | Status |
 |---|---|---|
-| P3-01 | Login | not started |
-| P3-02 | Register and 3 signup forms | not started |
-| P3-03 | Shell: sidebar, topbar search, bell, theme, sign out, AI widget | not started |
-| P3-04 | Dashboard (generic) | not started |
-| P3-05 | Director cockpit | not started |
-| P3-06 | Partner dashboards (3) | not started |
-| P3-07 | Leads (table, board, detail, form, convert) | not started |
-| P3-08 | SFA (7 tabs, 4 popups) | not started |
-| P3-09 | Customers | not started |
-| P3-10 | Geography | not started |
-| P3-11 | Orders (form, stepper, partial, split, receipt) | not started |
-| P3-12 | Partner order screens (3) | not started |
-| P3-13 | Inventory (batch, adjust, count, transfer) | not started |
-| P3-14 | Purchases (4 tabs, 7 popups; exports D-24) | not started |
-| P3-15 | Stock | not started |
-| P3-16 | Price List | not started |
-| P3-17 | Accounting (4 tabs, 4 popups, print) | not started |
-| P3-18 | Schemes | not started |
-| P3-19 | Ledger | not started |
-| P3-20 | Claims | not started |
-| P3-21 | Incentives | not started |
-| P3-22 | Complaints | not started |
-| P3-23 | Reports (18 reports and exports) | not started |
-| P3-24 | AI Insights | not started |
-| P3-25 | ML Lab | not started |
-| P3-26 | Distributors | not started |
-| P3-27 | Dealers | not started |
-| P3-28 | Retailers | not started |
-| P3-29 | Option Lists | not started |
-| P3-30 | Team Members | not started |
-| P3-31 | Product Catalogue | not started |
-| P3-32 | Roles & Permissions | not started |
-| P3-33 | Settings (audit, activity, password) | not started |
-| P3-34 | Profile | not started |
-| P3-35 | Responsive and theme matrix (1440/768/375 × light/dark) across all screens | not started |
+| P3-01 | Login | not covered (carried over) |
+| P3-02 | Register and 3 signup forms | not covered (carried over) |
+| P3-03 | Shell: sidebar, topbar search, bell, theme, sign out, AI widget | not covered (carried over) |
+| P3-04 | Dashboard (generic) | done (see phase3/PHASE3-REPORT.md) |
+| P3-05 | Director cockpit | done (see phase3/PHASE3-REPORT.md) |
+| P3-06 | Partner dashboards (3) | done (see phase3/PHASE3-REPORT.md) |
+| P3-07 | Leads (table, board, detail, form, convert) | done (see phase3/PHASE3-REPORT.md) |
+| P3-08 | SFA (7 tabs, 4 popups) | done (see phase3/PHASE3-REPORT.md) |
+| P3-09 | Customers | done (see phase3/PHASE3-REPORT.md) |
+| P3-10 | Geography | done (see phase3/PHASE3-REPORT.md) |
+| P3-11 | Orders (form, stepper, partial, split, receipt) | done (see phase3/PHASE3-REPORT.md) |
+| P3-12 | Partner order screens (3) | done (see phase3/PHASE3-REPORT.md) |
+| P3-13 | Inventory (batch, adjust, count, transfer) | done (see phase3/PHASE3-REPORT.md) |
+| P3-14 | Purchases (4 tabs, 7 popups; exports D-24) | done (see phase3/PHASE3-REPORT.md) |
+| P3-15 | Stock | done (see phase3/PHASE3-REPORT.md) |
+| P3-16 | Price List | done (see phase3/PHASE3-REPORT.md) |
+| P3-17 | Accounting (4 tabs, 4 popups, print) | done (see phase3/PHASE3-REPORT.md) |
+| P3-18 | Schemes | done (see phase3/PHASE3-REPORT.md) |
+| P3-19 | Ledger | done (see phase3/PHASE3-REPORT.md) |
+| P3-20 | Claims | done (see phase3/PHASE3-REPORT.md) |
+| P3-21 | Incentives | done (see phase3/PHASE3-REPORT.md) |
+| P3-22 | Complaints | done (see phase3/PHASE3-REPORT.md) |
+| P3-23 | Reports (18 reports and exports) | done (see phase3/PHASE3-REPORT.md) |
+| P3-24 | AI Insights | done (see phase3/PHASE3-REPORT.md) |
+| P3-25 | ML Lab | done (see phase3/PHASE3-REPORT.md) |
+| P3-26 | Distributors | done (see phase3/PHASE3-REPORT.md) |
+| P3-27 | Dealers | done (see phase3/PHASE3-REPORT.md) |
+| P3-28 | Retailers | done (see phase3/PHASE3-REPORT.md) |
+| P3-29 | Option Lists | done (see phase3/PHASE3-REPORT.md) |
+| P3-30 | Team Members | done (see phase3/PHASE3-REPORT.md) |
+| P3-31 | Product Catalogue | done (see phase3/PHASE3-REPORT.md) |
+| P3-32 | Roles & Permissions | done (see phase3/PHASE3-REPORT.md) |
+| P3-33 | Settings (audit, activity, password) | done (see phase3/PHASE3-REPORT.md) |
+| P3-34 | Profile | done (see phase3/PHASE3-REPORT.md) |
+| P3-35 | Responsive and theme matrix (1440/768/375 × light/dark) across all screens | not covered (carried over) |
 
 ## Phase 4: Data integrity and known risks
 | ID | Check | Status |
 |---|---|---|
-| P4-INT-01 | Stock per product and batch = GRNs − deliveries − purchase returns + customer returns ± adjustments | not started |
-| P4-INT-02 | Partner balance (`outstandingAmount`) = invoices (amount + tax) − payments − credit notes, for every TEST party | not started |
-| P4-INT-03 | No order has more than one invoice; no GRN added stock twice | not started |
-| P4-INT-04 | Every change made during testing has an audit row with the right actor ("System" only for automatic changes) | not started |
-| P4-INT-05 | "Last changed by" matches the latest audit entry (sample per table) | not started |
-| P4-INT-06 | Vendor balance = GRN value − payments − returns | not started |
-| P4-RISK-CACHE | localStorage cache across browsers and after sign-out (another user on the same browser sees stale data?) | not started |
-| P4-RISK-COLS | Silent data loss: form fields not in the `*_COLUMNS` lists (compare every form with the table columns) | not started |
-| P4-RISK-ATT | Lead attachments stored and downloadable? (D-21) | not started |
-| P4-RISK-OVD | Overdue status and reports correct when nobody opens the app (D-16) | not started |
-| P4-RISK-EVT | Events and notifications missing for roles without reports full (D-13) | not started |
-| P4-RISK-EXP | Expired batches used for delivery (D-18) | not started |
+| P4-INT-01 | Stock per product and batch = GRNs − deliveries − purchase returns + customer returns ± adjustments | pass |
+| P4-INT-02 | Partner balance (`outstandingAmount`) = invoices (amount + tax) − payments − credit notes, for every TEST party | pass (25/25); finding P4-F1 MEDIUM |
+| P4-INT-03 | No order has more than one invoice; no GRN added stock twice | pass (O113 history) |
+| P4-INT-04 | Every change made during testing has an audit row with the right actor ("System" only for automatic changes) | pass; P4-F2, P4-F3 LOW |
+| P4-INT-05 | "Last changed by" matches the latest audit entry (sample per table) | pass; P4-F4 LOW |
+| P4-INT-06 | Vendor balance = GRN value − payments − returns | pass (4/4) |
+| P4-RISK-CACHE | localStorage cache across browsers and after sign-out (another user on the same browser sees stale data?) | pass (14/14) |
+| P4-RISK-COLS | Silent data loss: form fields not in the `*_COLUMNS` lists (compare every form with the table columns) | pass (9/9) |
+| P4-RISK-ATT | Lead attachments stored and downloadable? (D-21) | pass |
+| P4-RISK-OVD | Overdue status and reports correct when nobody opens the app (D-16) | pass; P4-F6 LOW (bell notice) |
+| P4-RISK-EVT | Events and notifications missing for roles without reports full (D-13) | pass (fixed in batch 11) |
+| P4-RISK-EXP | Expired batches used for delivery (D-18) | pass for deliveries; P4-F5 MEDIUM |
 
 ## Final report
 | ID | Item | Status |
 |---|---|---|
-| FIN-01 | REPORT.md: counts per phase; CRITICAL/HIGH first; then MEDIUM/LOW; untestable items; fix order | not started |
+| FIN-01 | REPORT.md: counts per phase; CRITICAL/HIGH first; then MEDIUM/LOW; untestable items; fix order | done: REPORT.md (2026-10-03) |
 
 **Planned tests (Phases 1–4 plus final): 189**
 

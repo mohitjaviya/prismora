@@ -1,0 +1,4 @@
+audit | cn | inv | krishna | ledger | o113 | o5 | sr
+["orders: correction 079: order O5 linked to Krishna pharma (P4-F1)","sales_returns: correction 079: sales return SR-1790658148634 linked to Krishna pharma (P4-F1)","credit_notes: correction 079: credit note CN-SR-1790658148634 linked to Krishna pharma (P4-F1)","distributors: credit note CN-SR-1790658148634","invoices: invoice status from payments and credit notes"] | DIST-1790265786389 | Partially Paid paid 12600.00 | 3080.00 | 1 | Shipped | DIST-1790265786389 | DIST-1790265786389
+(1 rows)
+partner_balance_drift as Accounts: []\

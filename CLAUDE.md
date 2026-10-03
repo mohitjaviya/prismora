@@ -11,7 +11,7 @@
 - `src/pages` screens; `src/components` shared UI; `src/context` Auth/Data/Dialog providers
 - `src/context/DataContext.jsx` data layer (all reads/writes)
 - `src/utils` pure logic + `__tests__`
-- `migrations/` numbered SQL (`NNN_name.sql`) + `README.md` ledger; next is `070`
+- `migrations/` numbered SQL (`NNN_name.sql`) + `README.md` ledger; next is `080`
 - `supabase/functions` Edge Functions (`create-user`, `partner-signup`)
 - `scripts/` backup, restore, test-account scripts
 - `test-results/full-test/` test programme docs (gitignored; hand-over docs force-added)
