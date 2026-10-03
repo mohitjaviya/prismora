@@ -1,0 +1,15 @@
+B1 start 4
+PASS U1 Edit form shows quantity read-only
+PASS U2 expired batch: later expiry refused with the reason, form left open
+PASS U2 DB expiry unchanged (2026-09-28)
+PASS U3 Adjust +2: DB 4 -> 6
+PASS U3 movement row: adjustment 2 by TEST Warehouse
+PASS U4 Adjust -100: refused with the reason (no silent clamp), modal open
+PASS U4 DB unchanged
+PASS U5 Cycle Count to 4: DB matches
+PASS U5 movement row: cycle_count -2
+PASS U6 Transfer 1: Main 4 -> 3, new Secondary batch INV-ITEM-1791049157602-4a91
+PASS U6 new Secondary batch shown on screen without reload
+PASS cleanup: unit moved back (B1 = 4), empty Secondary batch removed
+
+UI: 12 pass, 0 fail

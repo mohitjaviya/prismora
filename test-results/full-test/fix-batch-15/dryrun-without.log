@@ -1,0 +1,44 @@
+FAIL E1 Warehouse moves an expired batch expiry later => DONE rows=1
+FAIL E2 Warehouse clears an expired batch expiry => DONE rows=1
+FAIL E3 Admin moves an expired batch expiry later => DONE rows=1
+PASS E4 Warehouse moves an expired batch to another past date (stays expired) => DONE rows=1
+PASS E5 Warehouse shortens an unexpired batch (2027-10-31 -> 2027-06-30) => DONE rows=1
+PASS E6 Warehouse edits another field on an expired batch => DONE rows=1
+FAIL Q1 Warehouse sets a quantity directly => DONE rows=1
+FAIL Q2 Admin sets a quantity directly => DONE rows=1
+PASS Q3 Edit form save: same quantity, other fields changed => DONE rows=1
+PASS Q4 Add Batch with an opening quantity => DONE rows=1 ASSERT=true
+FAIL A1 Warehouse adjusts +3 with a reason => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL A2 Warehouse adjusts -5 on 4 units (was clamped to 0 silently) => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL A3 Warehouse adjusts with no reason => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL A4 Warehouse adjusts by 0 => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL A5 Warehouse adjusts by 1.5 => REFUSED: function adjust_stock(unknown, numeric, unknown) does not exist
+FAIL A6 Warehouse adjusts a batch that does not exist => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL A7 Admin adjusts -4 to zero => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL A8 Dispatch (Inventory view) adjusts => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL A9 Sales Exec adjusts => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL A10 Distributor adjusts => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL A11 Two adjusts in a row add up (no lost update) => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL C1 Warehouse counts 2 (system 4) => REFUSED: function count_stock(unknown, integer, integer) does not exist
+FAIL C2 Count opened at 5, batch now holds 4 => REFUSED: function count_stock(unknown, integer, integer) does not exist
+FAIL C3 Count matches: nothing changes, no movement => REFUSED: function count_stock(unknown, integer, integer) does not exist
+FAIL C4 Count -1 => REFUSED: function count_stock(unknown, integer, integer) does not exist
+FAIL C5 Count from 0 up to 5 => REFUSED: function adjust_stock(unknown, integer, unknown) does not exist
+FAIL C6 Dispatch counts => REFUSED: function count_stock(unknown, integer, integer) does not exist
+FAIL T1 Warehouse moves 2 of 4 to Secondary Warehouse (new batch there) => REFUSED: function transfer_stock(unknown, unknown, integer, unknown) does not exist
+FAIL T2 Two transfers to the same warehouse merge into one batch => REFUSED: function transfer_stock(unknown, unknown, integer, unknown) does not exist
+FAIL T3 Move 5 from a batch of 4 => REFUSED: function transfer_stock(unknown, unknown, integer, unknown) does not exist
+FAIL T4 Move to the warehouse it is already in => REFUSED: function transfer_stock(unknown, unknown, integer, unknown) does not exist
+FAIL T5 Move to a warehouse that does not exist => REFUSED: function transfer_stock(unknown, unknown, integer, unknown) does not exist
+FAIL T6 Move 0 => REFUSED: function transfer_stock(unknown, unknown, integer, unknown) does not exist
+FAIL T7 Dispatch moves stock => REFUSED: function transfer_stock(unknown, unknown, integer, unknown) does not exist
+FAIL T8 Expired batch moved to Cold Storage keeps its expiry (still unsellable) => REFUSED: function transfer_stock(unknown, unknown, integer, unknown) does not exist
+FAIL M1 Admin adds a lead source: audited => DONE rows=1 ASSERT=false
+FAIL M2 Admin edits a warehouse: audited => DONE rows=1 ASSERT=false
+PASS R1 Dispatch delivers 5 Lavender (deduct_stock) => DONE rows=1 ASSERT=true
+PASS R2 Warehouse records a GRN (grn_adds_stock) => DONE rows=1 ASSERT=true
+PASS R3 Purchase Manager records a purchase return (record_purchase_return) => DONE rows=1 ASSERT=true
+PASS R4 Admin deletes an empty TEST batch (delete untouched) => DONE rows=1
+
+mode: without migration; 41/41 scenarios parsed; everything rolled back
+32 scenario(s) not as required

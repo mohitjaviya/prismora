@@ -94,6 +94,10 @@ const ORDER_RULE = /^(Order \S+ (is |has been |was |needs )|Only .+ can move an 
 // sentence that says what to do instead.
 const MONEY_RULE = /^(Invoice \S+ is an issued GST tax invoice|Proforma \S+ (has a payment|becomes a GST)|Purchase returns are recorded and withdrawn only)/;
 
+// The stock guard (080): an expired batch stays expired, and quantities move
+// only through Adjust, Cycle Count and Transfer.
+const STOCK_RULE = /^(Batch \S+ of .+ expired on |Stock in batch \S+ changes only through )/;
+
 // The value rules (075): which amount may not be zero or negative.
 const VALUE_RULES = {
   expenses_amount_positive: 'An expense must be more than zero.',
@@ -122,7 +126,7 @@ export function plainDatabaseError(error, action = 'save this') {
   if (code === 'P0001') return message;
   // The order rules (054, 061, 062) refuse with a sentence meant for the
   // person at the screen — which stage comes next, which invoice locks it.
-  if (ORDER_RULE.test(message) || MONEY_RULE.test(message)) return message;
+  if (ORDER_RULE.test(message) || MONEY_RULE.test(message) || STOCK_RULE.test(message)) return message;
   if (code === '23514') {
     const rule = Object.keys(VALUE_RULES).find(name => message.includes(name));
     if (rule) return VALUE_RULES[rule];

@@ -39,7 +39,7 @@ const BLANK_FORM = {
 const BLANK_ADJUST = { adjustment: '', reason: '' };
 
 export default function Inventory() {
-  const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, masters } = useData();
+  const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, masters } = useData();
   const confirm = useConfirm();
   const toast = useToast();
   // Options come from Master Lists; masterLists.js holds the fallback.
@@ -148,7 +148,7 @@ export default function Inventory() {
     const variance = counted - countItem.quantity;
     if (variance === 0) { toast('Count matches the system: nothing to change.', 'success'); setCountItem(null); return; }
     setSaving('count');
-    const result = await adjustStock(countItem.id, variance, `Cycle count reconciliation (system ${countItem.quantity} → counted ${counted})`);
+    const result = await countStock(countItem.id, counted, countItem.quantity);
     finish(result, `Stock set to ${counted} for ${countItem.product}.`, () => setCountItem(null));
   };
 
@@ -161,6 +161,9 @@ export default function Inventory() {
       unitCost: Number(form.unitCost || 0),
       expiryDate: form.expiryDate ? new Date(form.expiryDate).toISOString() : null
     };
+    // Not sent on an edit: the database moves quantities (080), and a figure
+    // loaded earlier may no longer be what the batch holds.
+    if (editingItem) delete payload.quantity;
     setSaving('batch');
     const result = editingItem ? await updateInventoryItem(editingItem.id, payload) : await addInventoryItem(payload);
     finish(result, editingItem ? 'Stock batch saved.' : `Stock batch for ${payload.product} added.`, () => setIsAddOpen(false));
@@ -412,8 +415,10 @@ export default function Inventory() {
                   <input id="inventory-expiry-date" type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} className={inputCls} />
                 </div>
                 <div>
-                  <label htmlFor="inventory-quantity" className={labelCls}>Quantity *</label>
-                  <input id="inventory-quantity" required type="number" min="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" className={inputCls} />
+                  <label htmlFor="inventory-quantity" className={labelCls}>{editingItem ? 'Quantity' : 'Quantity *'}</label>
+                  {/* An existing batch's quantity moves only through Adjust, Cycle Count or Transfer (080). */}
+                  <input id="inventory-quantity" required={!editingItem} readOnly={!!editingItem} type="number" min="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" className={inputCls + (editingItem ? ' opacity-60 cursor-not-allowed' : '')} />
+                  {editingItem && <span className="block text-[10px] text-slate-500 mt-1">Use Adjust or Cycle Count to change it.</span>}
                 </div>
                 <div>
                   <label htmlFor="inventory-unit-cost" className={labelCls}>Unit Cost (₹)</label>

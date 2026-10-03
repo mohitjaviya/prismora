@@ -133,6 +133,13 @@ describe('plainDatabaseError - what Dispatch and Accounts are told', () => {
     expect(say('Purchase returns are recorded and withdrawn only from Purchases → Returns, which checks the stock held.')).toMatch(/^Purchase returns are recorded/);
   });
 
+  it('passes the stock guard through as written (080)', () => {
+    const say = (message) => plainDatabaseError({ code: '42501', message }, 'change this stock batch');
+    expect(say('Batch TEST-P2-EXP-26592 of Lavender Body Wash expired on 28 Sep 2026, so its expiry date cannot be moved later or cleared.')).toMatch(/^Batch TEST-P2-EXP-26592 of Lavender Body Wash expired on/);
+    expect(say('Stock in batch B7 changes only through Adjust, Cycle Count or Transfer (or goods receipts, deliveries and returns), so every movement is recorded.')).toMatch(/^Stock in batch B7 changes only through/);
+    expect(say('new row violates row-level security policy for table "inventory"')).toBe('Your role is not allowed to change this stock batch.');
+  });
+
   it('says which amount may not be zero or negative (075)', () => {
     const check = (name) => plainDatabaseError({ code: '23514', message: `new row for relation "x" violates check constraint "${name}"` }, 'save this');
     expect(check('expenses_amount_positive')).toBe('An expense must be more than zero.');

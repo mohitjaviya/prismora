@@ -1,0 +1,44 @@
+PASS E1 Warehouse moves an expired batch expiry later => REFUSED: Batch TEST-P2-EXP-26592 of Lavender Body Wash expired on 28 Sep 2026, so its expiry date cannot be moved later or cleared. Expired stock stays expired; if the date was typed wrongly, ask an administrator for a database correction.
+PASS E2 Warehouse clears an expired batch expiry => REFUSED: Batch TEST-P2-EXP-26592 of Lavender Body Wash expired on 28 Sep 2026, so its expiry date cannot be moved later or cleared. Expired stock stays expired; if the date was typed wrongly, ask an administrator for a database correction.
+PASS E3 Admin moves an expired batch expiry later => REFUSED: Batch TEST-P2-EXP-26592 of Lavender Body Wash expired on 28 Sep 2026, so its expiry date cannot be moved later or cleared. Expired stock stays expired; if the date was typed wrongly, ask an administrator for a database correction.
+PASS E4 Warehouse moves an expired batch to another past date (stays expired) => DONE rows=1
+PASS E5 Warehouse shortens an unexpired batch (2027-10-31 -> 2027-06-30) => DONE rows=1
+PASS E6 Warehouse edits another field on an expired batch => DONE rows=1
+PASS Q1 Warehouse sets a quantity directly => REFUSED: Stock in batch TEST-P3-B1 changes only through Adjust, Cycle Count or Transfer (or goods receipts, deliveries and returns), so every movement is recorded.
+PASS Q2 Admin sets a quantity directly => REFUSED: Stock in batch TEST-P3-B1 changes only through Adjust, Cycle Count or Transfer (or goods receipts, deliveries and returns), so every movement is recorded.
+PASS Q3 Edit form save: same quantity, other fields changed => DONE rows=1
+PASS Q4 Add Batch with an opening quantity => DONE rows=1 ASSERT=true
+PASS A1 Warehouse adjusts +3 with a reason => DONE rows=1 ASSERT=true {adjustment 3 by U-TEST-WAREHOUSE note=TEST B15 found in recount}
+PASS A2 Warehouse adjusts -5 on 4 units (was clamped to 0 silently) => REFUSED: Batch TEST-P3-B1 holds 4 units, so it cannot go down by 5.
+PASS A3 Warehouse adjusts with no reason => REFUSED: Give a reason for the adjustment.
+PASS A4 Warehouse adjusts by 0 => REFUSED: Enter a whole number of units to adjust by (not zero).
+PASS A5 Warehouse adjusts by 1.5 => REFUSED: Enter a whole number of units to adjust by (not zero).
+PASS A6 Warehouse adjusts a batch that does not exist => REFUSED: That stock batch no longer exists.
+PASS A7 Admin adjusts -4 to zero => DONE rows=1 ASSERT=true {adjustment -4 by U-TEST-ADMIN note=TEST B15 damaged}
+PASS A8 Dispatch (Inventory view) adjusts => REFUSED: Adjusting stock needs full Inventory access.
+PASS A9 Sales Exec adjusts => REFUSED: Adjusting stock needs full Inventory access.
+PASS A10 Distributor adjusts => REFUSED: Adjusting stock needs full Inventory access.
+PASS A11 Two adjusts in a row add up (no lost update) => DONE rows=1 ASSERT=true
+PASS C1 Warehouse counts 2 (system 4) => DONE rows=1 ASSERT=true {cycle_count -2 by U-TEST-WAREHOUSE note=cycle count: system 4, counted 2}
+PASS C2 Count opened at 5, batch now holds 4 => REFUSED: Batch TEST-P3-B1 now holds 4 units (it held 5 when the count was opened). Open the count again and recount.
+PASS C3 Count matches: nothing changes, no movement => DONE rows=1 ASSERT=true
+PASS C4 Count -1 => REFUSED: Enter the counted quantity as a whole number (zero or more).
+PASS C5 Count from 0 up to 5 => DONE rows=1 ASSERT=true
+PASS C6 Dispatch counts => REFUSED: A cycle count needs full Inventory access.
+PASS T1 Warehouse moves 2 of 4 to Secondary Warehouse (new batch there) => DONE rows=1 ASSERT=true {[{\\"id\\" : \\"INV-ITEM-1791047928523-3330\\", \\"q\\" : 2, \\"exp\\" : \\"2028-03-31\\"}]}
+PASS T2 Two transfers to the same warehouse merge into one batch => DONE rows=1 ASSERT=true {[{\\"id\\" : \\"INV-ITEM-1791047928530-1bc3\\", \\"q\\" : 3, \\"exp\\" : \\"2028-03-31\\"}]}
+PASS T3 Move 5 from a batch of 4 => REFUSED: Only 4 in this batch; cannot move 5.
+PASS T4 Move to the warehouse it is already in => REFUSED: This batch is already in Main Warehouse.
+PASS T5 Move to a warehouse that does not exist => REFUSED: Choose a warehouse to move the stock to.
+PASS T6 Move 0 => REFUSED: Enter how many units to move (a whole number above zero).
+PASS T7 Dispatch moves stock => REFUSED: Moving stock needs full Inventory access.
+PASS T8 Expired batch moved to Cold Storage keeps its expiry (still unsellable) => DONE rows=1 ASSERT=true
+PASS M1 Admin adds a lead source: audited => DONE rows=1 ASSERT=true
+PASS M2 Admin edits a warehouse: audited => DONE rows=1 ASSERT=true
+PASS R1 Dispatch delivers 5 Lavender (deduct_stock) => DONE rows=1 ASSERT=true
+PASS R2 Warehouse records a GRN (grn_adds_stock) => DONE rows=1 ASSERT=true
+PASS R3 Purchase Manager records a purchase return (record_purchase_return) => DONE rows=1 ASSERT=true
+PASS R4 Admin deletes an empty TEST batch (delete untouched) => DONE rows=1
+
+mode: with migration; 41/41 scenarios parsed; everything rolled back
+all as required

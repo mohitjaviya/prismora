@@ -4,7 +4,7 @@ import { linkedExpenseId, expenseForIncentive, expenseForClaim, unbookedPayouts,
 import { amountDue, isSettled } from '../utils/invoiceStatus';
 import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
 import { batchForReturn } from '../utils/purchasing';
-import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBatch, applyTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
+import { batchToReceiveInto, canTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
 import { blankIdsToNull } from '../utils/dbRow';
@@ -2726,21 +2726,37 @@ export const DataProvider = ({ children }) => {
     return { ok: true };
   };
 
+  // Adjust, Cycle Count and Transfer are database operations (080): one
+  // transaction each, the quantity worked out from what the batch holds at
+  // that moment (not what this browser last saw), and every movement written
+  // to stock_movements with its reason and who did it. A direct quantity
+  // write is refused for app users.
   const adjustStock = async (id, adjustment, reason) => {
     const item = inventory.find(i => i.id === id);
     if (!item) return { ok: false, error: 'That stock batch no longer exists.' };
-    const newQty = quantityAfterAdjustment(item.quantity, adjustment);
-    if (newQty === null) return { ok: false, error: 'Enter a whole number to adjust by.' };
-    const res = await confirmSave('inventory update', 'adjust this stock',
-      () => supabase.from('inventory').update({ quantity: newQty }).eq('id', id).select('id'));
-    if (!res.ok) return res;
-    setInventory(prev => {
-      const next = prev.map(i => i.id === id ? { ...i, quantity: newQty } : i);
-      localStorage.setItem('prismora_inventory', JSON.stringify(next));
-      return next;
+    const { data, error } = await supabase.rpc('adjust_stock', {
+      p_inventory_id: id, p_change: Number(adjustment), p_reason: reason,
     });
+    if (error) {
+      await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [id]);
+      return { ok: false, error: plainDatabaseError(error, 'adjust this stock') };
+    }
+    await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [id]);
     logEvent('stock_adjusted', `Stock ${adjustment > 0 ? '+' : ''}${adjustment} for ${item.product}: ${reason}`, null, id);
-    return { ok: true, quantity: newQty };
+    return { ok: true, quantity: data?.quantity };
+  };
+
+  /** Cycle count: set the batch to what was counted, unless it moved since the count was opened. */
+  const countStock = async (id, counted, expected) => {
+    const item = inventory.find(i => i.id === id);
+    if (!item) return { ok: false, error: 'That stock batch no longer exists.' };
+    const { data, error } = await supabase.rpc('count_stock', {
+      p_inventory_id: id, p_counted: Number(counted), p_expected: Number(expected),
+    });
+    await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [id]);
+    if (error) return { ok: false, error: plainDatabaseError(error, 'record this count') };
+    if (data?.changed) logEvent('stock_adjusted', `Cycle count ${item.product}: system ${expected} → counted ${counted}`, null, id);
+    return { ok: true, quantity: data?.quantity, changed: !!data?.changed };
   };
 
   /**
@@ -2830,35 +2846,12 @@ export const DataProvider = ({ children }) => {
     const allowed = canTransfer(src, toWarehouse, qty);
     if (!allowed.ok) return allowed;
 
-    const dest = destinationBatch(inventory, src, toWarehouse);
-    const moved = applyTransfer(src, dest, qty);
-    const newSrcQty = moved.from;
-    const newDestItem = dest ? null : {
-      ...src, id: `INV-ITEM-${Date.now()}`, warehouse: toWarehouse, quantity: qty,
-      reserved: 0, transit: 0, createdAt: new Date().toISOString()
-    };
-
-    // Two writes, each confirmed. If the second is refused the first has
-    // happened: say so, and show what the database now holds.
-    const out = await confirmSave('inventory update', 'move this stock',
-      () => supabase.from('inventory').update({ quantity: newSrcQty }).eq('id', batchId).select('id'));
-    if (!out.ok) return out;
-    const into = dest
-      ? await confirmSave('inventory update', 'move this stock',
-        () => supabase.from('inventory').update({ quantity: moved.to }).eq('id', dest.id).select('id'))
-      : await confirmSave('inventory insert', 'move this stock',
-        () => supabase.from('inventory').insert([newDestItem]).select('id'));
-    if (!into.ok) {
-      await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [batchId]);
-      return { ok: false, error: `${into.error} ${qty} unit(s) were taken off ${src.warehouse} but not added to ${toWarehouse}: correct the stock by hand.` };
-    }
-    setInventory(prev => {
-      let next = prev.map(i => i.id === batchId ? { ...i, quantity: newSrcQty } : i);
-      if (dest) next = next.map(i => i.id === dest.id ? { ...i, quantity: moved.to } : i);
-      else next = [newDestItem, ...next];
-      localStorage.setItem('prismora_inventory', JSON.stringify(next));
-      return next;
+    // One transaction in the database (080): both sides move, or neither.
+    const { data, error } = await supabase.rpc('transfer_stock', {
+      p_inventory_id: batchId, p_to_warehouse: toWarehouse, p_qty: Number(qty), p_notes: notes || null,
     });
+    await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [batchId, data?.toId]);
+    if (error) return { ok: false, error: plainDatabaseError(error, 'move this stock') };
     logEvent('stock_transfer', `Transferred ${qty} of ${src.product} from ${src.warehouse} → ${toWarehouse}${notes ? ` (${notes})` : ''}`, null, batchId);
     return { ok: true };
   };
@@ -3892,7 +3885,7 @@ export const DataProvider = ({ children }) => {
       addExpense, deleteExpense, reconcilePayouts, correctPartyBalance,
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
-      addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, transferStock, receiveStock,
+      addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, receiveStock,
       masters, addMasterOption, updateMasterOption, deleteMasterOption,
       addVendor, updateVendor, deleteVendor,
       vendorPayments, addVendorPayment, deleteVendorPayment,
