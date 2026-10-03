@@ -48,7 +48,15 @@ Report: `test-results/full-test/PHASE2-REPORT.md`; evidence and check scripts: `
 - Dealer/Retailer Incentives and Stock pages (script didn't wait for "Loading…"); Director "Top States" and Admin "Lead Status" charts (checked from code/data only); Reports date-range filters (all checks ran unfiltered).
 - Small bug seen 2026-10-03: the PO cancel note is dated in UTC ("Cancelled on 2026-10-02" at 00:xx IST on 3 Oct).
 
-## Phase 3 — every-button sweep (IN PROGRESS, 2026-10-03): groups 1–5 done (SFA, Partner, Sales, Orders, Purchases); groups 6–7 left (Accounting, Admin)
+## Phase 3 — every-button sweep (DONE 2026-10-03): all 7 groups; final ranked summary + fix batch order at the end of PHASE3-REPORT.md
+- G7 Admin done (adm-*.mjs/log, adm-dryrun 22 scenarios rolled back). New: **HIGH Admin can set Settings=full on any role** (makes its holders admins; side-steps 071); MEDIUM products linked by name, no FK (in-use product deletable); complaint Delete is a no-op (no DELETE policy; CMP-5 kept); Masters Remove asks "[object Object]" (`Masters.jsx:262` native confirm); partner forms no GSTIN/phone/pincode checks; no DB value rules (prices, scheme %, dates, credit limit, case-dup option keys); Profile revenue = all order values. All TEST-P3 G7 rows removed.
+- **Manual cleanup (2026-10-03, owner's OK):** complaint CMP-5 (TEST-P3 G7 Customer, made in G7) deleted by SQL because the app's Delete is broken (no DELETE policy on `complaints` — that is the finding itself). Checked first: test row, no foreign keys or notifications point at complaints; its audit_log/events rows kept as history. One-statement delete that aborts unless exactly 1 row; after: 0 TEST-P3 complaints, 8 complaints total.
+
+## Owner decisions for the fix batch (2026-10-03)
+- **Dispatch must NOT delete orders** (G4): remove Delete for Dispatch on screen and in the DB policy.
+- **Warehouse Manager SHOULD record GRNs** (G5 question): give it GRN insert in the DB and the button on Purchases.
+- H17 TDS: still parked, awaiting the accountant.
+- G6 Accounting done (acc-*.mjs/log, dry runs rolled back, all TEST rows removed and verified). New: **HIGH credit notes uncapped and they settle invoices** (₹5,000 note on a ₹1,180 invoice -> "Settled", partner −₹3,920); **HIGH issued tax invoices editable/deletable** (paid invoice deleted with its payment; amount editable in DB, balance drifts); MEDIUM DB accepts negative expense/payment/credit note; MEDIUM reminders fall back to 9876543210 / accounts@prismora.com; MEDIUM unmatched manual credit note cuts sales; LOW expense/unpaid fire-and-forget, future-dated expense, Convert wording.
 Report: `test-results/full-test/phase3/PHASE3-REPORT.md`; scripts/logs in the same folder (`lib.mjs`, `crawl.mjs ROLE [paths]`, `*-w*.mjs` write tests). Order: SFA, Partner, Sales, **Orders, Purchases, Accounting, Admin** (Admin last). Report only, no fixes; stop and report after each group. All TEST-P3 rows deleted after each group, verified in the DB.
 - Tooling: `playwright-core` + `@supabase/supabase-js` copied into `phase3/node_modules`; BASE defaults to local dev `http://localhost:5174` (owner runs `npm run dev` themselves; a background dev server dies at 2 h). Live site writes are blocked by the permission classifier: use local. In Git Bash set `MSYS_NO_PATHCONV=1` before passing `/paths`. Settle waits for "Loading…" (Unicode ellipsis). Saves can take 8 s+: wait long enough before judging.
 - Done: G1 SFA (Sales Exec 1, Sales Manager), G2 Partner (Distributor, Dealer, Retailer), G3 Sales (Sales Manager, Sales Exec 1, Sales), G4 Orders (Admin, Sales Manager, Dispatch, Warehouse, Accounts), G5 Purchases + Inventory (Purchase Manager, Warehouse, Accounts, Admin). GPS punch-in proven to save lat/lng in headed Chrome with location allowed (the empty save was headless only).
@@ -72,6 +80,6 @@ Findings so far:
 - Checked, not bugs: stale-edit warning works (just slow); single-product orders store items = [] by design; ERR_NAME_NOT_RESOLVED was a transient DNS blip (4 clean re-runs).
 
 ## Next (priority)
-1. Phase 3 groups 6–7 (Accounting, Admin), Phase 4 (integrity); final report. Post-Phase-3 fix batch starts with the purchase-return bug, then the ownerless-orders pair and the split double-click.
+1. Owner picks: start fix batch 9 (money/stock integrity) per PHASE3-REPORT.md "Suggested fix batch order", or Phase 4 (integrity) first. Owner decisions pending: order delete by Dispatch, Warehouse GRN, H17 TDS, CMP-5 removal via SQL.
 2. Later batch: slow saves, self-registered partner address/territory, claims tied to earned incentives, missing confirms, Phase 1 leftovers, PO cancel-note date (UTC).
 3. Optional: delete the batch 6 TEST rows on owner's OK.
