@@ -1,0 +1,18 @@
+FAIL W1 Warehouse changes the warehouse of a batch holding 4 units directly => DONE rows=1
+FAIL W2 Admin does the same => DONE rows=1
+PASS W3 An empty batch can still be relabelled => DONE rows=1 ASSERT=true
+FAIL W4 Whole batch (4) to Secondary, nothing to merge into: the batch itself moves => DONE rows=1 ASSERT=false
+PASS W5 Whole batch where the destination already has that batch: merged, source at 0 => DONE rows=1 ASSERT=true
+PASS W6 Part of a batch still splits into a new batch (unchanged) => DONE rows=1 ASSERT=true
+PASS W7 Edit form save that keeps the warehouse => DONE rows=1
+PASS W8 Dispatch moves the whole batch => REFUSED: Moving stock needs full Inventory access.
+FAIL G1 Warehouse GRN of 3 into a new batch => REFUSED: column m.grnId does not exist
+FAIL G2 Purchase Manager GRN of 2 into existing batch N2 (25) => REFUSED: column \\"grnId\\" does not exist
+FAIL G3 GRN with two lines: two movement rows => REFUSED: column \\"grnId\\" does not exist
+FAIL G4 GRN line with 0 received: no stock, no movement => REFUSED: column \\"grnId\\" does not exist
+PASS R1 Expired batch expiry moved later: still refused => REFUSED: Batch TEST-P2-EXP-26592 of Lavender Body Wash expired on 28 Sep 2026, so its expiry date cannot be moved later or cleared. Expired stock stays expired; if the date was typed wrongly, ask an administrator for a database correction.
+PASS R2 Direct quantity change: still refused => REFUSED: Stock in batch TEST-P3-B1 changes only through Adjust, Cycle Count or Transfer (or goods receipts, deliveries and returns), so every movement is recorded.
+PASS R3 Adjust still works => DONE rows=1 ASSERT=true
+
+mode: without migration; 15/15 scenarios parsed; everything rolled back
+7 scenario(s) not as required

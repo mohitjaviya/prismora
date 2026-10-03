@@ -164,9 +164,18 @@ export default function Inventory() {
     // Not sent on an edit: the database moves quantities (080), and a figure
     // loaded earlier may no longer be what the batch holds.
     if (editingItem) delete payload.quantity;
+    // A batch holding stock changes warehouse only as a recorded transfer of
+    // all of it (081): the other fields are saved first, then the move.
+    const held = Number(inventory.find(i => i.id === editingItem?.id)?.quantity ?? editingItem?.quantity) || 0;
+    const moveTo = editingItem && held > 0 && payload.warehouse !== editingItem.warehouse ? payload.warehouse : null;
+    if (moveTo) payload.warehouse = editingItem.warehouse;
     setSaving('batch');
-    const result = editingItem ? await updateInventoryItem(editingItem.id, payload) : await addInventoryItem(payload);
-    finish(result, editingItem ? 'Stock batch saved.' : `Stock batch for ${payload.product} added.`, () => setIsAddOpen(false));
+    let result = editingItem ? await updateInventoryItem(editingItem.id, payload) : await addInventoryItem(payload);
+    if (result?.ok && moveTo) {
+      result = await transferStock(editingItem.id, moveTo, held, 'moved on the batch Edit form');
+      if (!result?.ok) result = { ok: false, error: `Changes saved, but the batch was not moved: ${result?.error || result?.reason || 'refused.'}` };
+    }
+    finish(result, moveTo ? `Stock batch saved and its ${held} units moved to ${moveTo}.` : editingItem ? 'Stock batch saved.' : `Stock batch for ${payload.product} added.`, () => setIsAddOpen(false));
   };
 
   const handleAdjust = async (e) => {

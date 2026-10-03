@@ -1,0 +1,11 @@
+B1 start Main Warehouse 4
+PASS V0 Edit form offers the warehouse
+PASS V1 Edit form warehouse -> Secondary Warehouse: DB batch INV-ITEM-1791003427562-7c81 now "Secondary Warehouse 4" (same batch, nothing left behind)
+PASS V1 success message names the move
+PASS V1 movement rows: transfer_in 4 U-TEST-WAREHOUSE transfer Main Warehouse → Secondary Warehouse: moved on the batch Edit form | transfer_out 4 U-TEST-WAREHOUSE transfer Main Warehouse → Secondary Warehouse: moved on the batch Edit form
+PASS V2 Edit form warehouse -> Main Warehouse: DB batch INV-ITEM-1791003427562-7c81 now "Main Warehouse 4" (same batch, nothing left behind)
+PASS V2 success message names the move
+PASS V2 movement rows: transfer_in 4 U-TEST-WAREHOUSE transfer Secondary Warehouse → Main Warehouse: moved on the batch Edit form | transfer_out 4 U-TEST-WAREHOUSE transfer Secondary Warehouse → Main Warehouse: moved on the batch Edit form
+PASS back where it started: "Main Warehouse 4", one TEST-P3-B1 batch
+
+UI: 8 pass, 0 fail

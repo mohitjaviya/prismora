@@ -95,8 +95,9 @@ const ORDER_RULE = /^(Order \S+ (is |has been |was |needs )|Only .+ can move an 
 const MONEY_RULE = /^(Invoice \S+ is an issued GST tax invoice|Proforma \S+ (has a payment|becomes a GST)|Purchase returns are recorded and withdrawn only)/;
 
 // The stock guard (080): an expired batch stays expired, and quantities move
-// only through Adjust, Cycle Count and Transfer.
-const STOCK_RULE = /^(Batch \S+ of .+ expired on |Stock in batch \S+ changes only through )/;
+// only through Adjust, Cycle Count and Transfer; a batch holding stock
+// changes warehouse only through Transfer (081).
+const STOCK_RULE = /^(Batch \S+ of .+ expired on |Stock in batch \S+ changes (warehouse )?only through )/;
 
 // The value rules (075): which amount may not be zero or negative.
 const VALUE_RULES = {

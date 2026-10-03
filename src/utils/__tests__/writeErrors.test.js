@@ -137,6 +137,7 @@ describe('plainDatabaseError - what Dispatch and Accounts are told', () => {
     const say = (message) => plainDatabaseError({ code: '42501', message }, 'change this stock batch');
     expect(say('Batch TEST-P2-EXP-26592 of Lavender Body Wash expired on 28 Sep 2026, so its expiry date cannot be moved later or cleared.')).toMatch(/^Batch TEST-P2-EXP-26592 of Lavender Body Wash expired on/);
     expect(say('Stock in batch B7 changes only through Adjust, Cycle Count or Transfer (or goods receipts, deliveries and returns), so every movement is recorded.')).toMatch(/^Stock in batch B7 changes only through/);
+    expect(say('Stock in batch B7 changes warehouse only through Transfer, so the move is recorded.')).toMatch(/^Stock in batch B7 changes warehouse only through Transfer/);
     expect(say('new row violates row-level security policy for table "inventory"')).toBe('Your role is not allowed to change this stock batch.');
   });
 
