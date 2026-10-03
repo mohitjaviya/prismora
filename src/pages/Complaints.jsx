@@ -52,6 +52,7 @@ export default function Complaints() {
   const [targetComplaint, setTargetComplaint] = useState(null);
   const [form, setForm] = useState(BLANK_FORM);
   const [resolveForm, setResolveForm] = useState(BLANK_RESOLVE);
+  const [isSavingAdd, setIsSavingAdd] = useState(false);
 
   const isParty = ['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
   const distributor = useMemo(() => distributors?.find(d => d.id === user?.distributorId), [distributors, user]);
@@ -107,15 +108,20 @@ export default function Complaints() {
     setIsAddOpen(true);
   };
 
-  const handleSubmitAdd = (e) => {
+  const handleSubmitAdd = async (e) => {
     e.preventDefault();
-    addComplaint({
+    if (isSavingAdd) return;
+    setIsSavingAdd(true);
+    const r = await addComplaint({
       ...form,
       assignedTo: form.assignedTo || user.id,
       distributorId: user?.role === 'Distributor' ? party?.id : undefined,
       dealerId: user?.role === 'Dealer' ? party?.id : undefined,
       retailerId: user?.role === 'Retailer' ? party?.id : undefined
     });
+    setIsSavingAdd(false);
+    if (!r?.ok) { toast(r?.error || 'The complaint could not be registered.', 'error'); return; }
+    toast(`Complaint ${r.id} registered.`, 'success');
     setIsAddOpen(false);
     setForm(BLANK_FORM);
   };
@@ -385,7 +391,7 @@ export default function Complaints() {
               </div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsAddOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm btn-accent rounded-xl">Register Complaint</button>
+                <button type="submit" disabled={isSavingAdd} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingAdd ? 'Saving…' : 'Register Complaint'}</button>
               </div>
             </form>
           </div>

@@ -3,11 +3,12 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Tag, Plus, Trash2, X, Edit2, CheckCircle, Clock, Download, Percent, Gift, Calendar, BarChart3, Zap, Trophy } from 'lucide-react';
-import { useConfirm } from '../context/DialogContext';
+import { useConfirm, useToast } from '../context/DialogContext';
 import { PageHeader, Button, StatCard, Card, SearchInput } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { schemeLiveState } from '../utils/schemeUtils';
 import { optionsFor } from '../utils/masterLists';
+import { schemeProblem } from '../utils/valueRules';
 
 const APPLICABLE_TO = ['All', 'Distributor', 'Dealer', 'Retailer'];
 
@@ -42,6 +43,7 @@ const BLANK_FORM = {
 export default function Schemes() {
   const { schemes, addScheme, updateScheme, deleteScheme, distributorIncentives, productCatalog, masters } = useData();
   const confirm = useConfirm();
+  const toast = useToast();
   // Options come from Master Lists; masterLists.js holds the fallback.
   const schemeTypes = optionsFor(masters, 'scheme_type').map(o => o.key);
   const { canAccess } = useAuth();
@@ -139,6 +141,8 @@ export default function Schemes() {
       validFrom: form.validFrom ? new Date(form.validFrom).toISOString() : null,
       validTo: form.validTo ? new Date(form.validTo).toISOString() : null,
     };
+    const problem = schemeProblem(payload);
+    if (problem) { toast(problem, 'error'); return; }
     if (editingScheme) updateScheme(editingScheme.id, payload);
     else addScheme(payload);
     setIsModalOpen(false);

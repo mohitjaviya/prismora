@@ -16,6 +16,7 @@
  */
 
 import { looksLikeEmail, normaliseEmail } from './signupChecks';
+import { contactProblem } from './contactChecks';
 
 /** The three kinds, and the words each one needs on screen. */
 export const SIGNUP_KINDS = {
@@ -51,6 +52,10 @@ export function validateSignup(kind, form = {}) {
   for (const [value, message] of need) {
     if (!String(value ?? '').trim()) return { ok: false, error: message };
   }
+
+  // The database refuses these formats too (078); say so before the round-trip.
+  const formatProblem = contactProblem({ gstin: form.gstin, phone: form.phone });
+  if (formatProblem) return { ok: false, error: formatProblem };
 
   if (!looksLikeEmail(form.email)) return { ok: false, error: 'Enter a valid email address.' };
   if (String(form.password ?? '').length < 8) {

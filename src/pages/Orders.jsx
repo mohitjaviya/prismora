@@ -811,7 +811,8 @@ const Orders = () => {
           )}
           <IconButton icon={Edit2} title="Edit order" size="sm" tone="accent"
             onClick={e => { e.stopPropagation(); handleOpenModal(o); }} />
-          {!isDelivered(o) && (
+          {/* Owner's decision (078): Dispatch moves orders along but does not delete them. */}
+          {!isDelivered(o) && user?.role !== 'Dispatch Team' && (
             <IconButton icon={Trash2} title="Delete order" size="sm" tone="danger"
               onClick={async e => {
                 e.stopPropagation();

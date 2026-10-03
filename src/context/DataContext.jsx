@@ -1591,6 +1591,8 @@ export const DataProvider = ({ children }) => {
    * Returns true only when the database actually accepted it, so a caller can
    * still tell the difference between saved and merely shown.
    */
+  // Returns true, or the database's refusal as a sentence (a duplicate
+  // option is refused by 078's case-blind unique indexes).
   const persistMaster = async (label, build) => {
     const { error } = await build(withoutAbsent);
     if (!error) return true;
@@ -1599,7 +1601,7 @@ export const DataProvider = ({ children }) => {
     const culprit = OPTIONAL_MASTER_COLUMNS.find(c => message.includes(`'${c}'`));
     if (!culprit || absentMasterColumns.current.has(culprit)) {
       console.error(`[Prismora] Could not save ${label}:`, message || error);
-      return false;
+      return plainDatabaseError(error, `save ${label}`);
     }
 
     console.warn(
@@ -1609,12 +1611,14 @@ export const DataProvider = ({ children }) => {
     return persistMaster(label, build);
   };
 
+  const sameOption = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
   const addMasterOption = async (listId, label) => {
     const clean = String(label || '').trim();
     if (!listId || !clean) return { ok: false, error: 'Give the option a name.' };
 
     const existing = masters.filter(m => m.list === listId);
-    if (existing.some(m => m.key.toLowerCase() === clean.toLowerCase())) {
+    if (existing.some(m => sameOption(m.key, clean) || sameOption(m.label, clean))) {
       return { ok: false, error: `"${clean}" is already in this list.` };
     }
     // Added options are never locked: the code cannot branch on something it
@@ -1639,10 +1643,10 @@ export const DataProvider = ({ children }) => {
     localStorage.setItem('prismora_masters', JSON.stringify(next));
     const saved = await persistMaster('the new option',
       (shape) => supabase.from('masters').insert([shape(row)]));
-    if (!saved) {
+    if (saved !== true) {
       setMasters(masters);
       localStorage.setItem('prismora_masters', JSON.stringify(masters));
-      return { ok: false, error: 'Could not save — see the banner above.' };
+      return { ok: false, error: saved };
     }
     logEvent('master_added', `Added "${clean}" to ${listId}`, null, row.id);
     return { ok: true };
@@ -1663,6 +1667,9 @@ export const DataProvider = ({ children }) => {
     if (patch.label !== undefined && !String(patch.label).trim()) {
       return { ok: false, error: 'An option needs a name.' };
     }
+    if (patch.label !== undefined && masters.some(m => m.list === before.list && m.id !== id && sameOption(m.label, patch.label))) {
+      return { ok: false, error: `"${String(patch.label).trim()}" is already in this list.` };
+    }
     if (patch.key !== undefined) {
       const clean = String(patch.key).trim();
       if (masters.some(m => m.list === before.list && m.id !== id && m.key.toLowerCase() === clean.toLowerCase())) {
@@ -1676,10 +1683,10 @@ export const DataProvider = ({ children }) => {
     localStorage.setItem('prismora_masters', JSON.stringify(next));
     const saved = await persistMaster('the change',
       (shape) => supabase.from('masters').update(shape(masterRow(patch))).eq('id', id));
-    if (!saved) {
+    if (saved !== true) {
       setMasters(masters);
       localStorage.setItem('prismora_masters', JSON.stringify(masters));
-      return { ok: false, error: 'Could not save — see the banner above.' };
+      return { ok: false, error: saved };
     }
     return { ok: true };
   };
@@ -1997,7 +2004,7 @@ export const DataProvider = ({ children }) => {
    */
   const absentProductColumns = useRef(new Set());
 
-  const persistProduct = async (label, build) => {
+  const persistProduct = async (label, build, onError) => {
     const shape = (row) => {
       const copy = productRow(row);
       absentProductColumns.current.forEach(c => delete copy[c]);
@@ -2011,6 +2018,7 @@ export const DataProvider = ({ children }) => {
     const culprit = OPTIONAL_PRODUCT_COLUMNS.find(c => message.includes(`'${c}'`));
     if (!culprit || absentProductColumns.current.has(culprit)) {
       console.error(`[Prismora] Could not save ${label}:`, message || error);
+      onError?.(error);
       return false;
     }
 
@@ -2018,7 +2026,7 @@ export const DataProvider = ({ children }) => {
       `[Prismora] The products table has no '${culprit}' column, so it is being left out. ` +
       'Run ADD_PRODUCT_COLUMNS.sql to keep SKUs and statuses.');
     absentProductColumns.current.add(culprit);
-    return persistProduct(label, build);
+    return persistProduct(label, build, onError);
   };
 
   /**
@@ -2093,7 +2101,16 @@ export const DataProvider = ({ children }) => {
     logEvent('product_added', `Added product: ${name}`, null, newId);
   };
 
+  // Waits for the database: it refuses a rename while stock, orders, schemes
+  // or complaints use the name (078), and the price rules, and the screen
+  // must not show a change that was not saved.
   const updateProduct = async (id, updatedData) => {
+    let failure = null;
+    const ok = await journaled('products update', () => persistProduct('the product',
+      (shape) => supabase.from('products').update(shape(updatedData)).eq('id', id),
+      (error) => { failure = error; }));
+    if (!ok) return { ok: false, error: plainDatabaseError(failure, 'save this product') };
+
     setProductCatalog(prev => {
       const next = prev.map(p => p.id === id ? { ...p, ...updatedData } : p);
       localStorage.setItem('prismora_product_catalog', JSON.stringify(next));
@@ -2104,13 +2121,20 @@ export const DataProvider = ({ children }) => {
     if (oldProd && oldProd.name !== updatedData.name) {
       setProducts(prev => prev.map(name => name === oldProd.name ? updatedData.name : name));
     }
-
-    await persistProduct('the product',
-      (shape) => supabase.from('products').update(shape(updatedData)).eq('id', id));
+    return { ok: true };
   };
 
   const deleteProduct = async (id) => {
     const oldProd = productCatalog.find(p => p.id === id);
+    // A product still in use is refused by the database (078); RLS refuses
+    // by deleting nothing, so the row count is the answer.
+    const res = await journaled('products delete', async () => {
+      const { data, error } = await supabase.from('products').delete().eq('id', id).select('id');
+      if (error) return { ok: false, error: plainDatabaseError(error, 'delete this product') };
+      if (!data?.length) return { ok: false, error: 'The database did not delete it: your role may not delete products.' };
+      return { ok: true };
+    });
+    if (!res.ok) return res;
     setProductCatalog(prev => {
       const next = prev.filter(p => p.id !== id);
       localStorage.setItem('prismora_product_catalog', JSON.stringify(next));
@@ -2120,8 +2144,7 @@ export const DataProvider = ({ children }) => {
     if (oldProd) {
       setProducts(prev => prev.filter(name => name !== oldProd.name));
     }
-
-    await persist('products delete', supabase.from('products').delete().eq('id', id));
+    return res;
   };
 
   // ── Invoices ─────────────────────────────────────────────────────────────
@@ -3210,13 +3233,19 @@ export const DataProvider = ({ children }) => {
   };
 
   // ── Complaints ────────────────────────────────────────────────────────────
+  // The database numbers a complaint from a sequence (078), so a deleted
+  // number is never given out again and old audit events keep pointing at
+  // the complaint they were about. Send no id; read the number back.
   const addComplaint = async (complaintData) => {
-    const maxId = complaints.reduce((max, c) => {
-      const num = parseInt(c.id.replace('CMP-', ''), 10);
-      return !isNaN(num) && num > max ? num : max;
-    }, 0);
     const draft = { ...complaintData, status: 'Registered', createdAt: new Date().toISOString() };
-    const { id: newId } = await insertWithFreeId('complaints insert', 'complaints', 'CMP-', maxId + 1, draft);
+    delete draft.id;
+    const res = await journaled('complaints insert', async () => {
+      const { data, error } = await supabase.from('complaints').insert([draft]).select('id').single();
+      if (error || !data?.id) return { ok: false, error: plainDatabaseError(error, 'register this complaint') };
+      return { ok: true, id: data.id };
+    });
+    if (!res.ok) return res;
+    const newId = res.id;
     const newComplaint = { ...draft, id: newId };
     setComplaints(prev => {
       const next = [newComplaint, ...prev];
@@ -3224,6 +3253,7 @@ export const DataProvider = ({ children }) => {
       return next;
     });
     logEvent('complaint_registered', `Complaint ${newId}: ${complaintData.complaintType} by ${complaintData.customerName}`, complaintData.assignedTo, newId);
+    return res;
   };
 
   const updateComplaintStatus = async (id, status, resolution = '') => {

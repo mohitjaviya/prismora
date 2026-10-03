@@ -102,6 +102,14 @@ const VALUE_RULES = {
   invoices_amounts_not_negative: 'An invoice amount and its tax cannot be negative.',
   purchase_returns_value_not_negative: 'A return cannot have a negative value.',
   products_prices_not_negative: 'Prices and the GST rate cannot be negative.',
+  // 078
+  products_partner_prices_within_mrp: 'A distributor, dealer or retailer price cannot be above the MRP.',
+  schemes_discount_0_100: 'A scheme discount must be between 0 and 100%.',
+  schemes_dates_in_order: 'A scheme cannot end before it starts.',
+  schemes_amounts_not_negative: 'Free goods quantity and minimum order value cannot be negative.',
+  distributors_credit_limit_not_negative: 'Credit limit cannot be negative.',
+  dealers_credit_limit_not_negative: 'Credit limit cannot be negative.',
+  retailers_credit_limit_not_negative: 'Credit limit cannot be negative.',
 };
 
 export function plainDatabaseError(error, action = 'save this') {
@@ -123,6 +131,9 @@ export function plainDatabaseError(error, action = 'save this') {
   }
   if (code === '23505' && /invoices_one_per_order/.test(message)) {
     return 'That order already has an invoice. An order can have only one.';
+  }
+  if (code === '23505' && /masters_list_(key|label)_ci/.test(message)) {
+    return 'That list already has this option (ignoring capitals). Use the existing one.';
   }
   if (/Failed to fetch|NetworkError|network/i.test(message)) {
     return `Could not reach the database to ${action}. Check the connection and try again.`;

@@ -139,4 +139,16 @@ describe('plainDatabaseError - what Dispatch and Accounts are told', () => {
     expect(check('vendor_payments_amount_positive')).toBe('A payment must be more than zero.');
     expect(check('products_prices_not_negative')).toBe('Prices and the GST rate cannot be negative.');
   });
+
+  it('explains the master-data rules (078)', () => {
+    const check = (name) => plainDatabaseError({ code: '23514', message: `new row for relation "x" violates check constraint "${name}"` }, 'save this');
+    expect(check('schemes_discount_0_100')).toMatch(/between 0 and 100/);
+    expect(check('schemes_dates_in_order')).toMatch(/end before it starts/);
+    expect(check('products_partner_prices_within_mrp')).toMatch(/above the MRP/);
+    expect(check('dealers_credit_limit_not_negative')).toMatch(/Credit limit/);
+    expect(plainDatabaseError({ code: '23505', message: 'duplicate key value violates unique constraint "masters_list_key_ci"' }, 'save the new option'))
+      .toMatch(/already has this option/);
+    const inUse = 'Product "X" is in use (1 stock batch(es), 0 order(s), 0 scheme(s), 0 complaint(s)), so it cannot be deleted';
+    expect(plainDatabaseError({ code: 'P0001', message: inUse }, 'delete this product')).toBe(inUse);
+  });
 });

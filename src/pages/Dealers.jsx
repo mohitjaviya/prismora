@@ -13,6 +13,7 @@ import { buildLedgerEntries } from '../utils/distributorUtils';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
 import LastChanged from '../components/audit/LastChanged';
+import { contactProblem, normaliseGstin } from '../utils/contactChecks';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -87,7 +88,9 @@ export default function Dealers() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const payload = { ...form, creditLimit: Number(form.creditLimit) };
+    const payload = { ...form, gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
+    const problem = contactProblem(payload, editingDealer) || (payload.creditLimit < 0 ? 'Credit limit cannot be negative.' : null);
+    if (problem) { toast(problem, 'error'); return; }
     if (editingDealer) updateDealer(editingDealer.id, payload);
     else addDealer(payload);
     setIsModalOpen(false);

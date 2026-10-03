@@ -15,6 +15,7 @@ import { downloadCSV, itemsText } from '../utils/exportUtils';
 import { isAwaitingGoods } from '../utils/purchasing';
 import { buildVendorLedger } from '../utils/distributorUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
+import { contactProblem, normaliseGstin } from '../utils/contactChecks';
 
 
 const statusConfig = {
@@ -107,6 +108,10 @@ export default function Purchases() {
   const [vendorForm, setVendorForm] = useState({ name: '', gstin: '', phone: '', email: '', address: '', contactPerson: '', status: 'Active' });
 
   const canManage = canAccess('purchases', 'full');
+  // Warehouse receives the goods, so it records the GRN too — and only that
+  // (078: the database lets it insert a GRN, nothing else on purchases).
+  const canRecordGRN = canManage || user?.role === 'Warehouse Manager';
+  const showPOActions = canRecordGRN;
 
   // KPIs
   const kpis = useMemo(() => ({
@@ -351,8 +356,11 @@ export default function Purchases() {
   const openEditVendor = (v) => { setEditingVendor(v); setVendorForm({ name: v.name, gstin: v.gstin || '', phone: v.phone || '', email: v.email || '', address: v.address || '', contactPerson: v.contactPerson || '', status: v.status || 'Active' }); setIsVendorModalOpen(true); };
   const handleSubmitVendor = (e) => {
     e.preventDefault();
-    if (editingVendor) updateVendor(editingVendor.id, vendorForm);
-    else addVendor(vendorForm);
+    const payload = { ...vendorForm, gstin: normaliseGstin(vendorForm.gstin) };
+    const problem = contactProblem(payload, editingVendor);
+    if (problem) { toast(problem, 'error'); return; }
+    if (editingVendor) updateVendor(editingVendor.id, payload);
+    else addVendor(payload);
     setIsVendorModalOpen(false);
   };
 
@@ -436,7 +444,7 @@ export default function Purchases() {
                   <th className="p-4">Created</th>
                   <th className="p-4">Raised by</th>
                   <th className="p-4 text-center">Status</th>
-                  {canManage && <th className="p-4 text-center">Actions</th>}
+                  {showPOActions && <th className="p-4 text-center">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-300">
@@ -464,25 +472,25 @@ export default function Purchases() {
                           return <div className={`mt-1 text-[10px] font-semibold ${cls}`}>⏳ {days}d awaiting GRN</div>;
                         })()}
                       </td>
-                      {canManage && (
+                      {showPOActions && (
                         <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
-                            {po.status === 'Draft' && (
+                            {canManage && po.status === 'Draft' && (
                               <button onClick={() => updatePurchaseOrderStatus(po.id, 'Confirmed')} className="px-2 py-1 text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-colors">Confirm</button>
                             )}
-                            {(po.status === 'Confirmed' || po.status === 'Partially Received') && (
+                            {canRecordGRN && (po.status === 'Confirmed' || po.status === 'Partially Received') && (
                               <button onClick={() => openGRN(po)} className="px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-colors">GRN</button>
                             )}
-                            {po.status === 'GRN Done' && (
+                            {canManage && po.status === 'GRN Done' && (
                               <button onClick={() => updatePurchaseOrderStatus(po.id, 'Closed')} className="px-2 py-1 text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-lg hover:bg-purple-500/20 transition-colors">Close</button>
                             )}
                             {/* Cancelled was a defined status with no way to
                                 reach it, so the only way out of a PO was to
                                 delete it and lose that it ever existed. */}
-                            {(po.status === 'Draft' || po.status === 'Confirmed') && (
+                            {canManage && (po.status === 'Draft' || po.status === 'Confirmed') && (
                               <button onClick={() => { setCancellingPO(po); setCancelReason('Ordered by mistake'); }} className="px-2 py-1 text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg hover:bg-rose-500/20 transition-colors" title="Cancel this purchase order">Cancel</button>
                             )}
-                            <button onClick={async () => { if (await confirm({ title: 'Delete this PO? Cancelling keeps the record — deleting removes it for good.', danger: true, confirmLabel: 'Delete' })) { const r = await deletePurchaseOrder(po.id); toast(r?.ok ? `${po.id} deleted.` : (r?.error || 'The purchase order could not be deleted.'), r?.ok ? 'success' : 'error'); } }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete this purchase order"><Trash2 size={13} /></button>
+                            {canManage && <button onClick={async () => { if (await confirm({ title: 'Delete this PO? Cancelling keeps the record — deleting removes it for good.', danger: true, confirmLabel: 'Delete' })) { const r = await deletePurchaseOrder(po.id); toast(r?.ok ? `${po.id} deleted.` : (r?.error || 'The purchase order could not be deleted.'), r?.ok ? 'success' : 'error'); } }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete this purchase order"><Trash2 size={13} /></button>}
                           </div>
                         </td>
                       )}

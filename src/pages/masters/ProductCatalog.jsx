@@ -3,9 +3,10 @@ import { useData } from '../../context/DataContext';
 import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, Package, QrCode, X, Download } from 'lucide-react';
 import { downloadCSV } from '../../utils/exportUtils';
-import { useConfirm } from '../../context/DialogContext';
+import { useConfirm, useToast } from '../../context/DialogContext';
 import { Badge, Button, DataTable, IconButton, PageHeader } from '../../components/ui';
 import { optionsFor } from '../../utils/masterLists';
+import { productPriceProblem } from '../../utils/valueRules';
 
 /**
  * The product catalogue: what is sold, at what price, under which tax rate.
@@ -28,6 +29,7 @@ const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tr
 export default function ProductCatalog() {
   const { productCatalog, addProduct, updateProduct, deleteProduct, masters } = useData();
   const confirm = useConfirm();
+  const toast = useToast();
 
   // The three lists this form offers are themselves master lists.
   const productCategories = optionsFor(masters, 'product_category').map(o => o.key);
@@ -51,7 +53,7 @@ export default function ProductCatalog() {
     setIsProductModalOpen(true);
   };
 
-  const handleProductSubmit = (e) => {
+  const handleProductSubmit = async (e) => {
     e.preventDefault();
     const payload = {
       ...productForm,
@@ -61,8 +63,13 @@ export default function ProductCatalog() {
       dealerPrice: Number(productForm.dealerPrice || 0),
       retailerPrice: Number(productForm.retailerPrice || 0)
     };
-    if (editingProduct) updateProduct(editingProduct.id, payload);
-    else addProduct(payload);
+    const problem = productPriceProblem(payload);
+    if (problem) { toast(problem, 'error'); return; }
+    if (editingProduct) {
+      // A rename is refused while the name is in use (078); keep the form open.
+      const r = await updateProduct(editingProduct.id, payload);
+      if (!r?.ok) { toast(r?.error || 'The product could not be saved.', 'error'); return; }
+    } else addProduct(payload);
     setIsProductModalOpen(false);
   };
 
@@ -114,7 +121,11 @@ export default function ProductCatalog() {
         <div className="flex items-center justify-center gap-0.5">
           <IconButton icon={Edit2} title="Edit product" size="sm" tone="accent" onClick={() => openProductEdit(p)} />
           <IconButton icon={Trash2} title="Delete product" size="sm" tone="danger"
-            onClick={async () => { if (await confirm({ title: 'Delete this product?', danger: true, confirmLabel: 'Delete' })) deleteProduct(p.id); }} />
+            onClick={async () => {
+              if (!await confirm({ title: 'Delete this product?', danger: true, confirmLabel: 'Delete' })) return;
+              const r = await deleteProduct(p.id);
+              toast(r?.ok ? `${p.name} deleted.` : (r?.error || 'The product could not be deleted.'), r?.ok ? 'success' : 'error');
+            }} />
         </div>
       ),
     },
