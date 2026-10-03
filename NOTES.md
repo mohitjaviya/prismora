@@ -48,7 +48,7 @@ Report: `test-results/full-test/PHASE2-REPORT.md`; evidence and check scripts: `
 - Dealer/Retailer Incentives and Stock pages (script didn't wait for "Loading…"); Director "Top States" and Admin "Lead Status" charts (checked from code/data only); Reports date-range filters (all checks ran unfiltered).
 - Small bug seen 2026-10-03: the PO cancel note is dated in UTC ("Cancelled on 2026-10-02" at 00:xx IST on 3 Oct).
 
-## Phase 3 — every-button sweep (DONE 2026-10-03): all 7 groups; final ranked summary + fix batch order at the end of PHASE3-REPORT.md
+## Phase 3 — every-button sweep: FULLY COMPLETE 2026-10-03 (all 7 groups); final ranked summary + fix batch order at the end of PHASE3-REPORT.md
 - G7 Admin done (adm-*.mjs/log, adm-dryrun 22 scenarios rolled back). New: **HIGH Admin can set Settings=full on any role** (makes its holders admins; side-steps 071); MEDIUM products linked by name, no FK (in-use product deletable); complaint Delete is a no-op (no DELETE policy; CMP-5 kept); Masters Remove asks "[object Object]" (`Masters.jsx:262` native confirm); partner forms no GSTIN/phone/pincode checks; no DB value rules (prices, scheme %, dates, credit limit, case-dup option keys); Profile revenue = all order values. All TEST-P3 G7 rows removed.
 - **Manual cleanup (2026-10-03, owner's OK):** complaint CMP-5 (TEST-P3 G7 Customer, made in G7) deleted by SQL because the app's Delete is broken (no DELETE policy on `complaints` — that is the finding itself). Checked first: test row, no foreign keys or notifications point at complaints; its audit_log/events rows kept as history. One-statement delete that aborts unless exactly 1 row; after: 0 TEST-P3 complaints, 8 complaints total.
 
@@ -80,6 +80,6 @@ Findings so far:
 - Checked, not bugs: stale-edit warning works (just slow); single-product orders store items = [] by design; ERR_NAME_NOT_RESOLVED was a transient DNS blip (4 clean re-runs).
 
 ## Next (priority)
-1. Owner picks: start fix batch 9 (money/stock integrity) per PHASE3-REPORT.md "Suggested fix batch order", or Phase 4 (integrity) first. Owner decisions pending: order delete by Dispatch, Warehouse GRN, H17 TDS, CMP-5 removal via SQL.
+1. **Phase 3 fully complete (all 7 groups, 2026-10-03). Ready to start the fix batch:** batch 9 (money/stock integrity) first, per PHASE3-REPORT.md "Suggested fix batch order"; fold in the owner decisions above (Dispatch can't delete orders; Warehouse records GRNs). Phase 4 (integrity checks) after the fix batches unless the owner says otherwise. Only H17 TDS is still waiting (accountant).
 2. Later batch: slow saves, self-registered partner address/territory, claims tied to earned incentives, missing confirms, Phase 1 leftovers, PO cancel-note date (UTC).
 3. Optional: delete the batch 6 TEST rows on owner's OK.
