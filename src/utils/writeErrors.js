@@ -21,6 +21,7 @@
  */
 
 import { isIdColumn } from './dbRow';
+import { WRITE_TIMEOUT_MS } from './retryFetch';
 
 /**
  * Which column of `row` a constraint is about, or null if it cannot be told.
@@ -112,6 +113,8 @@ const VALUE_RULES = {
   retailers_credit_limit_not_negative: 'Credit limit cannot be negative.',
 };
 
+export const SAVE_TIMEOUT_TEXT = `No answer from the server after ${WRITE_TIMEOUT_MS / 1000} seconds. It may or may not have saved — refresh the page and check before trying again.`;
+
 export function plainDatabaseError(error, action = 'save this') {
   if (!error) return `Could not ${action}.`;
   const code = error.code;
@@ -141,6 +144,8 @@ export function plainDatabaseError(error, action = 'save this') {
   if (code === '23505' && /masters_list_(key|label)_ci/.test(message)) {
     return 'That list already has this option (ignoring capitals). Use the existing one.';
   }
+  // retryFetch gave up waiting (batch 14). Whether it landed is unknown.
+  if (/SAVE_TIMEOUT/.test(message)) return SAVE_TIMEOUT_TEXT;
   if (/Failed to fetch|NetworkError|network/i.test(message)) {
     return `Could not reach the database to ${action}. Check the connection and try again.`;
   }

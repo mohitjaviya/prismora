@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { retryingFetch } from './utils/retryFetch';
+import { noteEvent } from './utils/writeJournal';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -30,11 +31,16 @@ if (!isConfigured) {
 // Placeholders keep createClient from throwing at module load. Every request
 // made through it fails, which is correct and now visible, rather than taking
 // the whole app down before it can explain itself.
-// Failed reads are asked again; writes are not repeated (utils/retryFetch.js).
+// Failed reads are asked again; writes are not repeated, and one with no
+// answer in 20 s is given up (utils/retryFetch.js). A request slower than 4 s
+// is noted in the save journal, so a slow-save report shows where time went.
+const noteSlow = ({ method, url, ms, status }) =>
+  noteEvent('slow request', `${method} ${String(url).replace(/^https?:\/\/[^/]+/, '').slice(0, 70)} ${Math.round(ms)}ms ${status}`);
+
 export const supabase = createClient(
   supabaseUrl || 'https://unconfigured.invalid',
   supabaseAnonKey || 'unconfigured',
-  { global: { fetch: retryingFetch() } }
+  { global: { fetch: retryingFetch(undefined, undefined, { onSlow: noteSlow }) } }
 );
 
 // Which project this build points at. Two deployments pointing at different

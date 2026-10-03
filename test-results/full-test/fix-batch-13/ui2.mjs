@@ -4,13 +4,14 @@
 // Playwright (nothing reaches the server). Local only (LIVE unset): the scheme toggle is done for real on
 // TEST scheme SCH-1790405906612 and put back.
 // Usage (Git Bash): BASE=http://localhost:5174 node ui2.mjs ; LIVE=1 BASE=<live> node ui2.mjs
-import { login, go, browser } from '../phase3/lib.mjs';
+import { assertNotIntercepting, login, go, browser } from '../phase3/lib.mjs';
 import { writeFileSync, unlinkSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 
 const LIVE = !!process.env.LIVE;
 function db(sql) {
+  assertNotIntercepting();
   const f = `${tmpdir()}/ui13b-${Date.now()}.sql`.replace(/\\/g, '/');
   writeFileSync(f, sql);
   for (let i = 0; i < 3; i++) {
@@ -69,6 +70,7 @@ let page;
   const hits = await refuseWrites(page, 'purchase_orders', ['PATCH']);
   await page.locator('tr', { hasText: 'TEST-PO-B5-81925' }).locator('button', { hasText: /^Close$/ }).click();
   const t2 = await toastMatching(page, new RegExp(REFUSAL));
+  await page.unrouteAll({ behavior: 'ignoreErrors' }); // no DB check while intercepting (batch 14)
   const st = db(`SELECT status FROM purchase_orders WHERE id='TEST-PO-B5-81925'`)[0].status;
   const chip = await page.locator('tr', { hasText: 'TEST-PO-B5-81925' }).innerText();
   check('P1 PO Close refused: reason shown, PO still GRN Done (DB + screen)', t2.includes(REFUSAL) && st === 'GRN Done' && /GRN Done/.test(chip) && hits() > 0, `toast="${t2}" db=${st}`);
@@ -108,6 +110,7 @@ let page;
   const hits = await refuseWrites(page, 'schemes', ['PATCH']);
   await tgl.click();
   const t = await toastMatching(page, new RegExp(REFUSAL));
+  await page.unrouteAll({ behavior: 'ignoreErrors' }); // no DB check while intercepting (batch 14)
   const st = db(`SELECT status FROM schemes WHERE id='SCH-1790405906612'`)[0].status;
   check('S1 Scheme on/off refused: reason shown, DB unchanged', t.includes(REFUSAL) && st === 'Inactive' && hits() > 0, `toast="${t}" db=${st}`);
   await page.unrouteAll({ behavior: 'ignoreErrors' });
@@ -131,11 +134,12 @@ let page;
   await go(page, '/inventory');
   await page.locator('tr', { hasText: 'TEST Neem Face Wash 100ml' }).first().click();
   await page.waitForTimeout(800);
-  const hits = await refuseWrites(page, 'inventory', ['DELETE']);
   const before = db(`SELECT count(*)::int n FROM inventory WHERE product='TEST Neem Face Wash 100ml'`)[0].n;
+  const hits = await refuseWrites(page, 'inventory', ['DELETE']);
   await page.locator('button[title="Delete"]').first().click();
   await page.getByRole('button', { name: 'Delete' }).last().click();
   const t = await toastMatching(page, new RegExp(REFUSAL));
+  await page.unrouteAll({ behavior: 'ignoreErrors' }); // no DB check while intercepting (batch 14)
   const after = db(`SELECT count(*)::int n FROM inventory WHERE product='TEST Neem Face Wash 100ml'`)[0].n;
   check('I1 Stock batch delete refused: reason shown, batches unchanged', t.includes(REFUSAL) && before === after && hits() > 0, `toast="${t}" batches ${before}->${after}`);
   await page.context().close();

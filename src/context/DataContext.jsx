@@ -8,7 +8,7 @@ import { quantityAfterAdjustment, batchToReceiveInto, canTransfer, destinationBa
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
 import { blankIdsToNull } from '../utils/dbRow';
-import { explainForeignKey, plainDatabaseError } from '../utils/writeErrors';
+import { explainForeignKey, plainDatabaseError, SAVE_TIMEOUT_TEXT } from '../utils/writeErrors';
 import { stampCreator } from '../utils/attribution';
 import { useAuth } from './AuthContext';
 import { isConvertedStatus } from '../utils/leadStatus';
@@ -131,6 +131,7 @@ const writeComplaint = (err, row) => {
   const detail = err?.details ? ` ${err.details}` : '';
   if (!code && !message) return null;
 
+  if (/SAVE_TIMEOUT/.test(message)) return { text: SAVE_TIMEOUT_TEXT, cause: '' };
   if (code === '42703' || code === 'PGRST204' || /column .* does not exist|Could not find the '.*' column/i.test(message)) {
     return { text: message, cause: 'A pending database migration is the usual cause.' };
   }

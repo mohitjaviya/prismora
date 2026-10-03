@@ -4,7 +4,7 @@
 //   SUCCESS — (local only) a real save on a TEST row: "Saving…" while waiting, success shown, form closed,
 //             the change is in the DB; then put back via the API and checked.
 // Usage: BASE=http://localhost:5174 node ui.mjs  (run from Git Bash). LIVE=1: refusal checks only (no writes).
-import { login, go, browser, E } from '../phase3/lib.mjs';
+import { assertNotIntercepting, login, go, browser, E } from '../phase3/lib.mjs';
 import { createClient } from '../phase3/node_modules/@supabase/supabase-js/dist/index.mjs';
 import { writeFileSync, unlinkSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 
 const LIVE = !!process.env.LIVE;
 function db(sql) {
+  assertNotIntercepting();
   const f = `${tmpdir()}/ui13-${Date.now()}.sql`.replace(/\\/g, '/');
   writeFileSync(f, sql);
   for (let i = 0; i < 3; i++) {
@@ -58,6 +59,7 @@ let page;
   const saving = await submitAndWatch(page, page.locator('form button[type="submit"]', { hasText: /Save Changes|Saving/ }));
   const t = await toastMatching(page, new RegExp(REFUSAL));
   const open = await formOpen(page, '#distributors-contact-person');
+  await page.unrouteAll({ behavior: 'ignoreErrors' }); // no DB check while intercepting (batch 14)
   const after = db(`SELECT "contactPerson" c FROM distributors WHERE id='D-TEST-1'`)[0].c;
   check('R1 Distributor edit refused: reason shown, form open, DB unchanged', t.includes(REFUSAL) && open && after === before && hits() > 0 && saving, `toast="${t}" open=${open} saving=${saving} db="${after}"`);
   await page.unrouteAll({ behavior: 'ignoreErrors' });
@@ -88,6 +90,7 @@ let page;
   const saving = await submitAndWatch(page, btn);
   const t = await toastMatching(page, new RegExp(REFUSAL));
   const open = await formOpen(page, '#schemes-scheme-name');
+  await page.unrouteAll({ behavior: 'ignoreErrors' }); // no DB check while intercepting (batch 14)
   const n = db(`SELECT count(*)::int n FROM schemes WHERE name='TEST B13 Scheme'`)[0].n;
   const listed = await page.locator('text=TEST B13 Scheme').count();
   check('R2 Scheme create refused: reason shown, form open, not in DB or list', t.includes(REFUSAL) && open && n === 0 && hits() > 0 && saving, `toast="${t}" open=${open} saving=${saving} db=${n} listedOutsideForm=${listed}`);
@@ -118,6 +121,7 @@ let page;
   const saving = await submitAndWatch(page, btn);
   const t = await toastMatching(page, new RegExp(REFUSAL));
   const open = await formOpen(page, '#purchases-contact-person');
+  await page.unrouteAll({ behavior: 'ignoreErrors' }); // no DB check while intercepting (batch 14)
   const after = db(`SELECT "contactPerson" c FROM vendors WHERE id='TEST-V-1'`)[0].c;
   check('R3 Vendor edit refused: reason shown, form open, DB unchanged', t.includes(REFUSAL) && open && after === before && hits() > 0 && saving, `toast="${t}" open=${open} saving=${saving} db="${after}"`);
   await page.unrouteAll({ behavior: 'ignoreErrors' });
@@ -170,6 +174,7 @@ let page;
   const saving = await submitAndWatch(page, btn);
   const t = await toastMatching(page, new RegExp(REFUSAL));
   const open = await formOpen(page, '#sfa-amount');
+  await page.unrouteAll({ behavior: 'ignoreErrors' }); // no DB check while intercepting (batch 14)
   const n = db(`SELECT count(*)::int n FROM sfa_expenses WHERE description='TEST B13 expense'`)[0].n;
   check('R5 SFA expense refused: reason shown, form open, nothing in DB', t.includes(REFUSAL) && open && n === 0 && hits() > 0 && saving, `toast="${t}" open=${open} saving=${saving} db=${n}`);
   await page.context().close();
