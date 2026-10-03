@@ -130,6 +130,26 @@ describe('rejectPermissionChange — the two ways to lock yourself out', () => {
   });
 });
 
+describe('rejectPermissionChange — Settings = full is Super Admin only (077)', () => {
+  const full = role({ id: 'Ops', name: 'Ops', permissions: { settings: 'full' } });
+  it('an Admin cannot give a role full Settings', () => {
+    expect(rejectPermissionChange({ role: role(), moduleId: 'settings', access: 'full', actorRole: 'Admin' })).toMatch(/Only a Super Admin/);
+  });
+  it('an Admin cannot take full Settings from another role', () => {
+    expect(rejectPermissionChange({ role: full, moduleId: 'settings', access: 'view', actorRole: 'Admin' })).toMatch(/Only a Super Admin/);
+  });
+  it('an Admin may still move Settings between none and view', () => {
+    expect(rejectPermissionChange({ role: role(), moduleId: 'settings', access: 'view', actorRole: 'Admin' })).toBeNull();
+  });
+  it('an Admin may change other modules of a Settings=full role', () => {
+    expect(rejectPermissionChange({ role: full, moduleId: 'orders', access: 'full', actorRole: 'Admin' })).toBeNull();
+  });
+  it('a Super Admin may give and take it', () => {
+    expect(rejectPermissionChange({ role: role(), moduleId: 'settings', access: 'full', actorRole: 'Super Admin' })).toBeNull();
+    expect(rejectPermissionChange({ role: full, moduleId: 'settings', access: 'none', actorRole: 'Super Admin' })).toBeNull();
+  });
+});
+
 describe('the module list', () => {
   it('has a unique id for every module', () => {
     const ids = MODULES.map(m => m.id);
@@ -275,6 +295,10 @@ describe('who may be given which role, and whose account may be touched (071)', 
   it('editing keeps the person\'s current role visible even when it is not pickable', () => {
     expect(rolesAssignableBy('Admin', ALL, 'Director')).toEqual(['Director', 'Sales Manager', 'Accounts']);
     expect(rolesAssignableBy('Admin', ALL, 'Accounts')).toEqual(['Sales Manager', 'Accounts']);
+  });
+  it('an Admin is not offered a role with full Settings, whatever its name (077)', () => {
+    expect(rolesAssignableBy('Admin', ALL, null, ['Accounts'])).toEqual(['Sales Manager']);
+    expect(rolesAssignableBy('Super Admin', ALL, null, ['Accounts'])).toEqual(ALL);
   });
   it('only a Super Admin may manage a Super Admin account', () => {
     expect(mayManageAccount('Admin', 'Super Admin')).toBe(false);

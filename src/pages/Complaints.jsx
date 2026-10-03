@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { MessageSquareWarning, Plus, Trash2, X, Download, CheckCircle, Clock, AlertTriangle, Eye, RotateCcw } from 'lucide-react';
-import { useConfirm } from '../context/DialogContext';
+import { useConfirm, useToast } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
@@ -28,6 +28,7 @@ const BLANK_RESOLVE = { status: 'Resolved', resolution: '' };
 export default function Complaints() {
   const { complaints, products, addComplaint, updateComplaintStatus, deleteComplaint, distributors, dealers, retailers, masters } = useData();
   const confirm = useConfirm();
+  const toast = useToast();
   // From Master Lists. Statuses keep their stored key while the label is what
   // people read — statusConfig below is still keyed on the stored value.
   const complaintTypes = optionsFor(masters, 'complaint_type').map(o => o.key);
@@ -58,6 +59,14 @@ export default function Complaints() {
   const retailer = useMemo(() => retailers?.find(r => r.id === user?.retailerId), [retailers, user]);
   const party = user?.role === 'Distributor' ? distributor : user?.role === 'Dealer' ? dealer : user?.role === 'Retailer' ? retailer : null;
   const canManage = canAccess('complaints', 'full') && !isParty;
+  // Deleting is Super Admin and Admin only, as in the database (077).
+  const canDelete = canManage && ['Super Admin', 'Admin'].includes(user?.role);
+  const removeComplaint = async (c) => {
+    if (!await confirm({ title: `Delete complaint ${c.id}?`, body: 'It is removed for good. The audit log keeps a record.', danger: true, confirmLabel: 'Delete' })) return;
+    const res = await deleteComplaint(c.id);
+    if (res.ok) toast(`Complaint ${c.id} deleted.`, 'success');
+    else toast(`Not deleted: ${res.error}`, 'error');
+  };
 
   // KPIs
   const kpis = useMemo(() => {
@@ -171,9 +180,9 @@ export default function Complaints() {
             <IconButton icon={RotateCcw} title="Update status" size="sm"
               onClick={e => { e.stopPropagation(); openResolve(c); }} />
           )}
-          {canManage && (
+          {canDelete && (
             <IconButton icon={Trash2} title="Delete complaint" size="sm" tone="danger"
-              onClick={async e => { e.stopPropagation(); if (await confirm({ title: 'Delete complaint?', danger: true, confirmLabel: 'Delete' })) deleteComplaint(c.id); }} />
+              onClick={e => { e.stopPropagation(); removeComplaint(c); }} />
           )}
         </div>
       ),

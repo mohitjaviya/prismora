@@ -1137,7 +1137,10 @@ export const DataProvider = ({ children }) => {
       timestamp: new Date().toISOString()
     };
     setEventLog(prev => [newEvent, ...prev]);
-    await supabase.from('events').insert([newEvent]);
+    // Every active user may add an event; who and when are stamped by the
+    // database (077). A refusal used to vanish silently — now it is at least seen.
+    const { error } = await supabase.from('events').insert([newEvent]);
+    if (error) console.error(`[Prismora] Audit event "${type}" was not recorded:`, error.message || error);
   };
 
   // ── Leads ────────────────────────────────────────────────────────────────
@@ -3233,13 +3236,23 @@ export const DataProvider = ({ children }) => {
     logEvent('complaint_updated', `Complaint ${id} → ${status}`, null, id);
   };
 
+  // Only Super Admin and Admin may delete (077). RLS refuses anyone else by
+  // deleting nothing, with no error, so the deleted row count is the answer.
   const deleteComplaint = async (id) => {
+    const res = await journaled('complaints delete', async () => {
+      const { data, error } = await supabase.from('complaints').delete().eq('id', id).select('id');
+      if (error) return { ok: false, error: error.message };
+      if (!data?.length) return { ok: false, error: 'The database did not delete it: only a Super Admin or Admin can delete complaints.' };
+      return { ok: true };
+    });
+    if (!res.ok) return res;
     setComplaints(prev => {
       const next = prev.filter(c => c.id !== id);
       localStorage.setItem('prismora_complaints', JSON.stringify(next));
       return next;
     });
-    await persist('complaints delete', supabase.from('complaints').delete().eq('id', id));
+    logEvent('complaint_deleted', `Complaint ${id} deleted`, null, id);
+    return res;
   };
 
   // ── Territories ────────────────────────────────────────────────────────────

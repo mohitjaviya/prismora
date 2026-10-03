@@ -114,13 +114,18 @@ export const grantedCount = (role) => {
  * wrong is an administrator who can no longer administer anything — and there
  * is no way back from that inside the app.
  */
-export const rejectPermissionChange = ({ role, moduleId, access, editingOwnRole }) => {
+export const rejectPermissionChange = ({ role, moduleId, access, editingOwnRole, actorRole }) => {
   if (!role) return 'That role no longer exists.';
   if (isUnrestrictedRole(role)) {
     return 'Super Admin always has everything, so there is always someone who can undo a change here.';
   }
   if (editingOwnRole && moduleId === 'settings' && access !== 'full') {
     return 'This is your own role. Taking away Settings would lock you out of this screen, and nobody could give it back.';
+  }
+  // Settings = full makes a role's holders administrators (077).
+  if (moduleId === 'settings' && actorRole !== 'Super Admin'
+      && (access === 'full') !== (role.permissions?.settings === 'full')) {
+    return 'Only a Super Admin can give or take away full Settings access — it makes the role’s holders administrators.';
   }
   return null;
 };
@@ -208,12 +213,13 @@ export const SUPER_ADMIN_ONLY_ROLES = ['Super Admin', 'Admin', 'Director'];
 /**
  * The roles `actorRole` may pick on the Add/Edit User form. When editing,
  * the person's current role stays in the list so the select shows it truthfully
- * and saving without touching it does not change it.
+ * and saving without touching it does not change it. `fullSettingsRoles` are
+ * the roles whose Settings = full: admin tier whatever their name (077).
  */
-export const rolesAssignableBy = (actorRole, roleNames, currentRole = null) => {
+export const rolesAssignableBy = (actorRole, roleNames, currentRole = null, fullSettingsRoles = []) => {
   const allowed = actorRole === 'Super Admin'
     ? roleNames
-    : roleNames.filter(r => !SUPER_ADMIN_ONLY_ROLES.includes(r));
+    : roleNames.filter(r => !SUPER_ADMIN_ONLY_ROLES.includes(r) && !fullSettingsRoles.includes(r));
   return currentRole && !allowed.includes(currentRole) ? [currentRole, ...allowed] : allowed;
 };
 

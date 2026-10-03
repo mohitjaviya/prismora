@@ -132,7 +132,7 @@ export default function Roles() {
   };
 
   const setAccess = async (moduleId, access) => {
-    const refusal = rejectPermissionChange({ role, moduleId, access, editingOwnRole });
+    const refusal = rejectPermissionChange({ role, moduleId, access, editingOwnRole, actorRole: user?.role });
     if (refusal) { setError(refusal); return; }
     await save({ permissions: { ...(role.permissions || {}), [moduleId]: access } });
   };
@@ -141,7 +141,7 @@ export default function Roles() {
     const ids = MODULES.filter(m => m.group === group).map(m => m.id);
     // One refusal stops the whole group, rather than applying half of it.
     for (const id of ids) {
-      const refusal = rejectPermissionChange({ role, moduleId: id, access, editingOwnRole });
+      const refusal = rejectPermissionChange({ role, moduleId: id, access, editingOwnRole, actorRole: user?.role });
       if (refusal) { setError(refusal); return; }
     }
     const next = { ...(role.permissions || {}) };
@@ -156,7 +156,7 @@ export default function Roles() {
     const next = {};
     MODULES.forEach(m => { next[m.id] = source.permissions?.[m.id] || 'none'; });
     for (const m of MODULES) {
-      const refusal = rejectPermissionChange({ role, moduleId: m.id, access: next[m.id], editingOwnRole });
+      const refusal = rejectPermissionChange({ role, moduleId: m.id, access: next[m.id], editingOwnRole, actorRole: user?.role });
       if (refusal) { setError(refusal); return; }
     }
     await save({ permissions: next });

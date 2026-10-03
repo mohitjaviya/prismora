@@ -39,7 +39,7 @@ const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white p
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
 export default function TeamMembers() {
-  const { user, users: allUsers, addUser, createUserAccount, updateUser, deleteUser } = useAuth();
+  const { user, users: allUsers, roles, addUser, createUserAccount, updateUser, deleteUser } = useAuth();
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -47,10 +47,12 @@ export default function TeamMembers() {
   const [editingUser, setEditingUser] = useState(null);
   const [userForm, setUserForm] = useState(BLANK_USER_FORM);
   // What the server and database will accept from this person: only a Super
-  // Admin hands out Super Admin, Admin or Director (071).
-  const selectableRoles = rolesAssignableBy(user?.role, staffRoles, editingUser?.role);
+  // Admin hands out Super Admin, Admin or Director (071), or any role with
+  // Settings = full (077).
+  const fullSettingsRoles = (roles || []).filter(r => r.permissions?.settings === 'full').map(r => r.id);
+  const selectableRoles = rolesAssignableBy(user?.role, staffRoles, editingUser?.role, fullSettingsRoles);
 
-  const openUserAdd = () => { setEditingUser(null); setUserForm({ ...BLANK_USER_FORM, role: rolesAssignableBy(user?.role, staffRoles).includes('Sales Executive') ? 'Sales Executive' : (rolesAssignableBy(user?.role, staffRoles)[0] || '') }); setIsUserModalOpen(true); };
+  const openUserAdd = () => { const assignable = rolesAssignableBy(user?.role, staffRoles, null, fullSettingsRoles); setEditingUser(null); setUserForm({ ...BLANK_USER_FORM, role: assignable.includes('Sales Executive') ? 'Sales Executive' : (assignable[0] || '') }); setIsUserModalOpen(true); };
   const openUserEdit = (u) => { setEditingUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, managedUsers: u.managedUsers || [], password: '' }); setIsUserModalOpen(true); };
 
   const handleUserSubmit = (e) => {

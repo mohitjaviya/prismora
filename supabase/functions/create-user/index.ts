@@ -123,10 +123,15 @@ Deno.serve(async (req) => {
   // The role has to exist and be switched on. A made-up name creates an
   // account that signs in and can reach nothing.
   const { data: targetRole, error: targetRoleError } = await admin
-    .from('roles').select('id, active').eq('id', role).maybeSingle();
+    .from('roles').select('id, active, permissions').eq('id', role).maybeSingle();
   if (targetRoleError) return json({ error: 'Could not check the role.' }, 500);
   if (!targetRole || targetRole.active === false) {
     return json({ error: `"${role}" is not a role that can be given. Pick one from the list.` }, 400);
+  }
+  // Settings = full makes its holders administrators, whatever the role is
+  // called — same tier as Admin (077; the database refuses it too).
+  if (targetRole.permissions?.settings === 'full' && caller.role !== 'Super Admin') {
+    return json({ error: `Only a Super Admin can give the role ${role}: it has full Settings access, which makes its holders administrators.` }, 403);
   }
 
   // ── 2a. A partner role needs the record it belongs to ──────────────────
