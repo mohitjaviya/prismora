@@ -1,0 +1,7 @@
+PASS L1 live /register-distributor asks for address and pincode
+PASS L1 live /register-dealer asks for address and pincode
+PASS L1 live /register-retailer asks for address and pincode
+PASS L2 live claim form asks for an earned incentive, not a scheme
+PASS L3 live Distributor sees only the Active distributor scheme
+PASS L4 live Incentives screen loads for Accounts
+LIVE: 6 pass, 0 fail
