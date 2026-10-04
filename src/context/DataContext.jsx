@@ -78,6 +78,7 @@ const CACHE_KEYS_BY_TABLE = {
   product_catalog: 'prismora_product_catalog',
   purchase_orders: 'prismora_purchase_orders',
   purchase_returns: 'prismora_purchase_returns',
+  sales_returns: 'prismora_sales_returns',
   retailers: 'prismora_retailers',
   scheme_claims: 'prismora_scheme_claims',
   schemes: 'prismora_schemes',
@@ -556,6 +557,7 @@ export const DataProvider = ({ children }) => {
   const [purchaseOrders, setPurchaseOrders] = useState(() => lsInit('prismora_purchase_orders'));
   const [grn, setGrn] = useState(() => lsInit('prismora_grn'));
   const [purchaseReturns, setPurchaseReturns] = useState(() => lsInit('prismora_purchase_returns'));
+  const [salesReturns, setSalesReturns] = useState(() => lsInit('prismora_sales_returns'));
   const [distributors, setDistributors] = useState(() => lsInit('prismora_distributors'));
   const [dealers, setDealers] = useState(() => lsInit('prismora_dealers'));
   const [retailers, setRetailers] = useState(() => lsInit('prismora_retailers'));
@@ -645,6 +647,7 @@ export const DataProvider = ({ children }) => {
       vendors: begin(supabase.from('vendors').select('*').order('createdAt', { ascending: false })),
       vendor_payments: begin(supabase.from('vendor_payments').select('*').order('createdAt', { ascending: false })),
       purchase_returns: begin(supabase.from('purchase_returns').select('*').order('createdAt', { ascending: false })),
+      sales_returns: begin(supabase.from('sales_returns').select('*').order('createdAt', { ascending: false })),
       purchase_orders: begin(supabase.from('purchase_orders').select('*').order('createdAt', { ascending: false })),
       grn: begin(supabase.from('grn').select('*').order('createdAt', { ascending: false })),
       distributors: begin(supabase.from('distributors').select('*').order('createdAt', { ascending: false })),
@@ -877,6 +880,18 @@ export const DataProvider = ({ children }) => {
       fetchedReturns = local ? JSON.parse(local) : [];
     }
     applyFetched('prismora_purchase_returns', setPurchaseReturns, fetchedReturns);
+
+    // ── Sales Returns (read-only here; written by record_sales_return, 054) ──
+    let fetchedSalesReturns;
+    try {
+      const { data, error } = await inflight.sales_returns;
+      if (error) throw error;
+      fetchedSalesReturns = data || [];
+    } catch {
+      const local = localStorage.getItem('prismora_sales_returns');
+      fetchedSalesReturns = local ? JSON.parse(local) : [];
+    }
+    applyFetched('prismora_sales_returns', setSalesReturns, fetchedSalesReturns);
 
     // ── Purchase Orders ──
     let fetchedPOs = [];
@@ -1768,6 +1783,7 @@ export const DataProvider = ({ children }) => {
     await Promise.all([
       reloadRows('inventory', setInventory, 'prismora_inventory', 'product', lines.map(l => l.product)),
       reloadRows('credit_notes', setCreditNotes, 'prismora_credit_notes', 'id', [data.creditNoteId]),
+      reloadRows('sales_returns', setSalesReturns, 'prismora_sales_returns', 'id', [data.returnId]),
       reloadRows('distributors', setDistributors, 'prismora_distributors', 'id', [order?.distributorId]),
       reloadRows('dealers', setDealers, 'prismora_dealers', 'id', [order?.dealerId]),
       reloadRows('retailers', setRetailers, 'prismora_retailers', 'id', [order?.retailerId]),
@@ -3820,7 +3836,7 @@ export const DataProvider = ({ children }) => {
   return (
     <DataContext.Provider value={gateWrites({
       whenLoaded: () => loadGate.current.wait(),
-      getOrderReturnable, recordSalesReturn,
+      getOrderReturnable, recordSalesReturn, salesReturns,
       listLeadAttachments, uploadLeadAttachment, removeLeadAttachment, openLeadAttachment,
       companySettings, loadCompanySettings, updateCompanySettings,
       // Original CRM

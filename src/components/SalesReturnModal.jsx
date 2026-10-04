@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Undo2, X, Plus, Trash2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/DialogContext';
+import { returnsForOrder } from '../utils/salesReturns';
+import OrderReturnsList from './OrderReturnsList';
 
 const REASONS = ['Damaged in transit', 'Expired / near expiry', 'Wrong product', 'Quality complaint', 'Excess stock', 'Other'];
 const inputCls = 'w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white';
@@ -22,8 +25,10 @@ const formatCurrency = (val) =>
  * database checks it again.
  */
 export default function SalesReturnModal({ order, onClose }) {
-  const { getOrderReturnable, recordSalesReturn, inventory } = useData();
+  const { getOrderReturnable, recordSalesReturn, inventory, salesReturns } = useData();
+  const { users } = useAuth();
   const toast = useToast();
+  const previous = returnsForOrder(salesReturns, order.id);
   const [position, setPosition] = useState(null);
   const [lines, setLines] = useState([]);
   const [note, setNote] = useState('');
@@ -84,6 +89,12 @@ export default function SalesReturnModal({ order, onClose }) {
           <button type="button" title="Close" onClick={() => onClose(false)} className="p-1 text-slate-400 hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={save} className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
+          {previous.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Previous returns</p>
+              <OrderReturnsList returns={previous} users={users} />
+            </div>
+          )}
           <p className="text-xs text-slate-400">
             {order.customerName}. Returned units go back into the batch they left from, and a credit note for what was billed
             is raised against the partner's account. Nothing can come back beyond what was delivered.
@@ -105,26 +116,29 @@ export default function SalesReturnModal({ order, onClose }) {
                 const max = Math.min(Number(pos?.returnable || 0), batchMax ?? Infinity);
                 return (
                   <div key={i} className="grid grid-cols-12 gap-2 items-end bg-brand-primary-lighter/20 rounded-xl p-3 border border-white/5">
-                    <div className="col-span-12 sm:col-span-4">
+                    <div className="col-span-12 sm:col-span-5">
                       <label htmlFor={`sr-product-${i}`} className="block text-[10px] text-slate-500 mb-1">Product</label>
                       <select id={`sr-product-${i}`} className={inputCls} value={l.product}
                         onChange={e => { const p = returnable.find(x => x.product === e.target.value); setLine(i, blankLine(p)); }}>
                         {returnable.map(p => <option key={p.product} value={p.product} className="bg-brand-primary">{p.product}</option>)}
                       </select>
                     </div>
-                    <div className="col-span-12 sm:col-span-4">
+                    {/* Gap 11: the batch label ("B1 — delivered 2, returnable 1")
+                        gets a wide field of its own and its full text as a tooltip. */}
+                    <div className="col-span-12 sm:col-span-7">
                       <label htmlFor={`sr-batch-${i}`} className="block text-[10px] text-slate-500 mb-1">Back into batch</label>
-                      <select id={`sr-batch-${i}`} className={inputCls} value={l.inventoryId} onChange={e => setLine(i, { inventoryId: e.target.value })}>
+                      <select id={`sr-batch-${i}`} className={inputCls} value={l.inventoryId} onChange={e => setLine(i, { inventoryId: e.target.value })}
+                        title={batchOpts.find(b => b.id === l.inventoryId)?.label || 'Choose the batch the goods go back to'}>
                         <option value="" className="bg-brand-primary">Choose…</option>
-                        {batchOpts.map(b => <option key={b.id} value={b.id} className="bg-brand-primary">{b.label}</option>)}
+                        {batchOpts.map(b => <option key={b.id} value={b.id} title={b.label} className="bg-brand-primary">{b.label}</option>)}
                       </select>
                     </div>
-                    <div className="col-span-4 sm:col-span-1">
+                    <div className="col-span-4 sm:col-span-3">
                       <label htmlFor={`sr-qty-${i}`} className="block text-[10px] text-slate-500 mb-1">Qty</label>
                       <input id={`sr-qty-${i}`} type="number" min="1" max={Number.isFinite(max) ? max : undefined} className={inputCls}
                         value={l.quantity} onChange={e => setLine(i, { quantity: e.target.value })} />
                     </div>
-                    <div className="col-span-7 sm:col-span-2">
+                    <div className="col-span-7 sm:col-span-8">
                       <label htmlFor={`sr-reason-${i}`} className="block text-[10px] text-slate-500 mb-1">Reason</label>
                       <select id={`sr-reason-${i}`} className={inputCls} value={l.reason} onChange={e => setLine(i, { reason: e.target.value })}>
                         {REASONS.map(r => <option key={r} value={r} className="bg-brand-primary">{r}</option>)}

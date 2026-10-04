@@ -4,7 +4,7 @@ import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/Aut
 import { attributionFor } from '../utils/attribution';
 import { isUnassigned } from '../utils/orderRouting';
 import { format } from 'date-fns';
-import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart, ClipboardCheck, Undo2, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart, ClipboardCheck, ClipboardX, Undo2, X } from 'lucide-react';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { downloadExcel, itemsText } from '../utils/exportUtils';
@@ -19,6 +19,8 @@ import LastChanged from '../components/audit/LastChanged';
 import { localDay, orderDateToSave } from '../utils/orderDate';
 import { sellableQty } from '../utils/expiry';
 import SalesReturnModal from '../components/SalesReturnModal';
+import OrderReturnsList from '../components/OrderReturnsList';
+import { orderReturnState, returnsForOrder } from '../utils/salesReturns';
 import { canStepTo, stepRefusal, lockingInvoice, openBackorderOf } from '../utils/orderFlow';
 import { changedFields, describeConflict, ORDER_FIELDS } from '../utils/staleEdit';
 
@@ -55,7 +57,7 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded, invoices } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded, invoices, salesReturns } = useData();
   // From Master Lists. The stepper and the dropdown show the label; every
   // check in this file — STATUS_OWNERS, the stock guards, the delivery
   // branches — still compares the stored key, which cannot be renamed.
@@ -686,13 +688,19 @@ const Orders = () => {
     return sp ? sp.name : 'Unknown';
   };
 
+  // Returned units against delivered ones, from sales_returns (Gap 11).
+  const returnStateOf = (o) => orderReturnState(o, salesReturns);
+
   const handleExport = () => {
     const formattedData = visibleOrders.map(o => ({
       ...o,
       items: itemsText(o.items),
       Company: o.companyName || 'N/A',
       date: o.date ? format(new Date(o.date), 'yyyy-MM-dd') : null,
-      salesperson: mockUsers.find(u => u.id === o.assignedTo)?.name || 'Unassigned'
+      salesperson: mockUsers.find(u => u.id === o.assignedTo)?.name || 'Unassigned',
+      // Gap 11: what came back on the order (status blank when nothing did).
+      'Returned Qty': returnStateOf(o).returned,
+      'Return Status': returnStateOf(o).label,
     }));
     downloadExcel(formattedData, 'PRISMORA_Orders');
   };
@@ -781,6 +789,19 @@ const Orders = () => {
       render: o => (
         <>
           <Badge color={statusStyle(o.status) ? statusStyle(o.status).color : undefined}>{o.status}</Badge>
+          {(() => {
+            // Gap 11: goods that came back. Orders with no return show nothing extra.
+            const rs = returnStateOf(o);
+            if (!rs.label) return null;
+            return (
+              <div className={`mt-1 flex items-center gap-1 text-[10px] font-semibold ${rs.left === 0 ? 'text-rose-400' : 'text-amber-400'}`}
+                title={`${rs.label}: ${rs.returned} of ${rs.delivered} delivered units came back`}>
+                <Undo2 size={10} />
+                <span>{rs.label}</span>
+                <span className="text-slate-500 font-normal whitespace-nowrap">· Returned {rs.returned} of {rs.delivered}</span>
+              </div>
+            );
+          })()}
           {o.status === 'Partially Delivered' && (
             <div className="mt-1.5 w-28">
               <div className="flex items-center justify-between text-[10px] font-semibold text-teal-400">
@@ -817,14 +838,26 @@ const Orders = () => {
             <IconButton icon={ClipboardCheck} title="Record receipt" size="sm" tone="success"
               onClick={e => { e.stopPropagation(); openReceipt(o); }} />
           )}
+          {/* Gap 11: two different actions that shared the ↩ icon. This one only
+              takes back a staff-recorded "receipt confirmed" note; no goods move. */}
           {canStaffRecordReceipt && receiptSourceOf(o) === 'staff' && (
-            <IconButton icon={Undo2} title="Withdraw the receipt you recorded" size="sm"
+            <IconButton icon={ClipboardX} title="Withdraw the receipt you recorded (no goods move)" size="sm"
               onClick={e => { e.stopPropagation(); withdrawReceipt(o); }} />
           )}
-          {canRecordReturns && isDelivered(o) && (
-            <IconButton icon={Undo2} title="Sales return" size="sm" tone="accent"
-              onClick={e => { e.stopPropagation(); setReturningOrder(o); }} />
-          )}
+          {/* Goods coming back: stock, credit note and balance (record_sales_return). */}
+          {canRecordReturns && isDelivered(o) && (() => {
+            const rs = returnStateOf(o);
+            const nothingLeft = rs.returned > 0 && rs.left === 0;
+            return (
+              // The span carries the tooltip (a disabled button may not) and
+              // keeps a click on it from opening the order.
+              <span title={nothingLeft ? 'All delivered units already returned' : undefined} onClick={e => e.stopPropagation()}>
+                <IconButton icon={Undo2} title={nothingLeft ? 'All delivered units already returned' : 'Record a sales return (goods back into stock, credit note)'} size="sm" tone="accent"
+                  disabled={nothingLeft}
+                  onClick={e => { e.stopPropagation(); setReturningOrder(o); }} />
+              </span>
+            );
+          })()}
           {canEditOrders && (
             <IconButton icon={Edit2} title="Edit order" size="sm" tone="accent"
               onClick={e => { e.stopPropagation(); handleOpenModal(o); }} />
@@ -880,7 +913,7 @@ const Orders = () => {
         rowId={o => `order-row-${o.id}`}
         rowClassName={o => (highlightedRowId === o.id ? 'bg-brand-accent/15' : '')}
         onRowClick={o => handleOpenModal(o)}
-        search={o => `${o.id} ${o.customerName} ${o.companyName || ''} ${o.product} ${o.city || ''} ${o.state || ''} ${o.status}`}
+        search={o => `${o.id} ${o.customerName} ${o.companyName || ''} ${o.product} ${o.city || ''} ${o.state || ''} ${o.status} ${returnStateOf(o).label || ''}`}
         searchPlaceholder="Search order, customer, product"
         empty={{
           icon: ShoppingCart,
@@ -1367,6 +1400,23 @@ const Orders = () => {
               </div>
 
               </fieldset>
+
+              {/* Gap 11: what came back on this order. Outside the fieldset, so
+                  it reads the same on the editable and the read-only form. */}
+              {editingOrder && returnsForOrder(salesReturns, editingOrder.id).length > 0 && (() => {
+                const rs = returnStateOf(editingOrder);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-slate-300">Returns</h3>
+                      <span className={`text-xs font-semibold ${rs.left === 0 ? 'text-rose-400' : 'text-amber-400'}`}>
+                        {rs.label} · Returned {rs.returned} of {rs.delivered}
+                      </span>
+                    </div>
+                    <OrderReturnsList returns={returnsForOrder(salesReturns, editingOrder.id)} users={mockUsers} />
+                  </div>
+                );
+              })()}
 
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
                 <button type="button" onClick={closeModal} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium">Cancel</button>
