@@ -1,0 +1,20 @@
+PASS B1 bell: "Batch Expired" for an expired batch holding stock :: Aloevera Skin Gel 150g (Batch: N/A) expired 3 days ago and still holds 55 units. It can't be sold: return or write it off.
+PASS B2 bell: Overdue notice for INV-1790654942828 (DB Overdue), no ₹NaN :: ₹560 still due on INV-1790654942828 from TEST Dealer Traders, 14 days past its due date.
+PASS R1 Invoice Register 29 Sep (IST) shows every tax invoice of the day :: screen 12, DB 12
+PASS A1 credit-note-only invoice says "by credit note, nothing paid" :: ₹90 of ₹180 by credit note, nothing paid
+PASS A2 no placeholder contacts in reminder buttons
+PASS A3 reminder without a contact is disabled and says why :: 8 without phone
+PASS A4 deleting an auto-booked expense warns it was booked by the system
+PASS A5 cancelled: expense still in DB
+PASS A6 expense date picker stops at today (IST) :: max=2026-10-04
+PASS D15 Director card bar shows its own row (DB), not all-full :: DB 3 full · 14 view only · 4 no access; card bars: 15
+PASS L1 Orders at 375 px: "Add Order" fully on screen :: x 233..351
+PASS L2 Orders at 375 px: no sideways scroll
+PASS P1 Admin pages: no browser alert/confirm used
+PASS PR1 Profile says "Order Value Booked", not "Revenue Generated"
+PASS PR2 figure = DB non-cancelled orders of this rep :: screen ₹15,900, DB ₹15900
+PASS PD1 partner in credit sees "Credit Held", no negative outstanding :: DB balance -61356.2
+PASS PL1 Price List lists only Active products :: screen 29, DB active 29
+PASS X1 empty export: a toast, no browser alert
+
+18/18 as required (https://prismora-henna.vercel.app)
