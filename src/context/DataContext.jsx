@@ -2790,6 +2790,33 @@ export const DataProvider = ({ children }) => {
     return damagedLockCheck.current;
   };
 
+  // Whether an earlier return's condition can be corrected (089). Same pattern:
+  // asked once; until 089 is applied the action simply is not offered.
+  const returnCorrectionCheck = useRef(null);
+  const returnCorrectionSupported = () => {
+    if (!returnCorrectionCheck.current) {
+      returnCorrectionCheck.current = supabase.rpc('stock_return_correction_enabled')
+        .then(({ data, error }) => !error && data === true, () => false)
+        .then(ok => { if (!ok) returnCorrectionCheck.current = null; return ok; });
+    }
+    return returnCorrectionCheck.current;
+  };
+
+  /** Units of an earlier return found damaged: sellable -> damaged (089). Credit note unchanged. */
+  const correctReturnCondition = async (returnId, product, inventoryId, quantity, condition, reason) => {
+    const { error } = await supabase.rpc('correct_return_condition', {
+      p_return_id: returnId, p_product: product, p_inventory_id: inventoryId,
+      p_quantity: Number(quantity), p_condition: condition, p_reason: reason,
+    });
+    await Promise.all([
+      reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [inventoryId]),
+      reloadRows('sales_returns', setSalesReturns, 'prismora_sales_returns', 'id', [returnId]),
+    ]);
+    if (error) return { ok: false, error: plainDatabaseError(error, 'correct this return') };
+    logEvent('sales_return_corrected', `Return ${returnId}: ${quantity} × ${product} corrected to ${condition} (${reason})`, null, returnId);
+    return { ok: true };
+  };
+
   /** Damaged units written off (087): Admin / Warehouse Manager, reason required. */
   const writeOffDamaged = async (id, quantity, reason) => {
     const item = inventory.find(i => i.id === id);
@@ -3917,7 +3944,7 @@ export const DataProvider = ({ children }) => {
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, receiveStock,
-      damagedLockSupported, writeOffDamaged, returnDamagedToVendor,
+      damagedLockSupported, writeOffDamaged, returnDamagedToVendor, returnCorrectionSupported, correctReturnCondition,
       masters, addMasterOption, updateMasterOption, deleteMasterOption,
       addVendor, updateVendor, deleteVendor,
       vendorPayments, addVendorPayment, deleteVendorPayment,

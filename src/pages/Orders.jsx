@@ -19,6 +19,7 @@ import LastChanged from '../components/audit/LastChanged';
 import { localDay, orderDateToSave } from '../utils/orderDate';
 import { sellableQty } from '../utils/expiry';
 import SalesReturnModal from '../components/SalesReturnModal';
+import CorrectReturnModal from '../components/CorrectReturnModal';
 import OrderReturnsList from '../components/OrderReturnsList';
 import { orderReturnState, returnsForOrder, returnConditionText } from '../utils/salesReturns';
 import { canStepTo, stepRefusal, lockingInvoice, openBackorderOf } from '../utils/orderFlow';
@@ -57,7 +58,7 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded, invoices, salesReturns } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded, invoices, salesReturns, returnCorrectionSupported } = useData();
   // From Master Lists. The stepper and the dropdown show the label; every
   // check in this file — STATUS_OWNERS, the stock guards, the delivery
   // branches — still compares the stored key, which cannot be renamed.
@@ -77,6 +78,16 @@ const Orders = () => {
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
   const [returningOrder, setReturningOrder] = useState(null);
+  // 089: correct the condition of an earlier return (sellable -> damaged).
+  // Offered only once the database has 089, and only to these roles.
+  const [correctionOn, setCorrectionOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    returnCorrectionSupported().then(ok => { if (live) setCorrectionOn(ok); });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const canCorrectReturns = correctionOn && ['Super Admin', 'Admin', 'Warehouse Manager'].includes(user?.role);
+  const [correctingLine, setCorrectingLine] = useState(null);
   // The stock check must see inventory as it is when Save runs, not as it was
   // when the form rendered — a save can wait for the first load to land.
   const inventoryRef = useRef(inventory);
@@ -884,6 +895,7 @@ const Orders = () => {
   return (
     <div className="space-y-4">
       {returningOrder && <SalesReturnModal order={returningOrder} onClose={() => setReturningOrder(null)} />}
+      {correctingLine && <CorrectReturnModal row={correctingLine} onClose={() => setCorrectingLine(null)} />}
       <PageHeader
         compact
         icon={ShoppingCart}
@@ -1417,7 +1429,8 @@ const Orders = () => {
                         {rs.label} · Returned {rs.returned} of {rs.delivered}
                       </span>
                     </div>
-                    <OrderReturnsList returns={returnsForOrder(salesReturns, editingOrder.id)} users={mockUsers} />
+                    <OrderReturnsList returns={returnsForOrder(salesReturns, editingOrder.id)} users={mockUsers}
+                      onCorrect={canCorrectReturns ? setCorrectingLine : undefined} />
                   </div>
                 );
               })()}

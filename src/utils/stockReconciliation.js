@@ -32,6 +32,7 @@ export const movementEffect = (m) => {
     case 'return': return isNonSellableReturn(m) ? { qty: 0, damaged: q } : { qty: q, damaged: 0 };
     case 'opening_damaged': return { qty: 0, damaged: q };
     case 'damaged_write_off': case 'damaged_to_vendor': return { qty: 0, damaged: -q };
+    case 'return_reclassified': return { qty: -q, damaged: q }; // 089: earlier return corrected to damaged
     default: return null;
   }
 };
@@ -41,7 +42,7 @@ export const MOVEMENT_LABELS = {
   grn_reversed: 'GRN deleted', delivery: 'Delivered on order', return: 'Sales return',
   purchase_return: 'Returned to vendor', purchase_return_withdrawn: 'Vendor return withdrawn',
   adjustment: 'Adjustment', cycle_count: 'Cycle count', transfer_out: 'Transferred out', transfer_in: 'Transferred in',
-  free_goods: 'Free goods paid out', damaged_write_off: 'Damaged written off', damaged_to_vendor: 'Damaged returned to vendor',
+  free_goods: 'Free goods paid out', return_reclassified: 'Return corrected to damaged', damaged_write_off: 'Damaged written off', damaged_to_vendor: 'Damaged returned to vendor',
 };
 
 const fmtDay = (iso) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -96,6 +97,8 @@ export const reconcileBatch = (batch, allMovements) => {
       case 'purchase_return_withdrawn': t.toVendor -= q; break;
       case 'free_goods': t.freeGoods += q; break;
       case 'damaged_write_off': case 'damaged_to_vendor': t.damagedOut += q; break;
+      // 089: units of an earlier return found damaged move from good to damaged.
+      case 'return_reclassified': t.returnedGood -= q; t.returnedDamaged += q; break;
       default: break;
     }
     t.expectedQty += e.qty;

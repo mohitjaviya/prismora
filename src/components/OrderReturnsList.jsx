@@ -1,4 +1,4 @@
-import { returnLineRows, NOT_RECORDED } from '../utils/salesReturns';
+import { returnLineRows, NOT_RECORDED, correctableQty, correctionText } from '../utils/salesReturns';
 
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -7,11 +7,13 @@ const fmtDate = (d) =>
  * The returns recorded on one order, a row per returned line (Gap 11).
  * Shown in the order's details and at the top of the Sales Return popup.
  */
-export default function OrderReturnsList({ returns, users }) {
+export default function OrderReturnsList({ returns, users, onCorrect }) {
   const rows = returnLineRows(returns);
   if (!rows.length) return null;
   // Condition column only once a return has one (086); before that the list is as it was.
-  const showCondition = rows.some(r => r.condition);
+  const showCondition = rows.some(r => r.condition || r.corrections.length);
+  // 089: "Correct condition" only where the caller offers it (role + migration).
+  const showCorrect = !!onCorrect && rows.some(r => correctableQty(r) > 0);
   const who = (id) => (users || []).find(u => u.id === id)?.name || id || '—';
   return (
     <div className="overflow-x-auto custom-scrollbar rounded-xl border border-white/5">
@@ -27,6 +29,7 @@ export default function OrderReturnsList({ returns, users }) {
             <th className="px-2.5 py-2 font-semibold">Credit note</th>
             <th className="px-2.5 py-2 font-semibold">Note</th>
             <th className="px-2.5 py-2 font-semibold">Recorded by</th>
+            {showCorrect && <th className="px-2.5 py-2" />}
           </tr>
         </thead>
         <tbody className="divide-y divide-white/5 text-slate-300">
@@ -41,11 +44,20 @@ export default function OrderReturnsList({ returns, users }) {
                 <td className={`px-2.5 py-2 whitespace-nowrap ${r.condition && r.condition !== 'Good' ? 'text-rose-400 font-semibold' : r.condition ? '' : 'text-slate-500'}`}
                   title={r.condition ? undefined : 'Recorded before conditions were kept; these units went back on sale'}>
                   {r.condition || NOT_RECORDED}
+                  {correctionText(r) && <div className="text-rose-400 font-semibold">→ {correctionText(r)}</div>}
                 </td>
               )}
               <td className="px-2.5 py-2 whitespace-nowrap">{r.creditNoteId || '—'}</td>
               <td className="px-2.5 py-2">{r.note || '—'}</td>
               <td className="px-2.5 py-2 whitespace-nowrap">{who(r.createdBy)}</td>
+              {showCorrect && (
+                <td className="px-2.5 py-2 text-right">
+                  {correctableQty(r) > 0 && (
+                    <button type="button" onClick={() => onCorrect(r)} title="These units went back on sale. Move them to damaged if they came back damaged or expired."
+                      className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 whitespace-nowrap">Correct condition</button>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

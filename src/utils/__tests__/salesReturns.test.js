@@ -63,3 +63,20 @@ describe('Gap 11 G: condition of returned goods (086)', () => {
     expect(returnConditionText([])).toBe('');
   });
 });
+
+describe('089: correcting an earlier return', () => {
+  it('a pre-086 line is correctable up to what is not yet corrected; a Damaged line is not', async () => {
+    const { correctableQty, correctionText, returnConditionText } = await import('../salesReturns');
+    const old = ret('SR-1', 'O320', 50, '2026-10-04T09:36:54Z');
+    expect(correctableQty(returnLineRows([old])[0])).toBe(50);
+    old.lines[0].corrections = [{ quantity: 30, condition: 'Damaged' }];
+    const row = returnLineRows([old])[0];
+    expect(row.correctedQty).toBe(30);
+    expect(correctableQty(row)).toBe(20);
+    expect(correctionText(row)).toBe('Damaged 30 (corrected)');
+    expect(returnConditionText([old])).toBe('Not recorded → Damaged 30 (corrected)');
+    const dmg = ret('SR-2', 'O1', 5, '2026-10-05T00:00:00Z');
+    dmg.lines[0].condition = 'Damaged';
+    expect(correctableQty(returnLineRows([dmg])[0])).toBe(0);
+  });
+});

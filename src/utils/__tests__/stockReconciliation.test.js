@@ -71,3 +71,20 @@ describe('Gap 15: batch stock reconciliation', () => {
     expect(out[0]).toMatchObject({ Product: 'Neem', Batch: 'N1', 'Expected Qty': 5, 'Actual Qty': 5, 'Qty Difference': 0, Status: 'OK' });
   });
 });
+
+describe('089: an earlier return corrected to damaged', () => {
+  it('O319 + O320: 100 opening, two deliveries of 50 each came back on sale, both corrected -> 0 stock, 100 damaged, OK', () => {
+    const batch = { id: 'B1', product: 'Neem Face Wash 100ml', batchNumber: '', quantity: 0, damaged: 100, createdAt: '2026-10-01T04:29:33Z' };
+    const r = reconcileBatch(batch, [
+      mv('opening', 100, '2026-10-06T00:00:00Z'),
+      mv('return_reclassified', 50, '2026-10-06T01:00:00Z', { condition: 'Damaged' }),
+      mv('return_reclassified', 50, '2026-10-06T01:01:00Z', { condition: 'Damaged' }),
+    ]);
+    expect(r).toMatchObject({ opening: 100, returnedGood: -100, returnedDamaged: 100, expectedQty: 0, expectedDamaged: 100, status: 'OK' });
+  });
+  it('the same batch before 087: still History incomplete, never a made-up difference', () => {
+    const batch = { id: 'B1', product: 'Neem Face Wash 100ml', batchNumber: '', quantity: 100, damaged: 0, createdAt: '2026-10-01T04:29:33Z' };
+    const r = reconcileBatch(batch, [mv('delivery', 50, '2026-10-04T09:33:48Z'), mv('return', 50, '2026-10-04T09:34:17Z')]);
+    expect(r).toMatchObject({ status: 'History incomplete', delivered: 50, returnedGood: 50, qtyDiff: null });
+  });
+});

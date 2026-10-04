@@ -53,6 +53,10 @@ export const returnLineRows = (returns) =>
     reason: l.reason || '',
     // 086: per-line condition; null on returns recorded before it.
     condition: l.condition || null,
+    // 089: units of a line that went back on sale, later corrected to damaged.
+    inventoryId: l.inventoryId || '',
+    corrections: Array.isArray(l.corrections) ? l.corrections : [],
+    correctedQty: (Array.isArray(l.corrections) ? l.corrections : []).reduce((s, c) => s + num(c?.quantity), 0),
     creditNoteId: r.creditNoteId || '',
     note: r.note || '',
     createdBy: r.createdBy || '',
@@ -74,4 +78,15 @@ export const conditionForReason = (reason) => {
  * Lines recorded before 086 say "Not recorded"; no returns = ''.
  */
 export const returnConditionText = (returns) =>
-  [...new Set(returnLineRows(returns).map(r => r.condition || NOT_RECORDED))].join('\n');
+  [...new Set(returnLineRows(returns).map(r => [r.condition || NOT_RECORDED, correctionText(r)].filter(Boolean).join(' → ')))].join('\n');
+
+/** Units of a returned line still counted as sellable, so correctable (089). */
+export const correctableQty = (row) =>
+  (row && (!row.condition || row.condition === 'Good') ? Math.max(0, row.quantity - (row.correctedQty || 0)) : 0);
+
+/** "Damaged 50 (corrected)" for a line's corrections; '' when none. */
+export function correctionText(row) {
+  const by = {};
+  (row?.corrections || []).forEach(c => { by[c.condition] = (by[c.condition] || 0) + num(c.quantity); });
+  return Object.entries(by).map(([c, n]) => `${c} ${n} (corrected)`).join(', ');
+}
