@@ -7,8 +7,22 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 - Do NOT take backups (demo data).
 - Do NOT apply database changes to the live Supabase project: write migration files only and say how to apply them later.
 - Migrations prepared but not applied: **085** (keep-alive). Next number: **086**.
+- Per gap: check first (stop and ask if something depends on it), fix, run `npm test` + `npm run build` + `npm run lint` (must stay at 64 problems), give test steps, update this file, one local commit per gap, then stop.
 
-## GAP LIST — status check 2026-10-04 (check only, nothing changed; owner sends a fix prompt per gap)
+## GAP FIX PROGRESS (2026-10-04) — all local commits on `fix/erp-session-2026-09`, NOT pushed, NOT deployed
+| Order | Gap | Commit | Result |
+|---|---|---|---|
+| 1 | 12 hide ML Lab | `6ad91ba` | Fixed (flag `ML_LABS_ENABLED`) |
+| 2 | 13 keep-alive | `362863c` | Prepared, not activated (085 not applied; workflow not on GitHub) |
+| 3 | 1 KPI cards | `3cc7015` | Fixed (shared StatCard) |
+| 4 | 3 SFA attendance dropdown | `d3ff5e4` | Fixed (`internalUsersOf`) |
+| 5 | 6 Team Members | `da631da` | Fixed (Team / Partner logins tabs) |
+Tests 810/810, build OK, lint 64 (unchanged) after the last commit. Branch is ahead of `origin` by these 5 gap commits plus a NOTES-only commit.
+**Next:** owner sends the fix prompt for the next gap (still open: 2, 4, 5, 7, 8, 9, 10, 11, 14). Gap 5 (audit retention) will need migration 086 (file only).
+**To activate Gap 13 later:** apply 085 (`npx -y supabase@2.117.0 db query --linked --project-ref qvckvvckkfvelhnxmmvp -f migrations/085_system_heartbeat.sql`), add GitHub secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY`, push to `main`, run the workflow once by hand.
+**Left alone in the working tree (not mine, not committed):** `supabase/.temp/cli-latest`, `INTERVIEW_PREP.md`, `erp_audit_report.md`, `append_workflows.cjs`, `extract_modules.cjs`, `src/pages/supabase/`.
+
+## GAP LIST — status check 2026-10-04 (statuses updated as gaps are fixed)
 | # | Gap | Status | Evidence / missing |
 |---|---|---|---|
 | 1 | KPI cards truncate values | FIXED (local commit, not deployed) | Shared `StatCard` (`components/ui/Card.jsx`, 17 screens): no truncate; value box is a CSS container, font `min(24px, max(15px, 100cqi / (chars×0.62)))`; ₹ ≥ 1 crore switches to "₹2.29 Cr" only when the card is too narrow (static container query per length), full figure in tooltip + tap toggles it (11px floor). Logic in `utils/kpiValue.js` (+10 tests). Checked in Chrome at 1920/1366/1100/768/375/320 px: no overflow, no "…". DirectorDashboard's own tiles already use short forms (untouched) |
@@ -27,7 +41,7 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 | 14 | Orders page layout | STILL EXISTS | DataTable has no sticky header; page scrolls whole; AI button `fixed bottom-6 right-6 z-[99]` (`Layout.jsx:180`) covers the last column |
 
 ## FINAL STATE (2026-10-04): programme complete
-Phases 0–4, the carry-over checks and fix batches 1–17 are all live (migrations 040–084; next 085). `test-results/full-test/REPORT.md` and the private shared page https://claude.ai/artifact/1Ey4puBzJJwdx9b3tnzfrA (version 3) are both updated to this state: every batch with its migration and commit, test counts unchanged.
+Phases 0–4, the carry-over checks and fix batches 1–17 are all live (migrations 040–084; 085 written for Gap 13 but not applied; next 086). `test-results/full-test/REPORT.md` and the private shared page https://claude.ai/artifact/1Ey4puBzJJwdx9b3tnzfrA (version 3) are both updated to this state: every batch with its migration and commit, test counts unchanged.
 **Still open:**
 - H17 TDS: waiting for the accountant.
 - Phone-hotspot QUIC test: owner.
