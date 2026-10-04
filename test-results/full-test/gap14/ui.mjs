@@ -4,7 +4,8 @@
 // action under the AI button, is the "Add Order" button inside the screen.
 import { login, go, browser } from '../phase3/lib.mjs';
 
-const sizes = [[1920, 1080], [1366, 768], [1024, 768], [768, 1024], [375, 812]];
+// 1536x660 = a 1920x825 window at 125% Windows scaling (what the owner saw)
+const sizes = [[1920, 1080], [1920, 825], [1536, 660], [1366, 768], [1024, 768], [768, 1024], [375, 812]];
 const pages = {
   ADMIN: ['/orders', '/customers', '/distributors'],
   DISTRIBUTOR: ['/orders', '/price-list'],
@@ -25,7 +26,11 @@ for (const [role, paths] of Object.entries(pages)) {
         const thead = table?.querySelector('thead');
         const rows = table ? [...table.querySelectorAll('tbody tr')] : [];
         const vh = window.innerHeight;
-        const visibleRows = rows.filter(tr => { const b = tr.getBoundingClientRect(); return b.top >= 0 && b.bottom <= vh; }).length;
+        // fully visible: inside the window and inside the table's own scroll box
+        const clip = box ? box.getBoundingClientRect() : { top: 0, bottom: vh };
+        const visibleRows = rows.filter(tr => { const b = tr.getBoundingClientRect(); return b.top >= Math.max(0, clip.top) && b.bottom <= Math.min(vh, clip.bottom) + 0.5; }).length;
+        const card = table?.closest('.glass-panel');
+        const gapBelow = card ? Math.round(vh - card.getBoundingClientRect().bottom) : null;
         const outerScrolls = main ? main.scrollHeight > main.clientHeight + 1 : null;
         const innerScrolls = box ? box.scrollHeight > box.clientHeight + 1 : false;
         let headStays = null;
@@ -47,12 +52,13 @@ for (const [role, paths] of Object.entries(pages)) {
         const pageOverflowX = document.documentElement.scrollWidth > window.innerWidth + 1;
         const add = [...document.querySelectorAll('main button')].find(b => /Add Order|Place New Order|Export/.test(b.textContent));
         const addInside = add ? add.getBoundingClientRect().right <= window.innerWidth : true;
-        return { rows: rows.length, visibleRows, outerScrolls, innerScrolls, headStays, covered, pagerCovered, pageOverflowX, addInside, hasAI: !!ai };
+        return { rows: rows.length, visibleRows, gapBelow, outerScrolls, innerScrolls, headStays, covered, pagerCovered, pageOverflowX, addInside, hasAI: !!ai };
       });
       const tag = `${role} ${path} ${w}x${h}`;
       const fillPage = path !== '/distributors';
       if (w >= 1024 && fillPage) {
         out(!r.outerScrolls, `${tag}: window does not scroll (rows in view at load: ${r.visibleRows}/${r.rows})`);
+        if (r.rows > 10) out(r.gapBelow >= 0 && r.gapBelow <= 30, `${tag}: card reaches the bottom (gap ${r.gapBelow}px)`);
         if (r.innerScrolls) out(r.headStays, `${tag}: only rows scroll, header row stays`);
         else console.log('INFO', `${tag}: all rows fit, nothing to scroll`);
       } else {
@@ -60,6 +66,21 @@ for (const [role, paths] of Object.entries(pages)) {
       }
       out(!r.covered && !r.pagerCovered, `${tag}: AI button (${r.hasAI ? 'shown' : 'not shown'}) covers no last-row action or pager`);
       out(!r.pageOverflowX && r.addInside, `${tag}: no sideways page scroll, header buttons on screen`);
+    }
+  }
+  if (role === 'ADMIN') {
+    // resize without reloading: the card must follow the window
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await go(page, '/orders');
+    for (const [w, h] of [[1366, 768], [1920, 825], [1536, 660], [1920, 1080]]) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.waitForTimeout(400);
+      const r = await page.evaluate(() => {
+        const sc = document.querySelector('main').parentElement;
+        const card = document.querySelector('main table').closest('.glass-panel');
+        return { gap: Math.round(innerHeight - card.getBoundingClientRect().bottom), outer: sc.scrollHeight > sc.clientHeight + 1 };
+      });
+      out(!r.outer && r.gap >= 0 && r.gap <= 30, `ADMIN /orders resized to ${w}x${h} without reload: card gap ${r.gap}px, window scrolls ${r.outer}`);
     }
   }
   await page.context().close();

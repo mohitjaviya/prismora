@@ -187,6 +187,7 @@ export default function DealerOrders() {
 
       <DataTable
         fill
+        dense
         title="Orders"
         columns={orderColumns}
         rows={myOrders}

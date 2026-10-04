@@ -73,6 +73,7 @@ export default function PriceList() {
 
       <DataTable
         fill
+        dense
         title="Products"
         columns={columns}
         rows={rows}

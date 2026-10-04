@@ -708,8 +708,11 @@ const Orders = () => {
       key: 'id', header: 'Order / Date', sort: o => o.id,
       render: o => (
         <>
-          <div className="font-semibold text-white">{o.id}</div>
-          <div className="text-[11px] text-slate-500">{safeDate(o.date)}</div>
+          {/* id and date share a line where the column is wide enough */}
+          <div>
+            <span className="font-semibold text-white">{o.id}</span>{' '}
+            <span className="text-[11px] text-slate-500 whitespace-nowrap">{safeDate(o.date)}</span>
+          </div>
           {o.splitFromOrderId && (
             <div className="text-[10px] font-semibold text-cyan-400 mt-1">&#8627; Split from {o.splitFromOrderId}</div>
           )}
@@ -724,25 +727,32 @@ const Orders = () => {
       // The contact and address lines stand down on a phone. They pushed the
       // value and status columns off the side of the screen, and those are the
       // two things you actually open this list to see.
-      render: o => (
-        <>
-          <div className="font-semibold text-white">{o.customerName}</div>
-          {(o.phone || o.email) && (
-            <div className="hidden sm:block text-[11px] text-brand-accent mt-0.5 truncate">
-              {o.phone || '—'} &middot; {o.email || '—'}
+      // Company and place share a line (Gap 14): three lines a row, not four.
+      render: o => {
+        const place = [o.city, o.state].filter(Boolean).join(', ');
+        return (
+          <>
+            <div className="font-semibold text-white">{o.customerName}</div>
+            {(o.phone || o.email) && (
+              <div className="hidden sm:block text-[11px] text-brand-accent truncate">
+                {o.phone || '—'} &middot; {o.email || '—'}
+              </div>
+            )}
+            <div className="text-[11px] text-slate-500 truncate" title={`${o.companyName || 'N/A'}${place ? ' · ' + place : ''}`}>
+              <span className="hidden sm:inline">{o.companyName || 'N/A'}{place && ' · '}</span>{place}
             </div>
-          )}
-          <div className="hidden sm:block text-[11px] text-slate-500 mt-0.5 truncate">{o.companyName || 'N/A'}</div>
-          <div className="text-[11px] text-slate-500 truncate">{[o.city, o.state].filter(Boolean).join(', ')}</div>
-        </>
-      ),
+          </>
+        );
+      },
     },
     {
       key: 'product', header: 'Product', hideBelow: 'md', sort: o => o.product || '',
       render: o => (
         <>
-          <div className="text-brand-accent">{o.product}</div>
-          <div className="text-[11px] text-slate-500">Qty: {o.quantity}</div>
+          <div>
+            <span className="text-brand-accent">{o.product}</span>{' '}
+            <span className="text-[11px] text-slate-500 whitespace-nowrap">&middot; Qty: {o.quantity}</span>
+          </div>
         </>
       ),
     },
@@ -786,7 +796,7 @@ const Orders = () => {
             // Who confirmed it matters: the customer saying "it arrived" and an
             // employee saying "they told me it arrived" are different claims.
             <div
-              className={`mt-1.5 flex items-center gap-1 text-[10px] font-semibold ${
+              className={`mt-1 flex items-center gap-1 text-[10px] font-semibold ${
                 receiptSourceOf(o) === 'staff' ? 'text-amber-400' : 'text-emerald-400'}`}
               title={describeReceipt(o) || undefined}
             >

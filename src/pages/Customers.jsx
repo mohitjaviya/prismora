@@ -127,8 +127,11 @@ const Customers = () => {
       render: c => (
         <>
           <div className="font-semibold text-white">{c.name}</div>
-          <div className="text-[11px] text-brand-accent mt-0.5">{c.company}</div>
-          <div className="text-[11px] text-slate-500">{c.email !== 'N/A' ? c.email : c.phone}</div>
+          {/* company and contact on one line (Gap 14): two lines a row, not three */}
+          <div className="text-[11px] truncate max-w-[22rem]" title={`${c.company} · ${c.email !== 'N/A' ? c.email : c.phone}`}>
+            <span className="text-brand-accent">{c.company}</span>
+            <span className="text-slate-500"> &middot; {c.email !== 'N/A' ? c.email : c.phone}</span>
+          </div>
         </>
       ),
     },

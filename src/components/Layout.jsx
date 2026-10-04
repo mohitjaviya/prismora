@@ -80,12 +80,8 @@ const Layout = () => {
         <Topbar setIsMobileMenuOpen={setIsMobileMenuOpen} />
         {/* With the AI button on screen, the bottom padding is taller than the
             button (bottom-6 + h-14 = 5rem), so the last row of any page can
-            scroll above it and a <ListPage> ends before it. The offset is the
-            top bar (h-16 + mt-2) plus this padding at lg. */}
-        <main
-          className={`relative p-6 md:p-8 ${isAdmin ? 'pb-24 md:pb-24' : ''} animate-fade-in-up`}
-          style={{ '--list-page-offset': isAdmin ? '12.5rem' : '8.5rem' }}
-        >
+            scroll above it. A <ListPage> measures itself and cancels it. */}
+        <main className={`relative p-6 md:p-8 ${isAdmin ? 'pb-24 md:pb-24' : ''} animate-fade-in-up`}>
           {/* Nothing cached yet — a new device, or a fresh sign-in. Empty
               tables here would read as "you have no data", which is what sent
               people to hard-refresh. */}
