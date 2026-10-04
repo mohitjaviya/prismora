@@ -87,6 +87,7 @@ export default function StockReconciliation({ onClose }) {
                     <th className={`${th} text-right`}>To vendor</th>
                     <th className={`${th} text-right`}>Free goods</th>
                     <th className={`${th} text-right`} title="Damaged written off or returned to the vendor (087)">Damaged out</th>
+                    <th className={`${th} text-right`} title="Expired units written off (091)">Expired out</th>
                     <th className={`${th} text-right`}>Qty exp. / actual</th>
                     <th className={`${th} text-right`}>Damaged exp. / actual</th>
                     <th className={th}>Status</th>
@@ -111,6 +112,7 @@ export default function StockReconciliation({ onClose }) {
                         <td className={num}>{r.toVendor}</td>
                         <td className={num}>{r.freeGoods}</td>
                         <td className={num}>{r.damagedOut}</td>
+                        <td className={num}>{r.expiredOut}</td>
                         <td className={num}>
                           {cell(r.expectedQty)} / <span className="text-white font-semibold">{r.actualQty}</span>
                           {r.qtyDiff ? <div className="text-rose-400 font-semibold">{signed(r.qtyDiff)}</div> : null}
@@ -126,7 +128,7 @@ export default function StockReconciliation({ onClose }) {
                       {open === r.id && (
                         <tr className="bg-white/[0.02]">
                           <td />
-                          <td colSpan={14} className="px-2.5 py-3">
+                          <td colSpan={15} className="px-2.5 py-3">
                             {r.note && <p className="text-[11px] text-amber-400 mb-2">{r.note}</p>}
                             {r.movements.length === 0 ? <p className="text-slate-500">No movements recorded for this batch.</p> : (
                               <table className="w-full text-[11px]">
@@ -157,7 +159,7 @@ export default function StockReconciliation({ onClose }) {
                       )}
                     </Fragment>
                   ))}
-                  {!shown.length && <tr><td colSpan={15} className="p-6 text-center text-slate-500">No batches match.</td></tr>}
+                  {!shown.length && <tr><td colSpan={16} className="p-6 text-center text-slate-500">No batches match.</td></tr>}
                 </tbody>
               </table>
             )}

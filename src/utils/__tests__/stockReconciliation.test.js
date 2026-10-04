@@ -15,6 +15,8 @@ describe('Gap 15: batch stock reconciliation', () => {
     expect(movementEffect(mv('return', 5, null, { condition: 'Expired' }))).toEqual({ qty: 0, damaged: 5 });
     expect(movementEffect(mv('damaged_write_off', 3))).toEqual({ qty: 0, damaged: -3 });
     expect(movementEffect(mv('mystery', 3))).toBe(null);
+    expect(movementEffect(mv('expired_write_off', 4))).toEqual({ qty: -4, damaged: 0 });
+    expect(movementEffect(mv('expired_to_vendor', 2))).toEqual({ qty: -2, damaged: 0 });
   });
 
   it('owner\'s example: 100 bought, 100 delivered, 50 back damaged, 50 back good = OK', () => {

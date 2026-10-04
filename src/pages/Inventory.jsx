@@ -12,8 +12,10 @@ import { isExpired, daysToExpiry as expiryDays, EXPIRING_SOON_DAYS, stockStatus 
 import StockReconciliation from '../components/StockReconciliation';
 import DamagedStockModal from '../components/DamagedStockModal';
 import { batchNumberProblem } from '../utils/batchNumber';
+import { stockValueBreakdown, batchValues } from '../utils/stockValue';
 
-const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Expired', 'Out of Stock'];
+// 'Damaged' is not a status: batches holding damaged units, whatever their status (Gap 17).
+const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Expired', 'Damaged', 'Out of Stock'];
 
 // The status rule lives in utils/expiry.js, shared with the Reports low-stock list.
 const getStockStatus = stockStatus;
@@ -42,7 +44,7 @@ const BLANK_FORM = {
 const BLANK_ADJUST = { adjustment: '', reason: '' };
 
 export default function Inventory() {
-  const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, masters, damagedLockSupported } = useData();
+  const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, masters, damagedLockSupported, expiredMovesSupported } = useData();
   const confirm = useConfirm();
   const toast = useToast();
   // Options come from Master Lists; masterLists.js holds the fallback.
@@ -58,6 +60,14 @@ export default function Inventory() {
     return () => { live = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const canMoveDamaged = damagedLocked && ['Super Admin', 'Admin', 'Warehouse Manager'].includes(user?.role);
+  // Gap 17 (091): expired units written off / returned to the vendor, same roles.
+  const [expiredMoves, setExpiredMoves] = useState(false);
+  useEffect(() => {
+    let live = true;
+    expiredMovesSupported().then(ok => { if (live) setExpiredMoves(ok); });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const canMoveExpired = expiredMoves && ['Super Admin', 'Admin', 'Warehouse Manager'].includes(user?.role);
   const [damagedAction, setDamagedAction] = useState(null);
 
   const [search, setSearch] = useState('');
@@ -79,20 +89,23 @@ export default function Inventory() {
   // KPI derivations
   const withStatus = useMemo(() => inventory.map(i => ({ ...i, _status: getStockStatus(i) })), [inventory]);
 
+  // Stock Value = sellable units only; expired and damaged shown apart (Gap 17).
+  const values = useMemo(() => stockValueBreakdown(inventory), [inventory]);
   const kpis = useMemo(() => ({
+    stockValue: values.sellable, expiredValue: values.expired, damagedValue: values.damaged, damagedUnits: values.damagedUnits,
     totalSKUs:      [...new Set(inventory.map(i => i.product))].length,
     totalBatches:   inventory.length,
     lowStock:       withStatus.filter(i => i._status === 'Low Stock' || i._status === 'Critical' || i._status === 'Out of Stock').length,
     expiringSoon:   withStatus.filter(i => i._status === 'Expiring Soon').length,
     expiredUnits:   withStatus.filter(i => i._status === 'Expired').reduce((s, i) => s + (i.quantity || 0), 0),
-    stockValue:     inventory.reduce((s, i) => s + (i.quantity || 0) * (i.unitCost || 0), 0),
-  }), [inventory, withStatus]);
+  }), [inventory, withStatus, values]);
 
   const filtered = useMemo(() => {
     return withStatus.filter(item => {
       const matchSearch = !search || item.product.toLowerCase().includes(search.toLowerCase()) || (item.batchNumber || '').toLowerCase().includes(search.toLowerCase());
       const matchWarehouse = !warehouseFilter || item.warehouse === warehouseFilter;
-      const matchStatus = statusFilter === 'All' || item._status === statusFilter;
+      const matchStatus = statusFilter === 'All' || item._status === statusFilter
+        || (statusFilter === 'Damaged' && Number(item.damaged) > 0);
       return matchSearch && matchWarehouse && matchStatus;
     });
   }, [withStatus, search, warehouseFilter, statusFilter]);
@@ -103,12 +116,13 @@ export default function Inventory() {
     const byProduct = {};
     filtered.forEach(item => {
       if (!byProduct[item.product]) {
-        byProduct[item.product] = { product: item.product, totalQty: 0, reserved: 0, batchCount: 0, expired: 0, available: 0 };
+        byProduct[item.product] = { product: item.product, totalQty: 0, reserved: 0, batchCount: 0, expired: 0, damaged: 0, available: 0 };
       }
       const p = byProduct[item.product];
       p.totalQty += item.quantity || 0;
       p.reserved += item.reserved || 0;
       p.batchCount += 1;
+      p.damaged += Number(item.damaged) || 0;
       // Expired units are counted apart and never offered as available.
       if (item._status === 'Expired') p.expired += item.quantity || 0;
       else p.available += Math.max(0, (item.quantity || 0) - (item.reserved || 0));
@@ -210,7 +224,10 @@ export default function Inventory() {
       Product: i.product, Batch: i.batchNumber, Warehouse: i.warehouse,
       Qty: i.quantity, Reserved: i.reserved, AvailableToSell: isExpired(i) ? 0 : Math.max(0, (i.quantity || 0) - (i.reserved || 0)), Expired: isExpired(i) ? 'Yes' : '', Transit: i.transit, Damaged: i.damaged,
       ReorderLevel: i.reorderLevel, Expiry: formatDate(i.expiryDate),
-      UnitCost: i.unitCost, StockValue: i.quantity * (i.unitCost || 0), Status: i._status
+      UnitCost: i.unitCost,
+      // Gap 17: sellable value only in Stock Value; expired and damaged apart.
+      ...(v => ({ SellableValue: v.sellable, ExpiredValue: v.expired, DamagedValue: v.damaged }))(batchValues(i)),
+      Status: i._status
     })), 'PRISMORA_Inventory');
   };
 
@@ -234,12 +251,16 @@ export default function Inventory() {
       render: p => (p.expired > 0
         ? <span className="font-bold text-red-400" title="In expired batches: never sold or delivered">{p.expired}</span>
         : <span className="text-slate-600">—</span>) },
+    { key: 'damaged', header: 'Damaged', align: 'center', sort: p => p.damaged,
+      render: p => (p.damaged > 0
+        ? <span className="font-bold text-rose-400" title="Damaged units: never sold; written off or returned to the vendor">{p.damaged}</span>
+        : <span className="text-slate-600">—</span>) },
   ];
 
   return (
     <div className="space-y-6 animate-fade-in-up">
       {reconOpen && <StockReconciliation onClose={() => setReconOpen(false)} />}
-      {damagedAction && <DamagedStockModal item={damagedAction.item} mode={damagedAction.mode} onClose={() => setDamagedAction(null)} />}
+      {damagedAction && <DamagedStockModal item={damagedAction.item} mode={damagedAction.mode} source={damagedAction.source} onClose={() => setDamagedAction(null)} />}
       <PageHeader
         icon={Package2}
         title="Inventory Management"
@@ -254,7 +275,7 @@ export default function Inventory() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
         <StatCard label="Total SKUs" value={kpis.totalSKUs} icon={Package2} tone="info" />
         <StatCard label="Total Batches" value={kpis.totalBatches} icon={Layers} tone="accent" />
         <StatCard label="Low / Critical" value={kpis.lowStock} icon={AlertTriangle}
@@ -263,8 +284,12 @@ export default function Inventory() {
           tone={kpis.expiringSoon > 0 ? 'warning' : 'accent'} />
         <StatCard label="Expired units" value={kpis.expiredUnits} icon={AlertTriangle}
           tone={kpis.expiredUnits > 0 ? 'danger' : 'accent'} />
+        <StatCard label="Damaged units" value={kpis.damagedUnits} icon={PackageX}
+          tone={kpis.damagedUnits > 0 ? 'danger' : 'accent'}
+          hint={kpis.damagedUnits > 0 ? `${formatCurrency(kpis.damagedValue)} at cost` : undefined} />
         <StatCard label="Stock Value" value={formatCurrency(kpis.stockValue)} icon={Wallet} tone="accent"
-          className="col-span-2 lg:col-span-1" />
+          className="col-span-2 md:col-span-4 xl:col-span-1"
+          hint={kpis.expiredValue || kpis.damagedValue ? `Sellable only. Not counted: expired ${formatCurrency(kpis.expiredValue)}, damaged ${formatCurrency(kpis.damagedValue)}` : 'Sellable stock at cost'} />
       </div>
 
       <Card padding="p-4" className="flex flex-col md:flex-row gap-3 md:items-center">
@@ -381,8 +406,14 @@ export default function Inventory() {
                               <button onClick={() => openCount(item)} className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Cycle Count"><ClipboardCheck size={14} /></button>
                               {canMoveDamaged && Number(item.damaged) > 0 && (
                                 <>
-                                  <button onClick={() => setDamagedAction({ item, mode: 'writeoff' })} className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors" title="Write off damaged"><PackageX size={14} /></button>
-                                  <button onClick={() => setDamagedAction({ item, mode: 'vendor' })} className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Return damaged to vendor"><Undo2 size={14} /></button>
+                                  <button onClick={() => setDamagedAction({ item, mode: 'writeoff', source: 'damaged' })} className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors" title="Write off damaged"><PackageX size={14} /></button>
+                                  <button onClick={() => setDamagedAction({ item, mode: 'vendor', source: 'damaged' })} className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Return damaged to vendor"><Undo2 size={14} /></button>
+                                </>
+                              )}
+                              {canMoveExpired && expired && Math.max(0, (item.quantity || 0) - (item.reserved || 0)) > 0 && (
+                                <>
+                                  <button onClick={() => setDamagedAction({ item, mode: 'writeoff', source: 'expired' })} className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors" title="Write off expired"><PackageX size={14} /></button>
+                                  <button onClick={() => setDamagedAction({ item, mode: 'vendor', source: 'expired' })} className="p-1.5 text-red-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Return expired to vendor"><Undo2 size={14} /></button>
                                 </>
                               )}
                               <button onClick={() => openTransfer(item)} className="p-1.5 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors" title="Transfer to Warehouse"><ArrowLeftRight size={14} /></button>

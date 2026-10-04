@@ -2843,6 +2843,44 @@ export const DataProvider = ({ children }) => {
     return { ok: true, id: data?.id, value: data?.value };
   };
 
+  // Whether expired stock can be written off / returned to the vendor (091).
+  // Same pattern: asked once; until 091 is applied the actions are not offered.
+  const expiredMovesCheck = useRef(null);
+  const expiredMovesSupported = () => {
+    if (!expiredMovesCheck.current) {
+      expiredMovesCheck.current = supabase.rpc('stock_expired_moves_enabled')
+        .then(({ data, error }) => !error && data === true, () => false)
+        .then(ok => { if (!ok) expiredMovesCheck.current = null; return ok; });
+    }
+    return expiredMovesCheck.current;
+  };
+
+  /** Expired units of a batch written off (091): Admin / Warehouse Manager, reason required. */
+  const writeOffExpired = async (id, quantity, reason) => {
+    const item = inventory.find(i => i.id === id);
+    const { error } = await supabase.rpc('write_off_expired', { p_inventory_id: id, p_quantity: Number(quantity), p_reason: reason });
+    await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [id]);
+    if (error) return { ok: false, error: plainDatabaseError(error, 'write off this expired stock') };
+    logEvent('expired_written_off', `Expired ${quantity} × ${item?.product || id} written off: ${reason}`, null, id);
+    return { ok: true };
+  };
+
+  /** Expired units back to the vendor (091): a purchase return that credits the vendor. */
+  const returnExpiredToVendor = async (id, vendorId, quantity, unitCost, reason) => {
+    const item = inventory.find(i => i.id === id);
+    const { data, error } = await supabase.rpc('return_expired_to_vendor', {
+      p_inventory_id: id, p_vendor_id: vendorId, p_quantity: Number(quantity), p_unit_cost: Number(unitCost), p_reason: reason,
+    });
+    await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [id]);
+    if (error) return { ok: false, error: plainDatabaseError(error, 'return this expired stock to the vendor') };
+    await Promise.all([
+      reloadRows('vendors', setVendors, 'prismora_vendors', 'id', [vendorId]),
+      reloadRows('purchase_returns', setPurchaseReturns, 'prismora_purchase_returns', 'id', [data?.id]),
+    ]);
+    logEvent('expired_returned_to_vendor', `Expired ${quantity} × ${item?.product || id} returned to vendor (${data?.id}): ${reason}`, null, id);
+    return { ok: true, id: data?.id, value: data?.value };
+  };
+
   /** Cycle count: set the batch to what was counted, unless it moved since the count was opened. */
   const countStock = async (id, counted, expected) => {
     const item = inventory.find(i => i.id === id);
@@ -3944,7 +3982,7 @@ export const DataProvider = ({ children }) => {
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, receiveStock,
-      damagedLockSupported, writeOffDamaged, returnDamagedToVendor, returnCorrectionSupported, correctReturnCondition,
+      damagedLockSupported, writeOffDamaged, returnDamagedToVendor, expiredMovesSupported, writeOffExpired, returnExpiredToVendor, returnCorrectionSupported, correctReturnCondition,
       masters, addMasterOption, updateMasterOption, deleteMasterOption,
       addVendor, updateVendor, deleteVendor,
       vendorPayments, addVendorPayment, deleteVendorPayment,

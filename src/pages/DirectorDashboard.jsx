@@ -10,6 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, CHART_SINGLE, colorAt } from '../utils/chartTheme';
 import { isConvertedLead } from '../utils/leadStatus';
 import { isExpired } from '../utils/expiry';
+import { stockValueBreakdown } from '../utils/stockValue';
 import { profitAndLoss, receivables, partnerBalances } from '../utils/financials';
 
 const formatCurrency = (val) =>
@@ -104,7 +105,8 @@ export default function DirectorDashboard() {
 
   // ── Inventory health ─────────────────────────────────────────────────────
   const invHealth = useMemo(() => {
-    const stockValue = inventory.reduce((s, i) => s + (i.quantity || 0) * (i.unitCost || 0), 0);
+    // Sellable stock only, as on Inventory (Gap 17): expired and damaged units are not stock value.
+    const stockValue = stockValueBreakdown(inventory, now).sellable;
     const byProduct = {};
     inventory.forEach(i => {
       byProduct[i.product] = (byProduct[i.product] || 0) + (isExpired(i) ? 0 : Math.max(0, (i.quantity || 0) - (i.reserved || 0)));

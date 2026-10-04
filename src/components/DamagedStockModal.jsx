@@ -11,12 +11,17 @@ const labelCls = 'block text-xs font-semibold text-slate-400 mb-1.5 uppercase tr
  * Damaged units leaving a batch (Gap 16, migration 087): written off, or sent
  * back to a vendor as a purchase return. Both need a reason and are recorded
  * as a stock movement; the database checks who may do it and how many.
- * mode: 'writeoff' | 'vendor'.
+ * mode: 'writeoff' | 'vendor'. source: 'damaged' (087, the damaged count) or
+ * 'expired' (Gap 17, 091: units of an expired batch, out of its quantity).
  */
-export default function DamagedStockModal({ item, mode, onClose }) {
-  const { writeOffDamaged, returnDamagedToVendor, vendors } = useData();
+export default function DamagedStockModal({ item, mode, source = 'damaged', onClose }) {
+  const { writeOffDamaged, returnDamagedToVendor, writeOffExpired, returnExpiredToVendor, vendors } = useData();
   const toast = useToast();
-  const max = Number(item.damaged) || 0;
+  const expired = source === 'expired';
+  const what = expired ? 'expired' : 'damaged';
+  const max = expired
+    ? Math.max(0, (Number(item.quantity) || 0) - (Number(item.reserved) || 0))
+    : Number(item.damaged) || 0;
   const [quantity, setQuantity] = useState(String(max));
   const [reason, setReason] = useState('');
   const [vendorId, setVendorId] = useState('');
@@ -36,11 +41,11 @@ export default function DamagedStockModal({ item, mode, onClose }) {
     if (toVendor && (unitCost === '' || Number(unitCost) < 0)) { setError('Enter the unit cost (zero or more).'); return; }
     setSaving(true);
     const r = toVendor
-      ? await returnDamagedToVendor(item.id, vendorId, qty, Number(unitCost), reason.trim())
-      : await writeOffDamaged(item.id, qty, reason.trim());
+      ? await (expired ? returnExpiredToVendor : returnDamagedToVendor)(item.id, vendorId, qty, Number(unitCost), reason.trim())
+      : await (expired ? writeOffExpired : writeOffDamaged)(item.id, qty, reason.trim());
     setSaving(false);
     if (!r.ok) { setError(r.error); return; }
-    toast(toVendor ? `${qty} damaged unit(s) returned to the vendor (${r.id}); the vendor is credited.` : `${qty} damaged unit(s) written off.`, 'success');
+    toast(toVendor ? `${qty} ${what} unit(s) returned to the vendor (${r.id}); the vendor is credited.` : `${qty} ${what} unit(s) written off.`, 'success');
     onClose();
   };
 
@@ -50,12 +55,14 @@ export default function DamagedStockModal({ item, mode, onClose }) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !saving && onClose()} />
       <form onSubmit={save} className="relative glass-panel bg-brand-primary w-full max-w-md rounded-2xl shadow-2xl border border-white/10 z-10 p-6 space-y-4">
         <div className="flex justify-between items-start">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2"><Icon size={18} className="text-rose-400" />{toVendor ? 'Return damaged to vendor' : 'Write off damaged'}</h3>
+          <h3 className="text-lg font-bold text-white flex items-center gap-2"><Icon size={18} className="text-rose-400" />{toVendor ? `Return ${what} to vendor` : `Write off ${what}`}</h3>
           <button type="button" title="Close" onClick={onClose} className="p-1 text-slate-400 hover:text-white"><X size={18} /></button>
         </div>
         <p className="text-xs text-slate-400">
-          {item.product} · batch {item.batchNumber || '(no batch no.)'} · {max} damaged unit(s).{' '}
-          {toVendor ? 'The units leave the damaged count and the vendor is credited, like a purchase return. This cannot be withdrawn.' : 'The units leave the damaged count for good.'}
+          {item.product} · batch {item.batchNumber || '(no batch no.)'} · {max} {what} unit(s){expired && Number(item.reserved) > 0 ? ' not reserved' : ''}.{' '}
+          {toVendor
+            ? `The units leave the ${expired ? 'batch' : 'damaged count'} and the vendor is credited, like a purchase return. This cannot be withdrawn.`
+            : `The units leave the ${expired ? 'batch' : 'damaged count'} for good.`}
         </p>
         {toVendor && (
           <div>
@@ -81,7 +88,9 @@ export default function DamagedStockModal({ item, mode, onClose }) {
         <div>
           <label htmlFor="dmg-reason" className={labelCls}>Reason (required)</label>
           <textarea id="dmg-reason" rows="2" required value={reason} onChange={e => setReason(e.target.value)}
-            placeholder={toVendor ? 'e.g. Leaking tubes, vendor agreed to credit' : 'e.g. Crushed cartons, destroyed on 4 Oct'} className={`${inputCls} resize-none`} />
+            placeholder={expired
+              ? (toVendor ? 'e.g. Expired, vendor agreed to take back' : 'e.g. Expired, destroyed on 4 Oct')
+              : (toVendor ? 'e.g. Leaking tubes, vendor agreed to credit' : 'e.g. Crushed cartons, destroyed on 4 Oct')} className={`${inputCls} resize-none`} />
         </div>
         {error && <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">{error}</p>}
         <div className="flex justify-end gap-3 pt-2 border-t border-white/5">

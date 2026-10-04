@@ -33,6 +33,7 @@ export const movementEffect = (m) => {
     case 'opening_damaged': return { qty: 0, damaged: q };
     case 'damaged_write_off': case 'damaged_to_vendor': return { qty: 0, damaged: -q };
     case 'return_reclassified': return { qty: -q, damaged: q }; // 089: earlier return corrected to damaged
+    case 'expired_write_off': case 'expired_to_vendor': return { qty: -q, damaged: 0 }; // 091
     default: return null;
   }
 };
@@ -43,6 +44,7 @@ export const MOVEMENT_LABELS = {
   purchase_return: 'Returned to vendor', purchase_return_withdrawn: 'Vendor return withdrawn',
   adjustment: 'Adjustment', cycle_count: 'Cycle count', transfer_out: 'Transferred out', transfer_in: 'Transferred in',
   free_goods: 'Free goods paid out', return_reclassified: 'Return corrected to damaged', damaged_write_off: 'Damaged written off', damaged_to_vendor: 'Damaged returned to vendor',
+  expired_write_off: 'Expired written off', expired_to_vendor: 'Expired returned to vendor',
 };
 
 const fmtDay = (iso) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -78,7 +80,7 @@ export const reconcileBatch = (batch, allMovements) => {
   }
 
   const t = { opening: 0, received: 0, delivered: 0, returnedGood: 0, returnedDamaged: 0, adjustments: 0,
-    transfers: 0, toVendor: 0, damagedOut: 0, freeGoods: 0, expectedQty: 0, expectedDamaged: 0 };
+    transfers: 0, toVendor: 0, damagedOut: 0, expiredOut: 0, freeGoods: 0, expectedQty: 0, expectedDamaged: 0 };
   const unknown = new Set();
   for (const m of counted) {
     const e = movementEffect(m);
@@ -97,6 +99,9 @@ export const reconcileBatch = (batch, allMovements) => {
       case 'purchase_return_withdrawn': t.toVendor -= q; break;
       case 'free_goods': t.freeGoods += q; break;
       case 'damaged_write_off': case 'damaged_to_vendor': t.damagedOut += q; break;
+      // 091: expired units out of the batch's stock.
+      case 'expired_to_vendor': t.toVendor += q; break;
+      case 'expired_write_off': t.expiredOut += q; break;
       // 089: units of an earlier return found damaged move from good to damaged.
       case 'return_reclassified': t.returnedGood -= q; t.returnedDamaged += q; break;
       default: break;
@@ -134,7 +139,7 @@ export const reconciliationExportRows = (rows) => rows.map(r => ({
   Opening: r.opening, Received: r.received, Delivered: r.delivered,
   'Returned Good': r.returnedGood, 'Returned Damaged/Expired': r.returnedDamaged,
   Adjustments: r.adjustments, Transfers: r.transfers, 'To Vendor': r.toVendor, 'Free Goods': r.freeGoods,
-  'Damaged Out': r.damagedOut,
+  'Damaged Out': r.damagedOut, 'Expired Written Off': r.expiredOut,
   'Expected Qty': r.expectedQty, 'Actual Qty': r.actualQty, 'Qty Difference': r.qtyDiff,
   'Expected Damaged': r.expectedDamaged, 'Actual Damaged': r.actualDamaged, 'Damaged Difference': r.damagedDiff,
   Status: r.status, Note: r.note,
@@ -142,5 +147,5 @@ export const reconciliationExportRows = (rows) => rows.map(r => ({
 
 export const RECONCILIATION_EXPORT_TYPES = Object.fromEntries(
   ['Opening', 'Received', 'Delivered', 'Returned Good', 'Returned Damaged/Expired', 'Adjustments', 'Transfers', 'To Vendor',
-    'Free Goods', 'Damaged Out', 'Expected Qty', 'Actual Qty', 'Qty Difference', 'Expected Damaged', 'Actual Damaged',
+    'Free Goods', 'Damaged Out', 'Expired Written Off', 'Expected Qty', 'Actual Qty', 'Qty Difference', 'Expected Damaged', 'Actual Damaged',
     'Damaged Difference'].map(h => [h, 'number']));
