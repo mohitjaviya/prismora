@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole } from '../../context/AuthContext';
+import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole, roleLevel } from '../../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X, Download, UserX, UserCheck } from 'lucide-react';
 import { downloadCSV } from '../../utils/exportUtils';
 import { useConfirm } from '../../context/DialogContext';
 import { useToast } from '../../context/DialogContext';
 import { Badge, Button, DataTable, IconButton, PageHeader } from '../../components/ui';
-import { rolesAssignableBy, mayManageAccount } from '../../utils/roleUtils';
+import { rolesAssignableBy, mayManageAccount, internalUsersOf, isInternalLevel } from '../../utils/roleUtils';
 
 /**
  * The people who can sign in, and what each of them may reach.
@@ -47,6 +47,15 @@ export default function TeamMembers() {
   const [editingUser, setEditingUser] = useState(null);
   const [userForm, setUserForm] = useState(BLANK_USER_FORM);
   const [isSavingUser, setIsSavingUser] = useState(false);
+  // Staff and partner logins on separate tabs (Gap 6). Partner accounts are
+  // told apart by their role's level, as on SFA (Gap 3). Their logins are
+  // created from Distributors, Dealers and Retailers, but this is still the
+  // only place to switch one off or delete it, so they keep a tab here.
+  const [tab, setTab] = useState('team');
+  const staff = internalUsersOf(allUsers, roleLevel);
+  const partnerLogins = (allUsers || []).filter(u => u && !isInternalLevel(roleLevel(u.role)));
+  const onPartnerTab = tab === 'partners';
+  const shown = onPartnerTab ? partnerLogins : staff;
   // What the server and database will accept from this person: only a Super
   // Admin hands out Super Admin, Admin or Director (071), or any role with
   // Settings = full (077).
@@ -184,7 +193,9 @@ export default function TeamMembers() {
       key: 'actions', header: '', align: 'center', width: 'w-28',
       render: u => (
         <div className="flex items-center justify-center gap-0.5">
-          {mayManageAccount(user?.role, u.role) && <IconButton icon={Edit2} title="Edit user" size="sm" tone="accent" onClick={() => openUserEdit(u)} />}
+          {/* No Edit for a partner login: the form offers staff roles only,
+              so saving it could turn a partner's account into a staff one. */}
+          {!onPartnerTab && mayManageAccount(user?.role, u.role) && <IconButton icon={Edit2} title="Edit user" size="sm" tone="accent" onClick={() => openUserEdit(u)} />}
           {u.id !== user.id && mayManageAccount(user?.role, u.role) && (u.status === 'Inactive'
             ? <IconButton icon={UserCheck} title="Reactivate user" size="sm" tone="accent" onClick={() => setActive(u, true)} />
             : u.status !== 'Pending' && <IconButton icon={UserX} title="Deactivate user" size="sm" tone="danger" onClick={() => setActive(u, false)} />)}
@@ -195,18 +206,26 @@ export default function TeamMembers() {
         </div>
       ),
     },
-  ];
+  ].filter(c => !(onPartnerTab && c.key === 'managed'));
 
-  const handleExport = () => downloadCSV(allUsers.map(u => ({
-    Name: u.name,
-    Email: u.email,
-    Role: u.role,
-    Status: u.status || 'Active',
-    Manages: (u.managedUsers || [])
-      .map(id => (allUsers.find(x => x.id === id) || {}).name)
-      .filter(Boolean)
-      .join('; '),
-  })), 'PRISMORA_Team_Members');
+  // Exports the tab on screen: staff, or partner logins.
+  const handleExport = () => (onPartnerTab
+    ? downloadCSV(partnerLogins.map(u => ({
+      Name: u.name,
+      Email: u.email,
+      Role: u.role,
+      Status: u.status || 'Active',
+    })), 'PRISMORA_Partner_Logins')
+    : downloadCSV(staff.map(u => ({
+      Name: u.name,
+      Email: u.email,
+      Role: u.role,
+      Status: u.status || 'Active',
+      Manages: (u.managedUsers || [])
+        .map(id => (allUsers.find(x => x.id === id) || {}).name)
+        .filter(Boolean)
+        .join('; '),
+    })), 'PRISMORA_Team_Members'));
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -215,19 +234,40 @@ export default function TeamMembers() {
         title="Team Members"
         subtitle="Who can sign in, and what each of them may reach."
         actions={<>
-            <Button icon={Download} onClick={handleExport} disabled={!(allUsers.length > 0)}>Export</Button>
-            <Button variant="primary" icon={Plus} onClick={openUserAdd}>Add User</Button>
+            <Button icon={Download} onClick={handleExport} disabled={!(shown.length > 0)}>Export</Button>
+            {!onPartnerTab && <Button variant="primary" icon={Plus} onClick={openUserAdd}>Add User</Button>}
               </>}
       />
 
+      <div className="flex border-b border-white/5 pb-px gap-1" role="tablist">
+        {[['team', 'Team', staff.length], ['partners', 'Partner logins', partnerLogins.length]].map(([key, label, count]) => (
+          <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
+            className={`px-5 py-3 font-semibold text-sm border-b-2 transition-all ${tab === key ? 'border-brand-accent text-brand-accent' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}>
+            {label} ({count})
+          </button>
+        ))}
+      </div>
+
+      {onPartnerTab && (
+        <p className="text-xs text-slate-500">
+          Distributor, dealer and retailer portal logins. They are created with the key button on Distributors,
+          Dealers and Retailers; here they can be switched off, back on, or deleted.
+        </p>
+      )}
+
       <DataTable
-        title="Team"
+        key={tab}
+        title={onPartnerTab ? 'Partner logins' : 'Team'}
         columns={userColumns}
-        rows={allUsers}
+        rows={shown}
         rowKey={u => u.id}
         search={u => `${u.name} ${u.email} ${u.role}`}
         searchPlaceholder="Search name, email or role"
-        empty={{
+        empty={onPartnerTab ? {
+          icon: Users,
+          title: 'No partner has a portal login',
+          hint: 'Create one with the key button on Distributors, Dealers or Retailers.',
+        } : {
           icon: Users,
           title: 'Nobody has been added yet',
           hint: 'A team member gets a login and whatever their role allows. What each role can reach is set on Roles & Permissions.',
