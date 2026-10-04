@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { personName } from '../utils/attribution';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, ArrowUpCircle, ArrowDownCircle, Truck, Clock, AlertTriangle } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import PartnerLoginAction from '../components/PartnerLoginAction';
@@ -50,6 +51,15 @@ export default function Distributors() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDist, setEditingDist] = useState(null);
   const [viewingDist, setViewingDist] = useState(null);
+  // Roles' Members "View" (Gap 10) links here with ?view=<id>: open that
+  // record's details once, as soon as it is loaded.
+  const [searchParams] = useSearchParams();
+  const linkedId = searchParams.get('view');
+  const [openedLink, setOpenedLink] = useState(null);
+  if (linkedId && linkedId !== openedLink) {
+    const linked = distributors.find(d => d.id === linkedId);
+    if (linked) { setOpenedLink(linkedId); setViewingDist(linked); }
+  }
   const [form, setForm] = useState(BLANK_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);

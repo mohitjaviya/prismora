@@ -61,8 +61,9 @@ export default function DataTable({
   // sideways scroll box, and a sticky header cannot stick past one, so then it
   // scrolls away as usual (phones, narrow windows).
   stickyHeader = false,
+  initialQuery = '',      // the search box filled in on arrival, e.g. from a link
 }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [sort, setSort] = useState({ key: null, dir: 'asc' });
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(initialPageSize);

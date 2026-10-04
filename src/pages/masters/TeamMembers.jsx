@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole, roleLevel } from '../../context/AuthContext';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X, Download, UserX, UserCheck } from 'lucide-react';
 import { downloadCSV } from '../../utils/exportUtils';
 import { useConfirm } from '../../context/DialogContext';
@@ -51,7 +52,11 @@ export default function TeamMembers() {
   // told apart by their role's level, as on SFA (Gap 3). Their logins are
   // created from Distributors, Dealers and Retailers, but this is still the
   // only place to switch one off or delete it, so they keep a tab here.
-  const [tab, setTab] = useState('team');
+  // Roles' Members "View" (Gap 10) links here with ?tab=partners&q=<email>.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => (searchParams.get('tab') === 'partners' ? 'partners' : 'team'));
+  const [linkedTab] = useState(tab);
+  const linkedQuery = tab === linkedTab ? (searchParams.get('q') || '') : '';
   const staff = internalUsersOf(allUsers, roleLevel);
   const partnerLogins = (allUsers || []).filter(u => u && !isInternalLevel(roleLevel(u.role)));
   const onPartnerTab = tab === 'partners';
@@ -263,6 +268,7 @@ export default function TeamMembers() {
         rowKey={u => u.id}
         search={u => `${u.name} ${u.email} ${u.role}`}
         searchPlaceholder="Search name, email or role"
+        initialQuery={linkedQuery}
         empty={onPartnerTab ? {
           icon: Users,
           title: 'No partner has a portal login',

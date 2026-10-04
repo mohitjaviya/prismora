@@ -1,14 +1,17 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth, PERMISSIONS, FALLBACK_LEVELS } from '../../context/AuthContext';
+import { useData } from '../../context/DataContext';
 import { supabase } from '../../supabaseClient';
 import {
-  Shield, ChevronLeft, Lock, AlertTriangle, Check, Users, Copy, RefreshCw,
+  Shield, ChevronLeft, Lock, AlertTriangle, Check, Users, Copy, RefreshCw, Eye,
 } from 'lucide-react';
-import { PageHeader, Button, StatCard, SearchInput } from '../../components/ui';
+import { PageHeader, Button, IconButton, Badge, DataTable, Select, StatCard, SearchInput } from '../../components/ui';
 import {
   MODULES, MODULE_GROUPS, ROLE_LEVELS, grantedCount, isUnrestrictedRole, rejectPermissionChange,
   fallbackRoles, roleSummary, peopleByRole, holdersOf, orphanedRoles,
 } from '../../utils/roleUtils';
+import { roleMemberRows, memberSearchText, memberViewPath } from '../../utils/roleMembers';
 import LastChanged from '../../components/audit/LastChanged';
 
 /**
@@ -69,6 +72,96 @@ function People({ holders }) {
         </span>
       )}
     </div>
+  );
+}
+
+const DUP_LABEL = { name: 'name', phone: 'phone', email: 'e-mail' };
+const DUP_FILTER = '__duplicates';
+
+/**
+ * Everyone holding one role, however many (Gap 10). Search, status filter,
+ * sorting and 25 a page come from DataTable. Read-only: "View" opens the
+ * partner's record or the person on Team Members; nothing is changed here.
+ */
+function Members({ role, holders, users }) {
+  const { distributors, dealers, retailers } = useData();
+  const navigate = useNavigate();
+  const [statusFilter, setStatusFilter] = useState('all');
+  const partnerRole = role.level === 'partner';
+
+  const rows = useMemo(
+    () => roleMemberRows(holders, { users, distributors, dealers, retailers }),
+    [holders, users, distributors, dealers, retailers],
+  );
+  const statuses = useMemo(() => [...new Set(rows.map(r => r.status))].sort(), [rows]);
+  const dupCount = rows.filter(r => r.duplicateOf.length).length;
+  const shownRows = statusFilter === 'all' ? rows
+    : statusFilter === DUP_FILTER ? rows.filter(r => r.duplicateOf.length)
+      : rows.filter(r => r.status === statusFilter);
+
+  const columns = [
+    {
+      key: 'name', header: 'Name', sort: r => r.name.toLowerCase(),
+      render: r => (
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <span className="font-semibold text-white">{r.name || '—'}</span>
+          {r.duplicateOf.length > 0 && (
+            <Badge tone="warning" size="sm"
+              title={`Same ${r.duplicateOf.map(k => DUP_LABEL[k]).join(', ')} as another ${role.name} in this role`}>
+              Possible duplicate
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    { key: 'email', header: 'Email', sort: r => r.email.toLowerCase(), render: r => <span className="break-all">{r.email || '—'}</span> },
+    { key: 'phone', header: 'Phone', hideBelow: 'md', sort: r => r.phone || null, render: r => <span className="whitespace-nowrap">{r.phone || '—'}</span> },
+    {
+      key: 'party', header: partnerRole ? 'Linked party' : 'Manager',
+      sort: r => (r.party ? r.party.name || r.party.id : r.managers.join(', ')) || null,
+      render: r => (r.party ? (
+        <div className="min-w-0">
+          <div className="text-white">{r.party.name || r.party.id}</div>
+          <div className="text-[10px] text-slate-500">{r.party.found ? r.party.kind : `${r.party.kind} record not found`}</div>
+        </div>
+      ) : r.managers.length ? r.managers.join(', ') : <span className="text-slate-600">—</span>),
+    },
+    {
+      key: 'status', header: 'Status', sort: r => r.status,
+      render: r => (
+        <Badge tone={r.status === 'Active' ? 'success' : r.status === 'Pending' ? 'warning' : 'danger'}>{r.status}</Badge>
+      ),
+    },
+    {
+      key: 'view', header: '', align: 'center', width: 'w-14',
+      render: r => (
+        <IconButton icon={Eye} size="sm" tone="accent"
+          title={r.party?.found ? `View ${r.party.kind.toLowerCase()} record` : 'View on Team Members'}
+          onClick={() => navigate(memberViewPath(r, partnerRole))} />
+      ),
+    },
+  ];
+
+  return (
+    <DataTable
+      title="Members"
+      columns={columns}
+      rows={shownRows}
+      rowKey={r => r.id}
+      search={memberSearchText}
+      searchPlaceholder={partnerRole ? 'Search name, email, phone, party' : 'Search name, email, manager'}
+      dense
+      stickyHeader
+      toolbar={
+        <Select size="sm" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          aria-label="Filter members" className="w-auto">
+          <option value="all">All statuses</option>
+          {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+          {dupCount > 0 && <option value={DUP_FILTER}>Possible duplicates ({dupCount})</option>}
+        </Select>
+      }
+      empty={{ icon: Users, title: 'Nobody holds this role', hint: 'Changing it affects no one yet.' }}
+    />
   );
 }
 
@@ -168,7 +261,18 @@ export default function Roles() {
     setRefreshing(false);
   };
 
-  const open = (id) => { setEditing(id); setError(''); setSaved(false); };
+  // "N people" on a card opens the role scrolled to its Members list.
+  const jumpToMembers = useRef(false);
+  const open = (id, toMembers = false) => {
+    jumpToMembers.current = toMembers;
+    setEditing(id); setError(''); setSaved(false);
+  };
+  const membersRef = (el) => {
+    if (el && jumpToMembers.current) {
+      jumpToMembers.current = false;
+      el.scrollIntoView({ block: 'start' });
+    }
+  };
 
   // ── The list ───────────────────────────────────────────────────────────
   if (!role) {
@@ -294,11 +398,18 @@ export default function Roles() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filtered.filter(r => r.level === l.id).map(r => {
                   const holders = holdersOf(byRole, r.id);
+                  // A div acting as a button, so the people link inside it can be a real button.
                   return (
-                    <button
+                    <div
                       key={r.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => open(r.id)}
-                      className="glass-panel rounded-2xl border border-white/5 p-5 text-left hover:border-brand-accent/30 transition-colors flex flex-col"
+                      onKeyDown={e => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(r.id); }
+                      }}
+                      className="glass-panel rounded-2xl border border-white/5 p-5 text-left hover:border-brand-accent/30 transition-colors flex flex-col cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${LEVEL_STYLE[r.level] || LEVEL_STYLE.staff}`}>
@@ -315,18 +426,23 @@ export default function Roles() {
                       <AccessBar role={r} />
 
                       <div className="flex items-end justify-between mt-3 pt-3 border-t border-white/5 gap-3">
-                        <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); open(r.id, true); }}
+                          title={`See everyone in ${r.name}`}
+                          className="min-w-0 text-left rounded-lg -m-1 p-1 hover:bg-white/5 group"
+                        >
                           <People holders={holders} />
-                          <p className="text-[10px] text-slate-500 uppercase tracking-wide mt-1">
+                          <p className="text-[10px] text-slate-500 group-hover:text-brand-accent uppercase tracking-wide mt-1 underline-offset-2 group-hover:underline">
                             {holders.length === 1 ? '1 person' : `${holders.length} people`}
                           </p>
-                        </div>
+                        </button>
                         <div className="text-right flex-shrink-0">
                           <p className="text-lg font-extrabold text-brand-accent leading-none">{grantedCount(r)}</p>
                           <p className="text-[10px] text-slate-500 uppercase tracking-wide mt-1">of {MODULES.length} screens</p>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -385,13 +501,17 @@ export default function Roles() {
         <AccessBar role={role} />
         <div className="flex items-center gap-2 pt-3 border-t border-white/5">
           <Users size={13} className="text-slate-500 flex-shrink-0" />
-          <People holders={holders} />
-          <span className="text-[11px] text-slate-500 truncate">
+          <span className="text-[11px] text-slate-500">
             {holders.length === 0
               ? 'Nobody holds this role, so changing it affects no one yet.'
-              : `${holders.map(u => u.name).join(', ')} — a change here reaches them on their next page load.`}
+              : `${holders.length === 1 ? '1 person holds' : `${holders.length} people hold`} this role (listed under Members below) — a change here reaches them on their next page load.`}
           </span>
         </div>
+      </div>
+
+      {/* Everyone in the role, replacing the shortened name list (Gap 10) */}
+      <div ref={membersRef} className="scroll-mt-20">
+        <Members key={role.id} role={role} holders={holders} users={users} />
       </div>
 
       {error && (
