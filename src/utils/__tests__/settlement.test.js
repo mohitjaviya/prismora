@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  alreadySettled, balanceAfterPayment, invoiceBelongsToParty, invoicePartyFields, invoiceTotal, invoicesSettledBy, isOverpayment, partyForInvoice, paymentFieldFor, paymentIdForInvoice, settlementRowFor,
+  alreadySettled, balanceAfterPayment, invoiceBelongsToParty, invoicePartyFields, invoiceTotal, invoicesSettledBy, isOverpayment, partyForInvoice, paymentFieldFor, paymentIdForInvoice, settlementRowFor, partnerPaymentRpcArgs,
 } from '../settlement';
 
 describe('invoiceTotal', () => {
@@ -338,5 +338,23 @@ describe('invoicePartyFields', () => {
       .toEqual({ distributorId: null, dealerId: null, retailerId: null });
     expect(invoicePartyFields({ id: 'X' }, 'Supplier'))
       .toEqual({ distributorId: null, dealerId: null, retailerId: null });
+  });
+});
+
+describe('partnerPaymentRpcArgs (Gap 7 A, 092)', () => {
+  it('Record Payment sends what was typed, and no invoice', () => {
+    expect(partnerPaymentRpcArgs('Dealer', 'DLR-1', { amount: '500', method: 'UPI', reference: 'UTR9', date: '2026-10-04T00:00:00.000Z', notes: 'x' })).toEqual({
+      p_party_type: 'Dealer', p_party_id: 'DLR-1', p_amount: 500, p_method: 'UPI', p_reference: 'UTR9',
+      p_date: '2026-10-04T00:00:00.000Z', p_notes: 'x', p_invoice_id: null,
+    });
+  });
+  it('Mark as Paid sends the invoice and leaves the amount to the database', () => {
+    const args = partnerPaymentRpcArgs('Distributor', 'D-1', {}, 'INV-9');
+    expect(args.p_invoice_id).toBe('INV-9');
+    expect(args.p_amount).toBeNull();
+    expect(args.p_method).toBeNull();
+  });
+  it('never sends who recorded it', () => {
+    expect(Object.keys(partnerPaymentRpcArgs('Retailer', 'R-1', { amount: 1, recordedBy: 'u1' }))).not.toContain('p_recorded_by');
   });
 });

@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { linkedExpenseId, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { amountDue, isSettled } from '../utils/invoiceStatus';
-import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
+import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled, paymentFieldFor, partnerPaymentRpcArgs } from '../utils/settlement';
 import { batchToReceiveInto, canTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
@@ -2346,26 +2346,11 @@ export const DataProvider = ({ children }) => {
     const { party, type } = partyForInvoice(invoice);
     if (!party) return true;              // a walk-in invoice has no ledger to credit
     // What is still due — part of it may already be paid (057).
-    const due = amountDue(invoice);
-    if (due <= 0) return true;
-
+    if (amountDue(invoice) <= 0) return true;
     if (alreadySettled(invoice.id, distributorPayments)) return true;
-
-    const row = settlementRowFor({ ...invoice, amount: due, tax: 0 }, party, type);
-    if (!row) return false;
-    const payId = row.id;
-    const ok = await persist('distributor_payments insert (invoice settled)',
-      supabase.from('distributor_payments').insert([row]));
-    if (!ok) return false;
-
-    setDistributorPayments(prev => {
-      const next = prev.some(x => x.id === payId) ? prev : [row, ...prev];
-      localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
-      return next;
-    });
-    // The balance moved with the payment, in the database (046).
-    await reloadParty(type, party.id);
-    return true;
+    // The same payment Record Payment makes, tied to this invoice (Gap 7 A).
+    const result = await recordPartnerPayment(type, party.id, {}, invoice);
+    return result.ok;
   };
 
   /** Moving an invoice back out of Paid takes the credit away again. */
@@ -3784,126 +3769,77 @@ export const DataProvider = ({ children }) => {
     return { ok: true };
   };
 
-  // ── Distributor Payments (Outstanding Ledger credits) ──────────────────────
-  const addDistributorPayment = async (paymentData) => {
-    const newId = `PAY-${Date.now()}`;
-    const newPayment = { ...paymentData, id: newId, createdAt: new Date().toISOString() };
+  // ── Partner payments (Outstanding Ledger credits) ─────────────────────────
+  // Whether record_partner_payment is there (092). Asked once per session;
+  // until then (any error) payments are inserted from here as before.
+  const partnerPaymentCheck = useRef(null);
+  const partnerPaymentFunctionSupported = () => {
+    if (!partnerPaymentCheck.current) {
+      partnerPaymentCheck.current = supabase.rpc('partner_payment_function_enabled')
+        .then(({ data, error }) => !error && data === true, () => false)
+        .then(ok => { if (!ok) partnerPaymentCheck.current = null; return ok; });
+    }
+    return partnerPaymentCheck.current;
+  };
+
+  /**
+   * The one way a partner's payment is recorded, for "Record Payment" and for
+   * Accounting's "Mark as Paid" alike (Gap 7 A). With 092 the database builds
+   * the row (who recorded it, what is still due on the invoice, the checks);
+   * before 092 the same row is built here. Either way the balance (046) and
+   * the invoice statuses (057) move in the database, and are read back.
+   *
+   * `invoice` makes it the payment that settles that invoice (PAY-INV-<id>).
+   */
+  const recordPartnerPayment = async (partyType, partyId, paymentData = {}, invoice = null) => {
+    const field = paymentFieldFor(partyType);
+    if (!field || !partyId) return { ok: false, error: 'Choose who the payment is from.' };
+    let row;
+
+    if (await partnerPaymentFunctionSupported()) {
+      const { data, error } = await supabase.rpc('record_partner_payment',
+        partnerPaymentRpcArgs(partyType, partyId, paymentData, invoice?.id));
+      if (error || !data) {
+        console.error('[Prismora] Could not record the payment:', error?.message || 'nothing returned');
+        return { ok: false, error: error ? plainDatabaseError(error, 'record this payment') : 'The payment could not be saved.' };
+      }
+      row = data;
+    } else {
+      row = invoice
+        ? settlementRowFor({ ...invoice, amount: amountDue(invoice), tax: 0 }, { id: partyId }, partyType)
+        : { ...paymentData, [field]: partyId, id: `PAY-${Date.now()}`, createdAt: new Date().toISOString() };
+      if (invoice) row.recordedBy = signedInUser?.id || null;
+      // Checked: a refused payment must not move anything else.
+      const saved = await persist('distributor_payments insert',
+        supabase.from('distributor_payments').insert([row]));
+      if (!saved) return { ok: false, error: 'The payment could not be saved. Nothing was recorded.' };
+    }
+
     setDistributorPayments(prev => {
-      const next = [newPayment, ...prev];
+      const next = [row, ...prev.filter(p => p.id !== row.id)];
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
-    // Checked, the way addVendorPayment already checks it. The balance change
-    // and the invoice settlements below are separate statements that would go
-    // through on their own, so a refused payment used to reduce what the
-    // partner owed and mark their invoices Paid -- money moving off the back of
-    // a record that does not exist, and no payment left to explain it.
-    const saved = await persist('distributor_payments insert',
-      supabase.from('distributor_payments').insert([newPayment]));
-    if (!saved) {
-      setDistributorPayments(prev => {
-        const next = prev.filter(p => p.id !== newId);
-        localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
-
-    const dist = distributors.find(d => d.id === paymentData.distributorId);
-    if (dist) {
-      // Not floored at zero any more. Paying more than is owed used to discard
-      // the excess, so a partner who paid in advance had that advance
-      // forgotten. A negative balance is money held on their behalf.
-      // The balance moved with the payment, in the database (046).
-      await reloadParty('Distributor', dist.id);
-
-      // Which invoices it pays, and how far, is the database's (057): oldest
-      // first, part-payments included. Read the statuses back.
-      await reloadInvoices();
-    }
-    logEvent('distributor_payment', `Payment of ₹${paymentData.amount} recorded for ${dist?.name || paymentData.distributorId}`, null, newId);
-    return { ok: true, id: newId };
+    // Not floored at zero: paying more than is owed leaves money held on the
+    // partner's behalf. The balance and which invoices it pays (oldest first,
+    // part-payments included) are the database's; read both back.
+    await reloadParty(partyType, partyId);
+    await reloadInvoices();
+    return { ok: true, id: row.id, row };
   };
 
-  const addDealerPayment = async (paymentData) => {
-    const newId = `PAY-${Date.now()}`;
-    const newPayment = { ...paymentData, id: newId, createdAt: new Date().toISOString() };
-    setDistributorPayments(prev => {
-      const next = [newPayment, ...prev];
-      localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
-      return next;
-    });
-    // Checked, the way addVendorPayment already checks it. The balance change
-    // and the invoice settlements below are separate statements that would go
-    // through on their own, so a refused payment used to reduce what the
-    // partner owed and mark their invoices Paid -- money moving off the back of
-    // a record that does not exist, and no payment left to explain it.
-    const saved = await persist('distributor_payments insert',
-      supabase.from('distributor_payments').insert([newPayment]));
-    if (!saved) {
-      setDistributorPayments(prev => {
-        const next = prev.filter(p => p.id !== newId);
-        localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
-
-    const dealer = dealers.find(d => d.id === paymentData.dealerId);
-    if (dealer) {
-      // Not floored at zero any more. Paying more than is owed used to discard
-      // the excess, so a partner who paid in advance had that advance
-      // forgotten. A negative balance is money held on their behalf.
-      // The balance moved with the payment, in the database (046).
-      await reloadParty('Dealer', dealer.id);
-
-      // Which invoices it pays, and how far, is the database's (057): oldest
-      // first, part-payments included. Read the statuses back.
-      await reloadInvoices();
-    }
-    logEvent('dealer_payment', `Payment of ₹${paymentData.amount} recorded for ${dealer?.name || paymentData.dealerId}`, null, newId);
-    return { ok: true, id: newId };
+  const addPartnerPayment = (partyType, list, eventType) => async (paymentData) => {
+    const field = paymentFieldFor(partyType);
+    const partyId = paymentData[field];
+    const result = await recordPartnerPayment(partyType, partyId, paymentData);
+    if (!result.ok) return null;
+    const party = list.find(x => x.id === partyId);
+    logEvent(eventType, `Payment of ₹${result.row.amount} recorded for ${party?.name || partyId}`, null, result.id);
+    return result;
   };
-
-  const addRetailerPayment = async (paymentData) => {
-    const newId = `PAY-${Date.now()}`;
-    const newPayment = { ...paymentData, id: newId, createdAt: new Date().toISOString() };
-    setDistributorPayments(prev => {
-      const next = [newPayment, ...prev];
-      localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
-      return next;
-    });
-    // Checked, the way addVendorPayment already checks it. The balance change
-    // and the invoice settlements below are separate statements that would go
-    // through on their own, so a refused payment used to reduce what the
-    // partner owed and mark their invoices Paid -- money moving off the back of
-    // a record that does not exist, and no payment left to explain it.
-    const saved = await persist('distributor_payments insert',
-      supabase.from('distributor_payments').insert([newPayment]));
-    if (!saved) {
-      setDistributorPayments(prev => {
-        const next = prev.filter(p => p.id !== newId);
-        localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
-        return next;
-      });
-      return null;
-    }
-
-    const retailer = retailers.find(r => r.id === paymentData.retailerId);
-    if (retailer) {
-      // Not floored at zero any more. Paying more than is owed used to discard
-      // the excess, so a partner who paid in advance had that advance
-      // forgotten. A negative balance is money held on their behalf.
-      // The balance moved with the payment, in the database (046).
-      await reloadParty('Retailer', retailer.id);
-
-      // Which invoices it pays, and how far, is the database's (057): oldest
-      // first, part-payments included. Read the statuses back.
-      await reloadInvoices();
-    }
-    logEvent('retailer_payment', `Payment of ₹${paymentData.amount} recorded for ${retailer?.name || paymentData.retailerId}`, null, newId);
-    return { ok: true, id: newId };
-  };
+  const addDistributorPayment = addPartnerPayment('Distributor', distributors, 'distributor_payment');
+  const addDealerPayment = addPartnerPayment('Dealer', dealers, 'dealer_payment');
+  const addRetailerPayment = addPartnerPayment('Retailer', retailers, 'retailer_payment');
 
   // ── Scheme Claims (distributor/dealer/retailer-submitted) ───────────────────
   // A claim names one of the partner's own Earned incentives (083): the database

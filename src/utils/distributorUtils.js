@@ -160,3 +160,30 @@ export const buildVendorLedger = (vendor, grns = [], vendorPayments = [], purcha
     return { ...row, balance };
   });
 };
+
+// ── How a partner's ledger reads (Gap 7 B/D) ─────────────────────────────
+const MINUS = '−';
+const cents = (v) => Math.round((Number(v) || 0) * 100) / 100;
+
+// A balance in words: what the partner owes, or what is held for them. A
+// negative "outstanding" read as a debt with a minus sign in front.
+export const balanceStanding = (balance) => {
+  const v = cents(balance);
+  return v < 0
+    ? { label: 'Credit Balance', amount: -v, credit: true }
+    : { label: 'Total Outstanding', amount: v, credit: false };
+};
+
+// A ledger line's amount with its direction: + charged, − credited. A real
+// minus sign, not a hyphen, which is also a place the line may wrap.
+export const signedLedgerAmount = (row, format) =>
+  row?.debit > 0 ? `+${format(row.debit)}` : `${MINUS}${format(row?.credit || 0)}`;
+
+// The stored balance (moved only by the database) against what the ledger
+// lines add up to. They agree by construction (048); when they do not, the
+// screen says so rather than show two figures without comment.
+export const ledgerDifference = (entries = [], outstanding = 0) => {
+  const lines = cents(entries.length ? entries[entries.length - 1].balance : 0);
+  const diff = cents(cents(outstanding) - lines);
+  return Math.abs(diff) >= 0.5 ? { lines, outstanding: cents(outstanding), diff } : null;
+};

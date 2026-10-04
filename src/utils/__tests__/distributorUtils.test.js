@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildLedgerEntries, buildVendorLedger } from '../distributorUtils';
+import { buildLedgerEntries, buildVendorLedger, balanceStanding, signedLedgerAmount, ledgerDifference } from '../distributorUtils';
 
 const DIST = { id: 'DIST-1', name: 'Gujarat Super Stockist' };
 
@@ -163,5 +163,35 @@ describe('ledger attribution', () => {
       { id: 'PAY-1', distributorId: 'DIST-1', amount: 400, date: '2026-01-02', recordedBy: 'U1' },
     ], []);
     expect(rows[rows.length - 1].balance).toBe(600);
+  });
+});
+
+describe('ledger reading (Gap 7 B/D)', () => {
+  const fmt = (v) => `₹${v}`;
+  it('a positive balance is Total Outstanding, a negative one a Credit Balance', () => {
+    expect(balanceStanding(5040)).toEqual({ label: 'Total Outstanding', amount: 5040, credit: false });
+    expect(balanceStanding(-5040)).toEqual({ label: 'Credit Balance', amount: 5040, credit: true });
+    expect(balanceStanding(0)).toEqual({ label: 'Total Outstanding', amount: 0, credit: false });
+    expect(balanceStanding(null).amount).toBe(0);
+  });
+  it('credits carry a real minus sign, not a hyphen', () => {
+    expect(signedLedgerAmount({ debit: 0, credit: 5040 }, fmt)).toBe('−₹5040');
+    expect(signedLedgerAmount({ debit: 0, credit: 5040 }, fmt)).not.toContain('-');
+    expect(signedLedgerAmount({ debit: 1120, credit: 0 }, fmt)).toBe('+₹1120');
+  });
+  it('flags a stored balance that the lines do not add up to', () => {
+    const entries = [{ balance: 1000 }, { balance: 400 }];
+    expect(ledgerDifference(entries, 400)).toBeNull();
+    expect(ledgerDifference(entries, 400.3)).toBeNull();
+    expect(ledgerDifference(entries, 900)).toEqual({ lines: 400, outstanding: 900, diff: 500 });
+    expect(ledgerDifference([], 0)).toBeNull();
+  });
+  it('running balance goes negative when a credit exceeds what was owed', () => {
+    const rows = buildLedgerEntries(DIST,
+      [{ id: 'I1', distributorId: 'DIST-1', amount: 1000, tax: 0, createdAt: '2026-10-01T00:00:00Z' }],
+      [{ id: 'P1', distributorId: 'DIST-1', amount: 1000, date: '2026-10-02T00:00:00Z' }], [],
+      [{ id: 'CN1', distributorId: 'DIST-1', amount: 400, createdAt: '2026-10-03T00:00:00Z' }]);
+    expect(rows.map(r => r.balance)).toEqual([1000, 0, -400]);
+    expect(balanceStanding(rows.at(-1).balance).label).toBe('Credit Balance');
   });
 });

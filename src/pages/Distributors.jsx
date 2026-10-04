@@ -1,16 +1,16 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { personName } from '../utils/attribution';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, ArrowUpCircle, ArrowDownCircle, Truck, Clock, AlertTriangle } from 'lucide-react';
+import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, Truck, Clock, AlertTriangle } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import PartnerLoginAction from '../components/PartnerLoginAction';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadExcel } from '../utils/exportUtils';
-import { buildLedgerEntries } from '../utils/distributorUtils';
+import { buildLedgerEntries, balanceStanding } from '../utils/distributorUtils';
+import PartnerLedgerList from '../components/PartnerLedgerList';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
 import LastChanged from '../components/audit/LastChanged';
@@ -27,8 +27,6 @@ const INDIAN_STATES = [
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
 
-const formatDate = (d) =>
-  d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
 
 const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
@@ -360,10 +358,16 @@ export default function Distributors() {
                 <InfoRow icon={<Network size={14} />} label="Contact Person" value={viewingDist.contactPerson || 'N/A'} />
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-center">
-                  <p className="text-xs text-slate-400">Outstanding</p>
-                  <p className="text-lg font-bold text-rose-400">{formatCurrency(viewingDist.outstandingAmount || 0)}</p>
-                </div>
+                {(() => {
+                  // A negative balance is money held for the partner, not a debt.
+                  const standing = balanceStanding(viewingDist.outstandingAmount);
+                  return (
+                    <div className={`${standing.credit ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'} border rounded-xl p-3 text-center`}>
+                      <p className="text-xs text-slate-400">{standing.credit ? 'Credit Balance' : 'Outstanding'}</p>
+                      <p className={`text-lg font-bold whitespace-nowrap ${standing.credit ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrency(standing.amount)}</p>
+                    </div>
+                  );
+                })()}
                 <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
                   <p className="text-xs text-slate-400">Credit Limit</p>
                   <p className="text-lg font-bold text-emerald-400">{formatCurrency(viewingDist.creditLimit)}</p>
@@ -380,32 +384,7 @@ export default function Distributors() {
                     <h4 className="text-sm font-bold text-white flex items-center gap-1.5"><Wallet size={14} className="text-brand-accent" />Outstanding Ledger</h4>
                     {canRecordPayment && <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
                   </div>
-                  {ledgerEntries.length > 0 ? (
-                    <div className="max-h-52 overflow-y-auto custom-scrollbar space-y-1.5">
-                      {ledgerEntries.slice().reverse().map(row => (
-                        <div key={row.id} className="flex items-center justify-between text-xs bg-brand-primary-lighter/30 rounded-lg px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            {row.debit > 0 ? <ArrowUpCircle size={13} className="text-rose-400 flex-shrink-0" /> : <ArrowDownCircle size={13} className="text-emerald-400 flex-shrink-0" />}
-                            <div>
-                              <p className="text-slate-300">{row.description}</p>
-                              {/* Who put this line in the ledger. Blank for
-                                  an invoice raised by delivery, which nobody
-                                  typed. */}
-                              <p className="text-[10px] text-slate-500">
-                                {formatDate(row.date)}
-                                {row.recordedBy && <> &middot; {personName(users, row.recordedBy)}</>}
-                              </p>
-                            </div>
-                          </div>
-                          <span className={`font-semibold ${row.debit > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                            {row.debit > 0 ? `+${formatCurrency(row.debit)}` : `-${formatCurrency(row.credit)}`}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500 text-center py-4">No ledger activity yet.</p>
-                  )}
+                  <PartnerLedgerList entries={ledgerEntries} outstanding={viewingDist.outstandingAmount} users={users} />
                 </div>
               )}
             </div>

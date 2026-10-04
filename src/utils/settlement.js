@@ -184,3 +184,21 @@ export const settlementRowFor = (invoice, party, partyType, now = new Date().toI
  */
 export const alreadySettled = (invoiceId, payments = []) =>
   (payments || []).some(p => p?.id === paymentIdForInvoice(invoiceId));
+
+/**
+ * The arguments for record_partner_payment (092), the one insert behind both
+ * "Record Payment" and "Mark as Paid".
+ *
+ * With an invoice the database works the amount out itself (what is still due
+ * there), so none is sent; who recorded it is the caller, never sent either.
+ */
+export const partnerPaymentRpcArgs = (partyType, partyId, payment = {}, invoiceId = null) => ({
+  p_party_type: partyType,
+  p_party_id: partyId,
+  p_amount: invoiceId ? null : (Number(payment.amount) || 0),
+  p_method: payment.method || null,
+  p_reference: payment.reference || null,
+  p_date: payment.date || null,
+  p_notes: payment.notes || null,
+  p_invoice_id: invoiceId || null,
+});
