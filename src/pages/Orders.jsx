@@ -5,7 +5,8 @@ import { attributionFor } from '../utils/attribution';
 import { isUnassigned } from '../utils/orderRouting';
 import { format } from 'date-fns';
 import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart, ClipboardCheck, ClipboardX, Undo2, X } from 'lucide-react';
-import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
+import { PageHeader, DataTable, Button, IconButton, Badge, Select, FieldError, useFieldCheck } from '../components/ui';
+import { cleanForm } from '../utils/formRules';
 import { createPortal } from 'react-dom';
 import { downloadExcel, itemsText } from '../utils/exportUtils';
 import { allParties } from '../utils/distributorUtils';
@@ -77,6 +78,7 @@ const Orders = () => {
   const [statusError, setStatusError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
+  const orderCheck = useFieldCheck();
   const [returningOrder, setReturningOrder] = useState(null);
   // 089: correct the condition of an earlier return (sellable -> damaged).
   // Offered only once the database has 089, and only to these roles.
@@ -199,6 +201,21 @@ const Orders = () => {
     if (Number(formData.deliveredQty || 0) > 0) return true;
     return ['Shipped', 'Partially Delivered', 'Delivered'].includes(formData.status);
   };
+  // Gap 9: the shared input rules. A locked quantity or a billed value cannot
+  // be changed here, so it is not asked for.
+  const hasItemLines = Array.isArray(formData.items) && formData.items.length > 0;
+  const orderSpec = {
+    customerName: { label: 'Customer name', required: true },
+    phone: { label: 'Contact phone', kind: 'mobile' },
+    email: { label: 'Contact email', kind: 'email' },
+    product: hasItemLines ? null : { label: 'Product', required: true },
+    quantity: isQuantityLocked() ? null : { label: 'Quantity', kind: 'qty', required: true },
+    value: billedBy ? null : { label: 'Order value', kind: 'amount', required: true },
+    state: { label: 'State', required: true },
+    city: { label: 'City', required: true },
+    date: { label: 'Order date', required: true },
+  };
+  const orderErrors = orderCheck.errors(formData, orderSpec);
 
   const getStockShortfalls = (order, stock = inventory) => {
     // For a single-product order already part-delivered, only what's still
@@ -549,6 +566,7 @@ const Orders = () => {
   };
 
   const handleOpenModal = (order = null) => {
+    orderCheck.reset();
     setStatusError('');
     const choice = customerChoiceFor(order);
     setCustomerChoice(choice);
@@ -606,6 +624,8 @@ const Orders = () => {
   };
 
   const submitOrder = async () => {
+    if (!orderCheck.ok(formData, orderSpec)) return;
+    const clean = cleanForm(formData, orderSpec);
 
     // An order already cleared for fulfilment can have its quantity raised
     // above what's in stock. The status guard only runs on a status *change*,
@@ -635,10 +655,10 @@ const Orders = () => {
     }
 
     const dataToSave = {
-      ...formData,
-      quantity: Number(formData.quantity),
-      value: Number(formData.value),
-      date: orderDateToSave(formData.date, editingOrder?.date || null)
+      ...clean,
+      quantity: Number(clean.quantity),
+      value: Number(clean.value),
+      date: orderDateToSave(clean.date, editingOrder?.date || null)
     };
 
     // Awaited: delivering now takes the stock and raises the invoice in the
@@ -948,7 +968,7 @@ const Orders = () => {
               <button onClick={closeModal} className="text-slate-400 hover:text-white transition-colors">✕</button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} noValidate className="p-6 space-y-6">
               {/* Status Timeline Stepper (only for existing orders) */}
               {editingOrder && (
                 <div className="bg-brand-primary-lighter/40 rounded-xl p-4 border border-white/5 mb-2">
@@ -1193,6 +1213,7 @@ const Orders = () => {
                     }}
                     className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent"
                   />
+                  <FieldError>{orderErrors.customerName}</FieldError>
                   {(formData.distributorId || formData.dealerId || formData.retailerId) && (
                     <p className="mt-1 text-[11px] text-emerald-400 flex items-center gap-1">
                       <CheckCircle size={11} />
@@ -1208,10 +1229,12 @@ const Orders = () => {
                 <div>
                   <label htmlFor="orders-contact-phone" className="block text-xs font-medium text-slate-300 mb-1.5">Contact Phone</label>
                   <input id="orders-contact-phone" type="text" placeholder="e.g. 9876543210" value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <FieldError>{orderErrors.phone}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="orders-contact-email" className="block text-xs font-medium text-slate-300 mb-1.5">Contact Email</label>
                   <input id="orders-contact-email" type="email" placeholder="e.g. client@prismora.com" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <FieldError>{orderErrors.email}</FieldError>
                 </div>
                 {!(Array.isArray(formData.items) && formData.items.length > 0) && (
                   <div className="col-span-2">
@@ -1257,6 +1280,7 @@ const Orders = () => {
                         <option value="__ADD_NEW__" className="bg-brand-primary text-brand-accent font-bold">+ Add Custom Product</option>
                       </select>
                     )}
+                    <FieldError>{orderErrors.product}</FieldError>
                     {formData.product && !isCustomProduct && (() => {
                       const avail = getAvailableQty(formData.product);
                       return (
@@ -1321,6 +1345,7 @@ const Orders = () => {
                     }}
                     className="w-full glass-input rounded-lg px-4 py-2.5 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                  <FieldError>{orderErrors.quantity}</FieldError>
                   {isQuantityLocked() && (
                     <p className="mt-1 text-[11px] text-amber-400">
                       Locked — stock has already moved against this order. Use Split or raise a new order to change quantity.
@@ -1330,6 +1355,7 @@ const Orders = () => {
                 <div>
                   <label htmlFor="orders-order-value" className="block text-sm font-medium text-slate-300 mb-1.5">Order Value (₹)</label>
                   <input id="orders-order-value" type="number" required disabled={Boolean(billedBy)} value={formData.value} onChange={e => setFormData({ ...formData, value: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white disabled:opacity-60" />
+                  <FieldError>{orderErrors.value}</FieldError>
                   {billedBy && (
                     <p className="mt-1 text-[11px] text-amber-500">Invoiced as {billedBy.id}: value, quantity and items can no longer change. To correct it, record a sales return or issue a credit note.</p>
                   )}
@@ -1352,10 +1378,12 @@ const Orders = () => {
                       <option key={s} value={s} className="bg-brand-primary">{s}</option>
                     ))}
                   </select>
+                  <FieldError>{orderErrors.state}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="orders-city" className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
                   <input id="orders-city" type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <FieldError>{orderErrors.city}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="orders-pincode" className="block text-sm font-medium text-slate-300 mb-1.5">Pincode *</label>
@@ -1412,6 +1440,7 @@ const Orders = () => {
                 <div>
                   <label htmlFor="orders-order-date" className="block text-sm font-medium text-slate-300 mb-1.5">Order Date</label>
                   <input id="orders-order-date" type="date" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
+                  <FieldError>{orderErrors.date}</FieldError>
                 </div>
               </div>
 

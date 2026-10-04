@@ -10,13 +10,38 @@ import {
   ChevronRight, Package2, AlertCircle, Eye, Wallet, IndianRupee, ArrowUpCircle, ArrowDownCircle
 } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
-import { Button, IconButton, PageHeader } from '../components/ui';
+import { Button, IconButton, PageHeader, FieldError, useFieldCheck } from '../components/ui';
+import { cleanForm, lineFieldErrors } from '../utils/formRules';
 import { downloadExcel, itemsText } from '../utils/exportUtils';
 import { isAwaitingGoods } from '../utils/purchasing';
 import { buildVendorLedger } from '../utils/distributorUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
 import { contactProblem, normaliseGstin } from '../utils/contactChecks';
 import { grnBatchProblem } from '../utils/batchNumber';
+
+// Gap 9: the shared input rules (utils/formRules.js).
+const RETURN_SPEC = {
+  vendorId: { label: 'Vendor', required: true },
+  product: { label: 'Product', required: true },
+  quantity: { label: 'Quantity', kind: 'qty', required: true },
+  unitCost: { label: 'Unit cost', kind: 'amount', required: true },
+  reason: { label: 'Reason', required: true },
+};
+const PO_SPEC = { vendorId: { label: 'Vendor', required: true } };
+const PO_LINE_SPEC = {
+  product: { label: 'Product', required: true },
+  quantity: { label: 'Quantity', kind: 'qty', required: true },
+  unitCost: { label: 'Unit cost', kind: 'amount' },
+};
+const poExtra = (f) => lineFieldErrors(f.items, PO_LINE_SPEC);
+const GRN_SPEC = { receivedDate: { label: 'Received date', required: true } };
+const GRN_LINE_SPEC = { receivedQty: { label: 'Quantity received', kind: 'count' } };
+const grnExtra = (f) => ({
+  ...lineFieldErrors(f.items, GRN_LINE_SPEC),
+  ...((f.items || []).some(i => Number(i.receivedQty) > 0) ? {} : { received: 'Quantity received must be more than 0 on at least one line' }),
+});
+const PAYMENT_SPEC = { amount: { label: 'Amount', kind: 'positiveAmount', required: true } };
+const VENDOR_SPEC = { name: { label: 'Vendor name', required: true }, email: { label: 'Email', kind: 'email' } };
 
 
 const statusConfig = {
@@ -109,6 +134,11 @@ export default function Purchases() {
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnForm, setReturnForm] = useState({ vendorId: '', reason: 'Damaged goods', product: '', quantity: '', unitCost: '', notes: '' });
   const [savingReturn, setSavingReturn] = useState(false);
+  const returnCheck = useFieldCheck();
+  const poCheck = useFieldCheck();
+  const grnCheck = useFieldCheck();
+  const paymentCheck = useFieldCheck();
+  const vendorCheck = useFieldCheck();
   // A PO could be created but never opened again — the list showed "1 items"
   // and there was no way to see which item, at what cost, or in which batch.
   const [viewingPO, setViewingPO] = useState(null);
@@ -118,6 +148,11 @@ export default function Purchases() {
   const [poForm, setPOForm] = useState({ vendorId: '', vendorName: '', expectedDate: '', notes: '', items: [{ ...BLANK_LINE }] });
   const [grnForm, setGRNForm] = useState({ receivedDate: new Date().toISOString().split('T')[0], notes: '', items: [] });
   const [vendorForm, setVendorForm] = useState({ name: '', gstin: '', phone: '', email: '', address: '', contactPerson: '', status: 'Active' });
+  const returnErrors = returnCheck.errors(returnForm, RETURN_SPEC);
+  const poErrors = poCheck.errors(poForm, PO_SPEC, poExtra);
+  const grnErrors = grnCheck.errors(grnForm, GRN_SPEC, grnExtra);
+  const paymentErrors = paymentCheck.errors(paymentForm, PAYMENT_SPEC);
+  const vendorErrors = vendorCheck.errors(vendorForm, VENDOR_SPEC);
 
   const canManage = canAccess('purchases', 'full');
   // Warehouse receives the goods, so it records the GRN too — and only that
@@ -181,14 +216,16 @@ export default function Purchases() {
   const handleSubmitReturn = async (e) => {
     e.preventDefault();
     if (savingReturn) return;
-    const vendor = vendors.find(v => v.id === returnForm.vendorId);
+    if (!returnCheck.ok(returnForm, RETURN_SPEC)) return;
+    const rf = cleanForm(returnForm, RETURN_SPEC);
+    const vendor = vendors.find(v => v.id === rf.vendorId);
     setSavingReturn(true);
     const result = await addPurchaseReturn({
-      vendorId: returnForm.vendorId,
+      vendorId: rf.vendorId,
       vendorName: vendor?.name || '',
-      reason: returnForm.reason,
-      items: [{ product: returnForm.product, quantity: Number(returnForm.quantity), unitCost: Number(returnForm.unitCost) }],
-      notes: returnForm.notes,
+      reason: rf.reason,
+      items: [{ product: rf.product, quantity: Number(rf.quantity), unitCost: Number(rf.unitCost) }],
+      notes: rf.notes,
       date: new Date().toISOString(),
       recordedBy: user?.id
     });
@@ -202,14 +239,16 @@ export default function Purchases() {
   const handleRecordPayment = async (e) => {
     e.preventDefault();
     if (!viewingVendor || savingForm) return;
+    if (!paymentCheck.ok(paymentForm, PAYMENT_SPEC)) return;
+    const pf = cleanForm(paymentForm, PAYMENT_SPEC);
     setSavingForm('payment');
     const r = await addVendorPayment({
       vendorId: viewingVendor.id,
-      amount: Number(paymentForm.amount),
-      method: paymentForm.method,
-      reference: paymentForm.reference,
-      date: paymentForm.date ? new Date(paymentForm.date).toISOString() : new Date().toISOString(),
-      notes: paymentForm.notes,
+      amount: Number(pf.amount),
+      method: pf.method,
+      reference: pf.reference,
+      date: pf.date ? new Date(pf.date).toISOString() : new Date().toISOString(),
+      notes: pf.notes,
       recordedBy: user?.id
     });
     setSavingForm(null);
@@ -291,15 +330,16 @@ export default function Purchases() {
   const handleSubmitPO = async (e) => {
     e.preventDefault();
     if (savingForm) return;
+    if (!poCheck.ok(poForm, PO_SPEC, poExtra)) return;
     const vendor = vendors.find(v => v.id === poForm.vendorId);
     setSavingForm('po');
     const r = await addPurchaseOrder({
       vendorId: poForm.vendorId,
       vendorName: vendor?.name || poForm.vendorName,
-      items: poForm.items.map(i => ({ ...i, quantity: Number(i.quantity), unitCost: Number(i.unitCost) })),
+      items: poForm.items.map(i => ({ ...cleanForm(i), quantity: Number(i.quantity), unitCost: Number(i.unitCost) })),
       total: poTotal,
       expectedDate: poForm.expectedDate ? new Date(poForm.expectedDate).toISOString() : null,
-      notes: poForm.notes,
+      notes: String(poForm.notes || '').trim(),
       assignedTo: user.id
     });
     setSavingForm(null);
@@ -324,6 +364,7 @@ export default function Purchases() {
     const had = receivedSoFar(po);
     setGrnTargetPO(po);
     setGrnError('');
+    grnCheck.reset();
     setGRNForm({
       receivedDate: new Date().toISOString().split('T')[0],
       notes: '',
@@ -346,6 +387,7 @@ export default function Purchases() {
     e.preventDefault();
     if (isSavingGRN) return;
     setGrnError('');
+    if (!grnCheck.ok(grnForm, GRN_SPEC, grnExtra)) return;
     // Gap 18 (090): every line receiving units needs a batch number.
     const batchProblem = grnBatchProblem(grnForm.items);
     if (batchProblem) { setGrnError(batchProblem); return; }
@@ -364,7 +406,7 @@ export default function Purchases() {
         expiryDate: i.expiryDate ? new Date(i.expiryDate).toISOString() : null,
       })),
       receivedDate: new Date(grnForm.receivedDate).toISOString(),
-      notes: grnForm.notes,
+      notes: String(grnForm.notes || '').trim(),
       receivedBy: user.id
     });
     setIsSavingGRN(false);
@@ -378,12 +420,14 @@ export default function Purchases() {
     setIsGRNModalOpen(false);
   };
 
-  const openAddVendor = () => { setEditingVendor(null); setVendorForm({ name: '', gstin: '', phone: '', email: '', address: '', contactPerson: '', status: 'Active' }); setIsVendorModalOpen(true); };
-  const openEditVendor = (v) => { setEditingVendor(v); setVendorForm({ name: v.name, gstin: v.gstin || '', phone: v.phone || '', email: v.email || '', address: v.address || '', contactPerson: v.contactPerson || '', status: v.status || 'Active' }); setIsVendorModalOpen(true); };
+  const openAddVendor = () => { setEditingVendor(null); setVendorForm({ name: '', gstin: '', phone: '', email: '', address: '', contactPerson: '', status: 'Active' }); vendorCheck.reset(); setIsVendorModalOpen(true); };
+  const openEditVendor = (v) => { setEditingVendor(v); setVendorForm({ name: v.name, gstin: v.gstin || '', phone: v.phone || '', email: v.email || '', address: v.address || '', contactPerson: v.contactPerson || '', status: v.status || 'Active' }); vendorCheck.reset(); setIsVendorModalOpen(true); };
   const handleSubmitVendor = async (e) => {
     e.preventDefault();
     if (savingForm) return;
-    const payload = { ...vendorForm, gstin: normaliseGstin(vendorForm.gstin) };
+    if (!vendorCheck.ok(vendorForm, VENDOR_SPEC)) return;
+    const clean = cleanForm(vendorForm, VENDOR_SPEC);
+    const payload = { ...clean, gstin: normaliseGstin(clean.gstin) };
     const problem = contactProblem(payload, editingVendor);
     if (problem) { toast(problem, 'error'); return; }
     setSavingForm('vendor');
@@ -404,13 +448,13 @@ export default function Purchases() {
         actions={<>
           <Button icon={Download} onClick={handleExport}>Export</Button>
           {canManage && activeTab === 'orders' && (
-            <Button variant="primary" icon={Plus} onClick={() => setIsPOModalOpen(true)}>Create PO</Button>
+            <Button variant="primary" icon={Plus} onClick={() => { poCheck.reset(); setIsPOModalOpen(true); }}>Create PO</Button>
           )}
           {canManage && activeTab === 'vendors' && (
             <Button variant="primary" icon={Plus} onClick={openAddVendor}>Add Vendor</Button>
           )}
           {canManage && activeTab === 'returns' && (
-            <Button variant="primary" icon={Plus} onClick={() => setIsReturnModalOpen(true)}>Record Return</Button>
+            <Button variant="primary" icon={Plus} onClick={() => { returnCheck.reset(); setIsReturnModalOpen(true); }}>Record Return</Button>
           )}
         </>}
       />
@@ -530,7 +574,7 @@ export default function Purchases() {
                   <tr><td colSpan="9" className="p-12 text-center text-slate-500">
                     <ShoppingBag size={32} className="mx-auto mb-3 opacity-20" />
                     <p>No purchase orders found.</p>
-                    {canManage && <button onClick={() => setIsPOModalOpen(true)} className="mt-4 text-brand-accent hover:underline text-sm">+ Create your first PO</button>}
+                    {canManage && <button onClick={() => { poCheck.reset(); setIsPOModalOpen(true); }} className="mt-4 text-brand-accent hover:underline text-sm">+ Create your first PO</button>}
                   </td></tr>
                 )}
               </tbody>
@@ -670,7 +714,7 @@ export default function Purchases() {
                   <tr><td colSpan="9" className="p-12 text-center text-slate-500">
                     <ShoppingBag size={32} className="mx-auto mb-3 opacity-20" />
                     <p>No purchase returns recorded.</p>
-                    {canManage && <button onClick={() => setIsReturnModalOpen(true)} className="mt-4 text-brand-accent hover:underline text-sm">+ Record your first return</button>}
+                    {canManage && <button onClick={() => { returnCheck.reset(); setIsReturnModalOpen(true); }} className="mt-4 text-brand-accent hover:underline text-sm">+ Record your first return</button>}
                   </td></tr>
                 )}
               </tbody>
@@ -688,7 +732,7 @@ export default function Purchases() {
               <h3 className="text-lg font-bold text-white">Record Purchase Return</h3>
               <button onClick={() => setIsReturnModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={18} /></button>
             </div>
-            <form onSubmit={handleSubmitReturn} className="space-y-4">
+            <form onSubmit={handleSubmitReturn} noValidate className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label htmlFor="purchases-vendor" className={labelCls}>Vendor *</label>
@@ -696,6 +740,7 @@ export default function Purchases() {
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Vendor --</option>
                     {vendors.map(v => <option key={v.id} value={v.id} className="bg-brand-primary">{v.name}</option>)}
                   </select>
+                  <FieldError>{returnErrors.vendorId}</FieldError>
                 </div>
                 <div className="col-span-2">
                   <label htmlFor="purchases-product" className={labelCls}>Product *</label>
@@ -703,9 +748,10 @@ export default function Purchases() {
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Product --</option>
                     {products.map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
                   </select>
+                  <FieldError>{returnErrors.product}</FieldError>
                 </div>
-                <div><label htmlFor="purchases-quantity" className={labelCls}>Quantity *</label><input id="purchases-quantity" required type="number" min="1" value={returnForm.quantity} onChange={e => setReturnForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="purchases-unit-cost" className={labelCls}>Unit Cost (₹) *</label><input id="purchases-unit-cost" required type="number" min="0" value={returnForm.unitCost} onChange={e => setReturnForm(f => ({ ...f, unitCost: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="purchases-quantity" className={labelCls}>Quantity *</label><input id="purchases-quantity" required type="number" min="1" value={returnForm.quantity} onChange={e => setReturnForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} /><FieldError>{returnErrors.quantity}</FieldError></div>
+                <div><label htmlFor="purchases-unit-cost" className={labelCls}>Unit Cost (₹) *</label><input id="purchases-unit-cost" required type="number" min="0" value={returnForm.unitCost} onChange={e => setReturnForm(f => ({ ...f, unitCost: e.target.value }))} className={inputCls} /><FieldError>{returnErrors.unitCost}</FieldError></div>
                 <div className="col-span-2">
                   <label htmlFor="purchases-reason" className={labelCls}>Reason *</label>
                   <select id="purchases-reason" required value={returnForm.reason} onChange={e => setReturnForm(f => ({ ...f, reason: e.target.value }))} className={inputCls}>
@@ -736,7 +782,7 @@ export default function Purchases() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><ShoppingBag className="text-brand-accent" size={20} />Create Purchase Order</h3>
               <button onClick={() => setIsPOModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSubmitPO} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+            <form onSubmit={handleSubmitPO} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="purchases-vendor-2" className={labelCls}>Vendor *</label>
@@ -744,6 +790,7 @@ export default function Purchases() {
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Vendor --</option>
                     {vendors.map(v => <option key={v.id} value={v.id} className="bg-brand-primary">{v.name}</option>)}
                   </select>
+                  <FieldError>{poErrors.vendorId}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="purchases-expected-delivery-date" className={labelCls}>Expected Delivery Date</label>
@@ -765,12 +812,15 @@ export default function Purchases() {
                           <option value="" className="bg-brand-primary">Product...</option>
                           {products.map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
                         </select>
+                        <FieldError>{poErrors[`items.${idx}.product`]}</FieldError>
                       </div>
                       <div className="col-span-2">
                         <input type="number" min="1" required placeholder="Qty" value={item.quantity} onChange={e => updateLineItem(idx, 'quantity', e.target.value)} className="w-full glass-input rounded-lg px-3 py-2 text-xs text-white" />
+                        <FieldError>{poErrors[`items.${idx}.quantity`]}</FieldError>
                       </div>
                       <div className="col-span-2">
                         <input type="number" min="0" placeholder="Unit Cost" value={item.unitCost} onChange={e => updateLineItem(idx, 'unitCost', e.target.value)} className="w-full glass-input rounded-lg px-3 py-2 text-xs text-white" />
+                        <FieldError>{poErrors[`items.${idx}.unitCost`]}</FieldError>
                       </div>
                       <div className="col-span-2">
                         <input type="text" placeholder="Batch#" value={item.batchNumber} onChange={e => updateLineItem(idx, 'batchNumber', e.target.value)} className="w-full glass-input rounded-lg px-3 py-2 text-xs text-white" />
@@ -814,7 +864,7 @@ export default function Purchases() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><Truck className="text-brand-accent" size={20} />Record GRN — {grnTargetPO.id}</h3>
               <button onClick={() => setIsGRNModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSubmitGRN} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+            <form onSubmit={handleSubmitGRN} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
               <div className="bg-brand-primary-lighter/30 rounded-xl p-3 border border-white/5 text-xs text-slate-400">
                 <span className="font-semibold text-white">Vendor:</span> {grnTargetPO.vendorName} &nbsp;|&nbsp;
                 <span className="font-semibold text-white">PO Total:</span> {formatCurrency(grnTargetPO.total)}
@@ -822,6 +872,7 @@ export default function Purchases() {
               <div>
                 <label htmlFor="purchases-received-date" className={labelCls}>Received Date *</label>
                 <input id="purchases-received-date" required type="date" value={grnForm.receivedDate} onChange={e => setGRNForm(f => ({ ...f, receivedDate: e.target.value }))} className={inputCls} />
+                <FieldError>{grnErrors.receivedDate}</FieldError>
               </div>
               <div>
                 <label className={labelCls}>Items Received</label>
@@ -847,6 +898,7 @@ export default function Purchases() {
                           <input id="purchases-qty-received" type="number" min="0" max={item.orderedQty != null ? Math.max(0, item.orderedQty - (item.alreadyReceived || 0)) : undefined} value={item.receivedQty}
                             onChange={e => patch('receivedQty', e.target.value)}
                             className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" placeholder="Qty" />
+                          <FieldError>{grnErrors[`items.${idx}.receivedQty`]}</FieldError>
                         </div>
                         <div>
                           <label htmlFor="purchases-batch" className="block text-[10px] text-slate-500 mb-1">Batch # *</label>
@@ -868,6 +920,7 @@ export default function Purchases() {
                   );
                 })}
               </div>
+              <FieldError>{grnErrors.received}</FieldError>
               {grnError && <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">{grnError}</p>}
               <div>
                 <label htmlFor="purchases-notes-2" className={labelCls}>Notes</label>
@@ -902,7 +955,7 @@ export default function Purchases() {
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-bold text-white flex items-center gap-1.5"><Wallet size={14} className="text-brand-accent" />Vendor Ledger</h4>
                 {canManage && (liveVendor.outstandingAmount || 0) > 0 && (
-                  <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>
+                  <button onClick={() => { paymentCheck.reset(); setIsPaymentModalOpen(true); }} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>
                 )}
               </div>
               {ledgerEntries.length > 0 ? (
@@ -947,7 +1000,7 @@ export default function Purchases() {
             </div>
             <div className="flex gap-3 justify-end p-6 pt-4 border-t border-white/5 flex-shrink-0">
               {canManage && (viewingVendor.outstandingAmount || 0) > 0 && (
-                <button onClick={() => setIsPaymentModalOpen(true)} className="px-4 py-2 text-sm btn-accent rounded-xl flex items-center gap-2"><IndianRupee size={14} />Record Payment</button>
+                <button onClick={() => { paymentCheck.reset(); setIsPaymentModalOpen(true); }} className="px-4 py-2 text-sm btn-accent rounded-xl flex items-center gap-2"><IndianRupee size={14} />Record Payment</button>
               )}
               <button onClick={() => setViewingVendor(null)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Close</button>
             </div>
@@ -964,10 +1017,11 @@ export default function Purchases() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><IndianRupee size={18} className="text-brand-accent" />Pay {viewingVendor.name}</h3>
               <button onClick={() => setIsPaymentModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={18} /></button>
             </div>
-            <form onSubmit={handleRecordPayment} className="space-y-4">
+            <form onSubmit={handleRecordPayment} noValidate className="space-y-4">
               <div>
                 <label htmlFor="purchases-amount" className={labelCls}>Amount (₹) *</label>
                 <input id="purchases-amount" required type="number" min="1" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
+                <FieldError>{paymentErrors.amount}</FieldError>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1007,13 +1061,13 @@ export default function Purchases() {
               <h3 className="text-lg font-bold text-white">{editingVendor ? 'Edit Vendor' : 'Add Vendor'}</h3>
               <button onClick={() => setIsVendorModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={18} /></button>
             </div>
-            <form onSubmit={handleSubmitVendor} className="space-y-4">
+            <form onSubmit={handleSubmitVendor} noValidate className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2"><label htmlFor="purchases-vendor-name" className={labelCls}>Vendor Name *</label><input id="purchases-vendor-name" required type="text" value={vendorForm.name} onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Gujarat Herbal Supplies" className={inputCls} /></div>
+                <div className="col-span-2"><label htmlFor="purchases-vendor-name" className={labelCls}>Vendor Name *</label><input id="purchases-vendor-name" required type="text" value={vendorForm.name} onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Gujarat Herbal Supplies" className={inputCls} /><FieldError>{vendorErrors.name}</FieldError></div>
                 <div><label htmlFor="purchases-gstin" className={labelCls}>GSTIN</label><input id="purchases-gstin" type="text" value={vendorForm.gstin} onChange={e => setVendorForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className={inputCls} /></div>
                 <div><label htmlFor="purchases-contact-person" className={labelCls}>Contact Person</label><input id="purchases-contact-person" type="text" value={vendorForm.contactPerson} onChange={e => setVendorForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} /></div>
                 <div><label htmlFor="purchases-phone" className={labelCls}>Phone</label><input id="purchases-phone" type="text" value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="purchases-email" className={labelCls}>Email</label><input id="purchases-email" type="email" value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="purchases-email" className={labelCls}>Email</label><input id="purchases-email" type="email" value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /><FieldError>{vendorErrors.email}</FieldError></div>
                 <div className="col-span-2"><label htmlFor="purchases-address" className={labelCls}>Address</label><textarea id="purchases-address" rows="2" value={vendorForm.address} onChange={e => setVendorForm(f => ({ ...f, address: e.target.value }))} className={`${inputCls} resize-none`} /></div>
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">

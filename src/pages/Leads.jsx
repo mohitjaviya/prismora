@@ -10,7 +10,8 @@ import { downloadExcel } from '../utils/exportUtils';
 import { optionsFor, colorForKey, labelForKey } from '../utils/masterLists';
 import { territoryFields, territoryName } from '../utils/territory';
 import { attributionFor } from '../utils/attribution';
-import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
+import { PageHeader, DataTable, Button, IconButton, Badge, Select, FieldError, useFieldCheck } from '../components/ui';
+import { cleanForm, checkLines, hasErrors } from '../utils/formRules';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { isConvertedStatus, isOpenLead } from '../utils/leadStatus';
@@ -18,6 +19,18 @@ import { missingDelivery } from '../utils/delivery';
 import LastChanged from '../components/audit/LastChanged';
 import LeadAttachments from '../components/LeadAttachments';
 import { changedFields, describeConflict, LEAD_FIELDS } from '../utils/staleEdit';
+
+// Gap 9: the shared input rules (utils/formRules.js).
+const LEAD_SPEC = {
+  name: { label: 'Name', required: true },
+  email: { label: 'Email', kind: 'email' },
+  phone: { label: 'Phone', kind: 'mobile' },
+  dealValue: { label: 'Deal value', kind: 'amount', required: true },
+};
+const CONVERT_LINE_SPEC = {
+  quantity: { label: 'Quantity', kind: 'qty' },
+  unitPrice: { label: 'Unit price', kind: 'amount', required: true },
+};
 
 // Moving a lead into a conversion status means the customer has committed,
 // which is when an order is raised. The drag handler and the edit form both
@@ -100,6 +113,7 @@ const Leads = () => {
   });
 
   const handleOpenModal = (lead = null) => {
+    leadCheck.reset();
     if (lead) {
       setEditingLead(lead);
       // Normalize productInterest to always be an array
@@ -147,6 +161,7 @@ const Leads = () => {
   // pincode are asked for here so the order is not stopped at Pending for them.
   const [convertDelivery, setConvertDelivery] = useState({ state: '', city: '', deliveryAddress: '', deliveryPincode: '' });
   const [convertError, setConvertError] = useState('');
+  const [convertTried, setConvertTried] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
 
   const priceFor = (name) => {
@@ -163,6 +178,7 @@ const Leads = () => {
     setConvertStatus(targetStatus);
     setConvertDelivery({ state: lead.state || '', city: lead.city || '', deliveryAddress: '', deliveryPincode: '' });
     setConvertError('');
+    setConvertTried(false);
     setConvertingLead(lead);
   };
 
@@ -186,9 +202,20 @@ const Leads = () => {
   // Guards that hold from the first click, before React re-renders — two
   // clicks in the same instant used to save twice (A06, B06).
   const savingRef = useRef(false);
+  const leadCheck = useFieldCheck();
+  const leadErrors = leadCheck.errors(formData, LEAD_SPEC);
   const convertingRef = useRef(false);
+  // Only rows with a product are order lines; their quantity must be above 0.
+  const convertLineErrors = (rows) => checkLines(rows.map(r => (r.name ? r : {})), CONVERT_LINE_SPEC);
+  const convertErrors = convertTried ? convertLineErrors(convertItems) : {};
   const confirmConversion = async () => {
     if (!convertingLead || isConverting || convertingRef.current) return;
+    const named = convertItems.filter(r => r.name);
+    if (hasErrors(convertLineErrors(convertItems)) || named.some(r => !String(r.quantity ?? '').trim())) {
+      setConvertTried(true);
+      if (named.some(r => !String(r.quantity ?? '').trim())) setConvertError('Enter a quantity (more than 0) for every product, or remove the row.');
+      return;
+    }
     convertingRef.current = true;
     setIsConverting(true);
     setConvertError('');
@@ -210,6 +237,8 @@ const Leads = () => {
   };
 
   const submitLeadForm = async () => {
+    if (!leadCheck.ok(formData, LEAD_SPEC)) return;
+    const clean = cleanForm(formData, LEAD_SPEC);
 
     if (formData.status === 'Converted') {
       if (!formData.state || !formData.state.trim() || !formData.city || !formData.city.trim()) {
@@ -222,9 +251,9 @@ const Leads = () => {
     (formData.productInterest || []).forEach(p => addProduct(p));
 
     const dataToSave = {
-      ...formData,
-      followUpDate: formData.followUpDate ? new Date(formData.followUpDate).toISOString() : null,
-      dealValue: Number(formData.dealValue)
+      ...clean,
+      followUpDate: clean.followUpDate ? new Date(clean.followUpDate).toISOString() : null,
+      dealValue: Number(clean.dealValue)
     };
 
     // A status change into conversion is confirmed separately, so save the rest
@@ -774,11 +803,12 @@ const Leads = () => {
               <button onClick={closeModal} className="text-slate-400 hover:text-white transition-colors">✕</button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} noValidate className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-5">
                 <div>
                   <label htmlFor="leads-name" className="block text-sm font-medium text-slate-300 mb-1.5">Name</label>
                   <input id="leads-name" type="text" required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <FieldError>{leadErrors.name}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="leads-company" className="block text-sm font-medium text-slate-300 mb-1.5">Company</label>
@@ -787,10 +817,12 @@ const Leads = () => {
                 <div>
                   <label htmlFor="leads-email" className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
                   <input id="leads-email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <FieldError>{leadErrors.email}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="leads-phone" className="block text-sm font-medium text-slate-300 mb-1.5">Phone</label>
                   <input id="leads-phone" type="text" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <FieldError>{leadErrors.phone}</FieldError>
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">
@@ -856,6 +888,7 @@ const Leads = () => {
                 <div>
                   <label htmlFor="leads-deal-value" className="block text-sm font-medium text-slate-300 mb-1.5">Deal Value (₹)</label>
                   <input id="leads-deal-value" type="number" required value={formData.dealValue} onChange={e => setFormData({ ...formData, dealValue: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <FieldError>{leadErrors.dealValue}</FieldError>
                 </div>
 
                 <div>
@@ -1022,6 +1055,7 @@ const Leads = () => {
                         placeholder="0"
                         className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
                       />
+                      <FieldError>{convertErrors[idx]?.quantity}</FieldError>
                     </div>
                     <div className="col-span-5 sm:col-span-2">
                       <label htmlFor="leads-unit" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Unit ₹</label>
@@ -1030,6 +1064,7 @@ const Leads = () => {
                         onChange={e => updateConvertItem(idx, { unitPrice: e.target.value })}
                         className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
                       />
+                      <FieldError>{convertErrors[idx]?.unitPrice}</FieldError>
                     </div>
                     <div className="col-span-2 sm:col-span-2 flex items-center justify-end gap-1">
                       <span className="text-sm font-medium text-white tabular-nums">

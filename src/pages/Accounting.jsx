@@ -6,10 +6,10 @@ import { Navigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Wallet, TrendingUp, Plus, Trash2, FileText, Clock, Check, X, CreditCard, DollarSign, Printer, Mail, MessageSquare, ShoppingBag, AlertTriangle, Undo2 } from 'lucide-react';
 import { useToast, useConfirm } from '../context/DialogContext';
-import { Button, Card, IconButton, PageHeader } from '../components/ui';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, Legend, PieChart, Pie, Cell 
+import { Button, Card, IconButton, PageHeader, useFieldCheck, FieldError } from '../components/ui';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend, PieChart, Pie, Cell
 } from 'recharts';
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, colorAt } from '../utils/chartTheme';
 import { MONTHS, monthKey } from '../utils/months';
@@ -26,11 +26,14 @@ import { INVOICE_STATUSES, isSettled, isOpen, amountDue } from '../utils/invoice
 import { profitAndLoss, proformaSummary, receivables, netSalesByMonth } from '../utils/financials';
 
 
+const CREDIT_SPEC = { amount: { label: 'Credit amount', kind: 'amount', required: true } };
+const EXPENSE_AC_SPEC = { amount: { label: 'Amount', kind: 'amount', required: true } };
+
 const Accounting = () => {
   const { user, users, canAccessData, canAccess } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
-   const {
+  const {
     orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, leads, productCatalog, distributors,
     distributorIncentives, schemeClaims, sfaExpenses, reconcilePayouts,
     addInvoice, convertInvoice, updateInvoiceStatus, deleteInvoice,
@@ -61,7 +64,7 @@ const Accounting = () => {
   const [reconcileResult, setReconcileResult] = useState(null);
   const [activeTab, setActiveTab] = useState(canAccess('accounting', 'full') ? 'overview' : 'invoices'); // 'overview' | 'invoices' | 'expenses'
   const [invoiceFilter, setInvoiceFilter] = useState('All'); // 'All' | a status in INVOICE_STATUSES | 'Proforma'
-  
+
   // Modals state
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -100,6 +103,9 @@ const Accounting = () => {
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDescription, setExpenseDescription] = useState('');
   const [expenseDate, setExpenseDate] = useState(() => indiaDay());
+
+  const creditCheck = useFieldCheck();
+  const expenseCheck = useFieldCheck();
 
   // Financial Calculations — one definition, shared with the Director's
   // cockpit, the Dashboard and the Reports (utils/financials.js):
@@ -220,7 +226,7 @@ const Accounting = () => {
 
     if ((num = num.toString()).length > 9) return 'overflow';
     let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-    if (!n) return ''; 
+    if (!n) return '';
     let str = '';
     str += (Number(n[1]) != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
     str += (Number(n[2]) != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
@@ -233,7 +239,7 @@ const Accounting = () => {
   // Get trend data (grouped by month)
   const getMonthlyTrendData = () => {
     const data = {};
-    
+
     // Default initial empty states
     MONTHS.forEach(m => {
       data[m] = { month: m, Income: 0, Expenses: 0 };
@@ -273,8 +279,8 @@ const Accounting = () => {
   };
 
   // Invoice generation filter (orders that do not have invoices yet)
-  const uninvoicedOrders = orders.filter(order => 
-    order.status !== 'Cancelled' && 
+  const uninvoicedOrders = orders.filter(order =>
+    order.status !== 'Cancelled' &&
     !invoices.some(inv => inv.orderId === order.id)
   );
 
@@ -358,12 +364,8 @@ const Accounting = () => {
   const handleAddExpenseSubmit = async (e) => {
     e.preventDefault();
     if (isSavingExpense) return;
+    if (!expenseCheck.ok({ amount: expenseAmount }, EXPENSE_AC_SPEC)) return;
     const amount = Number(expenseAmount);
-
-    if (isNaN(amount) || amount <= 0) {
-      toast("Please enter a valid amount.", 'error');
-      return;
-    }
     // A cost not yet incurred is not an expense; the database refuses it too (084).
     if (expenseDate > indiaDay()) {
       toast('The expense date cannot be in the future.', 'error');
@@ -413,8 +415,9 @@ const Accounting = () => {
   const handleCreditSubmit = async (e) => {
     e.preventDefault();
     if (isSavingCredit) return;
+    if (!creditCheck.ok(creditForm, CREDIT_SPEC)) return;
+    if (!creditForm.customerName) { toast('Enter a valid customer name.', 'error'); return; }
     const amount = Number(creditForm.amount);
-    if (!creditForm.customerName || isNaN(amount) || amount <= 0) { toast('Enter a valid customer and amount.', 'error'); return; }
     setIsSavingCredit(true);
     try {
       // Kept open until the database has the note; the partner's balance moves
@@ -451,20 +454,20 @@ const Accounting = () => {
         // own accounts address used to stand in, so a reminder went nowhere.
         const phone = orderObj?.phone || leadObj?.phone || distObj?.phone || '';
         const email = orderObj?.email || leadObj?.email || distObj?.email || '';
-        
+
         const totalValue = Number(inv.amount || 0) + Number(inv.tax || 0);
-        
+
         // Calculate calendar day difference
         const dueDateObj = new Date(inv.dueDate);
         const todayObj = new Date();
         const todayStart = new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate());
         const dueStart = new Date(dueDateObj.getFullYear(), dueDateObj.getMonth(), dueDateObj.getDate());
-        
+
         const msDiff = todayStart.getTime() - dueStart.getTime();
         const daysDiff = Math.round(msDiff / 86400000); // positive if overdue, negative if upcoming
         const formattedDate = dueDateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-        
-        let statusText = '';
+
+        let statusText;
         if (daysDiff > 0) {
           statusText = `is currently overdue by ${daysDiff} day${daysDiff > 1 ? 's' : ''}`;
         } else if (daysDiff < 0) {
@@ -473,7 +476,7 @@ const Accounting = () => {
         } else {
           statusText = `is due today`;
         }
-        
+
         const messageText = `Hi ${inv.customerName},\n\nThis is a payment reminder from Prismora. Invoice ${inv.id} for ₹${totalValue.toLocaleString('en-IN')} ${statusText}. Please arrange for payment at your earliest convenience.\n\nThank you,\nPrismora Finance Team`;
 
         return (
@@ -591,103 +594,99 @@ const Accounting = () => {
 
       <BalanceCheckPanel watch={`${rawInvoices.length}:${rawInvoices.filter(isSettled).length}:${(distributorPayments || []).length}:${(creditNotes || []).length}`} />
 
-        {missingPayouts.length > 0 && canAccess('accounting', 'full') && (
-          <Card padding="p-4" className="border-amber-500/25 bg-amber-500/5">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="flex items-start gap-3 min-w-0">
-                <AlertTriangle size={15} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-xs text-amber-300 leading-relaxed">
-                    <span className="font-bold">
-                      {missingPayouts.length === 1
-                        ? 'One payout is missing from the books'
-                        : `${missingPayouts.length} payouts are missing from the books`}
-                      {' — '}{formatCurrency(missingPayoutValue)}.
-                    </span>{' '}
-                    Scheme incentives, settled claims and approved field expenses used to change a status and nothing
-                    else, so the money left the business without being recorded. Net profit above is overstated by
-                    this much.
-                  </p>
-                  <p className="text-[11px] text-amber-300/70 mt-1.5 leading-relaxed">
-                    Anything paid from now on is booked as it happens. This only covers what was paid before that.
-                  </p>
-                </div>
+      {missingPayouts.length > 0 && canAccess('accounting', 'full') && (
+        <Card padding="p-4" className="border-amber-500/25 bg-amber-500/5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3 min-w-0">
+              <AlertTriangle size={15} className="text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs text-amber-300 leading-relaxed">
+                  <span className="font-bold">
+                    {missingPayouts.length === 1
+                      ? 'One payout is missing from the books'
+                      : `${missingPayouts.length} payouts are missing from the books`}
+                    {' — '}{formatCurrency(missingPayoutValue)}.
+                  </span>{' '}
+                  Scheme incentives, settled claims and approved field expenses used to change a status and nothing
+                  else, so the money left the business without being recorded. Net profit above is overstated by
+                  this much.
+                </p>
+                <p className="text-[11px] text-amber-300/70 mt-1.5 leading-relaxed">
+                  Anything paid from now on is booked as it happens. This only covers what was paid before that.
+                </p>
               </div>
-              <Button
-                variant="primary"
-                disabled={reconciling}
-                onClick={async () => {
-                  setReconciling(true);
-                  setReconcileResult(await reconcilePayouts());
-                  setReconciling(false);
-                }}
-              >
-                {reconciling ? 'Booking…' : 'Book them'}
-              </Button>
             </div>
-          </Card>
-        )}
+            <Button
+              variant="primary"
+              disabled={reconciling}
+              onClick={async () => {
+                setReconciling(true);
+                setReconcileResult(await reconcilePayouts());
+                setReconciling(false);
+              }}
+            >
+              {reconciling ? 'Booking…' : 'Book them'}
+            </Button>
+          </div>
+        </Card>
+      )}
 
-        {reconcileResult && (
-          <Card
-            padding="p-4"
-            className={reconcileResult.failed > 0
-              ? 'border-rose-500/25 bg-rose-500/5'
-              : 'border-emerald-500/25 bg-emerald-500/5'}
-          >
-            <p className={`text-xs leading-relaxed ${reconcileResult.failed > 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
-              {reconcileResult.booked > 0 && (
-                <>Booked {reconcileResult.booked} payout{reconcileResult.booked === 1 ? '' : 's'} worth{' '}
+      {reconcileResult && (
+        <Card
+          padding="p-4"
+          className={reconcileResult.failed > 0
+            ? 'border-rose-500/25 bg-rose-500/5'
+            : 'border-emerald-500/25 bg-emerald-500/5'}
+        >
+          <p className={`text-xs leading-relaxed ${reconcileResult.failed > 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+            {reconcileResult.booked > 0 && (
+              <>Booked {reconcileResult.booked} payout{reconcileResult.booked === 1 ? '' : 's'} worth{' '}
                 {formatCurrency(reconcileResult.value)}. </>
-              )}
-              {reconcileResult.failed > 0
-                ? `${reconcileResult.failed} could not be written and are still missing — the reason is in the browser console. Running this again is safe.`
-                : reconcileResult.booked === 0 ? 'Nothing needed booking.' : 'Net profit above now accounts for them.'}
-            </p>
-          </Card>
-        )}
+            )}
+            {reconcileResult.failed > 0
+              ? `${reconcileResult.failed} could not be written and are still missing — the reason is in the browser console. Running this again is safe.`
+              : reconcileResult.booked === 0 ? 'Nothing needed booking.' : 'Net profit above now accounts for them.'}
+          </p>
+        </Card>
+      )}
 
       {/* Tabs Menu */}
       <div className="flex border-b border-white/5 pb-px">
         {canAccess('accounting', 'full') && (
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
-              activeTab === 'overview'
-                ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
-                : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
+            className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${activeTab === 'overview'
+              ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
+              : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
           >
             Overview
           </button>
         )}
         <button
           onClick={() => setActiveTab('invoices')}
-          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
-            activeTab === 'invoices'
-              ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
-              : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-          }`}
+          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${activeTab === 'invoices'
+            ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
+            : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
         >
           Invoices ({invoices.length})
         </button>
         <button
           onClick={() => setActiveTab('expenses')}
-          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
-            activeTab === 'expenses'
-              ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
-              : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-          }`}
+          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${activeTab === 'expenses'
+            ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
+            : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
         >
           Expenses ({expenses.length})
         </button>
         <button
           onClick={() => setActiveTab('credit')}
-          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${
-            activeTab === 'credit'
-              ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
-              : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-          }`}
+          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-all ${activeTab === 'credit'
+            ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
+            : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
         >
           Credit Notes ({(creditNotes || []).length})
         </button>
@@ -817,7 +816,7 @@ const Accounting = () => {
                     <CartesianGrid {...CHART_GRID} />
                     <XAxis dataKey="month" {...CHART_AXIS} />
                     <YAxis {...CHART_AXIS} tickFormatter={(val) => `₹${val / 1000}k`} />
-                    <Tooltip 
+                    <Tooltip
                       {...CHART_TOOLTIP}
                       formatter={(val) => `₹${val.toLocaleString()}`}
                       cursor={false}
@@ -854,7 +853,7 @@ const Accounting = () => {
                             <Cell key={`cell-${idx}`} fill={colorAt(idx)} />
                           ))}
                         </Pie>
-                        <Tooltip 
+                        <Tooltip
                           {...CHART_TOOLTIP}
                           formatter={(val) => `₹${val.toLocaleString()}`}
                         />
@@ -896,11 +895,10 @@ const Accounting = () => {
                 <button
                   key={status}
                   onClick={() => setInvoiceFilter(status)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    invoiceFilter === status
-                      ? 'bg-brand-accent/15 border-brand-accent text-brand-accent shadow-sm shadow-brand-accent/15'
-                      : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400 hover:text-white'
-                  }`}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all ${invoiceFilter === status
+                    ? 'bg-brand-accent/15 border-brand-accent text-brand-accent shadow-sm shadow-brand-accent/15'
+                    : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400 hover:text-white'
+                    }`}
                 >
                   {status}
                 </button>
@@ -909,13 +907,12 @@ const Accounting = () => {
                   converts them. The count is always shown so none is forgotten. */}
               <button
                 onClick={() => setInvoiceFilter('Proforma')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                  invoiceFilter === 'Proforma'
-                    ? 'bg-amber-500/15 border-amber-500 text-amber-300'
-                    : proformaCount > 0
-                      ? 'bg-amber-500/5 border-amber-500/30 text-amber-400 hover:text-amber-300'
-                      : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400 hover:text-white'
-                }`}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all ${invoiceFilter === 'Proforma'
+                  ? 'bg-amber-500/15 border-amber-500 text-amber-300'
+                  : proformaCount > 0
+                    ? 'bg-amber-500/5 border-amber-500/30 text-amber-400 hover:text-amber-300'
+                    : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400 hover:text-white'
+                  }`}
               >
                 Proforma drafts not yet converted ({proformaCount})
               </button>
@@ -1007,6 +1004,7 @@ const Accounting = () => {
                 <div>
                   <label htmlFor="accounting-credit-amount" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Credit Amount (₹) *</label>
                   <input id="accounting-credit-amount" type="number" required min="1" value={creditForm.amount} onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600" />
+                  <FieldError errors={creditCheck.errors(creditForm, CREDIT_SPEC)} field="amount" />
                 </div>
                 <div>
                   <label htmlFor="accounting-reason" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Reason *</label>
@@ -1032,7 +1030,7 @@ const Accounting = () => {
         <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-[8vh] overflow-hidden">
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsInvoiceModalOpen(false)}></div>
-          
+
           {/* Modal Panel */}
           <div className="relative glass-panel bg-brand-primary w-full max-w-lg max-h-[90vh] rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 flex flex-col overflow-hidden">
             {/* Sticky Header */}
@@ -1062,11 +1060,10 @@ const Accounting = () => {
                         setCustomCustomerName('');
                         setCustomAmount('');
                       }}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all ${
-                        !selectedOrderId
-                          ? 'bg-brand-accent/20 border-brand-accent text-brand-accent'
-                          : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400'
-                      }`}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all ${!selectedOrderId
+                        ? 'bg-brand-accent/20 border-brand-accent text-brand-accent'
+                        : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400'
+                        }`}
                     >
                       Custom Invoice
                     </button>
@@ -1081,11 +1078,10 @@ const Accounting = () => {
                           toast("No uninvoiced orders available.", 'error');
                         }
                       }}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all ${
-                        selectedOrderId
-                          ? 'bg-brand-accent/20 border-brand-accent text-brand-accent'
-                          : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400'
-                      }`}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all ${selectedOrderId
+                        ? 'bg-brand-accent/20 border-brand-accent text-brand-accent'
+                        : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400'
+                        }`}
                     >
                       Bill CRM Order
                     </button>
@@ -1210,22 +1206,20 @@ const Accounting = () => {
                     <button
                       type="button"
                       onClick={() => setInvoiceWithTax(true)}
-                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
-                        invoiceWithTax
-                          ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/30'
-                          : 'bg-brand-primary-lighter/40 text-slate-400 border-white/5 hover:text-white'
-                      }`}
+                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${invoiceWithTax
+                        ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/30'
+                        : 'bg-brand-primary-lighter/40 text-slate-400 border-white/5 hover:text-white'
+                        }`}
                     >
                       With GST{invoicePreview.rateLabel ? ` (${invoicePreview.rateLabel})` : ''}
                     </button>
                     <button
                       type="button"
                       onClick={() => setInvoiceWithTax(false)}
-                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
-                        !invoiceWithTax
-                          ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/30'
-                          : 'bg-brand-primary-lighter/40 text-slate-400 border-white/5 hover:text-white'
-                      }`}
+                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${!invoiceWithTax
+                        ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/30'
+                        : 'bg-brand-primary-lighter/40 text-slate-400 border-white/5 hover:text-white'
+                        }`}
                     >
                       Without GST
                     </button>
@@ -1315,7 +1309,7 @@ const Accounting = () => {
         <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-[8vh] overflow-hidden">
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsExpenseModalOpen(false)}></div>
-          
+
           {/* Modal Panel */}
           <div className="relative glass-panel bg-brand-primary w-full max-w-lg max-h-[90vh] rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 flex flex-col overflow-hidden">
             {/* Sticky Header */}
@@ -1362,6 +1356,7 @@ const Accounting = () => {
                     onChange={(e) => setExpenseAmount(e.target.value)}
                     className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600"
                   />
+                  <FieldError errors={expenseCheck.errors({ amount: expenseAmount }, EXPENSE_AC_SPEC)} field="amount" />
                 </div>
 
                 <div>
@@ -1460,7 +1455,7 @@ const Accounting = () => {
           return (
             <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 overflow-y-auto bg-black/70 backdrop-blur-sm pt-[5vh] print-modal-wrapper">
               <div className="relative w-full max-w-3xl bg-white text-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-8 border border-slate-200 print-modal-box">
-                
+
                 {/* Header Actions (Not Printed) */}
                 <div className="bg-slate-100 px-6 py-4 flex justify-between items-center border-b border-slate-200 no-print flex-shrink-0">
                   <span className="font-bold text-slate-700 flex items-center gap-1.5">
@@ -1586,7 +1581,7 @@ const Accounting = () => {
                         <p className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Total Amount in Words:</p>
                         <p className="font-semibold text-slate-950 italic mt-1">{numberToWords(grandTotal)}</p>
                       </div>
-                      
+
                       <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-1">
                         <p className="font-bold text-slate-950 mb-1 text-[10px] uppercase tracking-wider">GST Tax Summary:</p>
                         {proforma ? (

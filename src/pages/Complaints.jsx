@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { MessageSquareWarning, Plus, Trash2, X, Download, CheckCircle, Clock, AlertTriangle, Eye, RotateCcw } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
-import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
+import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select, FieldError, useFieldCheck } from '../components/ui';
+import { cleanForm } from '../utils/formRules';
 import { downloadExcel } from '../utils/exportUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
 
@@ -22,6 +23,13 @@ const formatDate = (d) =>
 const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
+// Gap 9: the shared input rules (utils/formRules.js).
+const COMPLAINT_SPEC = {
+  customerName: { label: 'Customer name', required: true },
+  customerPhone: { label: 'Customer phone', kind: 'mobile' },
+  complaintType: { label: 'Complaint type', required: true },
+};
+const RESOLVE_SPEC = { status: { label: 'Status', required: true }, resolution: { label: 'Resolution notes', required: true } };
 const BLANK_FORM = { customerName: '', customerPhone: '', product: '', batchNumber: '', complaintType: '', description: '', assignedTo: '' };
 const BLANK_RESOLVE = { status: 'Resolved', resolution: '' };
 
@@ -51,6 +59,9 @@ export default function Complaints() {
   const [viewingComplaint, setViewingComplaint] = useState(null);
   const [targetComplaint, setTargetComplaint] = useState(null);
   const [form, setForm] = useState(BLANK_FORM);
+  const addCheck = useFieldCheck();
+  const resolveCheck = useFieldCheck();
+  const addErrors = addCheck.errors(form, COMPLAINT_SPEC);
   const [resolveForm, setResolveForm] = useState(BLANK_RESOLVE);
   const [isSavingAdd, setIsSavingAdd] = useState(false);
   const [isSavingResolve, setIsSavingResolve] = useState(false);
@@ -102,19 +113,21 @@ export default function Complaints() {
     return matchOwner && matchSearch && matchStatus && matchType;
   }), [complaints, isParty, party, search, statusFilter, typeFilter]);
 
-  const openResolve = (c) => { setTargetComplaint(c); setResolveForm({ status: 'Resolved', resolution: c.resolution || '' }); setIsResolveOpen(true); };
+  const openResolve = (c) => { setTargetComplaint(c); setResolveForm({ status: 'Resolved', resolution: c.resolution || '' }); resolveCheck.reset(); setIsResolveOpen(true); };
 
   const openAdd = () => {
     setForm(isParty ? { ...BLANK_FORM, customerName: party?.name || '', customerPhone: party?.phone || '' } : BLANK_FORM);
+    addCheck.reset();
     setIsAddOpen(true);
   };
 
   const handleSubmitAdd = async (e) => {
     e.preventDefault();
     if (isSavingAdd) return;
+    if (!addCheck.ok(form, COMPLAINT_SPEC)) return;
     setIsSavingAdd(true);
     const r = await addComplaint({
-      ...form,
+      ...cleanForm(form, COMPLAINT_SPEC),
       assignedTo: form.assignedTo || user.id,
       distributorId: user?.role === 'Distributor' ? party?.id : undefined,
       dealerId: user?.role === 'Dealer' ? party?.id : undefined,
@@ -130,8 +143,9 @@ export default function Complaints() {
   const handleSubmitResolve = async (e) => {
     e.preventDefault();
     if (isSavingResolve) return;
+    if (!resolveCheck.ok(resolveForm, RESOLVE_SPEC)) return;
     setIsSavingResolve(true);
-    const r = await updateComplaintStatus(targetComplaint.id, resolveForm.status, resolveForm.resolution);
+    const r = await updateComplaintStatus(targetComplaint.id, resolveForm.status, resolveForm.resolution.trim());
     setIsSavingResolve(false);
     if (!r?.ok) { toast(r?.error || 'The complaint could not be updated.', 'error'); return; }
     toast(`Complaint ${targetComplaint.id} → ${resolveForm.status}.`, 'success');
@@ -333,7 +347,7 @@ export default function Complaints() {
               <p className="text-xs text-slate-500">{targetComplaint.id}</p>
               <p className="text-white font-semibold">{targetComplaint.customerName} — {targetComplaint.complaintType}</p>
             </div>
-            <form onSubmit={handleSubmitResolve} className="space-y-4">
+            <form onSubmit={handleSubmitResolve} noValidate className="space-y-4">
               <div>
                 <label htmlFor="complaints-new-status" className={labelCls}>New Status *</label>
                 <select id="complaints-new-status" required value={resolveForm.status} onChange={e => setResolveForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
@@ -343,6 +357,7 @@ export default function Complaints() {
               <div>
                 <label htmlFor="complaints-resolution-notes" className={labelCls}>Resolution Notes</label>
                 <textarea id="complaints-resolution-notes" required rows="3" value={resolveForm.resolution} onChange={e => setResolveForm(f => ({ ...f, resolution: e.target.value }))} placeholder="Describe how the complaint was resolved..." className={`${inputCls} resize-none`} />
+                <FieldError>{resolveCheck.errors(resolveForm, RESOLVE_SPEC).resolution}</FieldError>
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsResolveOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
@@ -362,10 +377,10 @@ export default function Complaints() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><MessageSquareWarning className="text-brand-accent" size={20} />Register New Complaint</h3>
               <button onClick={() => setIsAddOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSubmitAdd} className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            <form onSubmit={handleSubmitAdd} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label htmlFor="complaints-customer-name" className={labelCls}>Customer Name *</label><input id="complaints-customer-name" required disabled={isParty} type="text" value={form.customerName} onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))} className={`${inputCls} ${isParty ? 'opacity-60 cursor-not-allowed' : ''}`} /></div>
-                <div><label htmlFor="complaints-customer-phone" className={labelCls}>Customer Phone</label><input id="complaints-customer-phone" type="tel" value={form.customerPhone} onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="complaints-customer-name" className={labelCls}>Customer Name *</label><input id="complaints-customer-name" required disabled={isParty} type="text" value={form.customerName} onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))} className={`${inputCls} ${isParty ? 'opacity-60 cursor-not-allowed' : ''}`} /><FieldError>{addErrors.customerName}</FieldError></div>
+                <div><label htmlFor="complaints-customer-phone" className={labelCls}>Customer Phone</label><input id="complaints-customer-phone" type="tel" value={form.customerPhone} onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))} placeholder="e.g. 9876543210" className={inputCls} /><FieldError>{addErrors.customerPhone}</FieldError></div>
                 <div>
                   <label htmlFor="complaints-product-involved" className={labelCls}>Product Involved</label>
                   <select id="complaints-product-involved" value={form.product} onChange={e => setForm(f => ({ ...f, product: e.target.value }))} className={inputCls}>
@@ -380,6 +395,7 @@ export default function Complaints() {
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Type --</option>
                     {complaintTypes.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
                   </select>
+                  <FieldError>{addErrors.complaintType}</FieldError>
                 </div>
                 <div className="sm:col-span-2">
                   <label htmlFor="complaints-description" className={labelCls}>Description</label>

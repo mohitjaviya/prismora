@@ -3,6 +3,18 @@ import { AlertTriangle, Building2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/DialogContext';
 import { INDIAN_STATES } from '../utils/gst';
+import { FieldError, useFieldCheck } from './ui';
+import { cleanForm } from '../utils/formRules';
+import { gstinProblem, normaliseGstin } from '../utils/contactChecks';
+
+// Gap 9: the shared input rules (utils/formRules.js); GSTIN as for partners.
+const COMPANY_SPEC = {
+  companyName: { label: 'Company name', required: true },
+  gstin: { label: 'GSTIN', required: true },
+  state: { label: 'State', required: true },
+  email: { label: 'Billing email', kind: 'email' },
+};
+const gstinError = (f) => (gstinProblem(f.gstin) ? { gstin: gstinProblem(f.gstin) } : {});
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 disabled:opacity-60';
 const labelCls = 'block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide';
@@ -20,24 +32,26 @@ export default function CompanySettingsPanel({ canEdit }) {
   const toast = useToast();
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const check = useFieldCheck();
 
   useEffect(() => { if (!companySettings) loadCompanySettings(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (companySettings) setForm({ ...companySettings }); }, [companySettings]);
 
   if (!form) return <p className="text-sm text-slate-500">Loading company details…</p>;
+  const errors = check.errors(form, COMPANY_SPEC, gstinError);
 
   const save = async (e) => {
     e.preventDefault();
     if (saving) return;
-    const gstin = String(form.gstin || '').trim().toUpperCase();
-    if (!/^\d{2}[A-Z0-9]{13}$/.test(gstin)) { toast('A GSTIN is 15 characters, starting with the two-digit state code.', 'error'); return; }
+    if (!check.ok(form, COMPANY_SPEC, gstinError)) return;
+    const clean = cleanForm(form, COMPANY_SPEC);
     setSaving(true);
     const result = await updateCompanySettings({
-      companyName: String(form.companyName || '').trim(),
-      gstin,
-      state: form.state,
-      address: String(form.address || '').trim() || null,
-      email: String(form.email || '').trim() || null,
+      companyName: String(clean.companyName || ''),
+      gstin: normaliseGstin(clean.gstin),
+      state: clean.state,
+      address: String(clean.address || '') || null,
+      email: String(clean.email || '') || null,
       brandName: String(form.brandName || '').trim() || 'PRISMORA',
       brandTagline: String(form.brandTagline || '').trim(),
       jurisdiction: String(form.jurisdiction || '').trim(),
@@ -69,14 +83,16 @@ export default function CompanySettingsPanel({ canEdit }) {
         the customer's.
       </p>
 
-      <form onSubmit={save} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <form onSubmit={save} noValidate className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label htmlFor="company-name" className={labelCls}>Company name</label>
           <input id="company-name" required disabled={!canEdit} value={form.companyName || ''} onChange={set('companyName')} className={inputCls} />
+          <FieldError>{errors.companyName}</FieldError>
         </div>
         <div>
           <label htmlFor="company-gstin" className={labelCls}>GSTIN</label>
           <input id="company-gstin" required disabled={!canEdit} value={form.gstin || ''} onChange={set('gstin')} className={`${inputCls} font-mono uppercase`} />
+          <FieldError>{errors.gstin}</FieldError>
         </div>
         <div>
           <label htmlFor="company-state" className={labelCls}>State</label>
@@ -103,6 +119,7 @@ export default function CompanySettingsPanel({ canEdit }) {
         <div>
           <label htmlFor="company-email" className={labelCls}>Billing email (optional)</label>
           <input id="company-email" type="email" disabled={!canEdit} value={form.email || ''} onChange={set('email')} className={inputCls} />
+          <FieldError>{errors.email}</FieldError>
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-300 self-end pb-2">
           <input id="company-is-demo" type="checkbox" disabled={!canEdit} checked={Boolean(form.isDemo)} onChange={set('isDemo')} />

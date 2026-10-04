@@ -5,7 +5,8 @@ import { assigneeForPortalOrder } from '../utils/orderRouting';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { ShoppingCart, Plus, Trash2, X, Package, Tag, Truck, CheckCircle, Clock, PackageCheck, UserX } from 'lucide-react';
-import { PageHeader, DataTable, Button, Badge, Card, EmptyState } from '../components/ui';
+import { PageHeader, DataTable, Button, Badge, Card, EmptyState, FieldError } from '../components/ui';
+import { quantityProblem, normaliseMobile, normaliseEmail } from '../utils/formRules';
 import CancelMyOrderButton from '../components/CancelMyOrderButton';
 import { useToast } from '../context/DialogContext';
 import { isSchemeEligible } from '../utils/schemeUtils';
@@ -37,6 +38,7 @@ export default function DistributorOrders() {
   const [isPlacing, setIsPlacing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [qty, setQty] = useState('');
+  const [qtyError, setQtyError] = useState('');
   const [viewingOrder, setViewingOrder] = useState(null);
 
   const myOrders = useMemo(() =>
@@ -59,7 +61,11 @@ export default function DistributorOrders() {
 
   const addToCart = () => {
     const product = productCatalog.find(p => p.id === selectedProduct);
-    if (!product || !qty || Number(qty) <= 0) return;
+    if (!product) { setQtyError('Choose a product first'); return; }
+    // Gap 9: whole units above 0, said under the box instead of ignored.
+    const problem = quantityProblem(qty);
+    if (problem) { setQtyError(problem); return; }
+    setQtyError('');
     setCart(prev => {
       const existing = prev.find(i => i.id === product.id);
       if (existing) {
@@ -73,7 +79,7 @@ export default function DistributorOrders() {
 
   const removeFromCart = (id) => setCart(prev => prev.filter(i => i.id !== id));
 
-  const openOrderModal = () => { setCart([]); setSelectedProduct(''); setQty(''); setIsModalOpen(true); };
+  const openOrderModal = () => { setCart([]); setSelectedProduct(''); setQty(''); setQtyError(''); setIsModalOpen(true); };
 
   const handleSubmitOrder = async () => {
     if (isPlacing) return;
@@ -109,8 +115,8 @@ export default function DistributorOrders() {
       deliveryAddress: distributor.address || '',
       deliveryPincode: distributor.pincode || '',
       distributorId: distributor.id,
-      phone: distributor.phone,
-      email: distributor.email,
+      phone: normaliseMobile(distributor.phone),
+      email: normaliseEmail(distributor.email) || null,
       date: new Date().toISOString()
     });
     setIsPlacing(false);
@@ -223,10 +229,11 @@ export default function DistributorOrders() {
                 </div>
                 <div className="w-28">
                   <label htmlFor="distributororders-qty" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Qty</label>
-                  <input id="distributororders-qty" type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white" />
+                  <input id="distributororders-qty" type="number" min="1" value={qty} onChange={e => { setQty(e.target.value); setQtyError(''); }} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white" />
                 </div>
                 <button type="button" onClick={addToCart} className="btn-accent px-4 py-2.5 rounded-xl text-sm font-bold flex-shrink-0">Add</button>
               </div>
+              <FieldError>{qtyError}</FieldError>
 
               {cart.length > 0 ? (
                 <div className="border border-white/5 rounded-xl overflow-hidden">

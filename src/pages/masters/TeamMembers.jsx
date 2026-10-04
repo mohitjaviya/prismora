@@ -6,7 +6,8 @@ import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X, Download, UserX, Us
 import { downloadExcel } from '../../utils/exportUtils';
 import { useConfirm } from '../../context/DialogContext';
 import { useToast } from '../../context/DialogContext';
-import { Badge, Button, DataTable, IconButton, PageHeader } from '../../components/ui';
+import { Badge, Button, DataTable, IconButton, PageHeader, FieldError, useFieldCheck } from '../../components/ui';
+import { cleanForm } from '../../utils/formRules';
 import { rolesAssignableBy, mayManageAccount, internalUsersOf, isInternalLevel } from '../../utils/roleUtils';
 
 /**
@@ -48,6 +49,15 @@ export default function TeamMembers() {
   const [editingUser, setEditingUser] = useState(null);
   const [userForm, setUserForm] = useState(BLANK_USER_FORM);
   const [isSavingUser, setIsSavingUser] = useState(false);
+  // Gap 9: the shared input rules. The e-mail of an existing user is locked
+  // (it is their sign-in), so it is checked only on Add.
+  const userCheck = useFieldCheck();
+  const userSpec = {
+    name: { label: 'Full name', required: true },
+    email: editingUser ? null : { label: 'Email', kind: 'email', required: true },
+  };
+  const userExtra = (f) => ((!editingUser || f.password) && passwordPolicyError(f.password) ? { password: passwordPolicyError(f.password) } : {});
+  const userErrors = userCheck.errors(userForm, userSpec, userExtra);
   // Staff and partner logins on separate tabs (Gap 6). Partner accounts are
   // told apart by their role's level, as on SFA (Gap 3). Their logins are
   // created from Distributors, Dealers and Retailers, but this is still the
@@ -67,19 +77,17 @@ export default function TeamMembers() {
   const fullSettingsRoles = (roles || []).filter(r => r.permissions?.settings === 'full').map(r => r.id);
   const selectableRoles = rolesAssignableBy(user?.role, staffRoles, editingUser?.role, fullSettingsRoles);
 
-  const openUserAdd = () => { const assignable = rolesAssignableBy(user?.role, staffRoles, null, fullSettingsRoles); setEditingUser(null); setUserForm({ ...BLANK_USER_FORM, role: assignable.includes('Sales Executive') ? 'Sales Executive' : (assignable[0] || '') }); setIsUserModalOpen(true); };
-  const openUserEdit = (u) => { setEditingUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, managedUsers: u.managedUsers || [], password: '' }); setIsUserModalOpen(true); };
+  const openUserAdd = () => { const assignable = rolesAssignableBy(user?.role, staffRoles, null, fullSettingsRoles); setEditingUser(null); setUserForm({ ...BLANK_USER_FORM, role: assignable.includes('Sales Executive') ? 'Sales Executive' : (assignable[0] || '') }); userCheck.reset(); setIsUserModalOpen(true); };
+  const openUserEdit = (u) => { setEditingUser(u); setUserForm({ name: u.name, email: u.email, role: u.role, managedUsers: u.managedUsers || [], password: '' }); userCheck.reset(); setIsUserModalOpen(true); };
 
   // Waits for the database (or create-user): the form stays open with the
   // reason on a refusal and closes only once saved.
   const handleUserSubmit = async (e) => {
     e.preventDefault();
     if (isSavingUser) return;
-    if ((!editingUser || userForm.password) && passwordPolicyError(userForm.password)) {
-      toast(passwordPolicyError(userForm.password), 'error');
-      return;
-    }
-    const payload = { ...userForm, managedUsers: isManagerRole(userForm.role) ? userForm.managedUsers : [] };
+    if (!userCheck.ok(userForm, userSpec, userExtra)) return;
+    // The password is kept exactly as typed; every other text is trimmed.
+    const payload = { ...cleanForm(userForm, userSpec), password: userForm.password, managedUsers: isManagerRole(userForm.role) ? userForm.managedUsers : [] };
     if (editingUser) {
       // Supabase Auth only lets an account change its own password, so editing a
       // colleague saves their profile and leaves their password alone.
@@ -289,10 +297,10 @@ export default function TeamMembers() {
                 <h3 className="text-lg font-bold text-white flex items-center gap-2"><Users className="text-brand-accent" size={20} />{editingUser ? 'Edit User' : 'Add New User'}</h3>
                 <button onClick={() => setIsUserModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
               </div>
-              <form onSubmit={handleUserSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
-                <div><label htmlFor="teammembers-full-name" className={labelCls}>Full Name *</label><input id="teammembers-full-name" required type="text" value={userForm.name} onChange={e => setUserForm({ ...userForm, name: e.target.value })} placeholder="e.g. Rahul Sharma" className={inputCls} /></div>
-                <div><label htmlFor="teammembers-email-address" className={labelCls}>Email Address *</label><input id="teammembers-email-address" required type="email" disabled={!!editingUser} value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="rahul@prismora.com" className={inputCls + (editingUser ? ' opacity-60 cursor-not-allowed' : '')} />{editingUser && <p className="mt-1 text-[11px] text-slate-500">The e-mail is their sign-in and cannot be changed. For a different e-mail, add a new user and deactivate this one.</p>}</div>
-                <div><label htmlFor="teammembers-password" className={labelCls}>{editingUser ? 'New Password (optional)' : 'Password *'}</label><input id="teammembers-password" required={!editingUser} type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className={inputCls} /></div>
+              <form onSubmit={handleUserSubmit} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+                <div><label htmlFor="teammembers-full-name" className={labelCls}>Full Name *</label><input id="teammembers-full-name" required type="text" value={userForm.name} onChange={e => setUserForm({ ...userForm, name: e.target.value })} placeholder="e.g. Rahul Sharma" className={inputCls} /><FieldError>{userErrors.name}</FieldError></div>
+                <div><label htmlFor="teammembers-email-address" className={labelCls}>Email Address *</label><input id="teammembers-email-address" required type="email" disabled={!!editingUser} value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} placeholder="rahul@prismora.com" className={inputCls + (editingUser ? ' opacity-60 cursor-not-allowed' : '')} /><FieldError>{userErrors.email}</FieldError>{editingUser && <p className="mt-1 text-[11px] text-slate-500">The e-mail is their sign-in and cannot be changed. For a different e-mail, add a new user and deactivate this one.</p>}</div>
+                <div><label htmlFor="teammembers-password" className={labelCls}>{editingUser ? 'New Password (optional)' : 'Password *'}</label><input id="teammembers-password" required={!editingUser} type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className={inputCls} /><FieldError>{userErrors.password}</FieldError></div>
                 <div>
                   <label htmlFor="teammembers-role" className={labelCls}>Role *</label>
                   <select id="teammembers-role" value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })} className={inputCls}>

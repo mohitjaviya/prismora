@@ -107,3 +107,9 @@ export function SearchInput({ size = 'md', className = '', ...rest }) {
     </div>
   );
 }
+
+/** The red line under a hand-built control; nothing when there is no message. */
+export function FieldError({ children }) {
+  if (!children) return null;
+  return <p role="alert" className="text-[10px] text-rose-400 mt-1 leading-snug">{children}</p>;
+}

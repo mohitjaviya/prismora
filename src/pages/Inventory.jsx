@@ -13,6 +13,18 @@ import StockReconciliation from '../components/StockReconciliation';
 import DamagedStockModal from '../components/DamagedStockModal';
 import { batchNumberProblem } from '../utils/batchNumber';
 import { stockValueBreakdown, batchValues } from '../utils/stockValue';
+import { useFieldCheck, FieldError } from '../components/ui';
+
+const INVENTORY_ADD_SPEC = {
+  quantity: { label: 'Quantity', kind: 'qty' },
+  unitCost: { label: 'Unit cost', kind: 'amount' }
+};
+const INVENTORY_TRANSFER_SPEC = {
+  quantity: { label: 'Quantity to Transfer', kind: 'qty', required: true }
+};
+const INVENTORY_COUNT_SPEC = {
+  countedQty: { label: 'Counted quantity', kind: 'amount', required: true }
+};
 
 // 'Damaged' is not a status: batches holding damaged units, whatever their status (Gap 17).
 const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Expired', 'Damaged', 'Out of Stock'];
@@ -21,12 +33,12 @@ const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', '
 const getStockStatus = stockStatus;
 
 const statusConfig = {
-  'OK':            { cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: <CheckCircle size={12} /> },
-  'Low Stock':     { cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20',    icon: <AlertCircle size={12} /> },
-  'Critical':      { cls: 'bg-rose-500/10 text-rose-400 border-rose-500/20',        icon: <AlertTriangle size={12} /> },
-  'Expiring Soon': { cls: 'bg-orange-500/10 text-orange-400 border-orange-500/20',  icon: <Clock size={12} /> },
-  'Expired':       { cls: 'bg-red-800/20 text-red-400 border-red-700/30',           icon: <AlertTriangle size={12} /> },
-  'Out of Stock':  { cls: 'bg-slate-500/10 text-slate-400 border-slate-500/20',     icon: <TrendingDown size={12} /> },
+  'OK': { cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: <CheckCircle size={12} /> },
+  'Low Stock': { cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20', icon: <AlertCircle size={12} /> },
+  'Critical': { cls: 'bg-rose-500/10 text-rose-400 border-rose-500/20', icon: <AlertTriangle size={12} /> },
+  'Expiring Soon': { cls: 'bg-orange-500/10 text-orange-400 border-orange-500/20', icon: <Clock size={12} /> },
+  'Expired': { cls: 'bg-red-800/20 text-red-400 border-red-700/30', icon: <AlertTriangle size={12} /> },
+  'Out of Stock': { cls: 'bg-slate-500/10 text-slate-400 border-slate-500/20', icon: <TrendingDown size={12} /> },
 };
 
 const formatCurrency = (val) =>
@@ -86,6 +98,10 @@ export default function Inventory() {
   const [countedQty, setCountedQty] = useState('');
   const [reconOpen, setReconOpen] = useState(false);
 
+  const addCheck = useFieldCheck();
+  const transferCheck = useFieldCheck();
+  const countCheck = useFieldCheck();
+
   // KPI derivations
   const withStatus = useMemo(() => inventory.map(i => ({ ...i, _status: getStockStatus(i) })), [inventory]);
 
@@ -93,11 +109,11 @@ export default function Inventory() {
   const values = useMemo(() => stockValueBreakdown(inventory), [inventory]);
   const kpis = useMemo(() => ({
     stockValue: values.sellable, expiredValue: values.expired, damagedValue: values.damaged, damagedUnits: values.damagedUnits,
-    totalSKUs:      [...new Set(inventory.map(i => i.product))].length,
-    totalBatches:   inventory.length,
-    lowStock:       withStatus.filter(i => i._status === 'Low Stock' || i._status === 'Critical' || i._status === 'Out of Stock').length,
-    expiringSoon:   withStatus.filter(i => i._status === 'Expiring Soon').length,
-    expiredUnits:   withStatus.filter(i => i._status === 'Expired').reduce((s, i) => s + (i.quantity || 0), 0),
+    totalSKUs: [...new Set(inventory.map(i => i.product))].length,
+    totalBatches: inventory.length,
+    lowStock: withStatus.filter(i => i._status === 'Low Stock' || i._status === 'Critical' || i._status === 'Out of Stock').length,
+    expiringSoon: withStatus.filter(i => i._status === 'Expiring Soon').length,
+    expiredUnits: withStatus.filter(i => i._status === 'Expired').reduce((s, i) => s + (i.quantity || 0), 0),
   }), [inventory, withStatus, values]);
 
   const filtered = useMemo(() => {
@@ -161,6 +177,7 @@ export default function Inventory() {
   const handleTransfer = async (e) => {
     e.preventDefault();
     if (saving) return;
+    if (!transferCheck.ok(transferForm, INVENTORY_TRANSFER_SPEC)) return;
     // An impossible transfer gives back a reason; this shows it and keeps the
     // dialog open so the number can be corrected.
     setSaving('transfer');
@@ -172,6 +189,7 @@ export default function Inventory() {
   const handleCount = async (e) => {
     e.preventDefault();
     if (!countItem || saving) return;
+    if (!countCheck.ok({ countedQty }, INVENTORY_COUNT_SPEC)) return;
     const counted = Number(countedQty);
     const variance = counted - countItem.quantity;
     if (variance === 0) { toast('Count matches the system: nothing to change.', 'success'); setCountItem(null); return; }
@@ -183,6 +201,7 @@ export default function Inventory() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
+    if (!addCheck.ok({ ...form, quantity: editingItem ? 1 : form.quantity }, INVENTORY_ADD_SPEC)) return;
     // Gap 18 (090): a number is required and used once per product.
     const batchProblem = batchNumberProblem(form, inventory, editingItem);
     if (batchProblem) { toast(batchProblem, 'error'); return; }
@@ -235,26 +254,40 @@ export default function Inventory() {
   const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
   const productColumns = [
-    { key: 'product', header: 'Product', sort: p => p.product || '',
-      render: p => <span className="font-semibold text-white">{p.product}</span> },
-    { key: 'batchCount', header: 'Batches', align: 'center', sort: p => p.batchCount,
-      render: p => <span className="text-slate-400">{p.batchCount}</span> },
-    { key: 'totalQty', header: 'Total Qty', align: 'center', sort: p => p.totalQty,
-      render: p => <span className="font-bold text-white">{p.totalQty}</span> },
-    { key: 'reserved', header: 'Reserved', align: 'center', hideBelow: 'sm', sort: p => p.reserved,
-      render: p => <span className="text-slate-400">{p.reserved}</span> },
-    { key: 'available', header: 'Available to Sell', align: 'center', sort: p => p.available,
+    {
+      key: 'product', header: 'Product', sort: p => p.product || '',
+      render: p => <span className="font-semibold text-white">{p.product}</span>
+    },
+    {
+      key: 'batchCount', header: 'Batches', align: 'center', sort: p => p.batchCount,
+      render: p => <span className="text-slate-400">{p.batchCount}</span>
+    },
+    {
+      key: 'totalQty', header: 'Total Qty', align: 'center', sort: p => p.totalQty,
+      render: p => <span className="font-bold text-white">{p.totalQty}</span>
+    },
+    {
+      key: 'reserved', header: 'Reserved', align: 'center', hideBelow: 'sm', sort: p => p.reserved,
+      render: p => <span className="text-slate-400">{p.reserved}</span>
+    },
+    {
+      key: 'available', header: 'Available to Sell', align: 'center', sort: p => p.available,
       render: p => (
         <span className={`font-bold ${p.available > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{p.available}</span>
-      ) },
-    { key: 'expired', header: 'Expired', align: 'center', sort: p => p.expired,
+      )
+    },
+    {
+      key: 'expired', header: 'Expired', align: 'center', sort: p => p.expired,
       render: p => (p.expired > 0
         ? <span className="font-bold text-red-400" title="In expired batches: never sold or delivered">{p.expired}</span>
-        : <span className="text-slate-600">—</span>) },
-    { key: 'damaged', header: 'Damaged', align: 'center', sort: p => p.damaged,
+        : <span className="text-slate-600">—</span>)
+    },
+    {
+      key: 'damaged', header: 'Damaged', align: 'center', sort: p => p.damaged,
       render: p => (p.damaged > 0
         ? <span className="font-bold text-rose-400" title="Damaged units: never sold; written off or returned to the vendor">{p.damaged}</span>
-        : <span className="text-slate-600">—</span>) },
+        : <span className="text-slate-600">—</span>)
+    },
   ];
 
   return (
@@ -305,11 +338,10 @@ export default function Inventory() {
         <div className="flex gap-1.5 flex-wrap">
           {STATUS_FILTERS.map(sf => (
             <button key={sf} type="button" onClick={() => setStatusFilter(sf)}
-              className={`h-10 px-3 rounded-xl text-xs font-semibold border transition-colors ${
-                statusFilter === sf
+              className={`h-10 px-3 rounded-xl text-xs font-semibold border transition-colors ${statusFilter === sf
                   ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
                   : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
-              }`}>
+                }`}>
               {sf}
             </button>
           ))}
@@ -485,13 +517,14 @@ export default function Inventory() {
                 </div>
                 <div>
                   <label htmlFor="inventory-quantity" className={labelCls}>{editingItem ? 'Quantity' : 'Quantity *'}</label>
-                  {/* An existing batch's quantity moves only through Adjust, Cycle Count or Transfer (080). */}
                   <input id="inventory-quantity" required={!editingItem} readOnly={!!editingItem} type="number" min="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" className={inputCls + (editingItem ? ' opacity-60 cursor-not-allowed' : '')} />
+                  <FieldError errors={addCheck.errors(form, INVENTORY_ADD_SPEC)} field="quantity" />
                   {editingItem && <span className="block text-[10px] text-slate-500 mt-1">Use Adjust or Cycle Count to change it.</span>}
                 </div>
                 <div>
                   <label htmlFor="inventory-unit-cost" className={labelCls}>Unit Cost (₹)</label>
                   <input id="inventory-unit-cost" type="number" min="0" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} placeholder="0" className={inputCls} />
+                  <FieldError errors={addCheck.errors(form, INVENTORY_ADD_SPEC)} field="unitCost" />
                 </div>
                 <div>
                   <label htmlFor="inventory-reorder-level" className={labelCls}>Reorder Level</label>
@@ -590,6 +623,7 @@ export default function Inventory() {
               <div>
                 <label htmlFor="inventory-quantity-to-transfer-max" className={labelCls}>Quantity to Transfer * <span className="normal-case text-slate-500 font-normal">(max {transferItem.quantity})</span></label>
                 <input id="inventory-quantity-to-transfer-max" required type="number" min="1" max={transferItem.quantity} value={transferForm.quantity} onChange={e => setTransferForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} />
+                <FieldError errors={transferCheck.errors(transferForm, INVENTORY_TRANSFER_SPEC)} field="quantity" />
               </div>
               <div>
                 <label htmlFor="inventory-notes" className={labelCls}>Notes</label>
@@ -621,6 +655,7 @@ export default function Inventory() {
               <div>
                 <label htmlFor="inventory-physically-counted-quantity" className={labelCls}>Physically Counted Quantity *</label>
                 <input id="inventory-physically-counted-quantity" required type="number" min="0" value={countedQty} onChange={e => setCountedQty(e.target.value)} className={inputCls} autoFocus />
+                <FieldError errors={countCheck.errors({ countedQty }, INVENTORY_COUNT_SPEC)} field="countedQty" />
               </div>
               {countedQty !== '' && Number(countedQty) !== countItem.quantity && (
                 <div className={`rounded-xl p-3 border text-sm font-medium ${Number(countedQty) - countItem.quantity > 0 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>

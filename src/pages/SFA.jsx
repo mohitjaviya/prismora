@@ -12,7 +12,7 @@ import {
   Upload, CheckSquare, XSquare, Route, Clock, RefreshCw
 } from 'lucide-react';
 import { useToast } from '../context/DialogContext';
-import { Button, PageHeader, StatCard, DataTable, Badge, ClampText } from '../components/ui';
+import { Button, PageHeader, StatCard, DataTable, Badge, ClampText, useFieldCheck, FieldError } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { optionsFor } from '../utils/masterLists';
 import { shiftDuration } from '../utils/attendance';
@@ -21,6 +21,8 @@ import { submitOutletVisit } from '../utils/beatVisits';
 import VisitReportsTable from '../components/sfa/VisitReportsTable';
 import { localDateStr, checkInState, isOpenRequest, isMissedBeat, beatDisplayStatus, canDecideRequest } from '../utils/beatDates';
 import { useSearchParams } from 'react-router-dom';
+
+const SFA_EXPENSE_SPEC = { amount: { label: 'Amount', kind: 'amount', required: true } };
 
 
 /**
@@ -258,8 +260,10 @@ export default function SFA() {
     if (savingSfa) return;
     const outletsList = beatForm.outlets.split(',').map(o => o.trim()).filter(Boolean);
     setSavingSfa('beat');
-    const r = await addBeatPlan({ executiveId: beatForm.executiveId || user.id, date: beatForm.date,
-      ...territoryFields(territories, beatForm.territoryId), outlets: outletsList });
+    const r = await addBeatPlan({
+      executiveId: beatForm.executiveId || user.id, date: beatForm.date,
+      ...territoryFields(territories, beatForm.territoryId), outlets: outletsList
+    });
     setSavingSfa(null);
     if (!r?.ok) { toast(r?.error || 'The beat was not saved.', 'error'); return; }
     toast(`Beat assigned for ${beatForm.date}.`, 'success');
@@ -320,8 +324,8 @@ export default function SFA() {
     const key = (name || '').trim().toLowerCase();
     if (!key) return null;
     return (retailers || []).find(r => r.name?.trim().toLowerCase() === key)
-        || (dealers || []).find(d => d.name?.trim().toLowerCase() === key)
-        || null;
+      || (dealers || []).find(d => d.name?.trim().toLowerCase() === key)
+      || null;
   };
 
   const handleOpenVisit = (beat, outlet, outcome = 'Visited') => {
@@ -359,78 +363,78 @@ export default function SFA() {
     if (isSubmittingVisit) return;
     setIsSubmittingVisit(true);
     try {
-    const notVisited = visitForm.outcome === 'Not Visited';
+      const notVisited = visitForm.outcome === 'Not Visited';
 
-    // An outlet that could not be worked still gets a report, so coverage shows
-    // it was attempted rather than leaving it indistinguishable from one that
-    // was never reached. No order is raised for it.
-    let order = null;
-    if (!notVisited && visitForm.orderPlaced && orderLines.length > 0) {
-      // The order used to be filled with placeholders — company "Retail Outlet",
-      // city "Field Beat", and the beat's territory put in the state field —
-      // which meant every field order landed in Orders needing to be corrected
-      // by hand. Everything below is either known or left empty.
-      const territory = territoryFor(territories, selectedBeatForVisit?.beat);
-      const outletKey = visitForm.outletName.trim().toLowerCase();
-      const matchedRetailer = retailers?.find(r => r.name?.trim().toLowerCase() === outletKey);
-      const matchedDealer = !matchedRetailer && dealers?.find(d => d.name?.trim().toLowerCase() === outletKey);
+      // An outlet that could not be worked still gets a report, so coverage shows
+      // it was attempted rather than leaving it indistinguishable from one that
+      // was never reached. No order is raised for it.
+      let order = null;
+      if (!notVisited && visitForm.orderPlaced && orderLines.length > 0) {
+        // The order used to be filled with placeholders — company "Retail Outlet",
+        // city "Field Beat", and the beat's territory put in the state field —
+        // which meant every field order landed in Orders needing to be corrected
+        // by hand. Everything below is either known or left empty.
+        const territory = territoryFor(territories, selectedBeatForVisit?.beat);
+        const outletKey = visitForm.outletName.trim().toLowerCase();
+        const matchedRetailer = retailers?.find(r => r.name?.trim().toLowerCase() === outletKey);
+        const matchedDealer = !matchedRetailer && dealers?.find(d => d.name?.trim().toLowerCase() === outletKey);
 
-      order = {
-        customerName: visitForm.outletName,
-        companyName: visitForm.outletCompany || matchedRetailer?.name || matchedDealer?.name || '',
-        product: orderLines.length === 1 ? orderLines[0].name : `${orderLines[0].name} +${orderLines.length - 1} more item${orderLines.length > 2 ? 's' : ''}`,
-        items: orderLines.length > 1 ? orderLines : undefined,
-        quantity: orderUnits,
-        value: orderValue,
-        state: territory?.state || matchedRetailer?.state || matchedDealer?.state || '',
-        // The order carries the territory's id, so a territory renamed later
-        // still reports against this order.
-        ...territoryFields(territories, territory?.id),
-        city: visitForm.outletCity || matchedRetailer?.city || matchedDealer?.city || '',
-        phone: visitForm.outletContact || '',
-        email: visitForm.outletEmail || matchedRetailer?.email || matchedDealer?.email || '',
-        deliveryAddress: visitForm.outletAddress || matchedRetailer?.address || matchedDealer?.address || '',
-        deliveryPincode: visitForm.outletPincode || matchedRetailer?.pincode || matchedDealer?.pincode || '',
-        retailerId: matchedRetailer?.id,
-        dealerId: matchedDealer?.id,
-        status: 'Pending',
-        assignedTo: user.id,
-        date: new Date().toISOString(),
+        order = {
+          customerName: visitForm.outletName,
+          companyName: visitForm.outletCompany || matchedRetailer?.name || matchedDealer?.name || '',
+          product: orderLines.length === 1 ? orderLines[0].name : `${orderLines[0].name} +${orderLines.length - 1} more item${orderLines.length > 2 ? 's' : ''}`,
+          items: orderLines.length > 1 ? orderLines : undefined,
+          quantity: orderUnits,
+          value: orderValue,
+          state: territory?.state || matchedRetailer?.state || matchedDealer?.state || '',
+          // The order carries the territory's id, so a territory renamed later
+          // still reports against this order.
+          ...territoryFields(territories, territory?.id),
+          city: visitForm.outletCity || matchedRetailer?.city || matchedDealer?.city || '',
+          phone: visitForm.outletContact || '',
+          email: visitForm.outletEmail || matchedRetailer?.email || matchedDealer?.email || '',
+          deliveryAddress: visitForm.outletAddress || matchedRetailer?.address || matchedDealer?.address || '',
+          deliveryPincode: visitForm.outletPincode || matchedRetailer?.pincode || matchedDealer?.pincode || '',
+          retailerId: matchedRetailer?.id,
+          dealerId: matchedDealer?.id,
+          status: 'Pending',
+          assignedTo: user.id,
+          date: new Date().toISOString(),
+        };
+      }
+
+      const report = {
+        executiveId: user.id,
+        beatId: selectedBeatForVisit?.beat?.id || null,
+        outletName: visitForm.outletName,
+        outletContact: visitForm.outletContact,
+        visitDate: todayStr,
+        outcome: visitForm.outcome,
+        notVisitedReason: notVisited ? visitForm.notVisitedReason : '',
+        productsShown: notVisited ? [] : visitForm.productsShown,
+        orderPlaced: notVisited ? false : visitForm.orderPlaced,
+        nextFollowUp: visitForm.nextFollowUp || null,
+        notes: visitForm.notes,
       };
-    }
 
-    const report = {
-      executiveId: user.id,
-      beatId: selectedBeatForVisit?.beat?.id || null,
-      outletName: visitForm.outletName,
-      outletContact: visitForm.outletContact,
-      visitDate: todayStr,
-      outcome: visitForm.outcome,
-      notVisitedReason: notVisited ? visitForm.notVisitedReason : '',
-      productsShown: notVisited ? [] : visitForm.productsShown,
-      orderPlaced: notVisited ? false : visitForm.orderPlaced,
-      nextFollowUp: visitForm.nextFollowUp || null,
-      notes: visitForm.notes,
-    };
-
-    // Order, then report, then the outlet on the beat — each only once the one
-    // before it is saved. The outcome is recorded against this outlet, not the
-    // whole route, so the rest of the beat stays workable.
-    const result = await submitOutletVisit({ addOrder, addVisitReport, recordOutletOutcome }, {
-      order,
-      report,
-      beatId: selectedBeatForVisit?.beat?.id,
-      outlet: selectedBeatForVisit?.outlet,
-      reason: notVisited ? visitForm.notVisitedReason : undefined,
-      savedOrderId: visitAttempt.current.orderId,
-      savedVisitId: visitAttempt.current.visitId,
-    });
-    visitAttempt.current = { orderId: result.orderId, visitId: result.visitId };
-    if (!result.ok) {
-      setVisitError(result.orderId ? `${result.error} Order ${result.orderId} was raised and will not be raised again.` : result.error);
-      return;
-    }
-    setIsVisitModalOpen(false);
+      // Order, then report, then the outlet on the beat — each only once the one
+      // before it is saved. The outcome is recorded against this outlet, not the
+      // whole route, so the rest of the beat stays workable.
+      const result = await submitOutletVisit({ addOrder, addVisitReport, recordOutletOutcome }, {
+        order,
+        report,
+        beatId: selectedBeatForVisit?.beat?.id,
+        outlet: selectedBeatForVisit?.outlet,
+        reason: notVisited ? visitForm.notVisitedReason : undefined,
+        savedOrderId: visitAttempt.current.orderId,
+        savedVisitId: visitAttempt.current.visitId,
+      });
+      visitAttempt.current = { orderId: result.orderId, visitId: result.visitId };
+      if (!result.ok) {
+        setVisitError(result.orderId ? `${result.error} Order ${result.orderId} was raised and will not be raised again.` : result.error);
+        return;
+      }
+      setIsVisitModalOpen(false);
     } finally {
       setIsSubmittingVisit(false);
     }
@@ -446,9 +450,12 @@ export default function SFA() {
     reader.onload = (ev) => setExpenseForm(prev => ({ ...prev, receiptName: file.name, receiptData: ev.target.result }));
     reader.readAsDataURL(file);
   };
+  const expenseCheck = useFieldCheck();
+
   const handleExpenseSubmit = async (e) => {
     e.preventDefault();
     if (savingSfa) return;
+    if (!expenseCheck.ok(expenseForm, SFA_EXPENSE_SPEC)) return;
     setSavingSfa('expense');
     const r = await addSFAExpense({ userId: user.id, date: expenseForm.date, category: expenseForm.category, amount: Number(expenseForm.amount), description: expenseForm.description, receiptName: expenseForm.receiptName, receiptData: expenseForm.receiptData });
     setSavingSfa(null);
@@ -524,7 +531,7 @@ export default function SFA() {
     return days;
   };
 
-  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const STATUS_CELL = {
     approved: 'bg-emerald-500 shadow-sm shadow-emerald-500/40',
     present: 'bg-blue-500 shadow-sm shadow-blue-500/30',
@@ -562,7 +569,7 @@ export default function SFA() {
   return (
     <div className="space-y-6">
       {/* ── Header ─────────────────────────────────────────────────────── */}
-            <PageHeader
+      <PageHeader
         icon={CalendarCheck}
         title="Sales Force Automation"
         subtitle="GPS tracking, beats, attendance, expenses & performance analytics."
@@ -580,11 +587,10 @@ export default function SFA() {
           const Icon = tab.icon;
           return (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-3 font-semibold text-xs border-b-2 flex items-center gap-1.5 transition-all whitespace-nowrap flex-shrink-0 ${
-                activeTab === tab.id
-                  ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
-                  : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
+              className={`px-4 py-3 font-semibold text-xs border-b-2 flex items-center gap-1.5 transition-all whitespace-nowrap flex-shrink-0 ${activeTab === tab.id
+                ? 'border-brand-accent text-brand-accent bg-brand-primary-light/10'
+                : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+                }`}
             >
               <Icon size={14} />{tab.label}
             </button>
@@ -597,277 +603,277 @@ export default function SFA() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'attendance' && (
         <div className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {isSREP && (
-            <div className="lg:col-span-4 glass-panel rounded-2xl p-5 border border-brand-accent/20 bg-brand-primary-light/10 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-brand-accent uppercase tracking-widest bg-brand-accent/10 border border-brand-accent/20 px-2.5 py-0.5 rounded-full">Punch Clock</span>
-                  <h3 className="text-lg font-bold text-white mt-1.5">Shift Logger</h3>
-                </div>
-                <Smartphone className="text-brand-accent shrink-0" size={28} />
-              </div>
-              {myAttendanceToday ? (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 size={16} /><span className="text-sm font-bold">Marked Present</span></div>
-                  <div className="text-xs text-slate-300 space-y-1 font-medium">
-                    <div className="flex justify-between"><span>Punch In:</span><span className="text-white font-bold">{myAttendanceToday.checkInTime}</span></div>
-                    <div className="flex justify-between"><span>Punch Out:</span><span className="text-white font-bold">{myAttendanceToday.checkOutTime || 'Active Shift'}</span></div>
-                    {myAttendanceToday.checkOutTime && (
-                      <div className="flex justify-between"><span>Worked:</span><span className="text-white font-bold">{shiftDuration(myAttendanceToday.checkInTime, myAttendanceToday.checkOutTime)}</span></div>
-                    )}
-                    {myAttendanceToday.punchInLat ? (
-                      <div className="flex justify-between items-center pt-1 border-t border-emerald-500/10">
-                        <span className="text-slate-400">📍 Location:</span>
-                        <a
-                          href={`https://www.openstreetmap.org/?mlat=${myAttendanceToday.punchInLat}&mlon=${myAttendanceToday.punchInLng}&zoom=16`}
-                          target="_blank" rel="noreferrer"
-                          className="text-brand-accent hover:underline font-bold text-[10px]"
-                        >
-                          {myAttendanceToday.punchInLat.toFixed(4)}, {myAttendanceToday.punchInLng.toFixed(4)} ↗
-                        </a>
-                      </div>
-                    ) : (
-                      <div className="flex justify-between items-center pt-1 border-t border-emerald-500/10">
-                        <span className="text-slate-400">📍 Location:</span>
-                        <span className="text-slate-600 italic text-[10px]">Not captured</span>
-                      </div>
-                    )}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {isSREP && (
+              <div className="lg:col-span-4 glass-panel rounded-2xl p-5 border border-brand-accent/20 bg-brand-primary-light/10 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-brand-accent uppercase tracking-widest bg-brand-accent/10 border border-brand-accent/20 px-2.5 py-0.5 rounded-full">Punch Clock</span>
+                    <h3 className="text-lg font-bold text-white mt-1.5">Shift Logger</h3>
                   </div>
+                  <Smartphone className="text-brand-accent shrink-0" size={28} />
                 </div>
-              ) : (
-                <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-xl p-4 text-xs text-yellow-500/80">⚠️ You have not checked in for today ({todayStr}). Please log your status.</div>
-              )}
-              <form onSubmit={handlePunchIn} className="space-y-3">
-                <div>
-                  <label htmlFor="sfa-notes-start-location" className={lbl}>Notes / Start Location</label>
-                  <input id="sfa-notes-start-location" type="text" value={punchNotes} onChange={e => setPunchNotes(e.target.value)} placeholder="e.g. Starting at Anand market area" className={inp} />
-                </div>
-                {!myAttendanceToday ? (
-                  <Button type="submit" variant="primary" size="lg" disabled={isPunchingIn} className="w-full">
-                    {isPunchingIn ? <><RefreshCw size={15} className="animate-spin" />Getting your location…</> : <><LogIn size={16} />Punch In / Start Day</>}
-                  </Button>
-                ) : !myAttendanceToday.checkOutTime ? (
-                  <Button variant="danger" size="lg" onClick={handlePunchOut} disabled={!!savingSfa} className="w-full"><LogOut size={16} />{savingSfa === 'punchout' ? 'Saving…' : 'Punch Out / End Shift'}</Button>
-                ) : null}
-              </form>
-            </div>
-          )}
-          {/* On the shared DataTable: search, sort, a count, and notes that
+                {myAttendanceToday ? (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 size={16} /><span className="text-sm font-bold">Marked Present</span></div>
+                    <div className="text-xs text-slate-300 space-y-1 font-medium">
+                      <div className="flex justify-between"><span>Punch In:</span><span className="text-white font-bold">{myAttendanceToday.checkInTime}</span></div>
+                      <div className="flex justify-between"><span>Punch Out:</span><span className="text-white font-bold">{myAttendanceToday.checkOutTime || 'Active Shift'}</span></div>
+                      {myAttendanceToday.checkOutTime && (
+                        <div className="flex justify-between"><span>Worked:</span><span className="text-white font-bold">{shiftDuration(myAttendanceToday.checkInTime, myAttendanceToday.checkOutTime)}</span></div>
+                      )}
+                      {myAttendanceToday.punchInLat ? (
+                        <div className="flex justify-between items-center pt-1 border-t border-emerald-500/10">
+                          <span className="text-slate-400">📍 Location:</span>
+                          <a
+                            href={`https://www.openstreetmap.org/?mlat=${myAttendanceToday.punchInLat}&mlon=${myAttendanceToday.punchInLng}&zoom=16`}
+                            target="_blank" rel="noreferrer"
+                            className="text-brand-accent hover:underline font-bold text-[10px]"
+                          >
+                            {myAttendanceToday.punchInLat.toFixed(4)}, {myAttendanceToday.punchInLng.toFixed(4)} ↗
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-center pt-1 border-t border-emerald-500/10">
+                          <span className="text-slate-400">📍 Location:</span>
+                          <span className="text-slate-600 italic text-[10px]">Not captured</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-500/5 border border-yellow-500/10 rounded-xl p-4 text-xs text-yellow-500/80">⚠️ You have not checked in for today ({todayStr}). Please log your status.</div>
+                )}
+                <form onSubmit={handlePunchIn} className="space-y-3">
+                  <div>
+                    <label htmlFor="sfa-notes-start-location" className={lbl}>Notes / Start Location</label>
+                    <input id="sfa-notes-start-location" type="text" value={punchNotes} onChange={e => setPunchNotes(e.target.value)} placeholder="e.g. Starting at Anand market area" className={inp} />
+                  </div>
+                  {!myAttendanceToday ? (
+                    <Button type="submit" variant="primary" size="lg" disabled={isPunchingIn} className="w-full">
+                      {isPunchingIn ? <><RefreshCw size={15} className="animate-spin" />Getting your location…</> : <><LogIn size={16} />Punch In / Start Day</>}
+                    </Button>
+                  ) : !myAttendanceToday.checkOutTime ? (
+                    <Button variant="danger" size="lg" onClick={handlePunchOut} disabled={!!savingSfa} className="w-full"><LogOut size={16} />{savingSfa === 'punchout' ? 'Saving…' : 'Punch Out / End Shift'}</Button>
+                  ) : null}
+                </form>
+              </div>
+            )}
+            {/* On the shared DataTable: search, sort, a count, and notes that
               clamp with "Show more" instead of a truncation cells ignore. */}
-          <DataTable
-            className={isSREP ? 'lg:col-span-8' : 'lg:col-span-12'}
-            title="Attendance Register"
-            dense
-            rows={attendance}
-            search={a => `${getRepName(a.userId)} ${a.date} ${a.notes || ''}`}
-            searchPlaceholder="Search rep, date, notes"
-            empty={{ title: 'No attendance records yet', hint: 'Check-ins appear here as reps punch in.' }}
-            columns={[
-              isManagerOrAbove && {
-                key: 'rep', header: 'Representative', sort: a => getRepName(a.userId),
-                render: a => (
-                  <div className="flex items-center gap-2 whitespace-nowrap font-semibold text-white">
-                    <div className="w-7 h-7 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-[10px]">{getRepName(a.userId).substring(0, 2).toUpperCase()}</div>
-                    {getRepName(a.userId)}
-                  </div>
-                ),
-              },
-              { key: 'date', header: 'Date', sort: a => a.date, render: a => <span className="whitespace-nowrap text-slate-400">{fmtDate(a.date)}</span> },
-              {
-                key: 'inout', header: 'In → Out', sort: a => a.checkInTime || '',
-                render: a => <span className="whitespace-nowrap font-semibold text-white tabular-nums">{a.checkInTime || '—'} <span className="text-slate-500">→</span> {a.checkOutTime || '—'}</span>,
-              },
-              {
-                // Was hard-coded to '~8h' for every closed shift, so a punch-out
-                // one minute after the punch-in read as a full working day.
-                key: 'duration', header: 'Duration', align: 'center',
-                render: a => (
-                  <Badge tone={a.checkOutTime ? 'info' : a.checkInTime ? 'success' : 'neutral'}>
-                    {shiftDuration(a.checkInTime, a.checkOutTime)}
-                  </Badge>
-                ),
-              },
-              {
-                key: 'location', header: 'Punch-in location', hideBelow: 'lg',
-                render: a => (a.punchInLat ? (
-                  <a
-                    href={`https://www.openstreetmap.org/?mlat=${a.punchInLat}&mlon=${a.punchInLng}&zoom=16`}
-                    target="_blank" rel="noreferrer"
-                    className="text-brand-accent hover:underline text-xs font-mono inline-flex items-center gap-1 whitespace-nowrap"
-                    title={`Accuracy: ±${a.punchInAccuracy}m`}
-                  >
-                    <Navigation size={10} />{a.punchInLat.toFixed(4)}, {a.punchInLng.toFixed(4)}
-                  </a>
-                ) : <span className="text-slate-600 text-xs italic whitespace-nowrap">No location</span>),
-              },
-              { key: 'notes', header: 'Notes', render: a => <ClampText text={a.notes} width="w-44" className="text-xs text-slate-400 italic" /> },
-              isManagerOrAbove && {
-                key: 'approval', header: 'Approval', align: 'center', sort: a => (a.approved ? 1 : 0),
-                render: a => (a.approved ? (
-                  <div className="flex flex-col items-center gap-0.5">
-                    <Badge tone="success"><CheckCircle2 size={10} /> Approved</Badge>
-                    <span className="text-[9px] text-slate-500">by {a.approvedBy || 'Admin'}</span>
-                  </div>
-                ) : a.checkInTime && canEditSfa ? (
-                  <button
-                    onClick={async () => {
-                      const r = await updateAttendanceRecord(a.id, { approved: true, approvedBy: user.name });
-                      if (!r?.ok) toast(r?.error || 'The approval was not saved.', 'error');
-                    }}
-                    className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold transition-all inline-flex items-center gap-1"
-                  >
-                    <CheckSquare size={11} /> Approve
-                  </button>
-                ) : <span className="text-slate-600 italic text-[10px]">Not checked in</span>),
-              },
-            ].filter(Boolean)}
-          />
-        </div>
+            <DataTable
+              className={isSREP ? 'lg:col-span-8' : 'lg:col-span-12'}
+              title="Attendance Register"
+              dense
+              rows={attendance}
+              search={a => `${getRepName(a.userId)} ${a.date} ${a.notes || ''}`}
+              searchPlaceholder="Search rep, date, notes"
+              empty={{ title: 'No attendance records yet', hint: 'Check-ins appear here as reps punch in.' }}
+              columns={[
+                isManagerOrAbove && {
+                  key: 'rep', header: 'Representative', sort: a => getRepName(a.userId),
+                  render: a => (
+                    <div className="flex items-center gap-2 whitespace-nowrap font-semibold text-white">
+                      <div className="w-7 h-7 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-[10px]">{getRepName(a.userId).substring(0, 2).toUpperCase()}</div>
+                      {getRepName(a.userId)}
+                    </div>
+                  ),
+                },
+                { key: 'date', header: 'Date', sort: a => a.date, render: a => <span className="whitespace-nowrap text-slate-400">{fmtDate(a.date)}</span> },
+                {
+                  key: 'inout', header: 'In → Out', sort: a => a.checkInTime || '',
+                  render: a => <span className="whitespace-nowrap font-semibold text-white tabular-nums">{a.checkInTime || '—'} <span className="text-slate-500">→</span> {a.checkOutTime || '—'}</span>,
+                },
+                {
+                  // Was hard-coded to '~8h' for every closed shift, so a punch-out
+                  // one minute after the punch-in read as a full working day.
+                  key: 'duration', header: 'Duration', align: 'center',
+                  render: a => (
+                    <Badge tone={a.checkOutTime ? 'info' : a.checkInTime ? 'success' : 'neutral'}>
+                      {shiftDuration(a.checkInTime, a.checkOutTime)}
+                    </Badge>
+                  ),
+                },
+                {
+                  key: 'location', header: 'Punch-in location', hideBelow: 'lg',
+                  render: a => (a.punchInLat ? (
+                    <a
+                      href={`https://www.openstreetmap.org/?mlat=${a.punchInLat}&mlon=${a.punchInLng}&zoom=16`}
+                      target="_blank" rel="noreferrer"
+                      className="text-brand-accent hover:underline text-xs font-mono inline-flex items-center gap-1 whitespace-nowrap"
+                      title={`Accuracy: ±${a.punchInAccuracy}m`}
+                    >
+                      <Navigation size={10} />{a.punchInLat.toFixed(4)}, {a.punchInLng.toFixed(4)}
+                    </a>
+                  ) : <span className="text-slate-600 text-xs italic whitespace-nowrap">No location</span>),
+                },
+                { key: 'notes', header: 'Notes', render: a => <ClampText text={a.notes} width="w-44" className="text-xs text-slate-400 italic" /> },
+                isManagerOrAbove && {
+                  key: 'approval', header: 'Approval', align: 'center', sort: a => (a.approved ? 1 : 0),
+                  render: a => (a.approved ? (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <Badge tone="success"><CheckCircle2 size={10} /> Approved</Badge>
+                      <span className="text-[9px] text-slate-500">by {a.approvedBy || 'Admin'}</span>
+                    </div>
+                  ) : a.checkInTime && canEditSfa ? (
+                    <button
+                      onClick={async () => {
+                        const r = await updateAttendanceRecord(a.id, { approved: true, approvedBy: user.name });
+                        if (!r?.ok) toast(r?.error || 'The approval was not saved.', 'error');
+                      }}
+                      className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold transition-all inline-flex items-center gap-1"
+                    >
+                      <CheckSquare size={11} /> Approve
+                    </button>
+                  ) : <span className="text-slate-600 italic text-[10px]">Not checked in</span>),
+                },
+              ].filter(Boolean)}
+            />
+          </div>
 
-        {/* ── Employee Year Report (Admin Only) ────────────────────────────── */}
-        {isManagerOrAbove && (
-          <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
-            <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <BarChart3 size={16} className="text-brand-accent" />
-                <span className="text-sm font-bold text-white uppercase tracking-wider">Employee Attendance Report — {new Date().getFullYear()}</span>
+          {/* ── Employee Year Report (Admin Only) ────────────────────────────── */}
+          {isManagerOrAbove && (
+            <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
+              <div className="p-4 border-b border-white/5 bg-brand-primary-light/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <BarChart3 size={16} className="text-brand-accent" />
+                  <span className="text-sm font-bold text-white uppercase tracking-wider">Employee Attendance Report — {new Date().getFullYear()}</span>
+                </div>
+                <select
+                  value={selectedAttendanceUser}
+                  onChange={e => setSelectedAttendanceUser(e.target.value)}
+                  className="glass-input rounded-xl px-3 py-2 text-sm text-white bg-brand-primary w-full sm:w-64"
+                >
+                  <option value="" className="bg-brand-primary">— Select Employee —</option>
+                  {reportEmployees.map(u => (
+                    <option key={u.id} value={u.id} className="bg-brand-primary">{u.name} ({u.role})</option>
+                  ))}
+                </select>
               </div>
-              <select
-                value={selectedAttendanceUser}
-                onChange={e => setSelectedAttendanceUser(e.target.value)}
-                className="glass-input rounded-xl px-3 py-2 text-sm text-white bg-brand-primary w-full sm:w-64"
-              >
-                <option value="" className="bg-brand-primary">— Select Employee —</option>
-                {reportEmployees.map(u => (
-                  <option key={u.id} value={u.id} className="bg-brand-primary">{u.name} ({u.role})</option>
-                ))}
-              </select>
-            </div>
 
-            {selectedAttendanceUser ? (() => {
-              const rep = allUsers.find(u => u.id === selectedAttendanceUser);
-              const stats = getAttendanceStats(selectedAttendanceUser);
-              const currentYear = new Date().getFullYear();
-              return (
-                <div className="p-5 space-y-6">
-                  {/* Rep Info + Stats */}
-                  <div className="flex flex-col sm:flex-row gap-4 items-start">
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <div className="w-12 h-12 rounded-2xl bg-brand-accent/15 text-brand-accent flex items-center justify-center font-black text-lg">{rep?.name?.substring(0,2).toUpperCase()}</div>
-                      <div>
-                        <p className="font-bold text-white text-base">{rep?.name}</p>
-                        <p className="text-xs text-slate-400">{rep?.role} · {rep?.email}</p>
+              {selectedAttendanceUser ? (() => {
+                const rep = allUsers.find(u => u.id === selectedAttendanceUser);
+                const stats = getAttendanceStats(selectedAttendanceUser);
+                const currentYear = new Date().getFullYear();
+                return (
+                  <div className="p-5 space-y-6">
+                    {/* Rep Info + Stats */}
+                    <div className="flex flex-col sm:flex-row gap-4 items-start">
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="w-12 h-12 rounded-2xl bg-brand-accent/15 text-brand-accent flex items-center justify-center font-black text-lg">{rep?.name?.substring(0, 2).toUpperCase()}</div>
+                        <div>
+                          <p className="font-bold text-white text-base">{rep?.name}</p>
+                          <p className="text-xs text-slate-400">{rep?.role} · {rep?.email}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+                        {[
+                          { label: 'Present Days', value: stats.presentDays, color: 'text-blue-400', icon: '📅' },
+                          { label: 'Approved', value: stats.approvedDays, color: 'text-emerald-400', icon: '✅' },
+                          { label: 'Current Streak', value: `${stats.currentStreak}d 🔥`, color: 'text-orange-400', icon: '🔥' },
+                          { label: 'Longest Streak', value: `${stats.longestStreak}d 🏆`, color: 'text-yellow-400', icon: '🏆' },
+                        ].map((s, i) => (
+                          <div key={i} className="bg-brand-primary-lighter/30 border border-white/5 rounded-xl p-3 text-center">
+                            <p className={`text-xl font-black ${s.color}`}>{s.value}</p>
+                            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide mt-0.5">{s.label}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+
+                    {/* Legend */}
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Legend:</span>
                       {[
-                        { label: 'Present Days', value: stats.presentDays, color: 'text-blue-400', icon: '📅' },
-                        { label: 'Approved', value: stats.approvedDays, color: 'text-emerald-400', icon: '✅' },
-                        { label: 'Current Streak', value: `${stats.currentStreak}d 🔥`, color: 'text-orange-400', icon: '🔥' },
-                        { label: 'Longest Streak', value: `${stats.longestStreak}d 🏆`, color: 'text-yellow-400', icon: '🏆' },
-                      ].map((s, i) => (
-                        <div key={i} className="bg-brand-primary-lighter/30 border border-white/5 rounded-xl p-3 text-center">
-                          <p className={`text-xl font-black ${s.color}`}>{s.value}</p>
-                          <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide mt-0.5">{s.label}</p>
+                        { color: 'bg-emerald-500', label: 'Present + Approved' },
+                        { color: 'bg-blue-500', label: 'Present (Pending)' },
+                        { color: 'bg-red-500/50', label: 'Absent' },
+                        { color: 'bg-white/5', label: 'Future / Sunday' },
+                      ].map((l, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <div className={`w-3 h-3 rounded-sm ${l.color}`}></div>
+                          <span className="text-[10px] text-slate-400">{l.label}</span>
                         </div>
                       ))}
                     </div>
-                  </div>
 
-                  {/* Legend */}
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Legend:</span>
-                    {[
-                      { color: 'bg-emerald-500', label: 'Present + Approved' },
-                      { color: 'bg-blue-500', label: 'Present (Pending)' },
-                      { color: 'bg-red-500/50', label: 'Absent' },
-                      { color: 'bg-white/5', label: 'Future / Sunday' },
-                    ].map((l, i) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <div className={`w-3 h-3 rounded-sm ${l.color}`}></div>
-                        <span className="text-[10px] text-slate-400">{l.label}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 12-Month Calendar Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {MONTH_NAMES.map((monthName, monthIdx) => {
-                      const days = buildMonthGrid(selectedAttendanceUser, currentYear, monthIdx);
-                      const presentCount = days.filter(d => d && (d.status === 'present' || d.status === 'approved')).length;
-                      return (
-                        <div key={monthIdx} className="bg-brand-primary-lighter/20 border border-white/5 rounded-xl p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-white">{monthName} {currentYear}</span>
-                            <span className="text-[10px] text-brand-accent font-bold">{presentCount}d</span>
+                    {/* 12-Month Calendar Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {MONTH_NAMES.map((monthName, monthIdx) => {
+                        const days = buildMonthGrid(selectedAttendanceUser, currentYear, monthIdx);
+                        const presentCount = days.filter(d => d && (d.status === 'present' || d.status === 'approved')).length;
+                        return (
+                          <div key={monthIdx} className="bg-brand-primary-lighter/20 border border-white/5 rounded-xl p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-white">{monthName} {currentYear}</span>
+                              <span className="text-[10px] text-brand-accent font-bold">{presentCount}d</span>
+                            </div>
+                            {/* Day headers */}
+                            <div className="grid grid-cols-7 gap-0.5 mb-1">
+                              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                                <div key={i} className="text-[8px] text-slate-600 text-center font-bold">{d}</div>
+                              ))}
+                            </div>
+                            {/* Day cells */}
+                            <div className="grid grid-cols-7 gap-0.5">
+                              {days.map((day, i) => (
+                                <div
+                                  key={i}
+                                  title={day ? `${day.dateStr} — ${day.status}` : ''}
+                                  className={`w-full aspect-square rounded-sm transition-all ${day ? STATUS_CELL[day.status] : 'bg-transparent'}`}
+                                />
+                              ))}
+                            </div>
                           </div>
-                          {/* Day headers */}
-                          <div className="grid grid-cols-7 gap-0.5 mb-1">
-                            {['M','T','W','T','F','S','S'].map((d, i) => (
-                              <div key={i} className="text-[8px] text-slate-600 text-center font-bold">{d}</div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Monthly breakdown table */}
+                    <div className="overflow-x-auto custom-scrollbar">
+                      <table className="w-full text-left text-sm border-collapse">
+                        <thead>
+                          <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
+                            <th className="p-3">Date</th><th className="p-3">Check In</th>
+                            <th className="p-3">Check Out</th><th className="p-3">Notes</th>
+                            <th className="p-3 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 text-slate-300">
+                          {attendance
+                            .filter(a => a.userId === selectedAttendanceUser)
+                            .sort((a, b) => b.date.localeCompare(a.date))
+                            .map(att => (
+                              <tr key={att.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
+                                <td className="p-3 text-xs font-bold text-white whitespace-nowrap">{fmtDate(att.date)}</td>
+                                <td className="p-3 text-xs font-bold text-brand-accent">{att.checkInTime || '—'}</td>
+                                <td className="p-3 text-xs text-slate-400">{att.checkOutTime || '—'}</td>
+                                <td className="p-3 text-xs text-slate-400 max-w-[200px] truncate italic">{att.notes || '—'}</td>
+                                <td className="p-3 text-center">
+                                  {att.approved
+                                    ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">✓ Approved</span>
+                                    : att.checkInTime
+                                      ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/10 text-blue-400 border-blue-500/20">Present</span>
+                                      : <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-500/10 text-slate-400 border-slate-500/20">—</span>}
+                                </td>
+                              </tr>
                             ))}
-                          </div>
-                          {/* Day cells */}
-                          <div className="grid grid-cols-7 gap-0.5">
-                            {days.map((day, i) => (
-                              <div
-                                key={i}
-                                title={day ? `${day.dateStr} — ${day.status}` : ''}
-                                className={`w-full aspect-square rounded-sm transition-all ${day ? STATUS_CELL[day.status] : 'bg-transparent'}`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
+                          {attendance.filter(a => a.userId === selectedAttendanceUser).length === 0 && (
+                            <tr><td colSpan="5" className="p-6 text-center text-slate-500 italic">No records found for this employee.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-
-                  {/* Monthly breakdown table */}
-                  <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left text-sm border-collapse">
-                      <thead>
-                        <tr className="bg-brand-primary-light/40 border-b border-white/5 text-slate-400 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
-                          <th className="p-3">Date</th><th className="p-3">Check In</th>
-                          <th className="p-3">Check Out</th><th className="p-3">Notes</th>
-                          <th className="p-3 text-center">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5 text-slate-300">
-                        {attendance
-                          .filter(a => a.userId === selectedAttendanceUser)
-                          .sort((a, b) => b.date.localeCompare(a.date))
-                          .map(att => (
-                            <tr key={att.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
-                              <td className="p-3 text-xs font-bold text-white whitespace-nowrap">{fmtDate(att.date)}</td>
-                              <td className="p-3 text-xs font-bold text-brand-accent">{att.checkInTime || '—'}</td>
-                              <td className="p-3 text-xs text-slate-400">{att.checkOutTime || '—'}</td>
-                              <td className="p-3 text-xs text-slate-400 max-w-[200px] truncate italic">{att.notes || '—'}</td>
-                              <td className="p-3 text-center">
-                                {att.approved
-                                  ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">✓ Approved</span>
-                                  : att.checkInTime
-                                  ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/10 text-blue-400 border-blue-500/20">Present</span>
-                                  : <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-500/10 text-slate-400 border-slate-500/20">—</span>}
-                              </td>
-                            </tr>
-                          ))}
-                        {attendance.filter(a => a.userId === selectedAttendanceUser).length === 0 && (
-                          <tr><td colSpan="5" className="p-6 text-center text-slate-500 italic">No records found for this employee.</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                );
+              })() : (
+                <div className="p-10 text-center text-slate-500">
+                  <BarChart3 size={32} className="mx-auto mb-3 opacity-20" />
+                  <p className="text-sm">Select an employee above to view their full year attendance report, streaks, and calendar.</p>
                 </div>
-              );
-            })() : (
-              <div className="p-10 text-center text-slate-500">
-                <BarChart3 size={32} className="mx-auto mb-3 opacity-20" />
-                <p className="text-sm">Select an employee above to view their full year attendance report, streaks, and calendar.</p>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -912,11 +918,10 @@ export default function SFA() {
                         <div
                           key={idx}
                           title={skipped && record?.reason ? `Not visited — ${record.reason}` : undefined}
-                          className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border ${
-                            !done ? 'bg-white/5 border-white/5 text-slate-300'
-                              : skipped ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
-                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                          }`}
+                          className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border ${!done ? 'bg-white/5 border-white/5 text-slate-300'
+                            : skipped ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                            }`}
                         >
                           {outlet}
                           {done && <span className="font-bold">{skipped ? '✕' : '✓'}</span>}
@@ -1114,7 +1119,7 @@ export default function SFA() {
                         <tr key={rep.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
                           <td className="p-4 font-semibold text-white">
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-brand-accent/15 text-brand-accent flex items-center justify-center font-bold text-xs">{rep.name.substring(0,2).toUpperCase()}</div>
+                              <div className="w-7 h-7 rounded-full bg-brand-accent/15 text-brand-accent flex items-center justify-center font-bold text-xs">{rep.name.substring(0, 2).toUpperCase()}</div>
                               <div><p>{rep.name}</p><p className="text-[10px] text-slate-500">{rep.role}</p></div>
                             </div>
                           </td>
@@ -1186,9 +1191,9 @@ export default function SFA() {
                 key: 'actions', header: 'Actions', align: 'center',
                 render: exp => (exp.status === 'Pending' && canEditSfa ? (
                   <div className="flex items-center justify-center gap-1.5">
-                              <button onClick={async () => { const r = await updateSFAExpense(exp.id, { status: 'Approved' }); if (!r?.ok) toast(r?.error || PAYOUT_FAILED, 'error'); else toast('Approved and booked in Accounting → Expenses.', 'success'); }} className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-400 transition-colors" title="Approve"><CheckSquare size={14} /></button>
-                              <button onClick={async () => { const r = await updateSFAExpense(exp.id, { status: 'Rejected' }); if (!r?.ok) toast(r?.error || 'The claim could not be rejected.', 'error'); }} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 transition-colors" title="Reject"><XSquare size={14} /></button>
-                            </div>
+                    <button onClick={async () => { const r = await updateSFAExpense(exp.id, { status: 'Approved' }); if (!r?.ok) toast(r?.error || PAYOUT_FAILED, 'error'); else toast('Approved and booked in Accounting → Expenses.', 'success'); }} className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-400 transition-colors" title="Approve"><CheckSquare size={14} /></button>
+                    <button onClick={async () => { const r = await updateSFAExpense(exp.id, { status: 'Rejected' }); if (!r?.ok) toast(r?.error || 'The claim could not be rejected.', 'error'); }} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 transition-colors" title="Reject"><XSquare size={14} /></button>
+                  </div>
                 ) : <span className="text-slate-600 italic text-xs">—</span>),
               },
             ].filter(Boolean)}
@@ -1378,11 +1383,11 @@ export default function SFA() {
                         .map(({ rep, stats }, i) => (
                           <tr key={rep.id} className="hover:bg-brand-primary-lighter/20 transition-colors">
                             <td className="p-4 text-center text-lg">
-                              {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : <span className="text-slate-500 font-bold text-xs">#{i+1}</span>}
+                              {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : <span className="text-slate-500 font-bold text-xs">#{i + 1}</span>}
                             </td>
                             <td className="p-4 font-semibold text-white">
                               <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-full bg-brand-accent/15 text-brand-accent flex items-center justify-center font-bold text-xs">{rep.name.substring(0,2).toUpperCase()}</div>
+                                <div className="w-8 h-8 rounded-full bg-brand-accent/15 text-brand-accent flex items-center justify-center font-bold text-xs">{rep.name.substring(0, 2).toUpperCase()}</div>
                                 <div><p className="text-sm">{rep.name}</p><p className="text-[10px] text-slate-500">{rep.role}</p></div>
                               </div>
                             </td>
@@ -1518,11 +1523,10 @@ export default function SFA() {
                       type="button"
                       key={opt.key}
                       onClick={() => setVisitForm({ ...visitForm, outcome: opt.key })}
-                      className={`p-3 rounded-xl border text-left transition-colors ${
-                        visitForm.outcome === opt.key
-                          ? 'bg-brand-accent/10 border-brand-accent text-white'
-                          : 'bg-brand-primary border-white/5 text-slate-400 hover:border-white/20'
-                      }`}
+                      className={`p-3 rounded-xl border text-left transition-colors ${visitForm.outcome === opt.key
+                        ? 'bg-brand-accent/10 border-brand-accent text-white'
+                        : 'bg-brand-primary border-white/5 text-slate-400 hover:border-white/20'
+                        }`}
                     >
                       <span className="block text-sm font-bold">{opt.text}</span>
                       <span className="block text-[10px] mt-0.5 leading-snug opacity-70">{opt.hint}</span>
@@ -1553,147 +1557,147 @@ export default function SFA() {
                   <input id="sfa-outlet-name" type="text" readOnly value={visitForm.outletName} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-slate-400 cursor-not-allowed" />
                 </div>
                 {visitForm.outcome === 'Visited' && (
-                <div>
-                  <label htmlFor="sfa-store-contact" className={lbl}>Store Contact *</label>
-                  <input id="sfa-store-contact" type="tel" required placeholder="9876543210" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
-                </div>
+                  <div>
+                    <label htmlFor="sfa-store-contact" className={lbl}>Store Contact *</label>
+                    <input id="sfa-store-contact" type="tel" required placeholder="9876543210" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
+                  </div>
                 )}
                 {visitForm.outcome === 'Visited' && (<>
-                <div className="sm:col-span-2">
-                  <span id="products-pitched-group" className={lbl}>Products Pitched</span>
-                  <div role="group" aria-labelledby="products-pitched-group" className="grid grid-cols-2 gap-2 bg-brand-primary-dark/50 p-3 rounded-xl border border-white/5">
-                    {productCatalog.map(p => {
-                      const on = visitForm.productsShown?.includes(p.name);
-                      return (
-                        <button type="button" key={p.id} onClick={() => toggleProduct(p.name)} className={`flex items-center gap-2 p-2 rounded-lg border text-xs text-left transition-colors ${on ? 'bg-brand-accent/10 border-brand-accent text-brand-accent' : 'bg-brand-primary border-white/5 text-slate-400'}`}>
-                          {on ? <Check size={13} /> : <X size={13} className="opacity-20" />} {p.name}
-                        </button>
-                      );
-                    })}
+                  <div className="sm:col-span-2">
+                    <span id="products-pitched-group" className={lbl}>Products Pitched</span>
+                    <div role="group" aria-labelledby="products-pitched-group" className="grid grid-cols-2 gap-2 bg-brand-primary-dark/50 p-3 rounded-xl border border-white/5">
+                      {productCatalog.map(p => {
+                        const on = visitForm.productsShown?.includes(p.name);
+                        return (
+                          <button type="button" key={p.id} onClick={() => toggleProduct(p.name)} className={`flex items-center gap-2 p-2 rounded-lg border text-xs text-left transition-colors ${on ? 'bg-brand-accent/10 border-brand-accent text-brand-accent' : 'bg-brand-primary border-white/5 text-slate-400'}`}>
+                            {on ? <Check size={13} /> : <X size={13} className="opacity-20" />} {p.name}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-                <div className="sm:col-span-2 bg-brand-primary-lighter/30 p-4 rounded-xl border border-white/5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="sfa-order-placed" className="text-xs font-bold text-brand-accent uppercase">Order Placed?</label>
-                    <input id="sfa-order-placed" type="checkbox" checked={visitForm.orderPlaced} onChange={e => setVisitForm({ ...visitForm, orderPlaced: e.target.checked })} className="w-5 h-5 rounded accent-brand-accent" />
-                  </div>
-                  {visitForm.orderPlaced && (
-                    <div className="space-y-2 pt-2 animate-fade-in-up">
-                      <p className="text-[10px] text-slate-500">
-                        Add every product the outlet ordered. The order is raised for the total.
-                      </p>
-                      {visitForm.orderItems.map((row, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                          <div className="col-span-12 sm:col-span-6">
-                            <label htmlFor="sfa-product" className={lbl}>Product</label>
-                            <select id="sfa-product" value={row.name} onChange={e => updateOrderItem(idx, { name: e.target.value })} className={inp}>
-                              <option value="" className="bg-brand-primary">Select a product…</option>
-                              {productCatalog.map(p => <option key={p.id} value={p.name} className="bg-brand-primary">{p.name}</option>)}
-                            </select>
+                  <div className="sm:col-span-2 bg-brand-primary-lighter/30 p-4 rounded-xl border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="sfa-order-placed" className="text-xs font-bold text-brand-accent uppercase">Order Placed?</label>
+                      <input id="sfa-order-placed" type="checkbox" checked={visitForm.orderPlaced} onChange={e => setVisitForm({ ...visitForm, orderPlaced: e.target.checked })} className="w-5 h-5 rounded accent-brand-accent" />
+                    </div>
+                    {visitForm.orderPlaced && (
+                      <div className="space-y-2 pt-2 animate-fade-in-up">
+                        <p className="text-[10px] text-slate-500">
+                          Add every product the outlet ordered. The order is raised for the total.
+                        </p>
+                        {visitForm.orderItems.map((row, idx) => (
+                          <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                            <div className="col-span-12 sm:col-span-6">
+                              <label htmlFor="sfa-product" className={lbl}>Product</label>
+                              <select id="sfa-product" value={row.name} onChange={e => updateOrderItem(idx, { name: e.target.value })} className={inp}>
+                                <option value="" className="bg-brand-primary">Select a product…</option>
+                                {productCatalog.map(p => <option key={p.id} value={p.name} className="bg-brand-primary">{p.name}</option>)}
+                              </select>
+                            </div>
+                            <div className="col-span-5 sm:col-span-2">
+                              <label htmlFor="sfa-qty" className={lbl}>Qty</label>
+                              <input id="sfa-qty" type="number" min="0" placeholder="0" value={row.quantity} onChange={e => updateOrderItem(idx, { quantity: e.target.value })} className={inp} />
+                            </div>
+                            <div className="col-span-5 sm:col-span-2">
+                              <label htmlFor="sfa-rate" className={lbl}>Rate ₹</label>
+                              <input id="sfa-rate" type="number" min="0" value={row.unitPrice} onChange={e => updateOrderItem(idx, { unitPrice: e.target.value })} className={inp} />
+                            </div>
+                            <div className="col-span-2 flex items-center justify-end gap-1 pb-2">
+                              <span className="text-xs font-bold text-white tabular-nums">
+                                ₹{(Number(row.quantity || 0) * Number(row.unitPrice || 0)).toLocaleString('en-IN')}
+                              </span>
+                              {visitForm.orderItems.length > 1 && (
+                                <button type="button" onClick={() => removeOrderItem(idx)} className="text-slate-500 hover:text-rose-400 p-1"><X size={13} /></button>
+                              )}
+                            </div>
                           </div>
-                          <div className="col-span-5 sm:col-span-2">
-                            <label htmlFor="sfa-qty" className={lbl}>Qty</label>
-                            <input id="sfa-qty" type="number" min="0" placeholder="0" value={row.quantity} onChange={e => updateOrderItem(idx, { quantity: e.target.value })} className={inp} />
-                          </div>
-                          <div className="col-span-5 sm:col-span-2">
-                            <label htmlFor="sfa-rate" className={lbl}>Rate ₹</label>
-                            <input id="sfa-rate" type="number" min="0" value={row.unitPrice} onChange={e => updateOrderItem(idx, { unitPrice: e.target.value })} className={inp} />
-                          </div>
-                          <div className="col-span-2 flex items-center justify-end gap-1 pb-2">
-                            <span className="text-xs font-bold text-white tabular-nums">
-                              ₹{(Number(row.quantity || 0) * Number(row.unitPrice || 0)).toLocaleString('en-IN')}
-                            </span>
-                            {visitForm.orderItems.length > 1 && (
-                              <button type="button" onClick={() => removeOrderItem(idx)} className="text-slate-500 hover:text-rose-400 p-1"><X size={13} /></button>
-                            )}
-                          </div>
+                        ))}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
+                          <button type="button" onClick={addOrderItem} className="text-xs text-brand-accent hover:underline font-bold">+ Add another product</button>
+                          <span className="text-xs text-slate-400">
+                            {orderUnits.toLocaleString('en-IN')} units · <span className="text-white font-bold">₹{orderValue.toLocaleString('en-IN')}</span>
+                          </span>
                         </div>
-                      ))}
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
-                        <button type="button" onClick={addOrderItem} className="text-xs text-brand-accent hover:underline font-bold">+ Add another product</button>
-                        <span className="text-xs text-slate-400">
-                          {orderUnits.toLocaleString('en-IN')} units · <span className="text-white font-bold">₹{orderValue.toLocaleString('en-IN')}</span>
-                        </span>
-                      </div>
-                      {visitForm.orderPlaced && orderLines.length === 0 && (
-                        <p className="text-[11px] text-amber-400">Enter a quantity against at least one product, or untick "Order Placed".</p>
-                      )}
+                        {visitForm.orderPlaced && orderLines.length === 0 && (
+                          <p className="text-[11px] text-amber-400">Enter a quantity against at least one product, or untick "Order Placed".</p>
+                        )}
 
-                      {/* An outlet on a beat is just a name, so the order has no
+                        {/* An outlet on a beat is just a name, so the order has no
                           address or contact to inherit. Rather than stamping
                           placeholders on it, ask once — here, while the rep is
                           standing in the shop and knows the answers. */}
-                      <div className="pt-3 mt-1 border-t border-white/5 space-y-3">
-                        <p className="text-[10px] font-bold text-brand-accent uppercase tracking-wider">Outlet details for this order</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label htmlFor="sfa-shop-company-name" className={lbl}>Shop / Company name</label>
-                            <input id="sfa-shop-company-name" type="text" value={visitForm.outletCompany} onChange={e => setVisitForm({ ...visitForm, outletCompany: e.target.value })} className={inp} />
-                          </div>
-                          <div>
-                            <label htmlFor="sfa-city" className={lbl}>City *</label>
-                            {cityOptions.length > 0 && !cityIsOther ? (
-                              <select id="sfa-city"
-                                required
-                                value={visitForm.outletCity}
-                                onChange={e => {
-                                  if (e.target.value === '__other__') { setCityIsOther(true); setVisitForm({ ...visitForm, outletCity: '' }); return; }
-                                  setVisitForm({ ...visitForm, outletCity: e.target.value });
-                                }}
-                                className={inp}
-                                style={{ colorScheme: 'dark' }}
-                              >
-                                <option value="" className="bg-brand-primary">Select a city…</option>
-                                {cityOptions.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
-                                <option value="__other__" className="bg-brand-primary">Other — type it in</option>
-                              </select>
-                            ) : (
-                              <div className="flex gap-2">
-                                <input
-                                  type="text" required autoFocus
-                                  placeholder="City or town"
+                        <div className="pt-3 mt-1 border-t border-white/5 space-y-3">
+                          <p className="text-[10px] font-bold text-brand-accent uppercase tracking-wider">Outlet details for this order</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label htmlFor="sfa-shop-company-name" className={lbl}>Shop / Company name</label>
+                              <input id="sfa-shop-company-name" type="text" value={visitForm.outletCompany} onChange={e => setVisitForm({ ...visitForm, outletCompany: e.target.value })} className={inp} />
+                            </div>
+                            <div>
+                              <label htmlFor="sfa-city" className={lbl}>City *</label>
+                              {cityOptions.length > 0 && !cityIsOther ? (
+                                <select id="sfa-city"
+                                  required
                                   value={visitForm.outletCity}
-                                  onChange={e => setVisitForm({ ...visitForm, outletCity: e.target.value })}
+                                  onChange={e => {
+                                    if (e.target.value === '__other__') { setCityIsOther(true); setVisitForm({ ...visitForm, outletCity: '' }); return; }
+                                    setVisitForm({ ...visitForm, outletCity: e.target.value });
+                                  }}
                                   className={inp}
-                                />
-                                {cityOptions.length > 0 && (
-                                  <button type="button" onClick={() => { setCityIsOther(false); setVisitForm({ ...visitForm, outletCity: '' }); }} className="px-3 text-xs text-slate-400 hover:text-white whitespace-nowrap">Back to list</button>
-                                )}
-                              </div>
-                            )}
-                            <p className="text-[10px] text-slate-500 mt-1">
-                              {visitTerritory?.state
-                                ? `Territory ${visitTerritory.name} — state recorded as ${visitTerritory.state}.`
-                                : 'No territory matched this beat — state and territory will be left empty.'}
+                                  style={{ colorScheme: 'dark' }}
+                                >
+                                  <option value="" className="bg-brand-primary">Select a city…</option>
+                                  {cityOptions.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
+                                  <option value="__other__" className="bg-brand-primary">Other — type it in</option>
+                                </select>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text" required autoFocus
+                                    placeholder="City or town"
+                                    value={visitForm.outletCity}
+                                    onChange={e => setVisitForm({ ...visitForm, outletCity: e.target.value })}
+                                    className={inp}
+                                  />
+                                  {cityOptions.length > 0 && (
+                                    <button type="button" onClick={() => { setCityIsOther(false); setVisitForm({ ...visitForm, outletCity: '' }); }} className="px-3 text-xs text-slate-400 hover:text-white whitespace-nowrap">Back to list</button>
+                                  )}
+                                </div>
+                              )}
+                              <p className="text-[10px] text-slate-500 mt-1">
+                                {visitTerritory?.state
+                                  ? `Territory ${visitTerritory.name} — state recorded as ${visitTerritory.state}.`
+                                  : 'No territory matched this beat — state and territory will be left empty.'}
+                              </p>
+                            </div>
+                            <div>
+                              <label htmlFor="sfa-store-contact-2" className={lbl}>Store contact</label>
+                              <input id="sfa-store-contact-2" type="tel" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
+                            </div>
+                            <div>
+                              <label htmlFor="sfa-email" className={lbl}>Email</label>
+                              <input id="sfa-email" type="email" placeholder="Optional" value={visitForm.outletEmail} onChange={e => setVisitForm({ ...visitForm, outletEmail: e.target.value })} className={inp} />
+                            </div>
+                            <div>
+                              <label htmlFor="sfa-pincode" className={lbl}>Pincode *</label>
+                              <input id="sfa-pincode" required type="text" inputMode="numeric" maxLength={6} value={visitForm.outletPincode} onChange={e => setVisitForm({ ...visitForm, outletPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className={inp} />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label htmlFor="sfa-delivery-address" className={lbl}>Delivery address *</label>
+                              <textarea id="sfa-delivery-address" required rows="2" value={visitForm.outletAddress} onChange={e => setVisitForm({ ...visitForm, outletAddress: e.target.value })} placeholder="Shop number, street, area" className={inp + ' resize-none'} />
+                              <p className="text-[10px] text-slate-500 mt-1">Where this order gets delivered. Dispatch cannot send goods to a city alone.</p>
+                            </div>
+                          </div>
+                          {matchOutlet(visitForm.outletName) && (
+                            <p className="text-[11px] text-emerald-400">
+                              This outlet is a registered {(retailers || []).some(r => r.name?.trim().toLowerCase() === visitForm.outletName.trim().toLowerCase()) ? 'retailer' : 'dealer'} — the order will appear on their portal and ledger.
                             </p>
-                          </div>
-                          <div>
-                            <label htmlFor="sfa-store-contact-2" className={lbl}>Store contact</label>
-                            <input id="sfa-store-contact-2" type="tel" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
-                          </div>
-                          <div>
-                            <label htmlFor="sfa-email" className={lbl}>Email</label>
-                            <input id="sfa-email" type="email" placeholder="Optional" value={visitForm.outletEmail} onChange={e => setVisitForm({ ...visitForm, outletEmail: e.target.value })} className={inp} />
-                          </div>
-                          <div>
-                            <label htmlFor="sfa-pincode" className={lbl}>Pincode *</label>
-                            <input id="sfa-pincode" required type="text" inputMode="numeric" maxLength={6} value={visitForm.outletPincode} onChange={e => setVisitForm({ ...visitForm, outletPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className={inp} />
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label htmlFor="sfa-delivery-address" className={lbl}>Delivery address *</label>
-                            <textarea id="sfa-delivery-address" required rows="2" value={visitForm.outletAddress} onChange={e => setVisitForm({ ...visitForm, outletAddress: e.target.value })} placeholder="Shop number, street, area" className={inp + ' resize-none'} />
-                            <p className="text-[10px] text-slate-500 mt-1">Where this order gets delivered. Dispatch cannot send goods to a city alone.</p>
-                          </div>
+                          )}
                         </div>
-                        {matchOutlet(visitForm.outletName) && (
-                          <p className="text-[11px] text-emerald-400">
-                            This outlet is a registered {(retailers || []).some(r => r.name?.trim().toLowerCase() === visitForm.outletName.trim().toLowerCase()) ? 'retailer' : 'dealer'} — the order will appear on their portal and ledger.
-                          </p>
-                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
                 </>)}
                 <div className="sm:col-span-2">
                   <label htmlFor="sfa-next-follow-up" className={lbl}>Next Follow-up</label>
@@ -1740,6 +1744,7 @@ export default function SFA() {
                 <div className="col-span-2">
                   <label htmlFor="sfa-amount" className={lbl}>Amount (₹) *</label>
                   <input id="sfa-amount" type="number" required min="1" placeholder="e.g. 450" value={expenseForm.amount} onChange={e => setExpenseForm({ ...expenseForm, amount: e.target.value })} className={inp} />
+                  <FieldError errors={expenseCheck.errors(expenseForm, SFA_EXPENSE_SPEC)} field="amount" />
                 </div>
                 <div className="col-span-2">
                   <label htmlFor="sfa-description" className={lbl}>Description *</label>
