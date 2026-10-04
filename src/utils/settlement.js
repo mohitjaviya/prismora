@@ -202,3 +202,40 @@ export const partnerPaymentRpcArgs = (partyType, partyId, payment = {}, invoiceI
   p_notes: payment.notes || null,
   p_invoice_id: invoiceId || null,
 });
+
+/** What can be refunded to a partner: their credit balance (a negative balance), else 0. */
+export const refundableCredit = (outstanding) => {
+  const credit = -Number(outstanding || 0);
+  return credit > 0.005 ? Math.round(credit * 100) / 100 : 0;
+};
+
+/**
+ * Why a refund can't be recorded yet, or null. The same rules as
+ * record_partner_refund (093), checked first so the form says so at once;
+ * the database checks again against the balance at that moment.
+ * `today` is the India-time date as YYYY-MM-DD.
+ */
+export const refundProblem = (refund = {}, outstanding, today) => {
+  const credit = refundableCredit(outstanding);
+  const amount = Math.round(Number(refund.amount) * 100) / 100;
+  if (credit <= 0) return 'This partner has no credit balance to refund.';
+  if (!(amount > 0)) return 'A refund must be more than zero.';
+  if (amount > credit + 0.005) return `A refund cannot be more than the credit balance (₹${credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).`;
+  if (!refund.date) return 'Enter the date the refund was paid.';
+  if (today && refund.date > today) return 'A refund cannot be dated after today.';
+  if (!(refund.method || '').trim()) return 'Choose the payment mode.';
+  if (!(refund.reference || '').trim()) return 'Enter the reference (UTR or cheque number).';
+  if ((refund.reason || '').trim().length < 3) return 'Enter the reason for the refund.';
+  return null;
+};
+
+/** The arguments for record_partner_refund (093). Who recorded it is the caller, never sent. */
+export const partnerRefundRpcArgs = (partyType, partyId, refund = {}) => ({
+  p_party_type: partyType,
+  p_party_id: partyId,
+  p_amount: Number(refund.amount) || 0,
+  p_date: refund.date || null,
+  p_method: (refund.method || '').trim() || null,
+  p_reference: (refund.reference || '').trim() || null,
+  p_reason: (refund.reason || '').trim() || null,
+});

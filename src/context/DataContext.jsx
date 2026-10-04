@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { linkedExpenseId, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { amountDue, isSettled } from '../utils/invoiceStatus';
-import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled, paymentFieldFor, partnerPaymentRpcArgs } from '../utils/settlement';
+import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled, paymentFieldFor, partnerPaymentRpcArgs, partnerRefundRpcArgs } from '../utils/settlement';
 import { batchToReceiveInto, canTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
@@ -3841,6 +3841,44 @@ export const DataProvider = ({ children }) => {
   const addDealerPayment = addPartnerPayment('Dealer', dealers, 'dealer_payment');
   const addRetailerPayment = addPartnerPayment('Retailer', retailers, 'retailer_payment');
 
+  // ── Partner refunds (Gap 7 C, 093) ─────────────────────────────────────────
+  // A credit balance paid back to the partner. Only through
+  // record_partner_refund; until 093 is applied the check is false, nothing is
+  // read and no Refund button is shown.
+  const [partnerRefunds, setPartnerRefunds] = useState([]);
+  const partnerRefundCheck = useRef(null);
+  const partnerRefundSupported = () => {
+    if (!partnerRefundCheck.current) {
+      partnerRefundCheck.current = supabase.rpc('partner_refund_enabled')
+        .then(({ data, error }) => !error && data === true, () => false)
+        .then(ok => { if (!ok) partnerRefundCheck.current = null; return ok; });
+    }
+    return partnerRefundCheck.current;
+  };
+  const reloadPartnerRefunds = async () => {
+    if (!(await partnerRefundSupported())) return;
+    const { data, error } = await supabase.from('partner_refunds').select('*').order('createdAt', { ascending: false });
+    if (!error) setPartnerRefunds(data || []);
+  };
+  useEffect(() => {
+    if (signedInUser?.id) partnerRefundSupported().then(ok => { if (ok) reloadPartnerRefunds(); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Pays back part or all of a partner's credit balance. The database checks and moves the balance. */
+  const recordPartnerRefund = async (partyType, partyId, refund) => {
+    const { data, error } = await supabase.rpc('record_partner_refund', partnerRefundRpcArgs(partyType, partyId, refund));
+    if (error || !data) {
+      console.error('[Prismora] Could not record the refund:', error?.message || 'nothing returned');
+      return { ok: false, error: error ? plainDatabaseError(error, 'record this refund') : 'The refund could not be saved.' };
+    }
+    setPartnerRefunds(prev => [data, ...prev.filter(r => r.id !== data.id)]);
+    await reloadParty(partyType, partyId);
+    await reloadInvoices();
+    const party = [...distributors, ...dealers, ...retailers].find(x => x.id === partyId);
+    logEvent('partner_refund', `Refund of ₹${data.amount} paid to ${party?.name || partyId}`, null, data.id);
+    return { ok: true, id: data.id, row: data };
+  };
+
   // ── Scheme Claims (distributor/dealer/retailer-submitted) ───────────────────
   // A claim names one of the partner's own Earned incentives (083): the database
   // takes the scheme, order and partner from it, caps the amount at its value
@@ -3939,6 +3977,7 @@ export const DataProvider = ({ children }) => {
       sfaExpenses, addSFAExpense, updateSFAExpense,
       // Distributor / Dealer / Retailer Portal
       distributorPayments, addDistributorPayment, addDealerPayment, addRetailerPayment,
+      partnerRefunds, partnerRefundSupported, recordPartnerRefund,
       schemeClaims, addSchemeClaim, updateSchemeClaimStatus,
       distributorIncentives, markIncentivePaid,
     }, loadGate.current, (name, ms) => noteEvent('save waited for data load', `${name} ${ms} ms`))}>

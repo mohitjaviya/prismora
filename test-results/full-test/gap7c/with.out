@@ -1,0 +1,28 @@
+PASS R1 Accounts refunds Rs 1,000: one RFD row with every detail, recordedBy = Accounts, balance 1,000 nearer 0, Balance check still agrees, invoices unchanged => DONE rows=1 ASSERT=true {D-TEST-1 -60356.20, derived -60356.20}
+PASS R2 The whole credit refunded (61,356.20): balance exactly 0, all invoices still settled => DONE rows=1 ASSERT=true {D-TEST-1 0.00, derived 0.00}
+PASS R3 More than the credit (61,356.21): refused => REFUSED: A refund cannot be more than the credit balance (₹61,356.20).
+PASS R4 Second refund after the first used the credit up: refused (no credit left) => REFUSED: D-TEST-1 has no credit balance to refund.
+PASS R5 Partner who owes money (D-TEST-2): refused => REFUSED: D-TEST-2 has no credit balance to refund.
+PASS R6 Amount 0: refused => REFUSED: A refund must be more than zero.
+PASS R7 No reference: refused => REFUSED: Enter the reference (UTR or cheque number).
+PASS R8 No reason: refused => REFUSED: Enter the reason for the refund.
+PASS R9 No payment mode: refused => REFUSED: Choose the payment mode.
+PASS R10 No date: refused => REFUSED: Enter the date the refund was paid.
+PASS R11 Dated tomorrow: refused => REFUSED: A refund cannot be dated after today.
+PASS R12 Sales Executive cannot record a refund => REFUSED: Only Accounts (Ledger or Accounting full) can record a refund.
+PASS R13 The partner itself cannot record a refund => REFUSED: Only Accounts (Ledger or Accounting full) can record a refund.
+PASS R14 Admin can: recordedBy = Admin => DONE rows=1 ASSERT=true {D-TEST-1 -61106.20, derived -61106.20}
+PASS R15 Super Admin can => DONE rows=1 ASSERT=true {D-TEST-1 -61106.20, derived -61106.20}
+PASS R16 Dealer with a credit (Demo Dealer, -2,500): refund 500 -> -2,000 => DONE rows=1 ASSERT=true {D-TEST-1 -61356.20, derived -61356.20}
+PASS R17 Writing the table directly (not through the function): refused => REFUSED: permission denied for table partner_refunds
+PASS R18 Deleting a refund directly: refused => REFUSED: permission denied for table partner_refunds
+PASS R19 The partner reads its own refund => DONE rows=1 {D-TEST-1 -61256.20, derived -61256.20}
+PASS R20 Another partner does not see it => DONE rows=0 {D-TEST-1 -61256.20, derived -61256.20}
+PASS R21 Sales Executive (no Ledger/Accounting view) does not see it => DONE rows=0 {D-TEST-1 -61256.20, derived -61256.20}
+PASS R22 Money paid back does not pay a later invoice: after refunding the whole credit, a new Rs 100 invoice stays Unpaid => DONE rows=1 ASSERT=true {D-TEST-1 0.00, derived 100.00}
+PASS R23 Without a refund the same invoice is paid from the credit (control) => DONE rows=1 ASSERT=true {D-TEST-1 -61356.20, derived -61256.20}
+PASS R24 Refund is a money entry in the activity feed => DONE rows=1 ASSERT=true {D-TEST-1 -61356.20, derived -61356.20}
+PASS R25 The screen check partner_refund_enabled() answers => DONE rows=1 {D-TEST-1 -61356.20, derived -61356.20}
+
+mode: with migration; 25/25 scenarios parsed; everything rolled back
+all as required

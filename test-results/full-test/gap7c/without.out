@@ -1,0 +1,28 @@
+FAIL R1 Accounts refunds Rs 1,000: one RFD row with every detail, recordedBy = Accounts, balance 1,000 nearer 0, Balance check still agrees, invoices unchanged => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R2 The whole credit refunded (61,356.20): balance exactly 0, all invoices still settled => REFUSED: function public.record_partner_refund(unknown, unknown, numeric, date, unknown, unknown, unknown) does not exist
+FAIL R3 More than the credit (61,356.21): refused => REFUSED: function public.record_partner_refund(unknown, unknown, numeric, date, unknown, unknown, unknown) does not exist
+FAIL R4 Second refund after the first used the credit up: refused (no credit left) => REFUSED: function public.record_partner_refund(unknown, unknown, numeric, date, unknown, unknown, unknown) does not exist
+FAIL R5 Partner who owes money (D-TEST-2): refused => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R6 Amount 0: refused => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R7 No reference: refused => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R8 No reason: refused => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R9 No payment mode: refused => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R10 No date: refused => REFUSED: function public.record_partner_refund(unknown, unknown, integer, unknown, unknown, unknown, unknown) does not exist
+FAIL R11 Dated tomorrow: refused => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R12 Sales Executive cannot record a refund => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R13 The partner itself cannot record a refund => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R14 Admin can: recordedBy = Admin => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R15 Super Admin can => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R16 Dealer with a credit (Demo Dealer, -2,500): refund 500 -> -2,000 => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R17 Writing the table directly (not through the function): refused => REFUSED: relation \\"partner_refunds\\" does not exist
+FAIL R18 Deleting a refund directly: refused => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R19 The partner reads its own refund => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R20 Another partner does not see it => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R21 Sales Executive (no Ledger/Accounting view) does not see it => REFUSED: function public.record_partner_refund(unknown, unknown, integer, date, unknown, unknown, unknown) does not exist
+FAIL R22 Money paid back does not pay a later invoice: after refunding the whole credit, a new Rs 100 invoice stays Unpaid => REFUSED: function public.record_partner_refund(unknown, unknown, numeric, date, unknown, unknown, unknown) does not exist
+PASS R23 Without a refund the same invoice is paid from the credit (control) => DONE rows=1 ASSERT=true {D-TEST-1 -61356.20, derived -61256.20}
+FAIL R24 Refund is a money entry in the activity feed => DONE rows=1 ASSERT=false {D-TEST-1 -61356.20, derived -61356.20}
+FAIL R25 The screen check partner_refund_enabled() answers => REFUSED: function public.partner_refund_enabled() does not exist
+
+mode: without migration; 25/25 scenarios parsed; everything rolled back
+24 scenario(s) not as required

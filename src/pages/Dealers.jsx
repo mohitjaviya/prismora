@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
@@ -11,6 +11,8 @@ import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadExcel } from '../utils/exportUtils';
 import { buildLedgerEntries, balanceStanding } from '../utils/distributorUtils';
 import PartnerLedgerList from '../components/PartnerLedgerList';
+import PartnerRefundModal from '../components/PartnerRefundModal';
+import { refundableCredit } from '../utils/settlement';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
 import LastChanged from '../components/audit/LastChanged';
@@ -38,7 +40,7 @@ const BLANK_FORM = {
 
 export default function Dealers() {
   const { dealers, addDealer, updateDealer, deleteDealer, distributors, invoices, distributorPayments, addDealerPayment, orders, territories,
-    distributorIncentives, schemeClaims, complaints, retailers, creditNotes } = useData();
+    distributorIncentives, schemeClaims, complaints, retailers, creditNotes, partnerRefunds, partnerRefundSupported } = useData();
   const confirm = useConfirm();
   const toast = useToast();
   const { user, users, deleteUser, canAccess } = useAuth();
@@ -68,6 +70,14 @@ export default function Dealers() {
   // Money received is Accounts' work: Ledger or Accounting full records it,
   // without rights to edit the partner record itself (D-12).
   const canRecordPayment = canAccess('ledger', 'full') || canAccess('accounting', 'full');
+  // Refunds of a credit balance (093): same people; no button until 093 is applied.
+  const [refundsOn, setRefundsOn] = useState(false);
+  const [isRefundOpen, setIsRefundOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    partnerRefundSupported().then(ok => { if (live) setRefundsOn(ok); });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const parentDistributorName = (id) => distributors.find(d => d.id === id)?.name || '—';
 
@@ -166,7 +176,7 @@ export default function Dealers() {
     toast(res?.ok ? `${d.name} deleted.` : (res?.error || 'It could not be deleted.'), res?.ok ? 'success' : 'error');
   };
 
-  const ledgerEntries = useMemo(() => viewingDealer ? buildLedgerEntries(viewingDealer, invoices, distributorPayments, orders, creditNotes) : [], [viewingDealer, invoices, distributorPayments, orders, creditNotes]);
+  const ledgerEntries = useMemo(() => viewingDealer ? buildLedgerEntries(viewingDealer, invoices, distributorPayments, orders, creditNotes, partnerRefunds) : [], [viewingDealer, invoices, distributorPayments, orders, creditNotes, partnerRefunds]);
 
   const handleRecordPayment = async (e) => {
     e.preventDefault();
@@ -400,7 +410,10 @@ export default function Dealers() {
                 <div className="mt-5 pt-4 border-t border-white/5">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-bold text-white flex items-center gap-1.5"><Wallet size={14} className="text-brand-accent" />Outstanding Ledger</h4>
-                    {canRecordPayment && <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
+                    <div className="flex items-center gap-3">
+                      {canRecordPayment && refundsOn && refundableCredit(viewingDealer.outstandingAmount) > 0 && <button onClick={() => setIsRefundOpen(true)} className="text-xs font-semibold text-emerald-400 hover:underline">Record Refund</button>}
+                      {canRecordPayment && <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
+                    </div>
                   </div>
                   <PartnerLedgerList entries={ledgerEntries} outstanding={viewingDealer.outstandingAmount} users={users} />
                 </div>
@@ -413,6 +426,8 @@ export default function Dealers() {
           </div>
         </div>, document.body
       )}
+
+      {isRefundOpen && viewingDealer && <PartnerRefundModal partyType="Dealer" party={viewingDealer} onClose={() => setIsRefundOpen(false)} />}
 
       {/* Record Payment Modal */}
       {isPaymentModalOpen && viewingDealer && createPortal(

@@ -195,3 +195,27 @@ describe('ledger reading (Gap 7 B/D)', () => {
     expect(balanceStanding(rows.at(-1).balance).label).toBe('Credit Balance');
   });
 });
+
+describe('buildLedgerEntries with refunds (Gap 7 C, 093)', () => {
+  const party = { id: 'D-1' };
+  const invoices = [{ id: 'INV-1', distributorId: 'D-1', amount: 1000, tax: 0, createdAt: '2026-10-01T05:00:00Z' }];
+  const payments = [{ id: 'PAY-1', distributorId: 'D-1', amount: 1500, date: '2026-10-02T05:00:00Z' }];
+  const refunds = [
+    { id: 'RFD-1', distributorId: 'D-1', amount: 300, method: 'UPI', reference: 'UTR77', reason: 'Credit paid back', date: '2026-10-03T06:30:00Z', recordedBy: 'U1' },
+    { id: 'RFD-2', dealerId: 'DL-9', amount: 50, date: '2026-10-03T06:30:00Z' },
+  ];
+  const rows = buildLedgerEntries(party, invoices, payments, [], [], refunds);
+
+  it('shows a refund as "Refund paid", a debit with its details, only on its own partner', () => {
+    const r = rows.find(x => x.type === 'Refund');
+    expect(rows.filter(x => x.type === 'Refund')).toHaveLength(1);
+    expect(r).toMatchObject({ ref: 'RFD-1', debit: 300, credit: 0, recordedBy: 'U1' });
+    expect(r.description).toBe('Refund paid via UPI (Ref: UTR77) — Credit paid back');
+  });
+  it('moves the running balance from a credit toward 0', () => {
+    expect(rows.map(x => x.balance)).toEqual([1000, -500, -200]);
+  });
+  it('without refunds nothing changes', () => {
+    expect(buildLedgerEntries(party, invoices, payments).map(x => x.balance)).toEqual([1000, -500]);
+  });
+});

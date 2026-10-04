@@ -34,9 +34,9 @@ export const invoiceParty = (inv, orderById) => {
 
 // Same moment: the charge before the money against it, so a running balance
 // never dips below zero between an invoice and the payment settling it.
-const TYPE_ORDER = { Invoice: 0, 'Credit Note': 1, Payment: 2 };
+const TYPE_ORDER = { Invoice: 0, 'Credit Note': 1, Payment: 2, Refund: 3 };
 
-export const buildLedgerEntries = (party, invoices = [], payments = [], orders = [], creditNotes = []) => {
+export const buildLedgerEntries = (party, invoices = [], payments = [], orders = [], creditNotes = [], refunds = []) => {
   if (!party) return [];
 
   const orderById = new Map((orders || []).map(o => [o.id, o]));
@@ -84,7 +84,22 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
       recordedBy: recordedById(c),
     }));
 
-  const rows = [...debitRows, ...creditRows, ...noteRows].sort((a, b) =>
+  // Credit paid back to the partner (093): a debit, moving a credit balance toward 0.
+  const refundRows = (refunds || [])
+    .filter(r => partyIdOf(r) === party.id)
+    .map(r => ({
+      id: `rfd-${r.id}`,
+      date: r.date || r.createdAt,
+      at: r.createdAt || r.date,
+      type: 'Refund',
+      ref: r.id,
+      description: `Refund paid${r.method ? ` via ${r.method}` : ''}${r.reference ? ` (Ref: ${r.reference})` : ''}${r.reason ? ` — ${r.reason}` : ''}`,
+      debit: Number(r.amount || 0),
+      credit: 0,
+      recordedBy: recordedById(r),
+    }));
+
+  const rows = [...debitRows, ...creditRows, ...noteRows, ...refundRows].sort((a, b) =>
     (new Date(a.date) - new Date(b.date)) || (TYPE_ORDER[a.type] - TYPE_ORDER[b.type]));
 
   let balance = 0;

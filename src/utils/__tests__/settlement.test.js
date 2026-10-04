@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  alreadySettled, balanceAfterPayment, invoiceBelongsToParty, invoicePartyFields, invoiceTotal, invoicesSettledBy, isOverpayment, partyForInvoice, paymentFieldFor, paymentIdForInvoice, settlementRowFor, partnerPaymentRpcArgs,
+  alreadySettled, balanceAfterPayment, invoiceBelongsToParty, invoicePartyFields, invoiceTotal, invoicesSettledBy, isOverpayment, partyForInvoice, paymentFieldFor, paymentIdForInvoice, settlementRowFor, partnerPaymentRpcArgs, refundableCredit, refundProblem, partnerRefundRpcArgs,
 } from '../settlement';
 
 describe('invoiceTotal', () => {
@@ -356,5 +356,36 @@ describe('partnerPaymentRpcArgs (Gap 7 A, 092)', () => {
   });
   it('never sends who recorded it', () => {
     expect(Object.keys(partnerPaymentRpcArgs('Retailer', 'R-1', { amount: 1, recordedBy: 'u1' }))).not.toContain('p_recorded_by');
+  });
+});
+
+describe('partner refunds (Gap 7 C, 093)', () => {
+  const ok = { amount: '500', date: '2026-10-04', method: 'Bank Transfer', reference: 'UTR1', reason: 'Credit paid back' };
+  it('only a negative balance can be refunded', () => {
+    expect(refundableCredit(-61356.2)).toBe(61356.2);
+    expect(refundableCredit(0)).toBe(0);
+    expect(refundableCredit(4901)).toBe(0);
+    expect(refundableCredit(null)).toBe(0);
+  });
+  it('accepts a complete refund within the credit, up to all of it', () => {
+    expect(refundProblem(ok, -61356.2, '2026-10-04')).toBeNull();
+    expect(refundProblem({ ...ok, amount: '61356.20' }, -61356.2, '2026-10-04')).toBeNull();
+  });
+  it('refuses what the database refuses', () => {
+    expect(refundProblem(ok, 4901, '2026-10-04')).toMatch(/no credit balance/);
+    expect(refundProblem(ok, 0, '2026-10-04')).toMatch(/no credit balance/);
+    expect(refundProblem({ ...ok, amount: '61356.21' }, -61356.2, '2026-10-04')).toMatch(/more than the credit balance \(₹61,356.20\)/);
+    expect(refundProblem({ ...ok, amount: '0' }, -100, '2026-10-04')).toMatch(/more than zero/);
+    expect(refundProblem({ ...ok, date: '' }, -1000, '2026-10-04')).toMatch(/date/);
+    expect(refundProblem({ ...ok, date: '2026-10-05' }, -1000, '2026-10-04')).toMatch(/after today/);
+    expect(refundProblem({ ...ok, method: '' }, -1000, '2026-10-04')).toMatch(/payment mode/);
+    expect(refundProblem({ ...ok, reference: '  ' }, -1000, '2026-10-04')).toMatch(/reference/);
+    expect(refundProblem({ ...ok, reason: 'ok' }, -1000, '2026-10-04')).toMatch(/reason/);
+  });
+  it('sends the typed details, trimmed, and never who recorded it', () => {
+    expect(partnerRefundRpcArgs('Dealer', 'DL-1', { ...ok, reference: ' UTR1 ', recordedBy: 'X' })).toEqual({
+      p_party_type: 'Dealer', p_party_id: 'DL-1', p_amount: 500, p_date: '2026-10-04',
+      p_method: 'Bank Transfer', p_reference: 'UTR1', p_reason: 'Credit paid back',
+    });
   });
 });
