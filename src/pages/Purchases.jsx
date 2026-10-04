@@ -16,6 +16,7 @@ import { isAwaitingGoods } from '../utils/purchasing';
 import { buildVendorLedger } from '../utils/distributorUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
 import { contactProblem, normaliseGstin } from '../utils/contactChecks';
+import { grnBatchProblem } from '../utils/batchNumber';
 
 
 const statusConfig = {
@@ -345,6 +346,9 @@ export default function Purchases() {
     e.preventDefault();
     if (isSavingGRN) return;
     setGrnError('');
+    // Gap 18 (090): every line receiving units needs a batch number.
+    const batchProblem = grnBatchProblem(grnForm.items);
+    if (batchProblem) { setGrnError(batchProblem); return; }
     setIsSavingGRN(true);
     // Kept open until the database has the receipt, with its reason if it
     // refuses one (more than is outstanding, for instance).
@@ -356,7 +360,7 @@ export default function Purchases() {
         // Both as numbers: receivedQty went in as the form's text ("5").
         receivedQty: Number(i.receivedQty),
         quantity: Number(i.receivedQty),
-        batchNumber: i.batchNumber || '',
+        batchNumber: String(i.batchNumber || '').trim(),
         expiryDate: i.expiryDate ? new Date(i.expiryDate).toISOString() : null,
       })),
       receivedDate: new Date(grnForm.receivedDate).toISOString(),
@@ -845,8 +849,8 @@ export default function Purchases() {
                             className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" placeholder="Qty" />
                         </div>
                         <div>
-                          <label htmlFor="purchases-batch" className="block text-[10px] text-slate-500 mb-1">Batch #</label>
-                          <input id="purchases-batch" type="text" value={item.batchNumber || ''}
+                          <label htmlFor="purchases-batch" className="block text-[10px] text-slate-500 mb-1">Batch # *</label>
+                          <input id="purchases-batch" type="text" required={Number(item.receivedQty) > 0} value={item.batchNumber || ''}
                             onChange={e => patch('batchNumber', e.target.value)}
                             className="w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white" placeholder="Batch" />
                         </div>

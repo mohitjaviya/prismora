@@ -11,6 +11,7 @@ import { optionsFor } from '../utils/masterLists';
 import { isExpired, daysToExpiry as expiryDays, EXPIRING_SOON_DAYS, stockStatus } from '../utils/expiry';
 import StockReconciliation from '../components/StockReconciliation';
 import DamagedStockModal from '../components/DamagedStockModal';
+import { batchNumberProblem } from '../utils/batchNumber';
 
 const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Expired', 'Out of Stock'];
 
@@ -168,8 +169,11 @@ export default function Inventory() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
+    // Gap 18 (090): a number is required and used once per product.
+    const batchProblem = batchNumberProblem(form, inventory, editingItem);
+    if (batchProblem) { toast(batchProblem, 'error'); return; }
     const payload = {
-      ...form,
+      ...form, batchNumber: form.batchNumber.trim(),
       quantity: Number(form.quantity), reorderLevel: Number(form.reorderLevel),
       unitCost: Number(form.unitCost || 0),
       expiryDate: form.expiryDate ? new Date(form.expiryDate).toISOString() : null
@@ -441,8 +445,8 @@ export default function Inventory() {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="inventory-batch-number" className={labelCls}>Batch Number</label>
-                  <input id="inventory-batch-number" type="text" value={form.batchNumber} onChange={e => setForm({ ...form, batchNumber: e.target.value })} placeholder="e.g. RBH-2025-001" className={inputCls} />
+                  <label htmlFor="inventory-batch-number" className={labelCls}>Batch Number *</label>
+                  <input id="inventory-batch-number" type="text" required value={form.batchNumber} onChange={e => setForm({ ...form, batchNumber: e.target.value })} placeholder="e.g. RBH-2025-001" className={inputCls} />
                 </div>
                 <div>
                   <label htmlFor="inventory-expiry-date" className={labelCls}>Expiry Date</label>
