@@ -4,7 +4,7 @@ import { Undo2, X, Plus, Trash2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/DialogContext';
-import { returnsForOrder } from '../utils/salesReturns';
+import { returnsForOrder, conditionForReason, RETURN_CONDITIONS } from '../utils/salesReturns';
 import OrderReturnsList from './OrderReturnsList';
 
 const REASONS = ['Damaged in transit', 'Expired / near expiry', 'Wrong product', 'Quality complaint', 'Excess stock', 'Other'];
@@ -25,7 +25,7 @@ const formatCurrency = (val) =>
  * database checks it again.
  */
 export default function SalesReturnModal({ order, onClose }) {
-  const { getOrderReturnable, recordSalesReturn, inventory, salesReturns } = useData();
+  const { getOrderReturnable, recordSalesReturn, inventory, salesReturns, salesReturnConditionSupported } = useData();
   const { users } = useAuth();
   const toast = useToast();
   const previous = returnsForOrder(salesReturns, order.id);
@@ -34,6 +34,14 @@ export default function SalesReturnModal({ order, onClose }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Condition of the goods (086). Off until the database says it has the
+  // column; while off, the form and what it sends are exactly as before 086.
+  const [conditionOn, setConditionOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    salesReturnConditionSupported().then(ok => { if (live) setConditionOn(ok); });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let live = true;
@@ -59,7 +67,7 @@ export default function SalesReturnModal({ order, onClose }) {
   };
   function blankLine(pos) {
     const b = pos.batches?.find(x => Number(x.returnable) > 0) || null;
-    return { product: pos.product, inventoryId: b?.inventoryId || '', quantity: '', reason: REASONS[0] };
+    return { product: pos.product, inventoryId: b?.inventoryId || '', quantity: '', reason: REASONS[0], condition: conditionForReason(REASONS[0]) };
   }
 
   const returnable = useMemo(() => (position || []).filter(p => Number(p.returnable) > 0), [position]);
@@ -73,10 +81,15 @@ export default function SalesReturnModal({ order, onClose }) {
     if (!clean.length) { setError('Enter a quantity to return on at least one line.'); return; }
     if (clean.some(l => !l.inventoryId)) { setError('Choose the batch each returned line goes back to.'); return; }
     setSaving(true);
-    const result = await recordSalesReturn(order.id, clean.map(l => ({ ...l, quantity: Number(l.quantity) })), note);
+    // Without 086 the lines are what they always were; with it, each carries its condition.
+    const result = await recordSalesReturn(order.id, clean.map(l => ({
+      product: l.product, inventoryId: l.inventoryId, quantity: Number(l.quantity), reason: l.reason,
+      ...(conditionOn ? { condition: l.condition || 'Good' } : {}),
+    })), note);
     setSaving(false);
     if (!result.ok) { setError(result.error); return; }
-    toast(`Return ${result.returnId} recorded: stock put back, credit note ${result.creditNoteId} for ${formatCurrency(result.value)}.`, 'success');
+    const held = conditionOn && clean.some(l => l.condition && l.condition !== 'Good');
+    toast(`Return ${result.returnId} recorded: ${held ? 'good units back on sale, damaged/expired units held as damaged (not sellable)' : 'stock put back'}, credit note ${result.creditNoteId} for ${formatCurrency(result.value)}.`, 'success');
     onClose(true);
   };
 
@@ -133,17 +146,27 @@ export default function SalesReturnModal({ order, onClose }) {
                         {batchOpts.map(b => <option key={b.id} value={b.id} title={b.label} className="bg-brand-primary">{b.label}</option>)}
                       </select>
                     </div>
-                    <div className="col-span-4 sm:col-span-3">
+                    <div className={`col-span-4 ${conditionOn ? 'sm:col-span-2' : 'sm:col-span-3'}`}>
                       <label htmlFor={`sr-qty-${i}`} className="block text-[10px] text-slate-500 mb-1">Qty</label>
                       <input id={`sr-qty-${i}`} type="number" min="1" max={Number.isFinite(max) ? max : undefined} className={inputCls}
                         value={l.quantity} onChange={e => setLine(i, { quantity: e.target.value })} />
                     </div>
-                    <div className="col-span-7 sm:col-span-8">
+                    <div className={`col-span-7 ${conditionOn ? 'sm:col-span-5' : 'sm:col-span-8'}`}>
                       <label htmlFor={`sr-reason-${i}`} className="block text-[10px] text-slate-500 mb-1">Reason</label>
-                      <select id={`sr-reason-${i}`} className={inputCls} value={l.reason} onChange={e => setLine(i, { reason: e.target.value })}>
+                      <select id={`sr-reason-${i}`} className={inputCls} value={l.reason} onChange={e => setLine(i, { reason: e.target.value, condition: conditionForReason(e.target.value) })}>
                         {REASONS.map(r => <option key={r} value={r} className="bg-brand-primary">{r}</option>)}
                       </select>
                     </div>
+                    {conditionOn && (
+                      // 086: Damaged/Expired units go to the batch's damaged count, not back on sale.
+                      <div className="col-span-11 sm:col-span-4">
+                        <label htmlFor={`sr-condition-${i}`} className="block text-[10px] text-slate-500 mb-1">Condition</label>
+                        <select id={`sr-condition-${i}`} className={inputCls} value={l.condition || 'Good'} onChange={e => setLine(i, { condition: e.target.value })}
+                          title="Good goes back on sale; Damaged and Expired are held as damaged stock (not sellable)">
+                          {RETURN_CONDITIONS.map(c => <option key={c} value={c} className="bg-brand-primary">{c === 'Good' ? 'Good (back on sale)' : `${c} (not sellable)`}</option>)}
+                        </select>
+                      </div>
+                    )}
                     <div className="col-span-1 flex justify-end">
                       {lines.length > 1 && <button type="button" title="Remove line" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))} className="p-2 text-slate-500 hover:text-rose-400"><Trash2 size={14} /></button>}
                     </div>

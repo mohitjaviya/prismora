@@ -20,7 +20,7 @@ import { localDay, orderDateToSave } from '../utils/orderDate';
 import { sellableQty } from '../utils/expiry';
 import SalesReturnModal from '../components/SalesReturnModal';
 import OrderReturnsList from '../components/OrderReturnsList';
-import { orderReturnState, returnsForOrder } from '../utils/salesReturns';
+import { orderReturnState, returnsForOrder, returnConditionText } from '../utils/salesReturns';
 import { canStepTo, stepRefusal, lockingInvoice, openBackorderOf } from '../utils/orderFlow';
 import { changedFields, describeConflict, ORDER_FIELDS } from '../utils/staleEdit';
 
@@ -691,6 +691,8 @@ const Orders = () => {
   // Returned units against delivered ones, from sales_returns (Gap 11).
   const returnStateOf = (o) => orderReturnState(o, salesReturns);
 
+  const conditionsKept = (salesReturns || []).some(r => r && 'condition' in r);
+
   const handleExport = () => {
     const formattedData = visibleOrders.map(o => ({
       ...o,
@@ -701,6 +703,8 @@ const Orders = () => {
       // Gap 11: what came back on the order (status blank when nothing did).
       'Returned Qty': returnStateOf(o).returned,
       'Return Status': returnStateOf(o).label,
+      // 086: only once the database keeps conditions (select * then carries the key).
+      ...(conditionsKept ? { 'Return Condition': returnConditionText(returnsForOrder(salesReturns, o.id)) } : {}),
     }));
     downloadExcel(formattedData, 'PRISMORA_Orders');
   };

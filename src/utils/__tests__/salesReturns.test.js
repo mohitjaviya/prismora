@@ -42,3 +42,24 @@ describe('Gap 11: sales returns on orders', () => {
     expect(rows[1]).toMatchObject({ returnId: 'SR-2', product: 'TEST Unrated Balm', batch: 'TEST-P3-B1', quantity: 1, reason: 'Excess stock', creditNoteId: 'CN-SR-2', note: 'second', createdBy: 'U1' });
   });
 });
+
+describe('Gap 11 G: condition of returned goods (086)', () => {
+  it('suggests a condition from the reason', async () => {
+    const { conditionForReason } = await import('../salesReturns');
+    expect(conditionForReason('Damaged in transit')).toBe('Damaged');
+    expect(conditionForReason('Expired / near expiry')).toBe('Expired');
+    expect(conditionForReason('Wrong product')).toBe('Good');
+    expect(conditionForReason(undefined)).toBe('Good');
+  });
+
+  it('carries each line\'s condition; returns before 086 read "Not recorded"', async () => {
+    const { returnConditionText } = await import('../salesReturns');
+    const old = ret('SR-1', 'O187', 1, '2026-10-02T11:00:00Z');
+    const dmg = ret('SR-2', 'O187', 1, '2026-10-05T11:00:00Z', { condition: 'Damaged' });
+    dmg.lines[0].condition = 'Damaged';
+    expect(returnLineRows([old, dmg]).map(r => r.condition)).toEqual([null, 'Damaged']);
+    expect(returnConditionText([old, dmg])).toBe('Not recorded\nDamaged');
+    expect(returnConditionText([dmg])).toBe('Damaged');
+    expect(returnConditionText([])).toBe('');
+  });
+});

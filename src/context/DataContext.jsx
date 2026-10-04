@@ -1774,8 +1774,21 @@ export const DataProvider = ({ children }) => {
     return { data: (data || []).map(r => ({ ...r, delivered: Number(r.delivered), returned: Number(r.returned), returnable: Number(r.returnable) })) };
   };
 
+  // Whether the database records the condition of returned goods (086). Asked
+  // once per session: a select of the column fails until 086 is applied, and
+  // until then the return form stays exactly as before. Any error = no.
+  const returnConditionCheck = useRef(null);
+  const salesReturnConditionSupported = () => {
+    if (!returnConditionCheck.current) {
+      returnConditionCheck.current = supabase.from('sales_returns').select('condition').limit(1)
+        .then(({ error }) => !error, () => false)
+        .then(ok => { if (!ok) returnConditionCheck.current = null; return ok; });
+    }
+    return returnConditionCheck.current;
+  };
+
   // Goods back on a delivered order: stock, credit note and balance together,
-  // in the database (record_sales_return, 054).
+  // in the database (record_sales_return, 054; condition per line from 086).
   const recordSalesReturn = async (orderId, lines, note) => {
     const { data, error } = await supabase.rpc('record_sales_return', { p_order_id: orderId, p_lines: lines, p_note: note || null });
     if (error) return { ok: false, error: plainDatabaseError(error, 'record this return') };
@@ -3836,7 +3849,7 @@ export const DataProvider = ({ children }) => {
   return (
     <DataContext.Provider value={gateWrites({
       whenLoaded: () => loadGate.current.wait(),
-      getOrderReturnable, recordSalesReturn, salesReturns,
+      getOrderReturnable, recordSalesReturn, salesReturns, salesReturnConditionSupported,
       listLeadAttachments, uploadLeadAttachment, removeLeadAttachment, openLeadAttachment,
       companySettings, loadCompanySettings, updateCompanySettings,
       // Original CRM

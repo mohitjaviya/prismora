@@ -51,7 +51,27 @@ export const returnLineRows = (returns) =>
     batch: l.batchNumber || '',
     quantity: num(l.quantity),
     reason: l.reason || '',
+    // 086: per-line condition; null on returns recorded before it.
+    condition: l.condition || null,
     creditNoteId: r.creditNoteId || '',
     note: r.note || '',
     createdBy: r.createdBy || '',
   })));
+
+// ── Condition of returned goods (Gap 11 G, migration 086) ──
+export const RETURN_CONDITIONS = ['Good', 'Damaged', 'Expired'];
+export const NOT_RECORDED = 'Not recorded';
+
+/** The condition the form suggests for a reason; the user may change it. */
+export const conditionForReason = (reason) => {
+  if (/damaged/i.test(reason || '')) return 'Damaged';
+  if (/expir/i.test(reason || '')) return 'Expired';
+  return 'Good';
+};
+
+/**
+ * The conditions an order's returns came back in, a line each, for the export.
+ * Lines recorded before 086 say "Not recorded"; no returns = ''.
+ */
+export const returnConditionText = (returns) =>
+  [...new Set(returnLineRows(returns).map(r => r.condition || NOT_RECORDED))].join('\n');
