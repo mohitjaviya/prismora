@@ -2,6 +2,30 @@
 
 Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `FIX-BATCH-5.md`.
 
+## WORKING RULES for the gap fixes (owner, 2026-10-04; apply to every remaining gap)
+- Do NOT deploy anything. Do NOT push to GitHub (local commits are fine).
+- Do NOT take backups (demo data).
+- Do NOT apply database changes to the live Supabase project: write migration files only and say how to apply them later.
+- Migrations prepared but not applied: **085** (keep-alive). Next number: **086**.
+
+## GAP LIST — status check 2026-10-04 (check only, nothing changed; owner sends a fix prompt per gap)
+| # | Gap | Status | Evidence / missing |
+|---|---|---|---|
+| 1 | KPI cards truncate values | STILL EXISTS | `components/ui/Card.jsx` StatCard value uses `truncate` (hover title only); Inventory "Stock Value" = full `formatCurrency` |
+| 2 | Excel exports badly formatted | STILL EXISTS | `utils/exportUtils.js` `downloadCSV`: plain CSV, `''+val` prints null/undefined, no BOM, no header styling/freeze/filter/widths; no xlsx library |
+| 3 | SFA attendance report lists partners | STILL EXISTS | `SFA.jsx:734` `allUsers.map` unfiltered; `users` has 20 partner rows (14 Distributor, 3 Dealer, 3 Retailer) |
+| 4 | Admin can't view employee performance | PARTLY FIXED | Reports "Sales Executive Performance" (sales roles only) + SFA leaderboard; no per-employee view for any role |
+| 5 | Audit log retention (90 days, keep important) | STILL EXISTS | `audit_log` 2,063 rows, no retention function; only cron job is `invoice-status-nightly` (057) |
+| 6 | Team Members shows partners | STILL EXISTS | `masters/TeamMembers.jsx:226` `rows={allUsers}` unfiltered (partner roles only kept out of the role picker) |
+| 7 | Partner Record Payment / ledger | PARTLY FIXED | Balance + FIFO settlement in DB (046/057); manual CN on a paid invoice refused (075). Missing: Finance "Mark as Paid" is a different flow; drawer ledger has no total/running balance; sales-return CN can still go negative (credit held); amount span has no `whitespace-nowrap` (`Distributors.jsx:390`, same in Dealers/Retailers) |
+| 8 | Payment mode + transaction details | PARTLY FIXED | `distributor_payments` has `method` + one free-text `reference` (Reference/UTR). Missing: cheque no/date/bank fields, per-mode required checks; Accounting "Mark as Paid" records no mode at all |
+| 9 | Input validation | PARTLY FIXED | GSTIN/phone/PIN FE+DB (`utils/contactChecks.js`, 078 trigger) on partners/vendors/sign-up; value rules (`valueRules.js`, 078); >0 amounts (075); expense date (084). Missing: email format, PAN, IFSC (no fields), coverage on leads/team/company settings/other forms |
+| 10 | Roles: member list per role | STILL EXISTS | `masters/Roles.jsx:53-68` 5 avatars + "+N"; `:389-392` truncated comma-joined names |
+| 11 | Sales returns on orders | STILL EXISTS | Orders shows no return state; two `Undo2` icons (`Orders.jsx:811,815`); long batch label in `SalesReturnModal.jsx` select; every return goes back into the sellable batch, no condition field in `sales_returns` |
+| 12 | Hide ML Lab | FIXED (local commit, not deployed) | Flag `ML_LABS_ENABLED = false` in `src/utils/features.js`; Sidebar drops the item, `/ml-lab` redirects to `/`. Nothing depended on it (no DB/API/jobs/widgets/search; no own module in Roles, it rode on `reports`, so counts and permissions unchanged). Code kept (`pages/MLLab.jsx`, `utils/ml/`). Re-enable: set flag true. Tests 797/797, build OK, lint unchanged |
+| 13 | Supabase keep-alive | PREPARED, NOT ACTIVATED | `migrations/085_system_heartbeat.sql` (one-row `system_heartbeat`, RLS no policies, anon may only run `heartbeat_ping`/`heartbeat_status`) + `.github/workflows/supabase-keepalive.yml` (every 2 days + manual; fails on error/mismatch/stale). Script tested offline with stand-ins for curl/jq; SQL not run anywhere yet. To activate: apply 085, add secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY`, push, run the workflow once (README "Supabase keep-alive") |
+| 14 | Orders page layout | STILL EXISTS | DataTable has no sticky header; page scrolls whole; AI button `fixed bottom-6 right-6 z-[99]` (`Layout.jsx:180`) covers the last column |
+
 ## FINAL STATE (2026-10-04): programme complete
 Phases 0–4, the carry-over checks and fix batches 1–17 are all live (migrations 040–084; next 085). `test-results/full-test/REPORT.md` and the private shared page https://claude.ai/artifact/1Ey4puBzJJwdx9b3tnzfrA (version 3) are both updated to this state: every batch with its migration and commit, test counts unchanged.
 **Still open:**

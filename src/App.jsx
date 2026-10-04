@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { dataSessionKey, routeGate } from './utils/dataSession';
+import { ML_LABS_ENABLED } from './utils/features';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 const PartnerRegister = lazy(() => import('./pages/PartnerRegister'));
@@ -153,7 +154,10 @@ function AppRoutes() {
         <Route path="schemes" element={<PermissionGuard module="schemes"><Schemes /></PermissionGuard>} />
         <Route path="reports" element={<PermissionGuard module="reports"><Reports /></PermissionGuard>} />
         <Route path="ai-insights" element={<PermissionGuard module="reports"><AIInsights /></PermissionGuard>} />
-        <Route path="ml-lab" element={<PermissionGuard module="reports"><MLLab /></PermissionGuard>} />
+        {/* Switched off (Gap 12): the URL goes to the Dashboard. */}
+        <Route path="ml-lab" element={ML_LABS_ENABLED
+          ? <PermissionGuard module="reports"><MLLab /></PermissionGuard>
+          : <Navigate to="/" replace />} />
         <Route path="geography" element={<PermissionGuard module="geography"><Geography /></PermissionGuard>} />
         {/* Settings checks access itself: its Audit Log tab is for Super Admin,
             Admin and Director, and Director has no Settings permission. */}

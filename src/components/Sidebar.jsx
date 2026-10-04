@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2, MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck, Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical, Layers, Shield, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { canViewAuditLog } from '../utils/audit';
+import { ML_LABS_ENABLED } from '../utils/features';
 
 const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
   const { user, canAccess } = useAuth();
@@ -83,7 +84,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
       items: [
         { name: 'Reports', path: '/reports', icon: <BarChart3 size={18} />, module: 'reports' },
         { name: 'AI Insights', path: '/ai-insights', icon: <Brain size={18} />, module: 'reports' },
-        { name: 'ML Lab', path: '/ml-lab', icon: <FlaskConical size={18} />, module: 'reports' },
+        ...(ML_LABS_ENABLED ? [{ name: 'ML Lab', path: '/ml-lab', icon: <FlaskConical size={18} />, module: 'reports' }] : []),
       ]
     },
     {
