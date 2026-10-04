@@ -1,0 +1,21 @@
+k | v
+claim | [{"id":"CLM-1791083968009","status":"Settled","amount":30,"incentiveId":"INC-1791083849440-SCH-TEST-B16-PCT","schemeName":"TEST B16 10pct Balm"}]
+incentives | [{"id":"INC-1791083849440-SCH-TEST-B16-FG","status":"Paid","incentiveType":"Free Goods","incentiveValue":2,"orderId":"O318"}, 
+ {"id":"INC-1791083849440-SCH-TEST-B16-PCT","status":"Paid","incentiveType":"Discount","incentiveValue":50,"orderId":"O318"}]
+expense | [{"id":"EXP-INC-1791083849440-SCH-TEST-B16-PCT","category":"Scheme Claim","amount":30}]
+order | [{"id":"O318","status":"Pending","customerName":"TEST B16 order","distributorId":"D-TEST-1","value":500}]
+schemes | [{"id":"SCH-TEST-B16-FG","name":"TEST B16 free Balm","status":"Inactive"}, 
+ {"id":"SCH-TEST-B16-PCT","name":"TEST B16 10pct Balm","status":"Inactive"}]
+other_claims_on_incentives | 0
+other_incentives_on_schemes_or_order | 0
+claims_on_schemes_or_order | 0
+invoices_for_O318 | 0
+backorders_of_O318 | 0
+stock_movements | [{"id":304,"kind":"free_goods","quantity":2,"inventoryId":"INV-ITEM-1791003427562-7c81","orderId":null,"incentiveId":"INC-1791083849440-SCH-TEST-B16-FG","note":"free goods on incentive INC-1791083849440-SCH-TEST-B16-FG (TEST B16 free Balm)"}, 
+ {"id":305,"kind":"adjustment","quantity":2,"inventoryId":"INV-ITEM-1791003427562-7c81","orderId":null,"incentiveId":null,"note":"TEST B16 clean-up: free goods test units put back"}]
+notifications | 0
+other_expenses | 0
+payments_creditnotes | 0
+fks_to_these_tables | invoices.invoices_orderId_fkey -> orders, visit_reports.visit_reports_orderId_fkey -> orders, distributor_incentives.fk_distributor_incentives_schemeid -> schemes, scheme_claims.fk_scheme_claims_schemeid -> schemes, scheme_claims.fk_scheme_claims_orderid -> orders, visit_reports.fk_visit_reports_orderid -> orders, scheme_claims.scheme_claims_incentiveId_fkey -> distributor_incentives, stock_movements.stock_movements_orderId_fkey -> orders, sales_returns.sales_returns_orderId_fkey -> orders
+events_audit | 3 events / 12 audit rows (kept as history)
+(16 rows)

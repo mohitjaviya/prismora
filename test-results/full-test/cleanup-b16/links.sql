@@ -1,0 +1,18 @@
+-- Everything that could point at the TEST B16 rows (read-only)
+WITH ids AS (SELECT 'INC-1791083849440-SCH-TEST-B16-PCT' a UNION ALL SELECT 'INC-1791083849440-SCH-TEST-B16-FG')
+SELECT 'claim' k, (SELECT json_agg(x)::text FROM (SELECT id, status, amount, "incentiveId", "schemeName" FROM scheme_claims WHERE id='CLM-1791083968009') x) v
+UNION ALL SELECT 'incentives', (SELECT json_agg(x)::text FROM (SELECT id, status, "incentiveType", "incentiveValue", "orderId" FROM distributor_incentives WHERE id IN (SELECT a FROM ids)) x)
+UNION ALL SELECT 'expense', (SELECT json_agg(x)::text FROM (SELECT id, category, amount FROM expenses WHERE id='EXP-INC-1791083849440-SCH-TEST-B16-PCT') x)
+UNION ALL SELECT 'order', (SELECT json_agg(x)::text FROM (SELECT id, status, "customerName", "distributorId", value FROM orders WHERE id='O318') x)
+UNION ALL SELECT 'schemes', (SELECT json_agg(x)::text FROM (SELECT id, name, status FROM schemes WHERE id IN ('SCH-TEST-B16-FG','SCH-TEST-B16-PCT')) x)
+UNION ALL SELECT 'other_claims_on_incentives', (SELECT count(*)::text FROM scheme_claims WHERE "incentiveId" IN (SELECT a FROM ids) AND id<>'CLM-1791083968009')
+UNION ALL SELECT 'other_incentives_on_schemes_or_order', (SELECT count(*)::text FROM distributor_incentives WHERE ("schemeId" IN ('SCH-TEST-B16-FG','SCH-TEST-B16-PCT') OR "orderId"='O318') AND id NOT IN (SELECT a FROM ids))
+UNION ALL SELECT 'claims_on_schemes_or_order', (SELECT count(*)::text FROM scheme_claims WHERE ("schemeId" IN ('SCH-TEST-B16-FG','SCH-TEST-B16-PCT') OR "orderId"='O318') AND id<>'CLM-1791083968009')
+UNION ALL SELECT 'invoices_for_O318', (SELECT count(*)::text FROM invoices WHERE "orderId"='O318')
+UNION ALL SELECT 'backorders_of_O318', (SELECT count(*)::text FROM orders WHERE "splitFromOrderId"='O318' OR "splitIntoOrderId"='O318')
+UNION ALL SELECT 'stock_movements', (SELECT json_agg(x)::text FROM (SELECT id, kind, quantity, "inventoryId", "orderId", "incentiveId", note FROM stock_movements WHERE "orderId"='O318' OR "incentiveId" IN (SELECT a FROM ids) OR note LIKE '%TEST B16%') x)
+UNION ALL SELECT 'notifications', (SELECT count(*)::text FROM notifications WHERE message LIKE '%O318%' OR message LIKE '%TEST B16%' OR message LIKE '%CLM-1791083968009%')
+UNION ALL SELECT 'other_expenses', (SELECT count(*)::text FROM expenses WHERE (description LIKE '%TEST B16%' OR id LIKE '%TEST-B16%') AND id<>'EXP-INC-1791083849440-SCH-TEST-B16-PCT')
+UNION ALL SELECT 'payments_creditnotes', (SELECT count(*)::text FROM distributor_payments WHERE notes LIKE '%O318%')
+UNION ALL SELECT 'fks_to_these_tables', (SELECT string_agg(conrelid::regclass||'.'||conname||' -> '||confrelid::regclass, ', ') FROM pg_constraint WHERE contype='f' AND confrelid IN ('public.orders'::regclass,'public.distributor_incentives'::regclass,'public.scheme_claims'::regclass,'public.schemes'::regclass,'public.expenses'::regclass))
+UNION ALL SELECT 'events_audit', (SELECT count(*)::text FROM events WHERE "dataId" IN ('O318','CLM-1791083968009') OR message LIKE '%TEST B16%') || ' events / ' || (SELECT count(*)::text FROM audit_log WHERE row_id IN ('O318','CLM-1791083968009','SCH-TEST-B16-FG','SCH-TEST-B16-PCT','EXP-INC-1791083849440-SCH-TEST-B16-PCT') OR row_id IN (SELECT a FROM ids)) || ' audit rows (kept as history)';

@@ -1,0 +1,7 @@
+net profit now (as Accounts): {"invoicedPaid":54362.90071162318,"gstOnPayments":6198.099288376821,"creditNoteGst":2265.986588826465,"gstCollected":3932.1126995503564,"creditNoteValue":19093.213411173536,"netSales":35269.687300449645,"expenses":10200,"goodsReceived":247480,"goodsReturned":561,"purchaseCost":246919,"netProfit":-221849.31269955036,"margin":-629.0084479901868}
+net profit before batch 16 tests (backup 2026-10-04T02-58-33-335Z): {"invoicedPaid":54362.90071162318,"gstOnPayments":6198.099288376821,"creditNoteGst":2265.986588826465,"gstCollected":3932.1126995503564,"creditNoteValue":19093.213411173536,"netSales":35269.687300449645,"expenses":10200,"goodsReceived":247480,"goodsReturned":561,"purchaseCost":246919,"netProfit":-221849.31269955036,"margin":-629.0084479901868}
+PASS net profit back to the pre-test figure (netProfit = -221849.31269955036)
+partner_balance_drift as Accounts: []
+vendor_balance_drift as Accounts: []
+PASS both drift checks empty
+partner balances (stored, as the app sums them): {"owed":14913,"owingCount":5,"creditHeld":80096.2,"creditCount":4}
