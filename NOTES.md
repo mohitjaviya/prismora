@@ -17,7 +17,7 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 | 3 | 1 KPI cards | `3cc7015` | Fixed (shared StatCard) |
 | 4 | 3 SFA attendance dropdown | `d3ff5e4` | Fixed (`internalUsersOf`) |
 | 5 | 6 Team Members | `da631da` | Fixed (Team / Partner logins tabs) |
-| 6 | 14 Orders layout | see `git log` ("fix(gap 14)") | Fixed (ListPage + DataTable fill + compact PageHeader) |
+| 6 | 14 Orders layout | `2a4e2eb` | Fixed (ListPage + DataTable fill + compact PageHeader) |
 Tests 810/810, build OK, lint 64 (unchanged) after the last commit. Branch is ahead of `origin` by these 6 gap commits plus a NOTES-only commit.
 **Next:** owner sends the fix prompt for the next gap (still open: 2, 4, 5, 7, 8, 9, 10, 11). Gap 5 (audit retention) will need migration 086 (file only).
 **To activate Gap 13 later:** apply 085 (`npx -y supabase@2.117.0 db query --linked --project-ref qvckvvckkfvelhnxmmvp -f migrations/085_system_heartbeat.sql`), add GitHub secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY`, push to `main`, run the workflow once by hand.
