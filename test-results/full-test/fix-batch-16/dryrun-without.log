@@ -1,0 +1,29 @@
+FAIL P1 Accounts pays a ₹55 cash incentive: expense booked, Paid => REFUSED: function pay_incentive(unknown) does not exist
+FAIL P2 Accounts (no Inventory access) pays 2 free Balm: the units leave stock => REFUSED: function pay_incentive(unknown) does not exist
+FAIL P3 Paying the same incentive twice => REFUSED: function pay_incentive(unknown) does not exist
+FAIL P4 Free goods with too little sellable stock (1000 units) => REFUSED: function pay_incentive(unknown) does not exist
+FAIL P5 Distributor pays its own incentive => REFUSED: function pay_incentive(unknown) does not exist
+FAIL P6 Accounts marks an incentive Paid directly => DONE rows=1
+FAIL P7 Admin adds an incentive by hand => DONE rows=1
+FAIL P8 Admin pays (Inventory full too): same result => REFUSED: function pay_incentive(unknown) does not exist
+FAIL C1 Distributor claims ₹30 of its ₹55 incentive: scheme/order taken from the incentive => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C2 Claim for more than the incentive is worth => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C3 Claim that names no incentive => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C4 Claim on another partner's incentive => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C5 Second claim on the same incentive => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C6 Claim on an incentive already paid => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C7 Accounts settles the ₹30 claim: incentive paid once, ₹30 expense (Scheme Claim) => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C8 A settled claim moved back to Approved => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C9 Free-goods claim (amount set to 0) settled: units leave stock => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C10 Free-goods claim: amount typed is replaced by 0 => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C11 After a rejected claim the incentive can be claimed again => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C12 Paying directly while a claim is open => REFUSED: column \\"incentiveId\\" of relation \\"scheme_claims\\" does not exist
+FAIL C13 Settling an old claim with no incentive => DONE rows=1
+FAIL X1 Distributor complaint naming itself as assignee: stored unassigned => DONE rows=1 ASSERT=false
+PASS X2 Customer Support complaint keeps its assignee => DONE rows=1 ASSERT=true
+FAIL S1 Distributor reads schemes: only the 1 Active scheme for Distributors => DONE rows=3
+FAIL S2 Dealer reads schemes: none apply to dealers => DONE rows=3
+PASS S3 Admin still reads all 3 schemes => DONE rows=3
+
+mode: without migration; 26/26 scenarios parsed; everything rolled back
+24 scenario(s) not as required

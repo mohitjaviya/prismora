@@ -11,7 +11,7 @@ import { territoryForPlace } from '../utils/territory';
 
 const BLANK_FORM = {
   name: '', gstin: '', contactPerson: '', phone: '', email: '', password: '',
-  state: '', city: '',
+  state: '', city: '', address: '', pincode: '',
   // Honeypot — see the field in the form below.
   website: ''
 };
@@ -170,6 +170,22 @@ const DistributorSignup = () => {
                       <option value="" className="bg-brand-primary text-slate-500">-- Select --</option>
                       {districts.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
                     </select>
+                  </div>
+                </div>
+
+                {/* Where orders are delivered (batch 16): a first order cannot move past
+                    Pending without an address and pincode. */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2">
+                    <label htmlFor="distributorsignup-address" className={labelCls}>Delivery Address *</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><MapPin size={16} /></div>
+                      <input id="distributorsignup-address" required type="text" maxLength={300} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Shop / office, street, area" className={inputCls} />
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="distributorsignup-pincode" className={labelCls}>Pincode *</label>
+                    <input id="distributorsignup-pincode" required type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="380001" className="w-full glass-input rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500" />
                   </div>
                 </div>
 

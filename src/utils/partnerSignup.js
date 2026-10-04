@@ -48,13 +48,17 @@ export function validateSignup(kind, form = {}) {
     [form.phone, 'Enter a phone number.'],
     [form.state, 'Choose your state.'],
     [form.city, 'Choose your city or district.'],
+    // Where orders are delivered (batch 16): without it a self-registered
+    // partner's first order could not move past Pending.
+    [form.address, 'Enter your address: it is where your orders are delivered.'],
+    [form.pincode, 'Enter your pincode.'],
   ];
   for (const [value, message] of need) {
     if (!String(value ?? '').trim()) return { ok: false, error: message };
   }
 
   // The database refuses these formats too (078); say so before the round-trip.
-  const formatProblem = contactProblem({ gstin: form.gstin, phone: form.phone });
+  const formatProblem = contactProblem({ gstin: form.gstin, phone: form.phone, pincode: form.pincode });
   if (formatProblem) return { ok: false, error: formatProblem };
 
   if (!looksLikeEmail(form.email)) return { ok: false, error: 'Enter a valid email address.' };
@@ -93,6 +97,8 @@ export function signupPayload(kind, form = {}) {
     phone: String(form.phone ?? '').trim(),
     state: String(form.state ?? '').trim(),
     city: String(form.city ?? '').trim(),
+    address: String(form.address ?? '').trim(),
+    pincode: String(form.pincode ?? '').trim(),
     gstin: String(form.gstin ?? '').trim().toUpperCase(),
   };
   // No territoryId. The function works it out from state and city, because the

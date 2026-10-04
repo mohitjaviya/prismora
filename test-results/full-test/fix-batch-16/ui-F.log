@@ -1,0 +1,30 @@
+scheme SCH-TEST-B16-FG created
+scheme SCH-TEST-B16-PCT created
+order O318 
+earned: INC-1791083849440-SCH-TEST-B16-PCT Discount 50 | INC-1791083849440-SCH-TEST-B16-FG Free Goods 2
+PASS F0 order O318 earned a free-goods and a ₹ incentive
+PASS F1 Accounts sees "Paid: 2 free unit(s) … taken out of stock"
+PASS F2 DB: Paid; Balm 55 -> 53; movement free_goods 2 U-TEST-ACCOUNTS
+PASS C1 claim form offers the earned ₹ incentive, not the paid one: TEST B16 10pct Balm — order O318 — ₹50
+PASS C2 amount defaults to the incentive's value (₹50)
+PASS C3 DB claim: CLM-1791083968009 | Pending | 30 | TEST B16 10pct Balm | O318
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Error: strict mode violation: locator('button').filter({ hasText: 'Settle' }) resolved to 2 elements:
+    1) <button type="button" class="h-10 px-3 rounded-xl text-xs font-semibold border transition-colors border-white/10 text-slate-400 hover:text-white hover:border-white/25">Settled</button> aka getByRole('button', { name: 'Settled' })
+    2) <button class="px-3 py-2 text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-lg">Settle</button> aka getByRole('button', { name: 'Settle', exact: true })
+
+Call log:
+[2m  - waiting for locator('button').filter({ hasText: 'Settle' })[22m
+
+    at D:\PRISMORA\test-results\full-test\fix-batch-16\ui.mjs:109:54 {
+  log: [ "  - waiting for locator('button').filter({ hasText: 'Settle' })" ]
+}
+
+Node.js v24.12.0
+PASS C4 Accounts settles: "its incentive is paid"
+PASS C5 DB: claim CLM-1791083968009 Settled, incentive Paid, one expense: Scheme Claim 30; expenses for this claim/incentive: EXP-INC-1791083849440-SCH-TEST-B16-PCT
+PASS C6 a settled claim offers no Review (final)
+C: 3 pass, 0 fail

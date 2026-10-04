@@ -47,10 +47,17 @@ export const expenseForIncentive = (incentive) => {
   };
 };
 
-/** The expense a settled claim should produce. */
+/**
+ * The expense a settled claim should produce.
+ *
+ * A claim tied to an incentive (083) is paid by settling it, in the database,
+ * and booked under the incentive (EXP-<incentive id>). Booking it again under
+ * the claim would count the same money twice, so only an old claim with no
+ * incentive has an expense of its own.
+ */
 export const expenseForClaim = (claim) => {
   const amount = Number(claim?.amount) || 0;
-  if (!claim?.id || amount <= 0) return null;
+  if (!claim?.id || amount <= 0 || claim.incentiveId) return null;
   return {
     sourceId: claim.id,
     category: 'Scheme Claim',

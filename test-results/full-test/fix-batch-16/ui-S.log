@@ -1,0 +1,39 @@
+PASS S1 sign-up without an address is stopped with a message
+PASS S2 sign-up with address + pincode submitted
+PASS S3 DB partner row: DIST-1791083655435 | Pending | 12 TEST Road, Ward 3 | 388001 | T-1790057083440 | Ahmedabad (city chosen Ahmedabad)
+PASS S4 API sign-up without address refused: HTTP 400 "Address is required: it is where your orders are delivered."
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('tr').filter({ hasText: 'TEST B16 Signup Distributor' }).first().locator('button').filter({ hasText: /Reject/i })[22m
+
+    at D:\PRISMORA\test-results\full-test\fix-batch-16\ui.mjs:57:54 {
+  log: [
+    "  - waiting for locator('tr').filter({ hasText: 'TEST B16 Signup Distributor' }).first().locator('button').filter({ hasText: /Reject/i })"
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.12.0
+TEST registration: test.b16.1791083624471@prismora.test
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('tr').filter({ hasText: 'TEST B16 Signup Distributor' }).first().locator('button[title="Reject"]')[22m
+
+    at D:\PRISMORA\test-results\full-test\fix-batch-16\ui-s5.mjs:8:109 {
+  log: [
+    `  - waiting for locator('tr').filter({ hasText: 'TEST B16 Signup Distributor' }).first().locator('button[title="Reject"]')`
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.12.0
+TEST registration: test.b16.1791083624471@prismora.test
+PASS S5 Admin rejected the TEST registration: partner record, profile and login removed

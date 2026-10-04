@@ -9,6 +9,8 @@ const FORM = {
   password: 'a-long-enough-one',
   state: 'Gujarat',
   city: 'Ahmedabad',
+  address: '12 Relief Road',
+  pincode: '380001',
   gstin: '24aabcs1429b1z5',
   territoryId: 'T-1',
   parentDistributorId: 'DIST-1',
@@ -26,6 +28,15 @@ describe('validateSignup', () => {
     expect(validateSignup('distributor', { ...FORM, name: '  ' }).error).toMatch(/business name/i);
     expect(validateSignup('distributor', { ...FORM, phone: '' }).error).toMatch(/phone/i);
     expect(validateSignup('distributor', { ...FORM, city: '' }).error).toMatch(/city/i);
+  });
+
+  it('asks for the delivery address and a 6-digit pincode (batch 16)', () => {
+    expect(validateSignup('distributor', { ...FORM, address: ' ' }).error).toMatch(/address/i);
+    expect(validateSignup('distributor', { ...FORM, pincode: '' }).error).toMatch(/pincode/i);
+    expect(validateSignup('distributor', { ...FORM, pincode: '12345' }).ok).toBe(false);
+    const p = signupPayload('dealer', { ...FORM, address: ' 12 Relief Road ', pincode: ' 380001 ' });
+    expect(p.address).toBe('12 Relief Road');
+    expect(p.pincode).toBe('380001');
   });
 
   it('refuses a password shorter than the function will accept', () => {

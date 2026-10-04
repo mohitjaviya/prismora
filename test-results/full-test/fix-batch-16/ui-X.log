@@ -1,0 +1,6 @@
+PASS X1 Distributor complaint stored unassigned: CMP-31 | (unassigned)
+PASS K1 Distributor Schemes shows only the Active scheme for distributors
+PASS K2 Dealer Schemes shows none of the distributor schemes
+
+UI: 3 pass, 0 fail
+TEST rows: {"complaint":"CMP-31"}

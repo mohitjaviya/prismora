@@ -56,6 +56,15 @@ describe('the expense each payout produces', () => {
     expect(expenseForIncentive({ id: 'INC-3', incentiveType: 'Free Goods', incentiveValue: 50 })).toBeNull();
   });
 
+  it('books a claim tied to an incentive under the incentive only, never twice (083)', () => {
+    expect(expenseForClaim({ id: 'CLM-2', amount: 30, incentiveId: 'INC-9' })).toBeNull();
+    expect(expenseForClaim({ id: 'CLM-3', amount: 30 })).not.toBeNull();
+    const rows = unbookedPayouts({ expenses: [{ id: 'EXP-INC-9' }],
+      incentives: [{ id: 'INC-9', status: 'Paid', incentiveType: 'Discount', incentiveValue: 30 }],
+      claims: [{ id: 'CLM-2', status: 'Settled', amount: 30, incentiveId: 'INC-9' }] });
+    expect(rows).toEqual([]);
+  });
+
   it('produces nothing for a zero or missing amount', () => {
     expect(expenseForClaim({ id: 'CLM-1', amount: 0 })).toBeNull();
     expect(expenseForFieldExpense({ id: 'EXP-1' })).toBeNull();

@@ -1,9 +1,8 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { linkedExpenseId, expenseForIncentive, expenseForClaim, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
+import { linkedExpenseId, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { amountDue, isSettled } from '../utils/invoiceStatus';
 import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled } from '../utils/settlement';
-import { batchForReturn } from '../utils/purchasing';
 import { batchToReceiveInto, canTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
@@ -2556,19 +2555,8 @@ export const DataProvider = ({ children }) => {
     return true;
   };
 
-  /** Undo the above, for a status that moves back out of the state that booked it. */
-  const unbookLinkedExpense = async (sourceId) => {
-    const id = linkedExpenseId(sourceId);
-    if (!expenses.some(e => e.id === id)) return;
-    const ok = await persist('expenses delete (reversal)', supabase.from('expenses').delete().eq('id', id));
-    if (!ok) return;
-    setExpenses(prev => prev.filter(e => e.id !== id));
-    try {
-      const local = JSON.parse(localStorage.getItem('prismora_expenses') || '[]');
-      localStorage.setItem('prismora_expenses', JSON.stringify(local.filter(e => e.id !== id)));
-    } catch { /* storage blocked */ }
-    logEvent('expense_reversed', `Reversed the expense booked for ${sourceId}`, null, id);
-  };
+  // (A settled claim used to be reversible here, unbooking its expense. Since
+  // 083 a settled claim is final: settling paid its incentive in the database.)
 
   /**
    * Book payouts that happened before any of this was wired up.
@@ -3327,13 +3315,14 @@ export const DataProvider = ({ children }) => {
     const draft = { ...complaintData, status: 'Registered', createdAt: new Date().toISOString() };
     delete draft.id;
     const res = await journaled('complaints insert', async () => {
-      const { data, error } = await supabase.from('complaints').insert([draft]).select('id').single();
+      const { data, error } = await supabase.from('complaints').insert([draft]).select('*').single();
       if (error || !data?.id) return { ok: false, error: plainDatabaseError(error, 'register this complaint') };
-      return { ok: true, id: data.id };
+      return { ok: true, id: data.id, row: data };
     });
     if (!res.ok) return res;
     const newId = res.id;
-    const newComplaint = { ...draft, id: newId };
+    // The row as stored: a partner's complaint is left unassigned by the database (083).
+    const newComplaint = res.row || { ...draft, id: newId };
     setComplaints(prev => {
       const next = [newComplaint, ...prev];
       localStorage.setItem('prismora_complaints', JSON.stringify(next));
@@ -3770,97 +3759,57 @@ export const DataProvider = ({ children }) => {
   };
 
   // ── Scheme Claims (distributor/dealer/retailer-submitted) ───────────────────
+  // A claim names one of the partner's own Earned incentives (083): the database
+  // takes the scheme, order and partner from it, caps the amount at its value
+  // (0 for free goods) and allows one open claim per incentive. Settling a claim
+  // pays the incentive in the database, once.
+  const reloadPayout = async ({ claimIds = [], incentiveIds = [], product } = {}) => {
+    await Promise.all([
+      reloadRows('scheme_claims', setSchemeClaims, 'prismora_scheme_claims', 'id', claimIds),
+      reloadRows('distributor_incentives', setDistributorIncentives, 'prismora_distributor_incentives', 'id', incentiveIds),
+      reloadRows('expenses', setExpenses, 'prismora_expenses', 'id', incentiveIds.map(linkedExpenseId)),
+      product ? reloadRows('inventory', setInventory, 'prismora_inventory', 'product', [product]) : null,
+    ]);
+  };
+
   const addSchemeClaim = async (claimData) => {
     const newId = `CLM-${Date.now()}`;
-    const newClaim = { ...claimData, id: newId, status: 'Pending', createdAt: new Date().toISOString() };
     const res = await confirmSave('scheme_claims insert', 'submit this claim',
-      () => supabase.from('scheme_claims').insert([blankIdsToNull(newClaim)]).select('id'));
+      () => supabase.from('scheme_claims').insert([blankIdsToNull({ ...claimData, id: newId })]).select('id'));
     if (!res.ok) return res;
-    setSchemeClaims(prev => {
-      const next = [newClaim, ...prev];
-      localStorage.setItem('prismora_scheme_claims', JSON.stringify(next));
-      return next;
-    });
-    logEvent('scheme_claim_submitted', `Scheme claim submitted for ${claimData.schemeName}`, null, newId);
+    await reloadPayout({ claimIds: [newId] });
+    logEvent('scheme_claim_submitted', `Scheme claim submitted for incentive ${claimData.incentiveId}`, null, newId);
     return { ok: true, id: newId };
   };
 
   const updateSchemeClaimStatus = async (id, status, reviewNotes = '') => {
     const claim = schemeClaims.find(c => c.id === id);
-
-    // Settled is the point the money goes out. Approved is a decision, not a
-    // payment, so it books nothing.
-    if (status === 'Settled' && claim) {
-      const expense = expenseForClaim(claim);
-      if (expense && !await bookLinkedExpense({ ...expense, date: new Date().toISOString() })) return false;
-    } else if (status !== 'Settled') {
-      // Moved back out of Settled: the payment is undone, so the books follow.
-      await unbookLinkedExpense(id);
-    }
-
-    setSchemeClaims(prev => {
-      const next = prev.map(c => c.id === id ? { ...c, status, reviewNotes } : c);
-      localStorage.setItem('prismora_scheme_claims', JSON.stringify(next));
-      return next;
-    });
-    await persist('scheme_claims update', supabase.from('scheme_claims').update({ status, reviewNotes }).eq('id', id));
+    const incentive = distributorIncentives.find(i => i.id === claim?.incentiveId);
+    const res = await confirmSave('scheme_claims update', status === 'Settled' ? 'settle this claim' : 'update this claim',
+      () => supabase.from('scheme_claims').update({ status, reviewNotes }).eq('id', id).select('id'));
+    if (!res.ok) return res;
+    await reloadPayout({ claimIds: [id], incentiveIds: claim?.incentiveId ? [claim.incentiveId] : [],
+      product: incentive?.incentiveType === 'Free Goods' ? incentive.incentiveProduct : null });
     logEvent('scheme_claim_updated', `Scheme claim ${id} \u2192 ${status}`, null, id);
-    return true;
+    return { ok: true };
   };
 
   // ── Distributor/Dealer/Retailer Incentives ───────────────────────────────
-  // Earned in the database when the order is saved (070, orders_earn_incentives),
-  // by the rules in utils/schemeUtils.js.
+  // Earned in the database when the order is saved (070, orders_earn_incentives).
+  // Paid in the database too (083, pay_incentive): a cash incentive books its
+  // expense, free goods leave stock with a movement row, then it reads Paid --
+  // one transaction, whoever presses it (before, free goods paid by Accounts,
+  // who cannot see inventory, never left stock).
   const markIncentivePaid = async (id) => {
     const incentive = distributorIncentives.find(i => i.id === id);
-    if (!incentive) return false;
-
-    // Booked before the status changes, and the status is left alone if it
-    // fails. An incentive that reads Paid with nothing in the books is the
-    // failure this whole change exists to stop, so it must not be the one the
-    // code falls back to.
-    const expense = expenseForIncentive(incentive);
-    if (expense && !await bookLinkedExpense({ ...expense, date: new Date().toISOString() })) return false;
-
-    // Free goods are the one payout that moves physical stock, and the only
-    // one that never did: the units left the warehouse in real life and the
-    // system went on believing they were there. It could not do otherwise --
-    // the incentive recorded a quantity and no product.
-    //
-    // A shortfall is reported rather than swallowed. adjustStock floors at
-    // zero, so giving away more than a batch holds used to lose the difference
-    // silently, and the count would not disagree with the shelf until somebody
-    // went and looked.
-    let shortfall = 0;
-    if (incentive.incentiveType === 'Free Goods') {
-      const qty = Number(incentive.incentiveValue || 0);
-      const product = incentive.incentiveProduct;
-
-      if (qty > 0 && !product) {
-        console.warn(`[Prismora] Incentive ${id} gives away ${qty} units but does not say of what, ` +
-          'so no stock has been taken out. Name the product on the scheme to fix this for future awards.');
-      } else if (qty > 0) {
-        const batch = batchForReturn(inventory, product);
-        if (!batch) {
-          shortfall = qty;
-          console.warn(`[Prismora] No stock of ${product} to cover ${qty} free unit(s) on incentive ${id}.`);
-        } else {
-          const held = Number(batch.quantity || 0);
-          shortfall = Math.max(0, qty - held);
-          await adjustStock(batch.id, -Math.min(qty, held), `Free goods on incentive ${id}`);
-        }
-      }
+    const { error } = await supabase.rpc('pay_incentive', { p_id: id });
+    if (error) {
+      await reloadPayout({ incentiveIds: [id] });
+      return { ok: false, error: plainDatabaseError(error, 'pay this incentive') };
     }
-
-    setDistributorIncentives(prev => {
-      const next = prev.map(i => i.id === id ? { ...i, status: 'Paid' } : i);
-      localStorage.setItem('prismora_distributor_incentives', JSON.stringify(next));
-      return next;
-    });
-    await persist('distributor_incentives update', supabase.from('distributor_incentives').update({ status: 'Paid' }).eq('id', id));
-    return shortfall > 0
-      ? { ok: true, shortfall, product: incentive.incentiveProduct }
-      : true;
+    await reloadPayout({ incentiveIds: [id], product: incentive?.incentiveType === 'Free Goods' ? incentive.incentiveProduct : null });
+    logEvent('incentive_paid', `Incentive ${id} paid`, null, id);
+    return { ok: true };
   };
 
   // Saves a user starts from a form, journaled so one that fails, stalls or

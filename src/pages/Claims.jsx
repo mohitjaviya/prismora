@@ -23,17 +23,16 @@ const statusConfig = {
 const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
-const BLANK_FORM = { schemeId: '', orderId: '', amount: '', notes: '' };
+const BLANK_FORM = { incentiveId: '', amount: '', notes: '' };
 
 // Maps a portal role to the id field its records carry on shared tables
 // (schemeClaims/orders/etc.) — keeps 3-way party logic from becoming a
 // chain of ternaries.
 const PARTY_ID_FIELD = { Distributor: 'distributorId', Dealer: 'dealerId', Retailer: 'retailerId' };
 
-const PAYOUT_FAILED = 'The payout could not be recorded as an expense, so the status has been left unchanged rather than showing money as paid that the books do not have. The reason is in the browser console; try again once it is resolved.';
 
 export default function Claims() {
-  const { schemeClaims, addSchemeClaim, updateSchemeClaimStatus, schemes, orders, distributors, dealers, retailers } = useData();
+  const { schemeClaims, addSchemeClaim, updateSchemeClaimStatus, distributorIncentives, distributors, dealers, retailers } = useData();
   const toast = useToast();
   const { user, canAccess } = useAuth();
 
@@ -66,15 +65,17 @@ export default function Claims() {
     }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [schemeClaims, isParty, party, user, search, statusFilter]);
 
-  const eligibleSchemes = useMemo(() => {
-    const now = new Date();
-    return schemes.filter(s => [user?.role, 'All'].includes(s.applicableTo) && s.status === 'Active' && (!s.validTo || new Date(s.validTo) >= now));
-  }, [schemes, user]);
-
-  const myOrders = useMemo(() =>
-    party?.id ? orders.filter(o => o[PARTY_ID_FIELD[user?.role]] === party.id) : [],
-    [orders, party, user]
-  );
+  // What can be claimed (083): the party's own Earned incentives that have no
+  // open claim. The database checks the same and takes the scheme, order and
+  // partner from the incentive.
+  const claimable = useMemo(() => {
+    if (!party?.id) return [];
+    const open = new Set(schemeClaims.filter(c => c.incentiveId && c.status !== 'Rejected').map(c => c.incentiveId));
+    return (distributorIncentives || []).filter(i => i[PARTY_ID_FIELD[user?.role]] === party.id && i.status === 'Earned' && !open.has(i.id));
+  }, [distributorIncentives, schemeClaims, party, user]);
+  const chosen = claimable.find(i => i.id === form.incentiveId);
+  const isFreeGoods = chosen?.incentiveType === 'Free Goods';
+  const incentiveLabel = (i) => `${i.schemeName || 'Scheme'}${i.orderId ? ` — order ${i.orderId}` : ''} — ${i.incentiveType === 'Free Goods' ? `${i.incentiveValue} free unit(s) of ${i.incentiveProduct}` : formatCurrency(i.incentiveValue)}`;
 
   const kpis = useMemo(() => ({
     pending: visibleClaims.filter(c => c.status === 'Pending').length,
@@ -88,17 +89,16 @@ export default function Claims() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSaving) return;
-    const scheme = schemes.find(s => s.id === form.schemeId);
-    if (!scheme || !party) return;
+    if (!chosen || !party) return;
     setIsSaving(true);
     const r = await addSchemeClaim({
       distributorId: user?.role === 'Distributor' ? party.id : null,
       dealerId: user?.role === 'Dealer' ? party.id : null,
       retailerId: user?.role === 'Retailer' ? party.id : null,
-      schemeId: scheme.id,
-      schemeName: scheme.name,
-      orderId: form.orderId || null,
-      amount: Number(form.amount),
+      incentiveId: chosen.id,
+      // The scheme, order and partner are taken from the incentive by the database.
+      schemeName: chosen.schemeName,
+      amount: isFreeGoods ? 0 : Number(form.amount || chosen.incentiveValue),
       notes: form.notes
     });
     setIsSaving(false);
@@ -111,10 +111,10 @@ export default function Claims() {
 
   const handleReview = async (status) => {
     if (!reviewingClaim) return;
-    if (!await updateSchemeClaimStatus(reviewingClaim.id, status, reviewNotes)) {
-      toast(PAYOUT_FAILED, 'error');
-      return;
-    }
+    // Settling pays the incentive in the database (083); a refusal says why.
+    const r = await updateSchemeClaimStatus(reviewingClaim.id, status, reviewNotes);
+    if (!r?.ok) { toast(r?.error || 'The claim was not updated.', 'error'); return; }
+    toast(status === 'Settled' ? `Claim ${reviewingClaim.id} settled: its incentive is paid.` : `Claim ${reviewingClaim.id} ${status.toLowerCase()}.`, 'success');
     setReviewingClaim(null);
   };
 
@@ -146,7 +146,12 @@ export default function Claims() {
     },
     {
       key: 'amount', header: 'Amount', align: 'right', sort: c => Number(c.amount) || 0,
-      render: c => <span className="font-semibold text-white">{formatCurrency(c.amount)}</span>,
+      render: c => {
+        const inc = (distributorIncentives || []).find(i => i.id === c.incentiveId);
+        return inc?.incentiveType === 'Free Goods'
+          ? <span className="font-semibold text-white">{inc.incentiveValue} unit(s)</span>
+          : <span className="font-semibold text-white">{formatCurrency(c.amount)}</span>;
+      },
     },
     {
       key: 'date', header: 'Date', hideBelow: 'sm',
@@ -159,7 +164,8 @@ export default function Claims() {
     },
     ...(canReview ? [{
       key: 'actions', header: '', align: 'center', width: 'w-24',
-      render: c => <Button size="sm" onClick={() => openReview(c)}>Review</Button>,
+      // A settled claim is final (083): nothing left to review.
+      render: c => (c.status === 'Settled' ? null : <Button size="sm" onClick={() => openReview(c)}>Review</Button>),
     }] : []),
   ];
 
@@ -181,7 +187,7 @@ export default function Claims() {
         icon={FileCheck2}
         title={isParty ? 'My Scheme Claims' : 'Scheme Claims'}
         subtitle={isParty
-          ? 'Submit and track claims against active schemes you qualify for.'
+          ? 'Claim the incentives your orders have earned, and track each claim.'
           : 'Review and settle distributor, dealer and retailer scheme claims.'}
         actions={<>
           <Button icon={Download} onClick={handleExport}>Export</Button>
@@ -224,7 +230,7 @@ export default function Claims() {
           icon: FileCheck2,
           title: 'No claims yet',
           hint: isParty
-            ? 'A claim is how you ask for what a scheme owes you. Submit one against a scheme you qualify for and its progress shows here.'
+            ? 'A claim is how you ask for an incentive your orders have earned. Submit one and its progress shows here.'
             : 'Nothing has been claimed against a scheme yet. Claims submitted by distributors, dealers and retailers arrive here for review.',
           action: isParty ? <Button variant="primary" icon={Plus} onClick={openAdd}>Submit Claim</Button> : undefined,
         }}
@@ -241,30 +247,34 @@ export default function Claims() {
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="claims-scheme" className={labelCls}>Scheme *</label>
-                <select id="claims-scheme" required value={form.schemeId} onChange={e => setForm(f => ({ ...f, schemeId: e.target.value }))} className={inputCls}>
-                  <option value="" className="bg-brand-primary text-slate-500">-- Select a scheme --</option>
-                  {eligibleSchemes.map(s => <option key={s.id} value={s.id} className="bg-brand-primary">{s.name}</option>)}
-                </select>
+                <label htmlFor="claims-incentive" className={labelCls}>Earned incentive *</label>
+                {claimable.length === 0 ? (
+                  <p className="text-sm text-slate-400">You have no earned incentives waiting to be claimed. Incentives appear here once a qualifying order earns one.</p>
+                ) : (
+                  <select id="claims-incentive" required value={form.incentiveId}
+                    onChange={e => { const inc = claimable.find(i => i.id === e.target.value); setForm(f => ({ ...f, incentiveId: e.target.value, amount: inc && inc.incentiveType !== 'Free Goods' ? String(inc.incentiveValue) : '' })); }}
+                    className={inputCls}>
+                    <option value="" className="bg-brand-primary text-slate-500">-- Choose an incentive --</option>
+                    {claimable.map(i => <option key={i.id} value={i.id} className="bg-brand-primary">{incentiveLabel(i)}</option>)}
+                  </select>
+                )}
               </div>
-              <div>
-                <label htmlFor="claims-related-order-optional" className={labelCls}>Related Order (optional)</label>
-                <select id="claims-related-order-optional" value={form.orderId} onChange={e => setForm(f => ({ ...f, orderId: e.target.value }))} className={inputCls}>
-                  <option value="" className="bg-brand-primary text-slate-500">-- None --</option>
-                  {myOrders.map(o => <option key={o.id} value={o.id} className="bg-brand-primary">{o.id} — {formatCurrency(o.value)}</option>)}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="claims-claim-amount" className={labelCls}>Claim Amount (₹) *</label>
-                <input id="claims-claim-amount" required type="number" min="1" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
-              </div>
+              {chosen && (isFreeGoods ? (
+                <p className="text-sm text-slate-300">You are claiming {chosen.incentiveValue} free unit(s) of {chosen.incentiveProduct}, paid in goods.</p>
+              ) : (
+                <div>
+                  <label htmlFor="claims-claim-amount" className={labelCls}>Claim Amount (₹) *</label>
+                  <input id="claims-claim-amount" required type="number" min="1" max={chosen.incentiveValue} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
+                  <p className="text-[11px] text-slate-500 mt-1">At most {formatCurrency(chosen.incentiveValue)}, what this incentive is worth.</p>
+                </div>
+              ))}
               <div>
                 <label htmlFor="claims-notes" className={labelCls}>Notes</label>
                 <textarea id="claims-notes" rows="3" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Explain how you qualified for this scheme..." className={`${inputCls} resize-none`} />
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : 'Submit Claim'}</button>
+                <button type="submit" disabled={isSaving || !chosen} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : 'Submit Claim'}</button>
               </div>
             </form>
           </div>
@@ -284,6 +294,9 @@ export default function Claims() {
               <p><span className="text-slate-500">{partyName(reviewingClaim).type || 'Party'}:</span> {partyName(reviewingClaim).name}</p>
               <p><span className="text-slate-500">Scheme:</span> {reviewingClaim.schemeName}</p>
               <p><span className="text-slate-500">Amount:</span> <span className="font-bold text-white">{formatCurrency(reviewingClaim.amount)}</span></p>
+              {reviewingClaim.incentiveId
+                ? <p><span className="text-slate-500">Incentive:</span> {reviewingClaim.incentiveId} — settling pays it</p>
+                : <p className="text-amber-400 text-xs">Made before claims were tied to incentives: it cannot be settled. Reject it, and the partner can claim the incentive.</p>}
               {reviewingClaim.notes && <p><span className="text-slate-500">Notes:</span> {reviewingClaim.notes}</p>}
             </div>
             <label htmlFor="claims-review-notes" className={labelCls}>Review Notes</label>

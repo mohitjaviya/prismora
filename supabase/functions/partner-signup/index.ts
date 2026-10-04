@@ -205,6 +205,10 @@ Deno.serve(async (req) => {
   const phone = str(body.phone);
   const state = str(body.state);
   const city = str(body.city);
+  // Where goods are delivered: without it a self-registered partner's first
+  // order could not move past Pending (062 needs an address and pincode).
+  const address = str(body.address);
+  const pincode = str(body.pincode);
   const gstin = str(body.gstin).toUpperCase();
   const parentId = spec.parentField ? str(body[spec.parentField]) : '';
 
@@ -281,6 +285,9 @@ Deno.serve(async (req) => {
   if (!contactPerson) return refuse('Contact person is required.', 400, 'missing-contact');
   if (!phone) return refuse('Phone number is required.', 400, 'missing-phone');
   if (!state || !city) return refuse('State and city are required.', 400, 'missing-place');
+  if (!address) return refuse('Address is required: it is where your orders are delivered.', 400, 'missing-address');
+  if (!/^[1-9][0-9]{5}$/.test(pincode)) return refuse('Enter a 6-digit pincode.', 400, 'bad-pincode');
+  if (address.length > 300) return refuse('One of the fields is longer than it should be.', 400, 'oversized');
   if (!looksLikeEmail(email)) return refuse('Enter a valid email address.', 400, 'bad-email');
   if (password.length < 8) return refuse('The password must be at least 8 characters.', 400, 'short-password');
   if (name.length > 200 || contactPerson.length > 200 || phone.length > 30) {
@@ -389,6 +396,8 @@ Deno.serve(async (req) => {
     gstin: gstin || null,
     state,
     city,
+    address,
+    pincode,
     territoryId: resolvedTerritoryId,
     phone,
     email,

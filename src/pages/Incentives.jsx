@@ -17,7 +17,6 @@ const PARTY_ID_FIELD = { Distributor: 'distributorId', Dealer: 'dealerId', Retai
 
 // Marking a payout without recording it is the failure this guard exists to
 // stop, so a refused write has to be said out loud rather than looking inert.
-const PAYOUT_FAILED = 'The payout could not be recorded as an expense, so the status has been left unchanged rather than showing money as paid that the books do not have. The reason is in the browser console; try again once it is resolved.';
 
 export default function Incentives() {
   const { distributorIncentives, markIncentivePaid, distributors, dealers, retailers } = useData();
@@ -123,15 +122,14 @@ export default function Incentives() {
       key: 'actions', header: '', align: 'center', width: 'w-28',
       render: i => (i.status === 'Earned'
         ? <Button size="sm" onClick={async () => {
+            // Paid in the database (083): the expense, or the free units out of
+            // stock, and the status, together. A refusal (not enough sellable
+            // stock, an open claim) leaves it Earned and says why.
             const result = await markIncentivePaid(i.id);
-            if (!result) { toast(PAYOUT_FAILED, 'error'); return; }
-            // Free goods take units out of stock. Where there were not enough,
-            // the incentive is still paid and the difference is said out loud
-            // rather than absorbed by the floor at zero.
-            if (result.shortfall > 0) {
-              toast(`Marked paid, but stock was short by ${result.shortfall} unit(s) of ${result.product}. `
-                + 'Inventory will not match what was given away until that is corrected.', 'error');
-            }
+            if (!result?.ok) { toast(result?.error || 'The incentive was not paid.', 'error'); return; }
+            toast(i.incentiveType === 'Free Goods'
+              ? `Paid: ${i.incentiveValue} free unit(s) of ${i.incentiveProduct} taken out of stock.`
+              : `Paid: ${formatCurrency(i.incentiveValue)} booked as an expense.`, 'success');
           }}>Mark Paid</Button>
         : null),
     }] : []),
