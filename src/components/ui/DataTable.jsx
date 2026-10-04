@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useLayoutEffect } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SearchInput, Select } from './Field';
 import { CountBadge } from './Badge';
@@ -56,10 +56,11 @@ export default function DataTable({
   filteredEmpty = {},
   className = '',
   dense = false,
-  // Inside a <ListPage>: on a laptop or wider the panel takes the height left
-  // on the screen and only the rows scroll, under a header row that stays put.
-  // Below lg the page scrolls as before.
-  fill = false,
+  // The header row sticks just under the top bar while the page scrolls. Only
+  // while the table fits its card: a table wider than that needs its own
+  // sideways scroll box, and a sticky header cannot stick past one, so then it
+  // scrolls away as usual (phones, narrow windows).
+  stickyHeader = false,
 }) {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState({ key: null, dir: 'asc' });
@@ -82,6 +83,26 @@ export default function DataTable({
     return copy;
   }, [searched, sort, columns]);
 
+  const boxRef = useRef(null);
+  const tableRef = useRef(null);
+  const [tooWide, setTooWide] = useState(false);
+  // the table is unmounted while nothing matches, so re-attach when it returns
+  const hasRows = sorted.length > 0;
+  useLayoutEffect(() => {
+    if (!stickyHeader) return undefined;
+    const box = boxRef.current, table = tableRef.current;
+    if (!box || !table) return undefined;
+    const check = () => setTooWide(table.scrollWidth > box.clientWidth + 1);
+    check();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    // the box follows the window, the table follows its rows (page, search)
+    const ro = new ResizeObserver(check);
+    ro.observe(box);
+    ro.observe(table);
+    return () => ro.disconnect();
+  }, [stickyHeader, hasRows]);
+  const sticky = stickyHeader && !tooWide;
+
   const pageCount = paginate ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1;
   // A filter that shortens the list can leave you on a page that no longer
   // exists, which showed an empty table rather than the rows still matching.
@@ -96,18 +117,15 @@ export default function DataTable({
     setPage(0);
   };
 
-  const cellPad = dense ? (fill ? 'px-3 py-1.5' : 'px-3 py-2') : 'px-4 py-3';
+  const cellPad = dense ? 'px-3 py-2' : 'px-4 py-3';
   const showPager = paginate && sorted.length > 10;
-  // fill runs the card to just above the window's bottom edge, where the AI
-  // button sits: keep the pager's right end clear of it, and with no pager
-  // leave room under the last row so it can scroll up past the button.
-  const fillScroll = fill ? `lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${showPager ? '' : 'lg:pb-16'}` : '';
 
   return (
-    <div className={`glass-panel rounded-2xl border border-white/5 overflow-hidden
-      ${fill ? 'lg:flex lg:flex-col lg:flex-1 lg:min-h-0' : ''} ${className}`}>
+    // overflow-clip, not hidden, with stickyHeader: hidden makes the card a
+    // scroll box of its own and the header would stick to it, i.e. never.
+    <div className={`glass-panel rounded-2xl border border-white/5 ${stickyHeader ? 'overflow-clip' : 'overflow-hidden'} ${className}`}>
       {(title || search || toolbar) && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5 flex-wrap shrink-0">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
             {title && <h3 className="text-sm font-bold text-white truncate">{title}</h3>}
             <CountBadge value={sorted.length} />
@@ -138,13 +156,13 @@ export default function DataTable({
         />
       ) : (
         <>
-          <div className={`overflow-x-auto custom-scrollbar ${fillScroll}`}>
+          <div ref={boxRef} className={sticky ? '' : 'overflow-x-auto custom-scrollbar'}>
             {/* Narrow enough that a phone shows three or four columns rather than
                   two, and still wide enough that cells do not cramp on a laptop. */}
-              <table className="w-full min-w-[520px]">
-              {/* Sticky only does anything when the box above scrolls, i.e. fill
-                  at lg+. Its own solid background, or rows show through it. */}
-              <thead className={fill ? 'sticky top-0 z-10 bg-brand-primary-light' : ''}>
+              <table ref={tableRef} className="w-full min-w-[520px]">
+              {/* top-16: the Topbar's height (h-16; its mt-2 drops away once stuck). Its own solid
+                  background, or the rows show through it. */}
+              <thead className={sticky ? 'sticky top-16 z-10 bg-brand-primary-light' : ''}>
                 <tr className="border-b border-white/5 bg-white/[0.02]">
                   {columns.map(col => {
                     const active = sort.key === col.key;
@@ -194,7 +212,7 @@ export default function DataTable({
           </div>
 
           {showPager && (
-            <div className={`flex items-center justify-between gap-3 px-4 border-t border-white/5 flex-wrap shrink-0 ${fill ? 'py-2 lg:pr-24' : 'py-3'}`}>
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-white/5 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-slate-500">Rows</span>
                 <Select

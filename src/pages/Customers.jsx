@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Download, Briefcase, MapPin, Package, X, Calendar, CheckCircle, Clock, Truck, Filter } from 'lucide-react';
-import { PageHeader, ListPage, DataTable, Button, Badge, Card, Select } from '../components/ui';
+import { PageHeader, DataTable, Button, Badge, Card, Select } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { createPortal } from 'react-dom';
 
@@ -182,7 +182,7 @@ const Customers = () => {
   }
 
   return (
-    <ListPage className="animate-fade-in-up">
+    <div className="space-y-4 animate-fade-in-up">
       <PageHeader
         compact
         icon={Briefcase}
@@ -206,7 +206,7 @@ const Customers = () => {
       </Card>
 
       <DataTable
-        fill
+        stickyHeader
         dense
         title="Customers"
         columns={customerColumns}
@@ -386,7 +386,7 @@ const Customers = () => {
           document.body
         );
       })()}
-    </ListPage>
+    </div>
   );
 };
 

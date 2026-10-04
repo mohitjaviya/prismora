@@ -354,7 +354,7 @@ const Leads = () => {
       key: 'followUp', header: 'Follow Up', hideBelow: 'sm',
       sort: l => (l.followUpDate ? new Date(l.followUpDate).getTime() : null),
       render: l => {
-        if (!l.followUpDate) return <span className="text-slate-600">None</span>;
+        if (!l.followUpDate) return <span className="text-slate-600" title="No follow-up date">—</span>;
         const days = differenceInDays(new Date(l.followUpDate), new Date());
         const soon = days <= 2 && l.status !== 'First Order' && l.status !== 'Active';
         return (

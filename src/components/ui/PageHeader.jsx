@@ -6,7 +6,7 @@
  * one. The icon is new — with nine sidebar groups collapsed, the heading is the
  * only thing telling you where you are.
  */
-// compact: for list screens (<ListPage>), where every pixel above the table is
+// compact: for list screens (Orders, Customers, …), where every pixel above the table is
 // a row nobody sees. Smaller title and icon, title and buttons on one centred
 // line from lg up, and the subtitle only on screens wide enough to spare it.
 export default function PageHeader({ icon: Icon, title, subtitle, actions, children, compact = false, className = '' }) {

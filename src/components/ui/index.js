@@ -6,7 +6,6 @@ export { default as Card, SectionCard, StatCard } from './Card';
 export { default as EmptyState } from './EmptyState';
 export { default as PageHeader } from './PageHeader';
 export { default as DataTable, TableShell } from './DataTable';
-export { default as ListPage } from './ListPage';
 export { Field, Input, Textarea, Select, SearchInput } from './Field';
 export { default as ShortId } from './ShortId';
 export { default as ClampText } from './ClampText';

@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Tags, Download } from 'lucide-react';
 import { downloadCSV } from '../utils/exportUtils';
-import { PageHeader, ListPage, DataTable, Button } from '../components/ui';
+import { PageHeader, DataTable, Button } from '../components/ui';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -62,7 +62,7 @@ export default function PriceList() {
   ];
 
   return (
-    <ListPage className="animate-fade-in-up">
+    <div className="space-y-4 animate-fade-in-up">
       <PageHeader
         compact
         icon={Tags}
@@ -72,7 +72,7 @@ export default function PriceList() {
       />
 
       <DataTable
-        fill
+        stickyHeader
         dense
         title="Products"
         columns={columns}
@@ -86,6 +86,6 @@ export default function PriceList() {
           hint: 'Prices are read from the Product Catalogue under Masters. Add a product there and its tier prices appear here.',
         }}
       />
-    </ListPage>
+    </div>
   );
 }

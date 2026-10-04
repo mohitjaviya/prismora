@@ -5,7 +5,7 @@ import { attributionFor } from '../utils/attribution';
 import { isUnassigned } from '../utils/orderRouting';
 import { format } from 'date-fns';
 import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart, ClipboardCheck, Undo2, X } from 'lucide-react';
-import { PageHeader, ListPage, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
+import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { downloadCSV, itemsText } from '../utils/exportUtils';
 import { allParties } from '../utils/distributorUtils';
@@ -845,7 +845,7 @@ const Orders = () => {
   ];
 
   return (
-    <ListPage>
+    <div className="space-y-4">
       {returningOrder && <SalesReturnModal order={returningOrder} onClose={() => setReturningOrder(null)} />}
       <PageHeader
         compact
@@ -871,7 +871,7 @@ const Orders = () => {
       />
 
       <DataTable
-        fill
+        stickyHeader
         dense
         title="Orders"
         columns={orderColumns}
@@ -1525,7 +1525,7 @@ const Orders = () => {
           </div>
         </div>, document.body
       )}
-    </ListPage>
+    </div>
   );
 };
 

@@ -1,0 +1,152 @@
+PASS ADMIN /orders 1920x1080: no inner table scroll box (page scrolls: true)
+PASS ADMIN /orders 1920x1080: page-number footer right after the last of 25 rows
+PASS ADMIN /orders 1920x1080: header row stuck under the top bar (head 64, bar 64)
+PASS ADMIN /orders 1920x1080: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /orders 1920x1080: no sideways page scroll
+PASS ADMIN /orders 1920x825: no inner table scroll box (page scrolls: true)
+PASS ADMIN /orders 1920x825: page-number footer right after the last of 25 rows
+PASS ADMIN /orders 1920x825: header row stuck under the top bar (head 64, bar 64)
+PASS ADMIN /orders 1920x825: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /orders 1920x825: no sideways page scroll
+PASS ADMIN /orders 1366x768: no inner table scroll box (page scrolls: true)
+PASS ADMIN /orders 1366x768: page-number footer right after the last of 25 rows
+PASS ADMIN /orders 1366x768: header row stuck under the top bar (head 64, bar 64)
+PASS ADMIN /orders 1366x768: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /orders 1366x768: no sideways page scroll
+PASS ADMIN /orders 1024x768: no inner table scroll box (page scrolls: true)
+PASS ADMIN /orders 1024x768: page-number footer right after the last of 25 rows
+INFO ADMIN /orders 1024x768: table wider than its card, header scrolls with the page
+PASS ADMIN /orders 1024x768: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /orders 1024x768: no sideways page scroll
+PASS ADMIN /orders 768x1024: no inner table scroll box (page scrolls: true)
+PASS ADMIN /orders 768x1024: page-number footer right after the last of 25 rows
+INFO ADMIN /orders 768x1024: table wider than its card, header scrolls with the page
+PASS ADMIN /orders 768x1024: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /orders 768x1024: no sideways page scroll
+PASS ADMIN /orders 375x812: no inner table scroll box (page scrolls: true)
+PASS ADMIN /orders 375x812: page-number footer right after the last of 25 rows
+INFO ADMIN /orders 375x812: table wider than its card, header scrolls with the page
+PASS ADMIN /orders 375x812: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /orders 375x812: no sideways page scroll
+PASS ADMIN /customers 1920x1080: no inner table scroll box (page scrolls: true)
+PASS ADMIN /customers 1920x1080: page-number footer right after the last of 25 rows
+PASS ADMIN /customers 1920x1080: header row stuck under the top bar (head 64, bar 64)
+PASS ADMIN /customers 1920x1080: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /customers 1920x1080: no sideways page scroll
+PASS ADMIN /customers 1920x825: no inner table scroll box (page scrolls: true)
+PASS ADMIN /customers 1920x825: page-number footer right after the last of 25 rows
+PASS ADMIN /customers 1920x825: header row stuck under the top bar (head 64, bar 64)
+PASS ADMIN /customers 1920x825: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /customers 1920x825: no sideways page scroll
+PASS ADMIN /customers 1366x768: no inner table scroll box (page scrolls: true)
+PASS ADMIN /customers 1366x768: page-number footer right after the last of 25 rows
+PASS ADMIN /customers 1366x768: header row stuck under the top bar (head 64, bar 64)
+PASS ADMIN /customers 1366x768: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /customers 1366x768: no sideways page scroll
+PASS ADMIN /customers 1024x768: no inner table scroll box (page scrolls: true)
+PASS ADMIN /customers 1024x768: page-number footer right after the last of 25 rows
+INFO ADMIN /customers 1024x768: table wider than its card, header scrolls with the page
+PASS ADMIN /customers 1024x768: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /customers 1024x768: no sideways page scroll
+PASS ADMIN /customers 768x1024: no inner table scroll box (page scrolls: true)
+PASS ADMIN /customers 768x1024: page-number footer right after the last of 25 rows
+INFO ADMIN /customers 768x1024: table wider than its card, header scrolls with the page
+PASS ADMIN /customers 768x1024: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /customers 768x1024: no sideways page scroll
+PASS ADMIN /customers 375x812: no inner table scroll box (page scrolls: true)
+PASS ADMIN /customers 375x812: page-number footer right after the last of 25 rows
+INFO ADMIN /customers 375x812: table wider than its card, header scrolls with the page
+PASS ADMIN /customers 375x812: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /customers 375x812: no sideways page scroll
+PASS ADMIN /distributors 1920x1080: no inner table scroll box (page scrolls: true)
+PASS ADMIN /distributors 1920x1080: page-number footer right after the last of 17 rows
+INFO ADMIN /distributors 1920x1080: table wider than its card, header scrolls with the page
+PASS ADMIN /distributors 1920x1080: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /distributors 1920x1080: no sideways page scroll
+PASS ADMIN /distributors 1920x825: no inner table scroll box (page scrolls: true)
+PASS ADMIN /distributors 1920x825: page-number footer right after the last of 17 rows
+INFO ADMIN /distributors 1920x825: table wider than its card, header scrolls with the page
+PASS ADMIN /distributors 1920x825: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /distributors 1920x825: no sideways page scroll
+PASS ADMIN /distributors 1366x768: no inner table scroll box (page scrolls: true)
+PASS ADMIN /distributors 1366x768: page-number footer right after the last of 17 rows
+INFO ADMIN /distributors 1366x768: table wider than its card, header scrolls with the page
+PASS ADMIN /distributors 1366x768: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /distributors 1366x768: no sideways page scroll
+PASS ADMIN /distributors 1024x768: no inner table scroll box (page scrolls: true)
+PASS ADMIN /distributors 1024x768: page-number footer right after the last of 17 rows
+INFO ADMIN /distributors 1024x768: table wider than its card, header scrolls with the page
+PASS ADMIN /distributors 1024x768: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /distributors 1024x768: no sideways page scroll
+PASS ADMIN /distributors 768x1024: no inner table scroll box (page scrolls: true)
+PASS ADMIN /distributors 768x1024: page-number footer right after the last of 17 rows
+INFO ADMIN /distributors 768x1024: table wider than its card, header scrolls with the page
+PASS ADMIN /distributors 768x1024: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /distributors 768x1024: no sideways page scroll
+PASS ADMIN /distributors 375x812: no inner table scroll box (page scrolls: true)
+PASS ADMIN /distributors 375x812: page-number footer right after the last of 17 rows
+INFO ADMIN /distributors 375x812: table wider than its card, header scrolls with the page
+PASS ADMIN /distributors 375x812: at the end, AI button (shown) covers no last row / footer
+PASS ADMIN /distributors 375x812: no sideways page scroll
+PASS ADMIN /leads 1920x1080: Follow Up shows no "None" (17 dashes of 25)
+PASS DISTRIBUTOR /orders 1920x1080: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /orders 1920x1080: page-number footer right after the last of 25 rows
+PASS DISTRIBUTOR /orders 1920x1080: header row stuck under the top bar (head 64, bar 64)
+PASS DISTRIBUTOR /orders 1920x1080: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /orders 1920x1080: no sideways page scroll
+PASS DISTRIBUTOR /orders 1920x825: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /orders 1920x825: page-number footer right after the last of 25 rows
+PASS DISTRIBUTOR /orders 1920x825: header row stuck under the top bar (head 64, bar 64)
+PASS DISTRIBUTOR /orders 1920x825: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /orders 1920x825: no sideways page scroll
+PASS DISTRIBUTOR /orders 1366x768: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /orders 1366x768: page-number footer right after the last of 25 rows
+PASS DISTRIBUTOR /orders 1366x768: header row stuck under the top bar (head 64, bar 64)
+PASS DISTRIBUTOR /orders 1366x768: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /orders 1366x768: no sideways page scroll
+PASS DISTRIBUTOR /orders 1024x768: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /orders 1024x768: page-number footer right after the last of 25 rows
+PASS DISTRIBUTOR /orders 1024x768: header row stuck under the top bar (head 64, bar 64)
+PASS DISTRIBUTOR /orders 1024x768: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /orders 1024x768: no sideways page scroll
+PASS DISTRIBUTOR /orders 768x1024: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /orders 768x1024: page-number footer right after the last of 25 rows
+INFO DISTRIBUTOR /orders 768x1024: table wider than its card, header scrolls with the page
+PASS DISTRIBUTOR /orders 768x1024: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /orders 768x1024: no sideways page scroll
+PASS DISTRIBUTOR /orders 375x812: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /orders 375x812: page-number footer right after the last of 25 rows
+INFO DISTRIBUTOR /orders 375x812: table wider than its card, header scrolls with the page
+PASS DISTRIBUTOR /orders 375x812: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /orders 375x812: no sideways page scroll
+PASS DISTRIBUTOR /price-list 1920x1080: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /price-list 1920x1080: page-number footer right after the last of 25 rows
+PASS DISTRIBUTOR /price-list 1920x1080: header row stuck under the top bar (head 64, bar 64)
+PASS DISTRIBUTOR /price-list 1920x1080: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /price-list 1920x1080: no sideways page scroll
+PASS DISTRIBUTOR /price-list 1920x825: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /price-list 1920x825: page-number footer right after the last of 25 rows
+PASS DISTRIBUTOR /price-list 1920x825: header row stuck under the top bar (head 64, bar 64)
+PASS DISTRIBUTOR /price-list 1920x825: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /price-list 1920x825: no sideways page scroll
+PASS DISTRIBUTOR /price-list 1366x768: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /price-list 1366x768: page-number footer right after the last of 25 rows
+PASS DISTRIBUTOR /price-list 1366x768: header row stuck under the top bar (head 64, bar 64)
+PASS DISTRIBUTOR /price-list 1366x768: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /price-list 1366x768: no sideways page scroll
+PASS DISTRIBUTOR /price-list 1024x768: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /price-list 1024x768: page-number footer right after the last of 25 rows
+PASS DISTRIBUTOR /price-list 1024x768: header row stuck under the top bar (head 64, bar 64)
+PASS DISTRIBUTOR /price-list 1024x768: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /price-list 1024x768: no sideways page scroll
+PASS DISTRIBUTOR /price-list 768x1024: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /price-list 768x1024: page-number footer right after the last of 25 rows
+INFO DISTRIBUTOR /price-list 768x1024: table wider than its card, header scrolls with the page
+PASS DISTRIBUTOR /price-list 768x1024: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /price-list 768x1024: no sideways page scroll
+PASS DISTRIBUTOR /price-list 375x812: no inner table scroll box (page scrolls: true)
+PASS DISTRIBUTOR /price-list 375x812: page-number footer right after the last of 25 rows
+INFO DISTRIBUTOR /price-list 375x812: table wider than its card, header scrolls with the page
+PASS DISTRIBUTOR /price-list 375x812: at the end, AI button (not shown) covers no last row / footer
+PASS DISTRIBUTOR /price-list 375x812: no sideways page scroll
+ALL PASS

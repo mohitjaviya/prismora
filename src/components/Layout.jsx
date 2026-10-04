@@ -80,7 +80,7 @@ const Layout = () => {
         <Topbar setIsMobileMenuOpen={setIsMobileMenuOpen} />
         {/* With the AI button on screen, the bottom padding is taller than the
             button (bottom-6 + h-14 = 5rem), so the last row of any page can
-            scroll above it. A <ListPage> measures itself and cancels it. */}
+            scroll above it, page-number row included. */}
         <main className={`relative p-6 md:p-8 ${isAdmin ? 'pb-24 md:pb-24' : ''} animate-fade-in-up`}>
           {/* Nothing cached yet — a new device, or a fresh sign-in. Empty
               tables here would read as "you have no data", which is what sent
@@ -93,7 +93,7 @@ const Layout = () => {
           ) : (
             <>
               {/* From md up it floats in main's top padding rather than pushing
-                  the page down, which made a full-height <ListPage> overflow. */}
+                  the page down (43 px, a jump on every background reload). */}
               {loading === 'refreshing' && (
                 <div role="status" aria-live="polite" className="mb-4 md:mb-0 md:absolute md:top-0.5 md:left-1/2 md:-translate-x-1/2 md:z-10 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-400">
                   <Loader2 size={12} className="animate-spin" /> Refreshing…
