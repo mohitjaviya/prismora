@@ -1,9 +1,9 @@
-# PRISMORA full test — final report (Phases 0–4)
+# PRISMORA full test — final report (Phases 0–4, fix batches 1–17)
 
-Janki Herbals ERP/CRM · 27 Sept – 3 Oct 2026 · demo/TEST data on the live Supabase project · live site https://prismora-henna.vercel.app
+Janki Herbals ERP/CRM · 27 Sept – 4 Oct 2026 · demo/TEST data on the live Supabase project · live site https://prismora-henna.vercel.app
 
 ## In one paragraph
-All five phases are complete. The test found **6 CRITICAL problems in Phase 1, 4 more in Phase 2's stories, 12 CRITICAL report/dashboard mismatches in Phase 2 H, and 6 HIGH in Phase 3. Every CRITICAL and HIGH finding has been fixed, deployed and checked against the database as the real roles.** The one exception is slow saves: the root cause was found (the network, not the app) and the app now stops waiting after 20 s with a clear message. That work took 14 fix batches plus a security hotfix (migrations 040–078). Phase 4's final integrity checks pass 12 of 12. They found no CRITICAL or HIGH problem, 2 MEDIUM and 4 LOW. The partner balance (P4-F1) was corrected on 3 Oct (migration 079); the batch expiry date (P4-F5) is still open, plus a few flow gaps and a LOW clean-up list; the order to tackle them is at the end.
+All five phases and the carry-over checks are complete, and **all 17 fix batches are done and live** (migrations 040–084). The test found **6 CRITICAL problems in Phase 1, 4 more in Phase 2's stories, 12 CRITICAL report/dashboard mismatches in Phase 2 H, and 6 HIGH in Phase 3. Every CRITICAL, HIGH and MEDIUM finding has been fixed, deployed and checked against the database as the real roles, and so has the LOW clean-up list.** Slow saves were traced to the office network, not the app: HTTP/3 (QUIC) connections stall. The app now stops waiting after 20 s with a clear message. Phase 4's final integrity checks passed 12 of 12; all its findings are fixed except P4-F3, a working practice, and P4-F4, one of two optional audit items. The partner balance was corrected on 3 Oct (migration 079). Only four things are still open (see "Still open").
 
 ## How it was tested
 - Every role signed in as itself (16 staff and partner roles, plus a second partner chain). Every save was confirmed in the database, never on the screen alone.
@@ -47,49 +47,34 @@ Phase 2 C includes an extra check (C09), so it has 9 tests. Phase 3 groups were 
 | 12 Master data | 3 Oct | Dispatch can't delete orders; Warehouse records GRNs; option lists readable by staff; GSTIN/phone/pincode checks; value rules; products in use can't be deleted or renamed; complaint numbers never reused | 078 | 0de4498 |
 | 13 Forms wait for the DB | 3 Oct | Every form and single click waits for the database and shows the outcome; vendor payment Withdraw; view-only Edit | front-end | b1898d3, b54dfa7 |
 | 14 Slow saves | 3 Oct | Root cause found: HTTP/3 (QUIC) stall on this network, not the database. Saves now give up after 20 s with a clear message; slow requests journaled | front-end | bc19914 |
+| Data correction | 3 Oct | Krishna pharma balance ₹15,680 → ₹3,080: O5, its sales return and credit note linked, audited (P4-F1) | 079 | 47aa4eb |
+| 15 Stock in the DB | 3 Oct | An expired batch stays expired (P4-F5); adjust, cycle count and transfer are DB operations with movement rows; no direct quantity writes; option lists and warehouses audited (P4-F2) | 080 | da57434 |
+| 15b | 3 Oct | A batch holding stock changes warehouse only by transfer; GRNs write movement rows | 081 | 915c1ab |
+| 15c | 3 Oct | Deleting a GRN takes its stock back out; PO status recomputed | 082 | 24c5a47 |
+| 16 Partner flow | 4 Oct | Sign-up asks address/pincode, territory from the DB; claims tied to earned incentives, paid once; partner complaints unassigned; partners see only their schemes; free-goods payout in one DB step | 083 + partner-signup v6 | 21a91f1 |
+| 17 Screen clean-up | 4 Oct | Bell Overdue from the DB + expired-batch alert (P4-F6); no placeholder reminder contacts; Profile "Order Value Booked"; confirms on approval and auto-booked expense delete; PO cancel note in IST; Reports date filter in whole IST days; 375 px header, partner "Credit Held"; LOW list; GRN items can't be edited; no future-dated expense. Data already loads once per sign-in in production (twice only in the dev build) | 084 | 021391d |
 
-## What's still open
+## Still open
 
-**MEDIUM**
-| Item | From | Note |
-|---|---|---|
-| An expired batch can be made sellable by editing its expiry date | P4-F5 | DB guard needed |
-| Self-registered partner has no address or territory | Phase 2 E03 | Its first order can't move to Processing until staff add an address |
-| Claims not tied to earned incentives | Phase 2 E05 | A claim can be settled for an order that earned nothing |
-| Stock adjust / cycle count / transfer are browser writes of absolute quantities, with no movement row; a transfer is two writes | Phase 3 G5 | Make them DB functions (one transaction, with `stock_movements`) |
-| Reminders fall back to placeholder contacts (9876543210 / accounts@prismora.com) | D-25, G6 | Left by owner for now |
-| Profile "Revenue" adds all order values | G7 | Left by owner for now |
+| Item | Status |
+|---|---|
+| **H17 TDS report** | Empty by design. Waiting for the accountant to decide which expense categories carry TDS, and at which section and rate. |
+| **Phone-hotspot test** | The owner is checking whether the office network drops idle HTTP/3 connections. The app already copes: saves stop after 20 s with a clear message. |
+| **Two optional audit items** | (1) A self sign-up shows "System" as the actor in the audit log. (2) A save that changes nothing re-stamps "last changed by" (P4-F4). Both mean changing triggers shared by every table, so the owner left them out of batch 17. |
+| **TEST rows kept on purpose** | Database guards stop these from being deleted, and they serve as test history: O187 (delivered, its invoice, return and credit note), O140, O145, O113 (owner's decision), the TEST-P3 vendor with PO-12, GRN-20/21 and batches TEST-P3-B1/B2, and territory T-TEST-PUNE. |
 
-**LOW:** option lists and warehouses not audited (P4-F2); audit "via" tag carries over in maintenance SQL (P4-F3); "last changed by" re-stamped by a no-change save (P4-F4); bell "Overdue" notice uses its own 15-day rule and shows ₹NaN, and there is no expired-batch alert (P4-F6); partners can read all schemes; a partner's complaint is assigned to the partner; weak confirm on deleting an auto-booked expense; no confirm on partner approval; "System" as actor at sign-up; "Expires in 1 days"; PO cancel note dated in UTC; data loaded twice per sign-in; empty export uses a browser alert; vendor ledger matches GRNs by name; GRN received quantity stored as text or number; future-dated expense accepted; Price List shows inactive products; two React warnings; D-15 Roles card, D-26 docs.
-
-**Data and decisions waiting**
-- **Done 3 Oct (migration 079):** Krishna pharma corrected to ₹3,080 (O5, its sales return and credit note linked; audited). **O113** left as it is by owner decision: it already has its own settled tax invoice, and delivering it adds no invoice.
-- **H17 TDS report** is empty by design until the accountant decides which categories carry TDS.
-- **Slow saves:** owner is testing on a phone hotspot to see whether the office network drops idle HTTP/3 connections.
-- Kept on purpose (guards): O187, O140, O145, TEST-P3 vendor/PO-12/GRN-20/21/batches, T-TEST-PUNE.
-
-**Not covered yet:** login, register and shell screens (P3-01…03); layout and theme matrix at 768/375 px, light/dark (P3-35); Reports date-range filters; Dealer/Retailer Incentives and Stock pages; free-goods stock movement (F03); partner confirms receipt (E06); lead drag refusal on screen.
-
-## Suggested order for what remains
-1. ~~Data corrections~~ done 3 Oct: Krishna pharma → ₹3,080 (migration 079); O113 left as it is (owner).
-2. **Batch 15 — stock in the database:** refuse moving a later expiry date on an expired batch (P4-F5); adjust, cycle count and transfer as DB functions writing `stock_movements`; audit triggers on option lists and warehouses (P4-F2).
-3. **Batch 16 — partner flow:** address/territory at self-registration; claims tied to earned incentives; partners read only the schemes that apply to them; complaint assignee.
-4. **Batch 17 — screen clean-up:** bell Overdue from the stored status plus an expired-batch alert (P4-F6); placeholder reminder contacts; Profile revenue label; missing confirms; PO cancel date in IST; load data once per sign-in; the LOW list.
-5. **Carry-over tests:** login/register/shell, the layout and theme matrix, report date filters, free goods.
-6. **Waiting on others:** H17 (accountant), the network test (owner).
-
-Each batch: dry run as the real roles first (rolled back), then apply, then check as the real roles locally and live, and confirm in the database.
+Each fix batch: a dry run as the real roles first (rolled back), then apply, then check as the real roles locally and live, and confirm in the database.
 
 ## Appendix A — Phase 4 findings
 
 | # | Severity | Finding |
 |---|---|---|
 | P4-F1 | MEDIUM (fixed 3 Oct, 079) | Krishna pharma (DIST-1790265786389) owes ₹15,680 on record; should be ₹3,080. Sales return credit note CN-SR-1790658148634 (₹12,600, 29 Sept) has no partner because order O5 has none; invoice INV-1790265113364 still "Unpaid". Total Outstanding is ₹12,600 too high; the balance check can't see it. |
-| P4-F5 | MEDIUM | Warehouse Manager moved an expired batch's expiry (TEST-P2-EXP-26592, 28 Sept → 2027) and it became deliverable again; no reason asked (rolled back). |
-| P4-F2 | LOW-MEDIUM | Option lists (`masters`) and `warehouses` write no audit rows. |
-| P4-F3 | LOW | The audit "via" tag carries over within a maintenance transaction; 27 maintenance groups show "System" with no reason. |
-| P4-F4 | LOW | A save that changes nothing re-stamps "last changed by" with no audit row (O57, O109, O111, O114, O141). |
-| P4-F6 | LOW | The bell's "Invoice Payment Overdue" uses its own 15-day rule (proformas included) and reads "₹NaN"; no notice for already-expired batches. |
+| P4-F5 | MEDIUM (fixed 3 Oct, 080) | Warehouse Manager moved an expired batch's expiry (TEST-P2-EXP-26592, 28 Sept → 2027) and it became deliverable again; no reason asked (rolled back). |
+| P4-F2 | LOW-MEDIUM (fixed 3 Oct, 080) | Option lists (`masters`) and `warehouses` write no audit rows. |
+| P4-F3 | LOW (working practice: tag every maintenance step) | The audit "via" tag carries over within a maintenance transaction; 27 maintenance groups show "System" with no reason. |
+| P4-F4 | LOW (open, optional) | A save that changes nothing re-stamps "last changed by" with no audit row (O57, O109, O111, O114, O141). |
+| P4-F6 | LOW (fixed 4 Oct, batch 17) | The bell's "Invoice Payment Overdue" uses its own 15-day rule (proformas included) and reads "₹NaN"; no notice for already-expired batches. |
 
 ## Appendix B — Stock history from before today's rules (INT-01)
 

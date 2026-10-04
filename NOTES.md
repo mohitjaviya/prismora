@@ -2,6 +2,16 @@
 
 Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `FIX-BATCH-5.md`.
 
+## FINAL STATE (2026-10-04): programme complete
+Phases 0–4, the carry-over checks and fix batches 1–17 are all live (migrations 040–084; next 085). `test-results/full-test/REPORT.md` and the private shared page https://claude.ai/artifact/1Ey4puBzJJwdx9b3tnzfrA (version 3) are both updated to this state: every batch with its migration and commit, test counts unchanged.
+**Still open:**
+- H17 TDS: waiting for the accountant.
+- Phone-hotspot QUIC test: owner.
+- Two optional audit items: the sign-up actor "System" (`audit_row`) and P4-F4 (`stamp_modified`).
+- TEST rows kept on purpose: O187, O140, O145, O113, the TEST-P3 vendor/PO-12/GRN-20/21/batches, T-TEST-PUNE.
+
+The page source is the session scratchpad copy. To change it, read the artifact (`path: index.html`), strip the wrapper before `<body>`, edit, and publish to the same URL.
+
 ## PHASE 4 COMPLETE (2026-10-03) — report only, nothing fixed or deployed
 12/12 checks pass; 6 findings: P4-F1 MEDIUM (Krishna pharma ₹15,680 should be ₹3,080: CN-SR-1790658148634 has no partner, O5 has none), P4-F5 MEDIUM (expired batch's expiry date editable -> sellable again), P4-F2..F4, F6 LOW. Report: `test-results/full-test/phase4/PHASE4-REPORT.md`; notes/scripts `phase4/findings.md` (`q.mjs` read-only SQL, `rolerun.mjs` real roles rolled back, `cache.mjs` browser). Backup: `backups/2026-10-03T16-09-11-712Z`.
 **Final report (Phases 0–4):** `test-results/full-test/REPORT.md`, published privately at https://claude.ai/artifact/1Ey4puBzJJwdx9b3tnzfrA (source in the session scratchpad; republish from REPORT.md if it changes). PROGRESS.md updated (P2 G/H, P3, P4, FIN-01).
