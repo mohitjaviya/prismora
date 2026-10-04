@@ -10,8 +10,10 @@
 name: Supabase keep-alive
 
 on:
-  schedule:
-    - cron: '17 3 */2 * *'   # 03:17 UTC (08:47 IST) every 2nd day
+  # Schedule OFF until Gap 13 is activated (owner, 2026-10-04): apply migration
+  # 085, add the two secrets above, then uncomment these two lines.
+  # schedule:
+  #   - cron: '17 3 */2 * *'   # 03:17 UTC (08:47 IST) every 2nd day
   workflow_dispatch:          # "Run workflow" button
 
 permissions:
