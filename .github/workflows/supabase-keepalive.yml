@@ -1,0 +1,75 @@
+# Keeps the Supabase free-tier project from pausing after 7 days without
+# activity. Every 2 days it stamps the one-row table system_heartbeat through
+# the REST API (migration 085), reads it back, and fails the run if either
+# call fails or the stamp is not fresh. See README.md "Supabase keep-alive".
+#
+# Secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL       https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY  the anon / publishable key (never the service_role key)
+
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: '17 3 */2 * *'   # 03:17 UTC (08:47 IST) every 2nd day
+  workflow_dispatch:          # "Run workflow" button
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    steps:
+      - name: Check secrets are set
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_ANON_KEY must be set as repository secrets."
+            exit 1
+          fi
+
+      - name: Ping and read back
+        run: |
+          set -euo pipefail
+          base="${SUPABASE_URL%/}/rest/v1/rpc"
+          headers=(-H "apikey: $SUPABASE_ANON_KEY" -H "Content-Type: application/json")
+          # A legacy anon key is a JWT and also goes in Authorization; a new
+          # publishable key (sb_publishable_...) goes in apikey only.
+          case "$SUPABASE_ANON_KEY" in
+            eyJ*) headers+=(-H "Authorization: Bearer $SUPABASE_ANON_KEY") ;;
+          esac
+          call() {
+            curl -sS --fail-with-body --max-time 30 \
+              --retry 3 --retry-delay 15 --retry-all-errors \
+              -X POST "${headers[@]}" -d "$2" "$base/$1"
+          }
+
+          ping=$(call heartbeat_ping "{\"p_source\":\"github-actions run ${GITHUB_RUN_ID}\"}") || {
+            echo "::error::heartbeat_ping failed: ${ping:-no response}"; exit 1; }
+          echo "ping:      $ping"
+
+          status=$(call heartbeat_status '{}') || {
+            echo "::error::heartbeat_status failed: ${status:-no response}"; exit 1; }
+          echo "read back: $status"
+
+          pinged=$(jq -er '.[0].last_ping_at' <<<"$ping")
+          read_at=$(jq -er '.[0].last_ping_at' <<<"$status")
+          if [ "$pinged" != "$read_at" ]; then
+            echo "::error::Read-back $read_at does not match the ping $pinged."
+            exit 1
+          fi
+          age=$(( $(date -u +%s) - $(date -u -d "$read_at" +%s) ))
+          if [ "$age" -gt 300 ] || [ "$age" -lt -300 ]; then
+            echo "::error::last_ping_at $read_at is ${age}s away from now."
+            exit 1
+          fi
+          echo "OK: heartbeat stamped at $read_at (${age}s ago)."
+          echo "Heartbeat OK at \`$read_at\`" >> "$GITHUB_STEP_SUMMARY"
