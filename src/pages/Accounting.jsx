@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { CHART_TOOLTIP, CHART_GRID, CHART_AXIS, colorAt } from '../utils/chartTheme';
 import { MONTHS, monthKey } from '../utils/months';
+import { indiaDay } from '../utils/orderDate';
 import { unbookedPayouts, unbookedTotal } from '../utils/payouts';
 import { sendWhatsAppAlert, sendEmailAlert } from '../utils/notificationUtils';
 import { gstForOrder, productsMissingGst, isProforma } from '../utils/billing';
@@ -98,7 +99,7 @@ const Accounting = () => {
   const [expenseCategory, setExpenseCategory] = useState('Raw Materials');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDescription, setExpenseDescription] = useState('');
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expenseDate, setExpenseDate] = useState(() => indiaDay());
 
   // Financial Calculations — one definition, shared with the Director's
   // cockpit, the Dashboard and the Reports (utils/financials.js):
@@ -339,7 +340,8 @@ const Accounting = () => {
   const handleConvert = async (inv) => {
     if (!await confirm({
       title: `Convert ${inv.id} to a GST tax invoice?`,
-      body: 'GST is added line by line at each product\'s rate stored on the proforma, and the partner is charged it. The same invoice is updated; this cannot be undone here.',
+      // "the partner is charged it" was said of walk-in customers too.
+      body: `GST is added line by line at each product's rate stored on the proforma, and ${inv.customerName || 'the customer'} is billed for it. The same invoice is updated; this cannot be undone here.`,
       confirmLabel: 'Convert',
     })) return;
     setConvertingId(inv.id);
@@ -362,6 +364,11 @@ const Accounting = () => {
       toast("Please enter a valid amount.", 'error');
       return;
     }
+    // A cost not yet incurred is not an expense; the database refuses it too (084).
+    if (expenseDate > indiaDay()) {
+      toast('The expense date cannot be in the future.', 'error');
+      return;
+    }
 
     setIsSavingExpense(true);
     const result = await addExpense({
@@ -378,7 +385,7 @@ const Accounting = () => {
     // Reset and close
     setExpenseAmount('');
     setExpenseDescription('');
-    setExpenseDate(new Date().toISOString().split('T')[0]);
+    setExpenseDate(indiaDay());
     setIsExpenseModalOpen(false);
   };
 
@@ -440,8 +447,10 @@ const Accounting = () => {
         const leadObj = leads.find(l => l.name?.toLowerCase() === inv.customerName?.toLowerCase() || l.company?.toLowerCase() === inv.customerName?.toLowerCase());
         const distObj = distributors?.find(d => d.name?.toLowerCase() === inv.customerName?.toLowerCase());
 
-        const phone = orderObj?.phone || leadObj?.phone || distObj?.phone || '9876543210';
-        const email = orderObj?.email || leadObj?.email || distObj?.email || 'accounts@prismora.com';
+        // The customer's own contact or none (D-25): a made-up number and our
+        // own accounts address used to stand in, so a reminder went nowhere.
+        const phone = orderObj?.phone || leadObj?.phone || distObj?.phone || '';
+        const email = orderObj?.email || leadObj?.email || distObj?.email || '';
         
         const totalValue = Number(inv.amount || 0) + Number(inv.tax || 0);
         
@@ -471,8 +480,9 @@ const Accounting = () => {
           <>
             <button
               onClick={() => sendWhatsAppAlert(phone, messageText)}
-              className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
-              title={`Send WhatsApp Reminder to ${phone}`}
+              disabled={!phone}
+              className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
+              title={phone ? `Send WhatsApp Reminder to ${phone}` : 'No phone number on record for this customer'}
             >
               <MessageSquare size={16} />
             </button>
@@ -482,8 +492,9 @@ const Accounting = () => {
                 `Payment Reminder: Invoice ${inv.id}`,
                 messageText
               )}
-              className="p-1 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
-              title={`Send Email Reminder to ${email}`}
+              disabled={!email}
+              className="p-1 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
+              title={email ? `Send Email Reminder to ${email}` : 'No e-mail address on record for this customer'}
             >
               <Mail size={16} />
             </button>
@@ -917,6 +928,7 @@ const Accounting = () => {
             formatDate={formatDate}
             raisedBy={inv => attributionFor(inv, users).name}
             renderActions={renderInvoiceActions}
+            creditedFor={inv => (creditNotes || []).filter(cn => cn.invoiceId === inv.id).reduce((s, cn) => s + Number(cn.amount || 0), 0)}
           />
         </div>
       )}
@@ -935,7 +947,15 @@ const Accounting = () => {
                 size="sm"
                 tone="danger"
                 onClick={async () => {
-                  if (!await confirm({ title: 'Delete this expense record?', danger: true, confirmLabel: 'Delete' })) return;
+                  // A scheme payout's expense is booked by the system; deleting
+                  // it takes the cost out of the books while the payout stays
+                  // Paid, so it says so instead of the plain question.
+                  const auto = ['Scheme Incentive', 'Scheme Claim'].includes(exp.category);
+                  if (!await confirm(auto ? {
+                    title: `Delete this auto-booked ${exp.category.toLowerCase()} expense?`,
+                    body: `${formatCurrency(exp.amount)} was booked automatically when a scheme payout was made. Deleting it removes that cost from the P&L, but the payout itself stays Paid. Delete only if it was booked in error.`,
+                    danger: true, confirmLabel: 'Delete anyway',
+                  } : { title: 'Delete this expense record?', danger: true, confirmLabel: 'Delete' })) return;
                   const res = await deleteExpense(exp.id);
                   toast(res?.ok ? 'Expense deleted.' : (res?.error || 'The expense could not be deleted.'), res?.ok ? 'success' : 'error');
                 }}
@@ -1361,6 +1381,7 @@ const Accounting = () => {
                     type="date"
                     required
                     value={expenseDate}
+                    max={indiaDay()}
                     onChange={(e) => setExpenseDate(e.target.value)}
                     className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white"
                   />

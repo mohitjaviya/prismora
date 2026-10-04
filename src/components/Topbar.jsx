@@ -193,6 +193,7 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
           <div className="relative" ref={notificationsRef}>
             <button 
               onClick={() => { setNotificationsOpen(!notificationsOpen); setDropdownOpen(false); }}
+              aria-label="Notifications"
               className={`relative transition-colors p-2 rounded-full ${notificationsOpen ? 'bg-brand-primary-lighter text-white' : 'text-slate-400 hover:text-white hover:bg-brand-primary-lighter'}`}
             >
               <Bell size={20} />

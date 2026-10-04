@@ -220,8 +220,9 @@ describe('roleSummary - what a role adds up to', () => {
     expect(s.none).toBe(MODULES.length - 2);
   });
 
-  it('gives an admin role everything', () => {
-    expect(roleSummary({ level: 'admin' })).toEqual({ full: MODULES.length, view: 0, none: 0 });
+  it('counts an admin-level role by its row, not as everything (D-15)', () => {
+    const s = roleSummary(role({ level: 'admin', permissions: { orders: 'full', leads: 'view' } }));
+    expect(s).toEqual({ full: 1, view: 1, none: MODULES.length - 2 });
   });
 
   it('always totals the module count, so the bar never over- or under-fills', () => {

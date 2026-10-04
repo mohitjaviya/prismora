@@ -155,7 +155,8 @@ export const fallbackRoles = (permissionMatrix, levelMap) =>
 /** How a role's access breaks down, for the summary on its card. */
 export const roleSummary = (role) => {
   const counts = { full: 0, view: 0, none: 0 };
-  if (isAdminLevel(role?.level)) return { full: MODULES.length, view: 0, none: 0 };
+  // What its row says, admin level or not: access is read from the row
+  // (accessFor), so a restricted Director showed as all-full here (D-15).
   MODULES.forEach(m => {
     const a = role?.permissions?.[m.id];
     counts[a === 'full' || a === 'view' ? a : 'none'] += 1;

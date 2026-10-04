@@ -41,7 +41,11 @@ export default function RetailerDashboard() {
     [distributorIncentives, retailer]
   );
 
-  const utilizationPct = retailer?.creditLimit ? Math.min(100, Math.round(((retailer.outstandingAmount || 0) / retailer.creditLimit) * 100)) : 0;
+  // In credit (a negative balance) is shown as credit held, as on the staff
+  // side (Phase 2 H), not as "−₹61,356 outstanding, −12% of limit".
+  const owed = Math.max(0, Number(retailer?.outstandingAmount) || 0);
+  const creditHeld = Math.max(0, -(Number(retailer?.outstandingAmount) || 0));
+  const utilizationPct = retailer?.creditLimit ? Math.min(100, Math.round((owed / retailer.creditLimit) * 100)) : 0;
 
   if (!retailer) {
     return (
@@ -59,7 +63,9 @@ export default function RetailerDashboard() {
   }
 
   const kpiCards = [
-    { label: 'Outstanding', tone: 'danger', value: formatCurrency(retailer.outstandingAmount || 0), icon: Wallet, sub: `${utilizationPct}% of ${formatCurrency(retailer.creditLimit)} limit` },
+    creditHeld > 0
+      ? { label: 'Credit Held', tone: 'success', value: formatCurrency(creditHeld), icon: Wallet, sub: `Nothing owed · ${formatCurrency(retailer.creditLimit)} limit` }
+      : { label: 'Outstanding', tone: 'danger', value: formatCurrency(owed), icon: Wallet, sub: `${utilizationPct}% of ${formatCurrency(retailer.creditLimit)} limit` },
     { label: 'Orders This Month', tone: 'accent', value: ordersThisMonth.length, icon: ShoppingCart, sub: `${formatCurrency(ordersThisMonth.reduce((s, o) => s + Number(o.value || 0), 0))} total value` },
     { label: 'Active Schemes', tone: 'info', value: activeSchemesCount, icon: Tag, sub: 'currently available to you' },
     { label: 'Incentives Pending', tone: 'success', value: formatCurrency(incentivesPending), icon: Gift, sub: 'awaiting payout' },

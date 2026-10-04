@@ -11,6 +11,7 @@ import { profitAndLoss, salesCreditNotes, openTaxInvoices } from '../utils/finan
 import { taxInvoices, registerRow, gstHsnSummary } from '../utils/gstReport';
 import { orderLines } from '../utils/billing';
 import { needsReorder } from '../utils/expiry';
+import { inIndiaDayRange } from '../utils/orderDate';
 
 // Paise shown where there are any (₹30.50, not ₹31), so a column on screen
 // adds up to the same total as its CSV (H15).
@@ -46,13 +47,7 @@ export default function Reports() {
   const [dateTo, setDateTo] = useState('');
 
   // Helper: date range filter
-  const inRange = (dateStr) => {
-    if (!dateFrom && !dateTo) return true;
-    const d = new Date(dateStr);
-    if (dateFrom && d < new Date(dateFrom)) return false;
-    if (dateTo && d > new Date(dateTo + 'T23:59:59')) return false;
-    return true;
-  };
+  const inRange = (dateStr) => inIndiaDayRange(dateStr, dateFrom, dateTo);
 
   // ── Report Definitions ───────────────────────────────────────
   const reports = useMemo(() => ({
@@ -413,11 +408,11 @@ export default function Reports() {
       {/* Date Range Filter */}
       <div className="glass-panel rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row gap-3 items-center">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Date Range:</span>
-        <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setActiveReport(null); }} className="glass-input rounded-xl px-4 py-2 text-sm text-white" />
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="glass-input rounded-xl px-4 py-2 text-sm text-white" />
         <span className="text-slate-500">→</span>
-        <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setActiveReport(null); }} className="glass-input rounded-xl px-4 py-2 text-sm text-white" />
+        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="glass-input rounded-xl px-4 py-2 text-sm text-white" />
         {(dateFrom || dateTo) && (
-          <button onClick={() => { setDateFrom(''); setDateTo(''); setActiveReport(null); }} className="text-xs text-slate-400 hover:text-white px-3 py-2 rounded-lg bg-brand-primary-lighter/50 transition-colors">Clear Filter</button>
+          <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-slate-400 hover:text-white px-3 py-2 rounded-lg bg-brand-primary-lighter/50 transition-colors">Clear Filter</button>
         )}
       </div>
 

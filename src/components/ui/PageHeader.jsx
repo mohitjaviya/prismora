@@ -34,7 +34,10 @@ export default function PageHeader({ icon: Icon, title, subtitle, actions, child
           // ml-auto keeps them on the right edge on the rare screen narrow
           // enough that the row does wrap, rather than stranding them under
           // the title at the left.
-          <div className="flex items-center gap-2 flex-wrap flex-shrink-0 ml-auto">{actions}</div>
+          // max-w-full: on a phone the row was as wide as all its buttons in
+          // one line, so the last one ran off the edge ("Add O" at 375px).
+          // Capped at the screen, the buttons wrap instead.
+          <div className="flex items-center justify-end gap-2 flex-wrap flex-shrink-0 ml-auto max-w-full">{actions}</div>
         )}
       </div>
       {children}

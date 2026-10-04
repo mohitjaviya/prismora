@@ -143,7 +143,7 @@ export default function Purchases() {
   // the pop-up's payable follows at once instead of showing the figure it
   // opened with.
   const liveVendor = viewingVendor ? (vendors.find(v => v.id === viewingVendor.id) || viewingVendor) : null;
-  const ledgerEntries = useMemo(() => liveVendor ? buildVendorLedger(liveVendor, grn, vendorPayments, purchaseReturns) : [], [liveVendor, grn, vendorPayments, purchaseReturns]);
+  const ledgerEntries = useMemo(() => liveVendor ? buildVendorLedger(liveVendor, grn, vendorPayments, purchaseReturns, purchaseOrders) : [], [liveVendor, grn, vendorPayments, purchaseReturns, purchaseOrders]);
 
   const handleDeletePayment = async (row) => {
     const ok = await confirm({
@@ -353,6 +353,8 @@ export default function Purchases() {
       vendorName: grnTargetPO?.vendorName || '',
       items: grnForm.items.map(i => ({
         ...i,
+        // Both as numbers: receivedQty went in as the form's text ("5").
+        receivedQty: Number(i.receivedQty),
         quantity: Number(i.receivedQty),
         batchNumber: i.batchNumber || '',
         expiryDate: i.expiryDate ? new Date(i.expiryDate).toISOString() : null,

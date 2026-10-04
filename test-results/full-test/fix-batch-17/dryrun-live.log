@@ -1,0 +1,16 @@
+PASS G1 PM changes a GRN quantity (3 -> 30): refused, stock and balance as received => REFUSED: Goods receipt GRN-G1 cannot be changed after it is recorded: its items, PO and vendor moved stock and the vendor balance. Delete it (this takes its stock back out) and record it again.
+PASS G2 Admin changes a GRN vendor name: refused => REFUSED: Goods receipt GRN-G2 cannot be changed after it is recorded: its items, PO and vendor moved stock and the vendor balance. Delete it (this takes its stock back out) and record it again.
+PASS G3 PM moves a GRN to another PO: refused => REFUSED: Goods receipt GRN-G3 cannot be changed after it is recorded: its items, PO and vendor moved stock and the vendor balance. Delete it (this takes its stock back out) and record it again.
+PASS G4 PM edits notes and received date: allowed, stock and balance unchanged => DONE rows=1 ASSERT=true {vendor 5049.00, batch 3}
+PASS G5 The way to fix a wrong GRN: delete (stock out, balance back) and record again => DONE rows=1 ASSERT=true {vendor 4979.00, batch 2}
+PASS G6 Maintenance (no app user) can still correct a GRN line => DONE rows=1 ASSERT=true
+PASS E1 Accounts logs an expense dated tomorrow: refused => REFUSED: The expense date (05 Oct 2026) is in the future. Record an expense on or after the day it is incurred.
+PASS E2 Accounts logs an expense dated today (as the form sends it: 05:30 IST) => DONE rows=1 ASSERT=true {2026-10-04 05:30}
+PASS E3 Accounts logs an expense dated yesterday => DONE rows=1
+PASS E4 Accounts logs one at 23:59 IST today: allowed => DONE rows=1
+PASS E5 Accounts logs one at 00:01 IST tomorrow: refused => REFUSED: The expense date (05 Oct 2026) is in the future. Record an expense on or after the day it is incurred.
+PASS E6 Accounts moves an expense date to next week: refused => REFUSED: The expense date (11 Oct 2026) is in the future. Record an expense on or after the day it is incurred.
+PASS E7 An old row already dated ahead: other fields still editable => DONE rows=1 ASSERT=true
+
+mode: live migration; 13/13 scenarios parsed; everything rolled back
+all as required

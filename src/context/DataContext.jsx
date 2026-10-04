@@ -18,6 +18,7 @@ import { sellableQty } from '../utils/expiry';
 import { LEAD_ATTACHMENT_BUCKET, attachmentError, attachmentPath, contentTypeFor } from '../utils/leadAttachments';
 import { shouldFetchData, dataCacheKeysToClear } from '../utils/dataSession';
 import { journaled, noteEvent, startJournal } from '../utils/writeJournal';
+import { indiaDay } from '../utils/orderDate';
 import { createLoadGate, gateWrites } from '../utils/loadGate';
 
 // The bracketed territory on a "new partner" log line. On a signup page the
@@ -2943,7 +2944,7 @@ export const DataProvider = ({ children }) => {
   const cancelPurchaseOrder = async (id, reason) => {
     const before = purchaseOrders.find(po => po.id === id);
     if (!before) return { ok: false, error: 'That purchase order no longer exists.' };
-    const stamped = `Cancelled on ${new Date().toISOString().slice(0, 10)}: ${reason || 'no reason given'}`;
+    const stamped = `Cancelled on ${indiaDay()}:${reason || 'no reason given'}`;
     const notes = before.notes ? `${before.notes}\n${stamped}` : stamped;
 
     const res = await confirmSave('purchase_orders cancel', 'cancel this purchase order',

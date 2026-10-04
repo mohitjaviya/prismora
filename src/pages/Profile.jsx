@@ -30,7 +30,10 @@ const Profile = () => {
       ? invoices
       : invoices.filter(inv => inv.assignedTo === user?.id);
 
-    const totalRevenue = myOrders.reduce((s, o) => s + (o.value || 0), 0);
+    // Order value booked, not revenue (Phase 2 H: revenue is Accounting's
+    // net sales). Cancelled orders were counted in as well.
+    const booked = myOrders.filter(o => o.status !== 'Cancelled');
+    const totalRevenue = booked.reduce((s, o) => s + (o.value || 0), 0);
     const converted = myLeads.filter(isConvertedLead).length;
     const conversionRate = myLeads.length > 0
       ? Math.round((converted / myLeads.length) * 100)
@@ -38,14 +41,14 @@ const Profile = () => {
     const pendingOrders = myOrders.filter(o => o.status === 'Pending' || o.status === 'Processing').length;
     const paidInvoices = myInvoices.filter(isSettled).length;
 
-    // Month-over-month revenue
+    // Month-over-month order value
     const now = new Date();
-    const thisMonth = myOrders.filter(o => {
+    const thisMonth = booked.filter(o => {
       const d = new Date(o.date || o.createdAt);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).reduce((s, o) => s + (o.value || 0), 0);
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonth = myOrders.filter(o => {
+    const lastMonth = booked.filter(o => {
       const d = new Date(o.date || o.createdAt);
       return d.getMonth() === lastMonthDate.getMonth() && d.getFullYear() === lastMonthDate.getFullYear();
     }).reduce((s, o) => s + (o.value || 0), 0);
@@ -145,7 +148,7 @@ const Profile = () => {
             { label: 'Total Leads', value: stats.totalLeads, icon: <Target size={18} />, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
             { label: 'Total Orders', value: stats.totalOrders, icon: <ShoppingBag size={18} />, color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
             { label: 'Conversion Rate', value: `${stats.conversionRate}%`, icon: <Star size={18} />, color: 'text-brand-accent', bg: 'bg-brand-accent/10 border-brand-accent/20' },
-            { label: 'Revenue Generated', value: `₹${stats.totalRevenue.toLocaleString('en-IN')}`, icon: <TrendingUp size={18} />, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+            { label: 'Order Value Booked', value: `₹${stats.totalRevenue.toLocaleString('en-IN')}`, icon: <TrendingUp size={18} />, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
           ].map((stat, i) => (
             <div key={i} className="bg-brand-primary/60 rounded-xl p-4 border border-white/5">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 border ${stat.bg} ${stat.color}`}>
@@ -169,7 +172,7 @@ const Profile = () => {
             <div className={`text-sm font-bold ${stats.growthPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               {stats.growthPct >= 0 ? '+' : ''}{stats.growthPct}%
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">MoM Revenue Growth</div>
+            <div className="text-xs text-slate-500 mt-0.5">Order Value vs Last Month</div>
           </div>
         </div>
       </div>
@@ -182,7 +185,7 @@ const Profile = () => {
               <Package size={18} />
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase tracking-wider">This Month's Revenue</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wider">Orders Booked This Month</p>
               <p className="text-2xl font-extrabold text-brand-accent mt-0.5">
                 ₹{stats.thisMonth.toLocaleString('en-IN')}
               </p>

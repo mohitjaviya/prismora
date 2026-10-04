@@ -18,7 +18,9 @@ export default function PriceList() {
   // Sorted by name as the default order. The table can be sorted by any column
   // from its header now, so this is only where it starts.
   const rows = useMemo(
-    () => [...productCatalog].sort((a, b) => a.name.localeCompare(b.name)),
+    // Only what can be ordered: discontinued or inactive products were listed
+    // with prices as if on offer. No status = Active, as on the catalog screen.
+    () => productCatalog.filter(p => (p.status || 'Active') === 'Active').sort((a, b) => a.name.localeCompare(b.name)),
     [productCatalog],
   );
 

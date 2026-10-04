@@ -1,3 +1,5 @@
+import { notify } from './notify';
+
 /**
  * PRISMORA Communications Utility
  * Handles client-side, zero-dependency WhatsApp alerts & Email triggers
@@ -10,7 +12,7 @@
  */
 export const sendWhatsAppAlert = (phone, text) => {
   if (!phone) {
-    alert('No phone number available for this contact.');
+    notify('No phone number on record for this contact.', 'error');
     return;
   }
   // Sanitize phone (remove spaces, dashes, plus sign)
@@ -34,7 +36,7 @@ export const sendWhatsAppAlert = (phone, text) => {
  */
 export const sendEmailAlert = (to, subject, body) => {
   if (!to) {
-    alert('No email address available for this contact.');
+    notify('No e-mail address on record for this contact.', 'error');
     return;
   }
   const mailtoUrl = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;

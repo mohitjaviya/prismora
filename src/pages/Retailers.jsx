@@ -103,6 +103,12 @@ export default function Retailers() {
   };
 
   const approveRetailer = async (r) => {
+    // Asks first: approving switches on the partner's portal login (043).
+    if (!await confirm({
+      title: `Approve ${r.name}?`,
+      body: 'Their portal login becomes active and they can place orders straight away. Check the details and territory first.',
+      confirmLabel: 'Approve',
+    })) return;
     const res = await updateRetailer(r.id, { status: 'Active' });
     toast(res?.ok ? `${r.name} approved.` : (res?.error || 'The approval was not saved.'), res?.ok ? 'success' : 'error');
     // Its Pending login is activated by the database when the partner is (043),

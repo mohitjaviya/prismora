@@ -1,3 +1,5 @@
+import { notify } from './notify';
+
 /**
  * Line items as one readable cell: "Neem Wash × 10 @ 140 = 1400; Shampoo × 5".
  * A list of objects put straight into a CSV printed "[object Object]" (H14).
@@ -15,7 +17,8 @@ export const itemsText = (items) => (Array.isArray(items) ? items : [])
 
 export const downloadCSV = (data, filename) => {
   if (!data || !data.length) {
-    alert("No data available to export");
+    // A toast, not the browser's blocking alert().
+    notify('Nothing to export: the list is empty.');
     return;
   }
 

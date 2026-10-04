@@ -97,11 +97,19 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
 // Payables ledger for a vendor: goods received (GRNs) are debits — money we owe
 // them — and recorded vendor payments are credits. Running balance = current
 // outstanding payable to that vendor.
-export const buildVendorLedger = (vendor, grns = [], vendorPayments = [], purchaseReturns = []) => {
+export const buildVendorLedger = (vendor, grns = [], vendorPayments = [], purchaseReturns = [], purchaseOrders = []) => {
   if (!vendor) return [];
 
+  // Whose receipt it is, as the database decides (grn_vendor, 065): the PO's
+  // vendor, and only without one the vendor of that name. Matching by name
+  // alone put a renamed vendor's receipts on nobody's ledger.
+  const poVendor = new Map((purchaseOrders || []).map(po => [po.id, po.vendorId]));
+  const sameName = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
   const debitRows = grns
-    .filter(g => (g.vendorName || '').toLowerCase() === (vendor.name || '').toLowerCase())
+    .filter(g => {
+      const viaPo = g.poId ? poVendor.get(g.poId) : null;
+      return viaPo ? viaPo === vendor.id : sameName(g.vendorName, vendor.name);
+    })
     .map(g => ({
       id: `grn-${g.id}`,
       date: g.receivedDate || g.createdAt,
@@ -109,7 +117,7 @@ export const buildVendorLedger = (vendor, grns = [], vendorPayments = [], purcha
       type: 'Goods Received',
       ref: g.id,
       description: `GRN ${g.id}${g.poId ? ` (PO ${g.poId})` : ''}`,
-      debit: (g.items || []).reduce((s, i) => s + (Number(i.quantity || 0) * Number(i.unitCost || 0)), 0),
+      debit: (g.items || []).reduce((s, i) => s + (Number(i.quantity ?? i.receivedQty ?? 0) * Number(i.unitCost || 0)), 0),
       credit: 0
     }));
 

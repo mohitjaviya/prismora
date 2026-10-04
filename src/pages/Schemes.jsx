@@ -333,7 +333,7 @@ export default function Schemes() {
                       <p className="text-[10px] text-slate-500">Validity</p>
                       <p className="text-xs font-medium text-slate-300">{formatDate(s.validFrom)} → {formatDate(s.validTo)}</p>
                       {isExpiringSoon && !isExpired && (
-                        <p className="text-[10px] text-orange-400 font-bold mt-0.5">⚠ Expires in {daysLeft} days</p>
+                        <p className="text-[10px] text-orange-400 font-bold mt-0.5">⚠ {daysLeft === 0 ? 'Expires today' : `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`}</p>
                       )}
                     </div>
                     {canManage && (

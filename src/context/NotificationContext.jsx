@@ -4,7 +4,11 @@ import { useData } from './DataContext';
 import { isToday } from 'date-fns';
 import { isOpenLead } from '../utils/leadStatus';
 import { localDateStr, canDecideRequest } from '../utils/beatDates';
-import { isOpen } from '../utils/invoiceStatus';
+import { amountDue } from '../utils/invoiceStatus';
+import { isProforma } from '../utils/billing';
+import { daysToExpiry } from '../utils/expiry';
+
+const plural = (n, word) => (n === 1 ? word : `${word}s`);
 
 const NotificationContext = createContext();
 
@@ -96,41 +100,52 @@ export const NotificationProvider = ({ children }) => {
           });
         }
 
-        // Expiry warning within 60 days
-        if (item.expiryDate) {
-          const daysToExpiry = Math.ceil((new Date(item.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-          if (daysToExpiry <= 60 && daysToExpiry > 0) {
-            newSystemNotifications.push({
-              id: `sys-expiry-${item.id}`,
-              type: 'critical_stock',
-              title: 'Batch Expiring Soon',
-              message: `${item.product} (Batch: ${item.batchNumber || 'N/A'}) expires in ${daysToExpiry} days.`,
-              link: '/inventory',
-              isRead: false,
-              timestamp: new Date().toISOString()
-            });
-          }
+        // Expiry: within 60 days, and already expired while it still holds
+        // stock (P4-F6: an expired batch used to drop out of the bell
+        // altogether). India-time days, the rule deliveries follow (expiry.js).
+        const days = daysToExpiry(item);
+        if (days !== null && days < 0 && (Number(item.quantity) || 0) > 0) {
+          newSystemNotifications.push({
+            id: `sys-expired-${item.id}`,
+            type: 'critical_stock',
+            title: 'Batch Expired',
+            message: `${item.product} (Batch: ${item.batchNumber || 'N/A'}) expired ${Math.abs(days)} ${plural(Math.abs(days), 'day')} ago and still holds ${item.quantity} units. It can't be sold: return or write it off.`,
+            link: '/inventory',
+            isRead: false,
+            timestamp: new Date().toISOString()
+          });
+        } else if (days !== null && days >= 0 && days <= 60) {
+          newSystemNotifications.push({
+            id: `sys-expiry-${item.id}`,
+            type: 'critical_stock',
+            title: 'Batch Expiring Soon',
+            message: days === 0
+              ? `${item.product} (Batch: ${item.batchNumber || 'N/A'}) expires today.`
+              : `${item.product} (Batch: ${item.batchNumber || 'N/A'}) expires in ${days} ${plural(days, 'day')}.`,
+            link: '/inventory',
+            isRead: false,
+            timestamp: new Date().toISOString()
+          });
         }
       });
     }
 
     // Trigger 2: Overdue Invoices (Admin, Manager, Accounts)
+    // The database's status (057), never a rule of its own: it used to flag any
+    // open invoice 15 days old, proformas too, as "₹NaN overdue" (P4-F6).
     if (isAdminRole(user.role) || isManagerRole(user.role)) {
       invoices.forEach(inv => {
-        if (isOpen(inv)) {
-          const daysOld = Math.ceil((new Date() - new Date(inv.createdAt)) / (1000 * 60 * 60 * 24));
-          if (daysOld > 15) {
-            newSystemNotifications.push({
-              id: `sys-inv-${inv.id}`,
-              type: 'overdue_payment',
-              title: 'Invoice Payment Overdue',
-              message: `Payment of ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(inv.total)} from ${inv.customerName} is overdue by ${daysOld - 15} days.`,
-              link: '/accounting',
-              isRead: false,
-              timestamp: new Date(inv.createdAt).toISOString() // Anchor near invoice date
-            });
-          }
-        }
+        if (inv.status !== 'Overdue' || isProforma(inv)) return;
+        const late = inv.dueDate ? -daysToExpiry({ expiryDate: inv.dueDate }) : null;
+        newSystemNotifications.push({
+          id: `sys-inv-${inv.id}`,
+          type: 'overdue_payment',
+          title: 'Invoice Payment Overdue',
+          message: `${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amountDue(inv))} still due on ${inv.id} from ${inv.customerName}${late > 0 ? `, ${late} ${plural(late, 'day')} past its due date` : ''}.`,
+          link: '/accounting',
+          isRead: false,
+          timestamp: inv.dueDate || inv.createdAt || new Date().toISOString()
+        });
       });
     }
 

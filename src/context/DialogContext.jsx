@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle, Info, X, XCircle } from 'lucide-react';
+import { NOTIFY_EVENT } from '../utils/notify';
 
 /**
  * Asking and telling, without the browser's own dialogs.
@@ -68,6 +69,14 @@ export const DialogProvider = ({ children }) => {
     setToasts(list => [...list, { id, message: String(message), tone }]);
     setTimeout(() => setToasts(list => list.filter(t => t.id !== id)), TOAST_MS);
   }, []);
+
+  // Plain helpers outside React (exports, reminders) say things through
+  // notify() below rather than window.alert.
+  useEffect(() => {
+    const onNotify = (e) => toast(e.detail?.message, e.detail?.tone);
+    window.addEventListener(NOTIFY_EVENT, onNotify);
+    return () => window.removeEventListener(NOTIFY_EVENT, onNotify);
+  }, [toast]);
 
   return (
     <DialogContext.Provider value={{ confirm, toast }}>
