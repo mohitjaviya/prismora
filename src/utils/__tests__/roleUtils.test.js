@@ -2,7 +2,36 @@ import { describe, it, expect } from 'vitest';
 import {
   MODULES, accessFor, levelFor, grantedCount, isAdminLevel, isUnrestrictedRole, rejectPermissionChange,
   fallbackRoles, roleSummary, peopleByRole, holdersOf, orphanedRoles, rolesAssignableBy, mayManageAccount,
+  isInternalLevel, internalUsersOf,
 } from '../roleUtils';
+
+describe('internalUsersOf - employees, never partner logins', () => {
+  const rows = [
+    { id: 'admin', level: 'admin' }, { id: 'Field Rep', level: 'sales' }, { id: 'Stockist', level: 'partner' },
+  ];
+  const levelOf = (name) => levelFor(rows, { Distributor: 'partner', 'Sales Manager': 'manager' }, name);
+  const users = [
+    { id: 'U1', role: 'admin' },
+    { id: 'U2', role: 'Field Rep' },
+    { id: 'U3', role: 'Sales Manager' },                  // level from the fallback
+    { id: 'U4', role: 'Warehouse Manager' },              // no level anywhere: staff
+    { id: 'U5', role: 'Distributor' },                    // fallback partner
+    { id: 'U6', role: 'Stockist' },                       // a partner role by its level, not its name
+    { id: 'U7', role: 'Field Rep', status: 'Inactive' },  // inactive staff stay listed
+    null,
+  ];
+
+  it('keeps every level but partner', () => {
+    expect(['admin', 'manager', 'sales', 'staff', undefined].every(isInternalLevel)).toBe(true);
+    expect(isInternalLevel('partner')).toBe(false);
+  });
+  it('drops partner accounts by level, whatever the role is called', () => {
+    expect(internalUsersOf(users, levelOf).map(u => u.id)).toEqual(['U1', 'U2', 'U3', 'U4', 'U7']);
+  });
+  it('copes with no list', () => {
+    expect(internalUsersOf(undefined, levelOf)).toEqual([]);
+  });
+});
 
 const FALLBACK = {
   'Sales Manager': { orders: 'view', leads: 'full', settings: 'none' },

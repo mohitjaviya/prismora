@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { useAuth } from '../context/AuthContext';
 import { isSalesRole, roleLevel } from '../context/AuthContext';
+import { internalUsersOf } from '../utils/roleUtils';
 import { canSeeOwner, visibleTo } from '../utils/sfaVisibility';
 import {
   Plus, CalendarCheck, MapPin, User, LogIn, LogOut, CheckCircle2,
@@ -138,6 +139,13 @@ export default function SFA() {
   const sfaExpenses = useMemo(() => visibleTo(allSfaExpenses, 'userId', user, viewerLevel), [allSfaExpenses, user, viewerLevel]);
   const salesReps = useMemo(
     () => allUsers.filter(u => (isSalesRole(u.role) || u.role === 'Sales Executive') && canSeeOwner(user, viewerLevel, u.id)),
+    [allUsers, user, viewerLevel],
+  );
+  // Employee Attendance Report: employees only, never a partner login (Gap 3),
+  // and only those whose attendance the viewer can see — a manager's team, an
+  // admin everyone. Inactive employees stay listed: their history still counts.
+  const reportEmployees = useMemo(
+    () => internalUsersOf(allUsers, roleLevel).filter(u => canSeeOwner(user, viewerLevel, u.id)),
     [allUsers, user, viewerLevel],
   );
   // Early check-in: what the signed-in rep may do on a beat today, and whether
@@ -731,7 +739,7 @@ export default function SFA() {
                 className="glass-input rounded-xl px-3 py-2 text-sm text-white bg-brand-primary w-full sm:w-64"
               >
                 <option value="" className="bg-brand-primary">— Select Employee —</option>
-                {allUsers.map(u => (
+                {reportEmployees.map(u => (
                   <option key={u.id} value={u.id} className="bg-brand-primary">{u.name} ({u.role})</option>
                 ))}
               </select>

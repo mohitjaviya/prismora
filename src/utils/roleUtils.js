@@ -62,6 +62,18 @@ export const ROLE_LEVELS = [
   { id: 'partner', name: 'Partner portal', hint: 'A distributor, dealer or retailer signing in to their own account.' },
 ];
 
+/**
+ * Employees, as opposed to partner logins. A distributor, dealer or retailer
+ * signing in has a profile in `users` like staff do; their role's level
+ * ('partner') is what tells them apart, so a renamed or added partner role
+ * needs no code change. A role with no level counts as staff (levelFor).
+ */
+export const isInternalLevel = (level) => level !== 'partner';
+
+/** The users who are employees. `levelOf(roleName)` gives a role's level. */
+export const internalUsersOf = (users, levelOf) =>
+  (users || []).filter(u => u && isInternalLevel(levelOf(u.role)));
+
 /** Admin level: sees everyone's records. Not, by itself, permission to do anything. */
 export const isAdminLevel = (level) => level === 'admin';
 
