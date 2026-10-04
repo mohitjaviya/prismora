@@ -2778,6 +2778,44 @@ export const DataProvider = ({ children }) => {
     return { ok: true, quantity: data?.quantity };
   };
 
+  // Whether the damaged count is locked (087). Asked once per session through
+  // a function 087 adds; until then (any error) the screens work as before.
+  const damagedLockCheck = useRef(null);
+  const damagedLockSupported = () => {
+    if (!damagedLockCheck.current) {
+      damagedLockCheck.current = supabase.rpc('stock_damaged_locked')
+        .then(({ data, error }) => !error && data === true, () => false)
+        .then(ok => { if (!ok) damagedLockCheck.current = null; return ok; });
+    }
+    return damagedLockCheck.current;
+  };
+
+  /** Damaged units written off (087): Admin / Warehouse Manager, reason required. */
+  const writeOffDamaged = async (id, quantity, reason) => {
+    const item = inventory.find(i => i.id === id);
+    const { error } = await supabase.rpc('write_off_damaged', { p_inventory_id: id, p_quantity: Number(quantity), p_reason: reason });
+    await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [id]);
+    if (error) return { ok: false, error: plainDatabaseError(error, 'write off this damaged stock') };
+    logEvent('damaged_written_off', `Damaged ${quantity} × ${item?.product || id} written off: ${reason}`, null, id);
+    return { ok: true };
+  };
+
+  /** Damaged units back to the vendor (087): a purchase return that credits the vendor. */
+  const returnDamagedToVendor = async (id, vendorId, quantity, unitCost, reason) => {
+    const item = inventory.find(i => i.id === id);
+    const { data, error } = await supabase.rpc('return_damaged_to_vendor', {
+      p_inventory_id: id, p_vendor_id: vendorId, p_quantity: Number(quantity), p_unit_cost: Number(unitCost), p_reason: reason,
+    });
+    await reloadRows('inventory', setInventory, 'prismora_inventory', 'id', [id]);
+    if (error) return { ok: false, error: plainDatabaseError(error, 'return this damaged stock to the vendor') };
+    await Promise.all([
+      reloadRows('vendors', setVendors, 'prismora_vendors', 'id', [vendorId]),
+      reloadRows('purchase_returns', setPurchaseReturns, 'prismora_purchase_returns', 'id', [data?.id]),
+    ]);
+    logEvent('damaged_returned_to_vendor', `Damaged ${quantity} × ${item?.product || id} returned to vendor (${data?.id}): ${reason}`, null, id);
+    return { ok: true, id: data?.id, value: data?.value };
+  };
+
   /** Cycle count: set the batch to what was counted, unless it moved since the count was opened. */
   const countStock = async (id, counted, expected) => {
     const item = inventory.find(i => i.id === id);
@@ -3879,6 +3917,7 @@ export const DataProvider = ({ children }) => {
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, receiveStock,
+      damagedLockSupported, writeOffDamaged, returnDamagedToVendor,
       masters, addMasterOption, updateMasterOption, deleteMasterOption,
       addVendor, updateVendor, deleteVendor,
       vendorPayments, addVendorPayment, deleteVendorPayment,

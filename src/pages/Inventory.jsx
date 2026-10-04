@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
-import { Package2, Plus, Edit2, Trash2, AlertTriangle, X, Download, RefreshCw, TrendingDown, CheckCircle, Clock, AlertCircle, ArrowUp, ArrowDown, Mail, ArrowLeftRight, ClipboardCheck, Layers, Wallet, Scale } from 'lucide-react';
+import { Package2, Plus, Edit2, Trash2, AlertTriangle, X, Download, RefreshCw, TrendingDown, CheckCircle, Clock, AlertCircle, ArrowUp, ArrowDown, Mail, ArrowLeftRight, ClipboardCheck, Layers, Wallet, Scale, PackageX, Undo2 } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, Card, StatCard, SearchInput, Select } from '../components/ui';
 import { downloadExcel } from '../utils/exportUtils';
@@ -10,6 +10,7 @@ import { sendEmailAlert, templates } from '../utils/notificationUtils';
 import { optionsFor } from '../utils/masterLists';
 import { isExpired, daysToExpiry as expiryDays, EXPIRING_SOON_DAYS, stockStatus } from '../utils/expiry';
 import StockReconciliation from '../components/StockReconciliation';
+import DamagedStockModal from '../components/DamagedStockModal';
 
 const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Expired', 'Out of Stock'];
 
@@ -40,13 +41,23 @@ const BLANK_FORM = {
 const BLANK_ADJUST = { adjustment: '', reason: '' };
 
 export default function Inventory() {
-  const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, masters } = useData();
+  const { inventory, products, addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, masters, damagedLockSupported } = useData();
   const confirm = useConfirm();
   const toast = useToast();
   // Options come from Master Lists; masterLists.js holds the fallback.
   const warehouses = optionsFor(masters, 'warehouse').map(o => o.key);
-  const { canAccess } = useAuth();
+  const { canAccess, user } = useAuth();
   const canManage = canAccess('inventory', 'full');
+  // Gap 16 (087): the damaged count moves only by write-off or return to the
+  // vendor. Until the database has 087 this stays off and nothing changes here.
+  const [damagedLocked, setDamagedLocked] = useState(false);
+  useEffect(() => {
+    let live = true;
+    damagedLockSupported().then(ok => { if (live) setDamagedLocked(ok); });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const canMoveDamaged = damagedLocked && ['Super Admin', 'Admin', 'Warehouse Manager'].includes(user?.role);
+  const [damagedAction, setDamagedAction] = useState(null);
 
   const [search, setSearch] = useState('');
   const [warehouseFilter, setWarehouseFilter] = useState('');
@@ -166,6 +177,8 @@ export default function Inventory() {
     // Not sent on an edit: the database moves quantities (080), and a figure
     // loaded earlier may no longer be what the batch holds.
     if (editingItem) delete payload.quantity;
+    // Nor the damaged count once 087 locks it (write-off / return to vendor only).
+    if (editingItem && damagedLocked) delete payload.damaged;
     // A batch holding stock changes warehouse only as a recorded transfer of
     // all of it (081): the other fields are saved first, then the move.
     const held = Number(inventory.find(i => i.id === editingItem?.id)?.quantity ?? editingItem?.quantity) || 0;
@@ -222,6 +235,7 @@ export default function Inventory() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       {reconOpen && <StockReconciliation onClose={() => setReconOpen(false)} />}
+      {damagedAction && <DamagedStockModal item={damagedAction.item} mode={damagedAction.mode} onClose={() => setDamagedAction(null)} />}
       <PageHeader
         icon={Package2}
         title="Inventory Management"
@@ -361,6 +375,12 @@ export default function Inventory() {
                             <div className="flex items-center justify-center gap-1.5">
                               <button onClick={() => openAdjust(item)} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="Adjust Stock"><RefreshCw size={14} /></button>
                               <button onClick={() => openCount(item)} className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Cycle Count"><ClipboardCheck size={14} /></button>
+                              {canMoveDamaged && Number(item.damaged) > 0 && (
+                                <>
+                                  <button onClick={() => setDamagedAction({ item, mode: 'writeoff' })} className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors" title="Write off damaged"><PackageX size={14} /></button>
+                                  <button onClick={() => setDamagedAction({ item, mode: 'vendor' })} className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Return damaged to vendor"><Undo2 size={14} /></button>
+                                </>
+                              )}
                               <button onClick={() => openTransfer(item)} className="p-1.5 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors" title="Transfer to Warehouse"><ArrowLeftRight size={14} /></button>
                               {item._status !== 'OK' && (
                                 <button
@@ -458,7 +478,10 @@ export default function Inventory() {
                 </div>
                 <div>
                   <label htmlFor="inventory-damaged" className={labelCls}>Damaged</label>
-                  <input id="inventory-damaged" type="number" min="0" value={form.damaged} onChange={e => setForm({ ...form, damaged: e.target.value })} className={inputCls} />
+                  <input id="inventory-damaged" type="number" min="0" value={form.damaged} onChange={e => setForm({ ...form, damaged: e.target.value })}
+                    readOnly={!!editingItem && damagedLocked} title={editingItem && damagedLocked ? 'Changes only through Write off damaged or Return damaged to vendor (batch list)' : undefined}
+                    className={`${inputCls} ${editingItem && damagedLocked ? 'opacity-60 cursor-not-allowed' : ''}`} />
+                  {editingItem && damagedLocked && <p className="mt-1 text-[11px] text-slate-500">Read-only: use Write off or Return to vendor on the batch.</p>}
                 </div>
               </div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
