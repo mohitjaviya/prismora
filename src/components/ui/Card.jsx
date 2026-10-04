@@ -6,6 +6,9 @@
  * panels sitting next to each other.
  */
 
+import { useState } from 'react';
+import { kpiDisplay, valueFontSize } from '../../utils/kpiValue';
+
 export default function Card({ children, className = '', padding = 'p-5', ...rest }) {
   return (
     <div {...rest} className={`glass-panel rounded-2xl border border-white/5 ${padding} ${className}`}>
@@ -60,6 +63,10 @@ export function StatCard({ label, value, icon: Icon, trend, hint, tone = 'accent
     info: 'text-blue-400 bg-blue-500/10',
   };
   const up = Number(trend) > 0;
+  // Tapping a shortened figure ("₹2.29 Cr") shows it in full: a phone has no hover.
+  const [expanded, setExpanded] = useState(false);
+  const { full, short, fullClass, shortClass } = kpiDisplay(value);
+  const showsShort = Boolean(short) && !expanded;
   return (
     <div className={`glass-panel rounded-2xl border border-white/5 p-4 sm:p-5 ${className}`}>
       <div className="flex items-start justify-between gap-3">
@@ -71,14 +78,31 @@ export function StatCard({ label, value, icon: Icon, trend, hint, tone = 'accent
         )}
       </div>
       <div className="flex items-baseline gap-2 mt-2">
-        {/* Truncated rather than wrapped: a long value in one card used to make
-            it taller than the rest of the row, which reads as a layout fault. */}
-        <p
-          className="text-2xl font-extrabold text-white leading-none truncate min-w-0"
-          title={typeof value === 'string' ? value : undefined}
-        >
-          {value}
-        </p>
+        {/* Always the whole figure on one line, never "…" (Gap 1): the font
+            shrinks with the card (24px down to 15px), and only a crore figure
+            on a card too narrow for it switches to its short form. */}
+        <div className="@container flex-1 min-w-0">
+          {short ? (
+            <button
+              type="button"
+              onClick={() => setExpanded(e => !e)}
+              title={full}
+              aria-label={full}
+              className="block text-left font-extrabold text-white leading-none whitespace-nowrap cursor-pointer"
+            >
+              <span className={showsShort ? fullClass : ''} style={{ fontSize: valueFontSize(full, { expanded }) }}>{full}</span>
+              {showsShort && <span className={shortClass} style={{ fontSize: valueFontSize(short) }}>{short}</span>}
+            </button>
+          ) : (
+            <p
+              className="font-extrabold text-white leading-none whitespace-nowrap"
+              style={{ fontSize: valueFontSize(full) }}
+              title={full || undefined}
+            >
+              {full}
+            </p>
+          )}
+        </div>
         {Number(trend) !== 0 && Number.isFinite(Number(trend)) && (
           <span className={`text-[11px] font-bold ${up ? 'text-emerald-400' : 'text-rose-400'}`}>
             {up ? '↑' : '↓'} {Math.abs(Number(trend))}%

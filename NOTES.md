@@ -11,7 +11,7 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 ## GAP LIST — status check 2026-10-04 (check only, nothing changed; owner sends a fix prompt per gap)
 | # | Gap | Status | Evidence / missing |
 |---|---|---|---|
-| 1 | KPI cards truncate values | STILL EXISTS | `components/ui/Card.jsx` StatCard value uses `truncate` (hover title only); Inventory "Stock Value" = full `formatCurrency` |
+| 1 | KPI cards truncate values | FIXED (local commit, not deployed) | Shared `StatCard` (`components/ui/Card.jsx`, 17 screens): no truncate; value box is a CSS container, font `min(24px, max(15px, 100cqi / (chars×0.62)))`; ₹ ≥ 1 crore switches to "₹2.29 Cr" only when the card is too narrow (static container query per length), full figure in tooltip + tap toggles it (11px floor). Logic in `utils/kpiValue.js` (+10 tests). Checked in Chrome at 1920/1366/1100/768/375/320 px: no overflow, no "…". DirectorDashboard's own tiles already use short forms (untouched) |
 | 2 | Excel exports badly formatted | STILL EXISTS | `utils/exportUtils.js` `downloadCSV`: plain CSV, `''+val` prints null/undefined, no BOM, no header styling/freeze/filter/widths; no xlsx library |
 | 3 | SFA attendance report lists partners | STILL EXISTS | `SFA.jsx:734` `allUsers.map` unfiltered; `users` has 20 partner rows (14 Distributor, 3 Dealer, 3 Retailer) |
 | 4 | Admin can't view employee performance | PARTLY FIXED | Reports "Sales Executive Performance" (sales roles only) + SFA leaderboard; no per-employee view for any role |
