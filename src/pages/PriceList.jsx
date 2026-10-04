@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Tags, Download } from 'lucide-react';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { PageHeader, DataTable, Button } from '../components/ui';
 
 const formatCurrency = (val) =>
@@ -24,7 +24,7 @@ export default function PriceList() {
     [productCatalog],
   );
 
-  const handleExport = () => downloadCSV(rows.map(p => ({
+  const handleExport = () => downloadExcel(rows.map(p => ({
     Product: p.name, Category: p.category, HSN: p.hsnCode, UOM: p.uom,
     MRP: p.mrp, 'Your Price': p[priceField], 'GST %': p.gstPct,
   })), 'PRISMORA_Price_List');

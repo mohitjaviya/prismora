@@ -9,7 +9,7 @@ import { useConfirm, useToast } from '../context/DialogContext';
 import PartnerLoginAction from '../components/PartnerLoginAction';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
@@ -277,7 +277,7 @@ export default function Distributors() {
         subtitle="Distributors, their territories, credit limits and outstanding ledger."
         actions={
           <>
-            <Button icon={Download} onClick={() => downloadCSV(filtered.map(d => ({ Name: d.name, GSTIN: d.gstin, State: d.state, City: d.city, Territory: territoryName(territories, d), Phone: d.phone, Email: d.email, Outstanding: d.outstandingAmount, CreditLimit: d.creditLimit, Status: d.status })), 'PRISMORA_Distributors')}>Export</Button>
+            <Button icon={Download} onClick={() => downloadExcel(filtered.map(d => ({ Name: d.name, GSTIN: d.gstin, State: d.state, City: d.city, Territory: territoryName(territories, d), Phone: d.phone, Email: d.email, Outstanding: d.outstandingAmount, CreditLimit: d.creditLimit, Status: d.status })), 'PRISMORA_Distributors')}>Export</Button>
             {canManage && <Button variant="primary" icon={Plus} onClick={openAdd}>Add Distributor</Button>}
           </>
         }

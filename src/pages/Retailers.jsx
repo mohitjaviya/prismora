@@ -9,7 +9,7 @@ import { useConfirm, useToast } from '../context/DialogContext';
 import PartnerLoginAction from '../components/PartnerLoginAction';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { buildLedgerEntries } from '../utils/distributorUtils';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
@@ -290,7 +290,7 @@ export default function Retailers() {
         subtitle="Retailers linked to dealers, territory mapping and outstanding ledger."
         actions={
           <>
-            <Button icon={Download} onClick={() => downloadCSV(filtered.map(r => ({ Name: r.name, GSTIN: r.gstin, ParentDealer: parentDealerName(r.parentDealerId), State: r.state, City: r.city, Territory: territoryName(territories, r), Phone: r.phone, Email: r.email, Outstanding: r.outstandingAmount, CreditLimit: r.creditLimit, Status: r.status })), 'PRISMORA_Retailers')}>Export</Button>
+            <Button icon={Download} onClick={() => downloadExcel(filtered.map(r => ({ Name: r.name, GSTIN: r.gstin, ParentDealer: parentDealerName(r.parentDealerId), State: r.state, City: r.city, Territory: territoryName(territories, r), Phone: r.phone, Email: r.email, Outstanding: r.outstandingAmount, CreditLimit: r.creditLimit, Status: r.status })), 'PRISMORA_Retailers')}>Export</Button>
             {canManage && <Button variant="primary" icon={Plus} onClick={openAdd}>Add Retailer</Button>}
           </>
         }

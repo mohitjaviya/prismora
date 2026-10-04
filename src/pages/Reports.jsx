@@ -4,7 +4,7 @@ import { territoryName } from '../utils/territory';
 import { useAuth, isSalesRole } from '../context/AuthContext';
 import { BarChart3, Download, TrendingUp, Package2, Wallet, Users, Star, ChevronRight } from 'lucide-react';
 import { Button, PageHeader } from '../components/ui';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { isConvertedLead } from '../utils/leadStatus';
 import { amountPaid, amountDue, invoiceTotal } from '../utils/invoiceStatus';
 import { profitAndLoss, salesCreditNotes, openTaxInvoices } from '../utils/financials';
@@ -390,7 +390,10 @@ export default function Reports() {
       activeReportDef.columns.forEach((col, i) => { obj[activeReportDef.labels[i]] = row[col]; });
       return obj;
     });
-    downloadCSV(exportData, `PRISMORA_${activeReportDef.label.replace(/\s+/g, '_')}`);
+    // Report labels mark money with "(₹)" (and Min Order); any other number is
+    // a count, e.g. the complaint report's "Total".
+    const types = Object.fromEntries(activeReportDef.labels.map(l => [l, /₹|^Min Order$/.test(l) ? 'amount' : 'number']));
+    downloadExcel(exportData, `PRISMORA_${activeReportDef.label.replace(/\s+/g, '_')}`, { types });
   };
 
   return (

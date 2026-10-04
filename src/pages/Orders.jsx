@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart, ClipboardCheck, Undo2, X } from 'lucide-react';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select } from '../components/ui';
 import { createPortal } from 'react-dom';
-import { downloadCSV, itemsText } from '../utils/exportUtils';
+import { downloadExcel, itemsText } from '../utils/exportUtils';
 import { allParties } from '../utils/distributorUtils';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
@@ -691,10 +691,10 @@ const Orders = () => {
       ...o,
       items: itemsText(o.items),
       Company: o.companyName || 'N/A',
-      date: o.date ? format(new Date(o.date), 'yyyy-MM-dd') : 'None',
+      date: o.date ? format(new Date(o.date), 'yyyy-MM-dd') : null,
       salesperson: mockUsers.find(u => u.id === o.assignedTo)?.name || 'Unassigned'
     }));
-    downloadCSV(formattedData, 'PRISMORA_Orders');
+    downloadExcel(formattedData, 'PRISMORA_Orders');
   };
 
   const safeDate = (d) => {

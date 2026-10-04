@@ -6,7 +6,7 @@ import { Plus, Edit2, Trash2, AlertCircle, LayoutGrid, List, Download, X, User, 
 import { useToast, useConfirm } from '../context/DialogContext';
 import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { optionsFor, colorForKey, labelForKey } from '../utils/masterLists';
 import { territoryFields, territoryName } from '../utils/territory';
 import { attributionFor } from '../utils/attribution';
@@ -272,10 +272,10 @@ const Leads = () => {
   const handleExport = () => {
     const formattedData = visibleLeads.map(l => ({
       ...l,
-      followUpDate: l.followUpDate ? format(new Date(l.followUpDate), 'yyyy-MM-dd') : 'None',
+      followUpDate: l.followUpDate ? format(new Date(l.followUpDate), 'yyyy-MM-dd') : null,
       salesperson: mockUsers.find(u => u.id === l.assignedTo)?.name || 'Unassigned'
     }));
-    downloadCSV(formattedData, 'PRISMORA_Leads');
+    downloadExcel(formattedData, 'PRISMORA_Leads');
   };
 
   const onDragEnd = async (result) => {

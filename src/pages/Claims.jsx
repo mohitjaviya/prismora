@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { FileCheck2, Plus, X, CheckCircle, XCircle, Clock, Wallet, Download } from 'lucide-react';
 import { useToast } from '../context/DialogContext';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { PageHeader, DataTable, Button, Badge, StatCard, Card, SearchInput } from '../components/ui';
 
 const formatCurrency = (val) =>
@@ -169,7 +169,7 @@ export default function Claims() {
     }] : []),
   ];
 
-  const handleExport = () => downloadCSV(visibleClaims.map(c => ({
+  const handleExport = () => downloadExcel(visibleClaims.map(c => ({
     Claim: c.id,
     Party: partyName(c).name,
     Type: partyName(c).type,

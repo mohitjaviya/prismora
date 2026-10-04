@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Tag, Plus, Trash2, X, Edit2, CheckCircle, Clock, Download, Percent, Gift, Calendar, BarChart3, Zap, Trophy } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import { PageHeader, Button, StatCard, Card, SearchInput } from '../components/ui';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { schemeLiveState } from '../utils/schemeUtils';
 import { optionsFor } from '../utils/masterLists';
 import { schemeProblem } from '../utils/valueRules';
@@ -190,7 +190,7 @@ export default function Schemes() {
           : 'Promotional schemes you currently qualify for.'}
         actions={
           <>
-            <Button icon={Download} onClick={() => downloadCSV(filtered.map(sc => ({ ID: sc.id, Name: sc.name, Type: sc.type, Discount: sc.discountPct, FreeGoods: sc.freeGoodsQty, MinOrder: sc.minOrderValue, ApplicableTo: sc.applicableTo, ApplicableProducts: Array.isArray(sc.applicableProducts) && sc.applicableProducts.length > 0 ? sc.applicableProducts.join('; ') : 'All Products', ValidFrom: formatDate(sc.validFrom), ValidTo: formatDate(sc.validTo), Status: sc.status })), 'PRISMORA_Schemes')}>
+            <Button icon={Download} onClick={() => downloadExcel(filtered.map(sc => ({ ID: sc.id, Name: sc.name, Type: sc.type, Discount: sc.discountPct, FreeGoods: sc.freeGoodsQty, MinOrder: sc.minOrderValue, ApplicableTo: sc.applicableTo, ApplicableProducts: Array.isArray(sc.applicableProducts) && sc.applicableProducts.length > 0 ? sc.applicableProducts.join('\n') : 'All Products', ValidFrom: formatDate(sc.validFrom), ValidTo: formatDate(sc.validTo), Status: sc.status })), 'PRISMORA_Schemes')}>
               Export
             </Button>
             {canManage && <Button variant="primary" icon={Plus} onClick={openAdd}>Create Scheme</Button>}

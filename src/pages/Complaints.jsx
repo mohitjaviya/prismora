@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { MessageSquareWarning, Plus, Trash2, X, Download, CheckCircle, Clock, AlertTriangle, Eye, RotateCcw } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
 
 
@@ -209,7 +209,7 @@ export default function Complaints() {
         subtitle="Register, track and resolve customer complaints with batch-level root cause."
         actions={
           <>
-            <Button icon={Download} onClick={() => downloadCSV(filtered.map(c => ({ ID: c.id, Customer: c.customerName, Phone: c.customerPhone, Product: c.product, Batch: c.batchNumber, Type: c.complaintType, Status: c.status, Resolution: c.resolution, Date: formatDate(c.createdAt) })), 'PRISMORA_Complaints')}>
+            <Button icon={Download} onClick={() => downloadExcel(filtered.map(c => ({ ID: c.id, Customer: c.customerName, Phone: c.customerPhone, Product: c.product, Batch: c.batchNumber, Type: c.complaintType, Status: c.status, Resolution: c.resolution, Date: formatDate(c.createdAt) })), 'PRISMORA_Complaints')}>
               Export
             </Button>
             <Button variant="primary" icon={Plus} onClick={openAdd}>Register Complaint</Button>

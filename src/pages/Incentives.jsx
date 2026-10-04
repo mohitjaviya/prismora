@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Gift, CheckCircle, Clock, Package, Wallet, Download } from 'lucide-react';
 import { useToast } from '../context/DialogContext';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { PageHeader, DataTable, Button, Badge, StatCard, Card, SearchInput } from '../components/ui';
 
 const formatCurrency = (val) =>
@@ -135,7 +135,7 @@ export default function Incentives() {
     }] : []),
   ];
 
-  const handleExport = () => downloadCSV(visible.map(i => ({
+  const handleExport = () => downloadExcel(visible.map(i => ({
     Incentive: i.id,
     Party: partyName(i).name,
     Type: partyName(i).type,

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Download, Briefcase, MapPin, Package, X, Calendar, CheckCircle, Clock, Truck, Filter } from 'lucide-react';
 import { PageHeader, DataTable, Button, Badge, Card, Select } from '../components/ui';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { createPortal } from 'react-dom';
 
 const Customers = () => {
@@ -115,10 +115,10 @@ const Customers = () => {
       City: c.city,
       TotalOrders: c.totalOrders,
       LifetimeValue: c.totalSpend,
-      ProductsPurchased: c.products.join(', '),
+      ProductsPurchased: c.products.join('\n'),
       AssignedSalesperson: allUsers.find(u => u.id === c.assignedTo)?.name || 'Unknown'
     }));
-    downloadCSV(exportData, 'PRISMORA_Customers');
+    downloadExcel(exportData, 'PRISMORA_Customers');
   };
 
   const customerColumns = [

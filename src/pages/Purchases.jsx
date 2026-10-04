@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import { Button, IconButton, PageHeader } from '../components/ui';
-import { downloadCSV, itemsText } from '../utils/exportUtils';
+import { downloadExcel, itemsText } from '../utils/exportUtils';
 import { isAwaitingGoods } from '../utils/purchasing';
 import { buildVendorLedger } from '../utils/distributorUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
@@ -241,7 +241,7 @@ export default function Purchases() {
    */
   const handleExport = () => {
     if (activeTab === 'orders') {
-      return downloadCSV(filteredOrders.map(po => ({
+      return downloadExcel(filteredOrders.map(po => ({
         PO: po.id,
         Vendor: vendorNameFor(po.vendorId),
         Items: (po.items || []).length,
@@ -252,7 +252,7 @@ export default function Purchases() {
       })), 'PRISMORA_Purchase_Orders');
     }
     if (activeTab === 'vendors') {
-      return downloadCSV(filteredVendors.map(v => ({
+      return downloadExcel(filteredVendors.map(v => ({
         Name: v.name,
         GSTIN: v.gstin,
         Contact: v.contactPerson,
@@ -263,7 +263,7 @@ export default function Purchases() {
       })), 'PRISMORA_Vendors');
     }
     if (activeTab === 'grn') {
-      return downloadCSV((grn || []).map(g => ({
+      return downloadExcel((grn || []).map(g => ({
         GRN: g.id,
         PO: g.poId,
         Vendor: vendorNameFor(g.vendorId),
@@ -271,7 +271,7 @@ export default function Purchases() {
         Received: formatDate(g.receivedDate || g.createdAt),
       })), 'PRISMORA_GRN_History');
     }
-    return downloadCSV((purchaseReturns || []).map(r => ({
+    return downloadExcel((purchaseReturns || []).map(r => ({
       Return: r.id,
       Vendor: vendorNameFor(r.vendorId),
       Items: itemsText(r.items),

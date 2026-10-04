@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Boxes, CheckCircle, Clock, Package, Truck, Download } from 'lucide-react';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { Badge, Button, Card, EmptyState, PageHeader, SearchInput, StatCard } from '../components/ui';
 import { aggregateReceived } from '../utils/stockUtils';
 import { allParties } from '../utils/distributorUtils';
@@ -74,7 +74,7 @@ export default function Stock() {
     </div>
   );
 
-  const handleExport = () => downloadCSV(rows.map(pr => ({
+  const handleExport = () => downloadExcel(rows.map(pr => ({
   Product: pr.name,
   Category: pr.category,
   Received: pr.received,

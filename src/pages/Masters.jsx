@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Layers, Plus, Trash2, Lock, Check, X, ChevronUp, ChevronDown, AlertTriangle, Search, Palette, Download } from 'lucide-react';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { useConfirm } from '../context/DialogContext';
 import { Button, PageHeader } from '../components/ui';
 import { MASTER_LISTS, optionsFor, badgeStyle } from '../utils/masterLists';
@@ -98,7 +98,7 @@ export default function Masters() {
 
   // The chosen list, not all twelve: they have nothing in common but the shape
   // of a row, and a file mixing lead statuses with payment methods helps nobody.
-  const handleExport = () => downloadCSV(allRows.map(o => ({
+  const handleExport = () => downloadExcel(allRows.map(o => ({
     Label: o.label,
     Key: o.key,
     Description: o.description || '',

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Wallet, ArrowUpCircle, ArrowDownCircle, CreditCard, Download } from 'lucide-react';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { PageHeader, DataTable, Card, StatCard, EmptyState, Button } from '../components/ui';
 import { buildLedgerEntries, allParties } from '../utils/distributorUtils';
 
@@ -60,7 +60,7 @@ export default function Ledger() {
    * carried, because a statement without the balance beside each line is not a
    * statement -- it is a list of amounts.
    */
-  const handleExport = () => downloadCSV(entries.map(row => ({
+  const handleExport = () => downloadExcel(entries.map(row => ({
     Date: formatDate(row.date),
     Description: row.description,
     Reference: row.ref || '',

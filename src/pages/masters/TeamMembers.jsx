@@ -3,7 +3,7 @@ import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole, roleLevel
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X, Download, UserX, UserCheck } from 'lucide-react';
-import { downloadCSV } from '../../utils/exportUtils';
+import { downloadExcel } from '../../utils/exportUtils';
 import { useConfirm } from '../../context/DialogContext';
 import { useToast } from '../../context/DialogContext';
 import { Badge, Button, DataTable, IconButton, PageHeader } from '../../components/ui';
@@ -215,13 +215,13 @@ export default function TeamMembers() {
 
   // Exports the tab on screen: staff, or partner logins.
   const handleExport = () => (onPartnerTab
-    ? downloadCSV(partnerLogins.map(u => ({
+    ? downloadExcel(partnerLogins.map(u => ({
       Name: u.name,
       Email: u.email,
       Role: u.role,
       Status: u.status || 'Active',
     })), 'PRISMORA_Partner_Logins')
-    : downloadCSV(staff.map(u => ({
+    : downloadExcel(staff.map(u => ({
       Name: u.name,
       Email: u.email,
       Role: u.role,
@@ -229,7 +229,7 @@ export default function TeamMembers() {
       Manages: (u.managedUsers || [])
         .map(id => (allUsers.find(x => x.id === id) || {}).name)
         .filter(Boolean)
-        .join('; '),
+        .join('\n'),
     })), 'PRISMORA_Team_Members'));
 
   return (

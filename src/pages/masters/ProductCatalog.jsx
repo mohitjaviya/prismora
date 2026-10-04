@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, Package, QrCode, X, Download } from 'lucide-react';
-import { downloadCSV } from '../../utils/exportUtils';
+import { downloadExcel } from '../../utils/exportUtils';
 import { useConfirm, useToast } from '../../context/DialogContext';
 import { Badge, Button, DataTable, IconButton, PageHeader } from '../../components/ui';
 import { optionsFor } from '../../utils/masterLists';
@@ -135,7 +135,7 @@ export default function ProductCatalog() {
     },
   ];
 
-  const handleExport = () => downloadCSV(productCatalog.map(p => ({
+  const handleExport = () => downloadExcel(productCatalog.map(p => ({
     Product: p.name,
     SKU: p.sku,
     Category: p.category,

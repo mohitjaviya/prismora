@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Package2, Plus, Edit2, Trash2, AlertTriangle, X, Download, RefreshCw, TrendingDown, CheckCircle, Clock, AlertCircle, ArrowUp, ArrowDown, Mail, ArrowLeftRight, ClipboardCheck, Layers, Wallet } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, Card, StatCard, SearchInput, Select } from '../components/ui';
-import { downloadCSV } from '../utils/exportUtils';
+import { downloadExcel } from '../utils/exportUtils';
 import { sendEmailAlert, templates } from '../utils/notificationUtils';
 import { optionsFor } from '../utils/masterLists';
 import { isExpired, daysToExpiry as expiryDays, EXPIRING_SOON_DAYS, stockStatus } from '../utils/expiry';
@@ -187,7 +187,7 @@ export default function Inventory() {
   };
 
   const handleExport = () => {
-    downloadCSV(filtered.map(i => ({
+    downloadExcel(filtered.map(i => ({
       Product: i.product, Batch: i.batchNumber, Warehouse: i.warehouse,
       Qty: i.quantity, Reserved: i.reserved, AvailableToSell: isExpired(i) ? 0 : Math.max(0, (i.quantity || 0) - (i.reserved || 0)), Expired: isExpired(i) ? 'Yes' : '', Transit: i.transit, Damaged: i.damaged,
       ReorderLevel: i.reorderLevel, Expiry: formatDate(i.expiryDate),
