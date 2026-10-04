@@ -5,7 +5,7 @@ import { assigneeForPortalOrder } from '../utils/orderRouting';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { ShoppingCart, Plus, Trash2, X, Package, Tag, Truck, CheckCircle, Clock, PackageCheck, UserX } from 'lucide-react';
-import { PageHeader, DataTable, Button, Badge, Card, EmptyState } from '../components/ui';
+import { PageHeader, ListPage, DataTable, Button, Badge, Card, EmptyState } from '../components/ui';
 import CancelMyOrderButton from '../components/CancelMyOrderButton';
 import { useToast } from '../context/DialogContext';
 import { isSchemeEligible } from '../utils/schemeUtils';
@@ -175,8 +175,9 @@ export default function DistributorOrders() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <ListPage className="animate-fade-in-up">
       <PageHeader
+        compact
         icon={ShoppingCart}
         title="My Orders"
         subtitle="Place new orders and track your order history."
@@ -184,6 +185,7 @@ export default function DistributorOrders() {
       />
 
       <DataTable
+        fill
         title="Orders"
         columns={orderColumns}
         rows={myOrders}
@@ -335,6 +337,6 @@ export default function DistributorOrders() {
         </div>, document.body
         );
       })()}
-    </div>
+    </ListPage>
   );
 }

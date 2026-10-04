@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Download, Briefcase, MapPin, Package, X, Calendar, CheckCircle, Clock, Truck, Filter } from 'lucide-react';
-import { PageHeader, DataTable, Button, Badge, Card, Select } from '../components/ui';
+import { PageHeader, ListPage, DataTable, Button, Badge, Card, Select } from '../components/ui';
 import { downloadCSV } from '../utils/exportUtils';
 import { createPortal } from 'react-dom';
 
@@ -179,8 +179,9 @@ const Customers = () => {
   }
 
   return (
-    <div className="space-y-6 flex flex-col h-full animate-fade-in-up">
+    <ListPage className="animate-fade-in-up">
       <PageHeader
+        compact
         icon={Briefcase}
         title="Customer Directory"
         subtitle="Aggregated insights and lifetime value across all accounts."
@@ -202,6 +203,8 @@ const Customers = () => {
       </Card>
 
       <DataTable
+        fill
+        dense
         title="Customers"
         columns={customerColumns}
         rows={filteredAndSortedCustomers}
@@ -380,7 +383,7 @@ const Customers = () => {
           document.body
         );
       })()}
-    </div>
+    </ListPage>
   );
 };
 

@@ -56,6 +56,10 @@ export default function DataTable({
   filteredEmpty = {},
   className = '',
   dense = false,
+  // Inside a <ListPage>: on a laptop or wider the panel takes the height left
+  // on the screen and only the rows scroll, under a header row that stays put.
+  // Below lg the page scrolls as before.
+  fill = false,
 }) {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState({ key: null, dir: 'asc' });
@@ -95,9 +99,10 @@ export default function DataTable({
   const cellPad = dense ? 'px-3 py-2' : 'px-4 py-3';
 
   return (
-    <div className={`glass-panel rounded-2xl border border-white/5 overflow-hidden ${className}`}>
+    <div className={`glass-panel rounded-2xl border border-white/5 overflow-hidden
+      ${fill ? 'lg:flex lg:flex-col lg:flex-1 lg:min-h-0' : ''} ${className}`}>
       {(title || search || toolbar) && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5 flex-wrap">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5 flex-wrap shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             {title && <h3 className="text-sm font-bold text-white truncate">{title}</h3>}
             <CountBadge value={sorted.length} />
@@ -128,11 +133,13 @@ export default function DataTable({
         />
       ) : (
         <>
-          <div className="overflow-x-auto custom-scrollbar">
+          <div className={`overflow-x-auto custom-scrollbar ${fill ? 'lg:flex-1 lg:min-h-0 lg:overflow-y-auto' : ''}`}>
             {/* Narrow enough that a phone shows three or four columns rather than
                   two, and still wide enough that cells do not cramp on a laptop. */}
               <table className="w-full min-w-[520px]">
-              <thead>
+              {/* Sticky only does anything when the box above scrolls, i.e. fill
+                  at lg+. Its own solid background, or rows show through it. */}
+              <thead className={fill ? 'sticky top-0 z-10 bg-brand-primary-light' : ''}>
                 <tr className="border-b border-white/5 bg-white/[0.02]">
                   {columns.map(col => {
                     const active = sort.key === col.key;
@@ -182,7 +189,7 @@ export default function DataTable({
           </div>
 
           {paginate && sorted.length > 10 && (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-white/5 flex-wrap">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-white/5 flex-wrap shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-slate-500">Rows</span>
                 <Select

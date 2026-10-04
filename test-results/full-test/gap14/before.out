@@ -1,0 +1,20 @@
+FAIL ADMIN /orders 1920x1080: 8/25)
+FAIL ADMIN /orders 1366x768: 4/25)
+FAIL ADMIN /orders 1024x768: 4/25)
+INFO ADMIN /orders 768x1024: normal page scroll (window scrolls: true), rows in view 6/25
+INFO ADMIN /orders 375x812: normal page scroll (window scrolls: true), rows in view 5/25
+FAIL ADMIN /customers 1920x1080: 8/25)
+FAIL ADMIN /customers 1366x768: 4/25)
+FAIL ADMIN /customers 1024x768: 4/25)
+INFO ADMIN /customers 768x1024: normal page scroll (window scrolls: true), rows in view 7/25
+INFO ADMIN /customers 375x812: normal page scroll (window scrolls: true), rows in view 3/25
+FAIL DISTRIBUTOR /orders 1920x1080: 14/25)
+FAIL DISTRIBUTOR /orders 1366x768: 8/25)
+FAIL DISTRIBUTOR /orders 1024x768: 8/25)
+INFO DISTRIBUTOR /orders 768x1024: normal page scroll (window scrolls: true), rows in view 12/25
+INFO DISTRIBUTOR /orders 375x812: normal page scroll (window scrolls: true), rows in view 7/25
+FAIL DISTRIBUTOR /price-list 1920x1080: 14/25)
+FAIL DISTRIBUTOR /price-list 1366x768: 8/25)
+FAIL DISTRIBUTOR /price-list 1024x768: 8/25)
+INFO DISTRIBUTOR /price-list 768x1024: normal page scroll (window scrolls: true), rows in view 9/25
+INFO DISTRIBUTOR /price-list 375x812: normal page scroll (window scrolls: true), rows in view 8/25
