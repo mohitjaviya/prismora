@@ -1774,6 +1774,20 @@ export const DataProvider = ({ children }) => {
     return { data: (data || []).map(r => ({ ...r, delivered: Number(r.delivered), returned: Number(r.returned), returnable: Number(r.returnable) })) };
   };
 
+  // Every stock movement row, for the batch reconciliation (Gap 15). Read on
+  // demand, not at load: only that view needs it.
+  // Paged: the API returns at most 1,000 rows a request.
+  const getStockMovements = async () => {
+    const all = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase.from('stock_movements').select('*')
+        .order('at', { ascending: true }).order('id', { ascending: true }).range(from, from + 999);
+      if (error) return { data: [], error: plainDatabaseError(error, 'read the stock movements') };
+      all.push(...(data || []));
+      if (!data || data.length < 1000) return { data: all };
+    }
+  };
+
   // Whether the database records the condition of returned goods (086). Asked
   // once per session: a select of the column fails until 086 is applied, and
   // until then the return form stays exactly as before. Any error = no.
@@ -3849,7 +3863,7 @@ export const DataProvider = ({ children }) => {
   return (
     <DataContext.Provider value={gateWrites({
       whenLoaded: () => loadGate.current.wait(),
-      getOrderReturnable, recordSalesReturn, salesReturns, salesReturnConditionSupported,
+      getOrderReturnable, recordSalesReturn, salesReturns, salesReturnConditionSupported, getStockMovements,
       listLeadAttachments, uploadLeadAttachment, removeLeadAttachment, openLeadAttachment,
       companySettings, loadCompanySettings, updateCompanySettings,
       // Original CRM

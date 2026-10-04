@@ -2,13 +2,14 @@ import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
-import { Package2, Plus, Edit2, Trash2, AlertTriangle, X, Download, RefreshCw, TrendingDown, CheckCircle, Clock, AlertCircle, ArrowUp, ArrowDown, Mail, ArrowLeftRight, ClipboardCheck, Layers, Wallet } from 'lucide-react';
+import { Package2, Plus, Edit2, Trash2, AlertTriangle, X, Download, RefreshCw, TrendingDown, CheckCircle, Clock, AlertCircle, ArrowUp, ArrowDown, Mail, ArrowLeftRight, ClipboardCheck, Layers, Wallet, Scale } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import { PageHeader, DataTable, Button, Card, StatCard, SearchInput, Select } from '../components/ui';
 import { downloadExcel } from '../utils/exportUtils';
 import { sendEmailAlert, templates } from '../utils/notificationUtils';
 import { optionsFor } from '../utils/masterLists';
 import { isExpired, daysToExpiry as expiryDays, EXPIRING_SOON_DAYS, stockStatus } from '../utils/expiry';
+import StockReconciliation from '../components/StockReconciliation';
 
 const STATUS_FILTERS = ['All', 'OK', 'Low Stock', 'Critical', 'Expiring Soon', 'Expired', 'Out of Stock'];
 
@@ -61,6 +62,7 @@ export default function Inventory() {
   const [transferForm, setTransferForm] = useState({ toWarehouse: '', quantity: '', notes: '' });
   const [countItem, setCountItem] = useState(null);
   const [countedQty, setCountedQty] = useState('');
+  const [reconOpen, setReconOpen] = useState(false);
 
   // KPI derivations
   const withStatus = useMemo(() => inventory.map(i => ({ ...i, _status: getStockStatus(i) })), [inventory]);
@@ -219,13 +221,16 @@ export default function Inventory() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
+      {reconOpen && <StockReconciliation onClose={() => setReconOpen(false)} />}
       <PageHeader
         icon={Package2}
         title="Inventory Management"
         subtitle="Warehouse stock, batch tracking, expiry and reorder alerts."
         actions={
           <>
-            <Button icon={Download} onClick={handleExport}>Export CSV</Button>
+            {/* Gap 15: movements added up per batch against what it holds. */}
+            <Button icon={Scale} onClick={() => setReconOpen(true)}>Stock check</Button>
+            <Button icon={Download} onClick={handleExport}>Export</Button>
             {canManage && <Button variant="primary" icon={Plus} onClick={openAdd}>Add Batch</Button>}
           </>
         }
