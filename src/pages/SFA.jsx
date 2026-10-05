@@ -12,7 +12,9 @@ import {
   Upload, CheckSquare, XSquare, Route, Clock, RefreshCw
 } from 'lucide-react';
 import { useToast } from '../context/DialogContext';
-import { Button, PageHeader, StatCard, DataTable, Badge, ClampText, useFieldCheck, FieldError } from '../components/ui';
+import { cleanForm, quantityProblem, amountProblem, isBlank } from '../utils/formRules';
+import { pincodeProblem } from '../utils/contactChecks';
+import { Button, PageHeader, StatCard, DataTable, Badge, ClampText, useFieldCheck, FieldError, ErrorSummary } from '../components/ui';
 import { createPortal } from 'react-dom';
 import { optionsFor } from '../utils/masterLists';
 import { shiftDuration } from '../utils/attendance';
@@ -47,6 +49,45 @@ const fmtDate = (value) => {
 // Marking a payout without recording it is the failure this guard exists to
 // stop, so a refused write has to be said out loud rather than looking inert.
 const PAYOUT_FAILED = 'The payout could not be recorded as an expense, so the status has been left unchanged rather than showing money as paid that the books do not have. The reason is in the browser console; try again once it is resolved.';
+
+const BEAT_SPEC = {
+  executiveId: { label: 'Executive', required: true },
+  date: { label: 'Beat date', required: true },
+  territoryId: { label: 'Territory', required: true },
+  outlets: { label: 'Outlets to visit', required: true },
+};
+
+// Visit report: what is asked depends on whether the outlet was visited and
+// whether an order was placed. Rows of the order are orderItems.N.field.
+const visitSpec = (f) => (f.outcome === 'Not Visited'
+  ? { notVisitedReason: { label: 'The reason', required: true } }
+  : {
+    outletContact: { label: 'Store contact', kind: 'mobile', required: true },
+    outletEmail: { label: 'Email', kind: 'email' },
+    ...(f.orderPlaced ? {
+      outletCity: { label: 'City', required: true },
+      outletPincode: { label: 'Pincode', required: true },
+      outletAddress: { label: 'Delivery address', required: true },
+    } : {}),
+  });
+const visitExtra = (f) => {
+  const out = {};
+  if (f.outcome === 'Not Visited' || !f.orderPlaced) return out;
+  const rows = f.orderItems || [];
+  const used = rows.map(r => r.name || !isBlank(r.quantity));
+  rows.forEach((r, i) => {
+    if (!used[i]) return;
+    if (!r.name) out[`orderItems.${i}.name`] = 'Choose the product';
+    const q = quantityProblem(r.quantity, 'Quantity');
+    if (q) out[`orderItems.${i}.quantity`] = q;
+    const rate = isBlank(r.unitPrice) ? 'Rate is required' : amountProblem(r.unitPrice, 'Rate', { positive: true });
+    if (rate) out[`orderItems.${i}.unitPrice`] = rate;
+  });
+  if (!used.some(Boolean)) out['orderItems.0.quantity'] = 'Enter a quantity against at least one product, or untick Order Placed';
+  const pin = !isBlank(f.outletPincode) ? pincodeProblem(f.outletPincode) : null;
+  if (pin) out.outletPincode = pin;
+  return out;
+};
 
 export default function SFA() {
   const { user, users: allUsers, isAdmin, isManager, isSales, canAccess } = useAuth();
@@ -258,6 +299,7 @@ export default function SFA() {
   const handleCreateBeat = async (e) => {
     e.preventDefault();
     if (savingSfa) return;
+    if (!beatCheck.ok(beatForm, BEAT_SPEC)) return;
     const outletsList = beatForm.outlets.split(',').map(o => o.trim()).filter(Boolean);
     setSavingSfa('beat');
     const r = await addBeatPlan({
@@ -355,15 +397,18 @@ export default function SFA() {
     });
     setCityIsOther(false);
     setVisitError('');
+    visitCheck.reset();
     visitAttempt.current = { orderId: null, visitId: null };
     setIsVisitModalOpen(true);
   };
   const handleVisitSubmit = async (e) => {
     e.preventDefault();
     if (isSubmittingVisit) return;
+    if (!visitCheck.ok(visitForm, visitSpec(visitForm), visitExtra)) return;
     setIsSubmittingVisit(true);
     try {
       const notVisited = visitForm.outcome === 'Not Visited';
+      const visitClean = cleanForm(visitForm, visitSpec(visitForm));
 
       // An outlet that could not be worked still gets a report, so coverage shows
       // it was attempted rather than leaving it indistinguishable from one that
@@ -391,8 +436,8 @@ export default function SFA() {
           // still reports against this order.
           ...territoryFields(territories, territory?.id),
           city: visitForm.outletCity || matchedRetailer?.city || matchedDealer?.city || '',
-          phone: visitForm.outletContact || '',
-          email: visitForm.outletEmail || matchedRetailer?.email || matchedDealer?.email || '',
+          phone: visitClean.outletContact || '',
+          email: visitClean.outletEmail || matchedRetailer?.email || matchedDealer?.email || '',
           deliveryAddress: visitForm.outletAddress || matchedRetailer?.address || matchedDealer?.address || '',
           deliveryPincode: visitForm.outletPincode || matchedRetailer?.pincode || matchedDealer?.pincode || '',
           retailerId: matchedRetailer?.id,
@@ -407,7 +452,7 @@ export default function SFA() {
         executiveId: user.id,
         beatId: selectedBeatForVisit?.beat?.id || null,
         outletName: visitForm.outletName,
-        outletContact: visitForm.outletContact,
+        outletContact: visitClean.outletContact,
         visitDate: todayStr,
         outcome: visitForm.outcome,
         notVisitedReason: notVisited ? visitForm.notVisitedReason : '',
@@ -451,6 +496,8 @@ export default function SFA() {
     reader.readAsDataURL(file);
   };
   const expenseCheck = useFieldCheck();
+  const beatCheck = useFieldCheck();
+  const visitCheck = useFieldCheck();
 
   const handleExpenseSubmit = async (e) => {
     e.preventDefault();
@@ -575,7 +622,7 @@ export default function SFA() {
         subtitle="GPS tracking, beats, attendance, expenses & performance analytics."
         actions={<>
           {!isSREP && (
-            <Button variant="primary" icon={Plus} onClick={() => setIsBeatModalOpen(true)}>Assign Beat</Button>
+            <Button variant="primary" icon={Plus} onClick={() => { beatCheck.reset(); setIsBeatModalOpen(true); }}>Assign Beat</Button>
           )}
           <Button variant="accent" icon={Receipt} onClick={() => setIsExpenseModalOpen(true)}>File Expense</Button>
         </>}
@@ -1428,24 +1475,24 @@ export default function SFA() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><MapPin className="text-brand-accent" size={20} />Assign Beat Route</h3>
               <button onClick={() => setIsBeatModalOpen(false)} className="p-1 text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
-            <form onSubmit={handleCreateBeat} className="p-6 space-y-4">
+            <form onSubmit={handleCreateBeat} noValidate className="p-6 space-y-4">
               <div>
                 <label htmlFor="sfa-assign-executive" className={lbl}>Assign Executive *</label>
-                <select id="sfa-assign-executive" required value={beatForm.executiveId} onChange={e => setBeatForm({ ...beatForm, executiveId: e.target.value })} className={inp}>
+                <select id="sfa-assign-executive" value={beatForm.executiveId} onChange={e => setBeatForm({ ...beatForm, executiveId: e.target.value })} className={inp}>
                   <option value="" className="bg-brand-primary">Select Sales Representative</option>
                   {salesReps.map(su => <option key={su.id} value={su.id} className="bg-brand-primary">{su.name}</option>)}
-                </select>
+                </select><FieldError errors={beatCheck.errors(beatForm, BEAT_SPEC)} field="executiveId" />
               </div>
               <div>
                 <label htmlFor="sfa-beat-date" className={lbl}>Beat Date *</label>
-                <input id="sfa-beat-date" type="date" required value={beatForm.date} onChange={e => setBeatForm({ ...beatForm, date: e.target.value })} className={inp} />
+                <input id="sfa-beat-date" type="date" value={beatForm.date} onChange={e => setBeatForm({ ...beatForm, date: e.target.value })} className={inp} /><FieldError errors={beatCheck.errors(beatForm, BEAT_SPEC)} field="date" />
               </div>
               <div>
                 <label htmlFor="sfa-territory-zone" className={lbl}>Territory Zone *</label>
-                <select id="sfa-territory-zone" required value={beatForm.territoryId} onChange={e => setBeatForm({ ...beatForm, territoryId: e.target.value })} className={inp} disabled={territories.length === 0}>
+                <select id="sfa-territory-zone" value={beatForm.territoryId} onChange={e => setBeatForm({ ...beatForm, territoryId: e.target.value })} className={inp} disabled={territories.length === 0}>
                   <option value="" className="bg-brand-primary">{territories.length === 0 ? 'No territories set up yet' : 'Select Territory'}</option>
                   {territories.map(t => <option key={t.id} value={t.id} className="bg-brand-primary">{t.name} ({t.state})</option>)}
-                </select>
+                </select><FieldError errors={beatCheck.errors(beatForm, BEAT_SPEC)} field="territoryId" />
                 {/* An empty dropdown reads as a broken control. Say what is
                     missing and where it is created, rather than leaving the
                     person guessing why there is nothing to pick. */}
@@ -1460,8 +1507,9 @@ export default function SFA() {
               <div>
                 <label htmlFor="sfa-outlets-to-visit" className={lbl}>Outlets to Visit *</label>
                 <p className="text-[10px] text-slate-500 mb-1.5">Separate outlet names with commas</p>
-                <textarea id="sfa-outlets-to-visit" required rows="3" placeholder="e.g. Radhe Medicals, Vrindavan Wellness, Krishna Pharma" value={beatForm.outlets} onChange={e => setBeatForm({ ...beatForm, outlets: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
+                <textarea id="sfa-outlets-to-visit" rows="3" placeholder="e.g. Radhe Medicals, Vrindavan Wellness, Krishna Pharma" value={beatForm.outlets} onChange={e => setBeatForm({ ...beatForm, outlets: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" /><FieldError errors={beatCheck.errors(beatForm, BEAT_SPEC)} field="outlets" />
               </div>
+              <ErrorSummary errors={beatCheck.errors(beatForm, BEAT_SPEC)} />
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                 <Button variant="secondary" onClick={() => setIsBeatModalOpen(false)}>Cancel</Button>
                 <Button type="submit" variant="primary" disabled={!!savingSfa}>{savingSfa === 'beat' ? 'Saving…' : 'Schedule Route'}</Button>
@@ -1511,7 +1559,7 @@ export default function SFA() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><Clipboard className="text-brand-accent" size={20} />{visitForm.outcome === 'Not Visited' ? 'Record a missed outlet' : 'Log Field Visit'}</h3>
               <button onClick={() => setIsVisitModalOpen(false)} className="p-1 text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
-            <form onSubmit={handleVisitSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+            <form onSubmit={handleVisitSubmit} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
               <div>
                 <span id="visit-outcome-group" className={lbl}>What happened at this outlet?</span>
                 <div role="group" aria-labelledby="visit-outcome-group" className="grid grid-cols-2 gap-2">
@@ -1539,12 +1587,12 @@ export default function SFA() {
                 <div>
                   <label htmlFor="sfa-why-not" className={lbl}>Why not? *</label>
                   <input id="sfa-why-not"
-                    type="text" required
+                    type="text"
                     placeholder="e.g. Shop closed for the day"
                     value={visitForm.notVisitedReason}
                     onChange={e => setVisitForm({ ...visitForm, notVisitedReason: e.target.value })}
                     className={inp}
-                  />
+                  /><FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field="notVisitedReason" />
                   <p className="text-[10px] text-slate-500 mt-1">
                     Recorded against the outlet so coverage shows it was attempted, not skipped silently.
                   </p>
@@ -1559,7 +1607,7 @@ export default function SFA() {
                 {visitForm.outcome === 'Visited' && (
                   <div>
                     <label htmlFor="sfa-store-contact" className={lbl}>Store Contact *</label>
-                    <input id="sfa-store-contact" type="tel" required placeholder="9876543210" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
+                    <input id="sfa-store-contact" type="tel" placeholder="9876543210" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} /><FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field="outletContact" />
                   </div>
                 )}
                 {visitForm.outcome === 'Visited' && (<>
@@ -1594,14 +1642,17 @@ export default function SFA() {
                                 <option value="" className="bg-brand-primary">Select a product…</option>
                                 {productCatalog.map(p => <option key={p.id} value={p.name} className="bg-brand-primary">{p.name}</option>)}
                               </select>
+                              <FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field={`orderItems.${idx}.name`} />
                             </div>
                             <div className="col-span-5 sm:col-span-2">
                               <label htmlFor="sfa-qty" className={lbl}>Qty</label>
-                              <input id="sfa-qty" type="number" min="0" placeholder="0" value={row.quantity} onChange={e => updateOrderItem(idx, { quantity: e.target.value })} className={inp} />
+                              <input id="sfa-qty" type="number" placeholder="0" value={row.quantity} onChange={e => updateOrderItem(idx, { quantity: e.target.value })} className={inp} />
+                              <FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field={`orderItems.${idx}.quantity`} />
                             </div>
                             <div className="col-span-5 sm:col-span-2">
                               <label htmlFor="sfa-rate" className={lbl}>Rate ₹</label>
-                              <input id="sfa-rate" type="number" min="0" value={row.unitPrice} onChange={e => updateOrderItem(idx, { unitPrice: e.target.value })} className={inp} />
+                              <input id="sfa-rate" type="number" value={row.unitPrice} onChange={e => updateOrderItem(idx, { unitPrice: e.target.value })} className={inp} />
+                              <FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field={`orderItems.${idx}.unitPrice`} />
                             </div>
                             <div className="col-span-2 flex items-center justify-end gap-1 pb-2">
                               <span className="text-xs font-bold text-white tabular-nums">
@@ -1619,9 +1670,6 @@ export default function SFA() {
                             {orderUnits.toLocaleString('en-IN')} units · <span className="text-white font-bold">₹{orderValue.toLocaleString('en-IN')}</span>
                           </span>
                         </div>
-                        {visitForm.orderPlaced && orderLines.length === 0 && (
-                          <p className="text-[11px] text-amber-400">Enter a quantity against at least one product, or untick "Order Placed".</p>
-                        )}
 
                         {/* An outlet on a beat is just a name, so the order has no
                           address or contact to inherit. Rather than stamping
@@ -1638,7 +1686,7 @@ export default function SFA() {
                               <label htmlFor="sfa-city" className={lbl}>City *</label>
                               {cityOptions.length > 0 && !cityIsOther ? (
                                 <select id="sfa-city"
-                                  required
+                                 
                                   value={visitForm.outletCity}
                                   onChange={e => {
                                     if (e.target.value === '__other__') { setCityIsOther(true); setVisitForm({ ...visitForm, outletCity: '' }); return; }
@@ -1665,6 +1713,7 @@ export default function SFA() {
                                   )}
                                 </div>
                               )}
+                              <FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field="outletCity" />
                               <p className="text-[10px] text-slate-500 mt-1">
                                 {visitTerritory?.state
                                   ? `Territory ${visitTerritory.name} — state recorded as ${visitTerritory.state}.`
@@ -1673,19 +1722,19 @@ export default function SFA() {
                             </div>
                             <div>
                               <label htmlFor="sfa-store-contact-2" className={lbl}>Store contact</label>
-                              <input id="sfa-store-contact-2" type="tel" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} />
+                              <input id="sfa-store-contact-2" type="tel" value={visitForm.outletContact} onChange={e => setVisitForm({ ...visitForm, outletContact: e.target.value })} className={inp} /><FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field="outletContact" />
                             </div>
                             <div>
                               <label htmlFor="sfa-email" className={lbl}>Email</label>
-                              <input id="sfa-email" type="email" placeholder="Optional" value={visitForm.outletEmail} onChange={e => setVisitForm({ ...visitForm, outletEmail: e.target.value })} className={inp} />
+                              <input id="sfa-email" type="email" placeholder="Optional" value={visitForm.outletEmail} onChange={e => setVisitForm({ ...visitForm, outletEmail: e.target.value })} className={inp} /><FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field="outletEmail" />
                             </div>
                             <div>
                               <label htmlFor="sfa-pincode" className={lbl}>Pincode *</label>
-                              <input id="sfa-pincode" required type="text" inputMode="numeric" maxLength={6} value={visitForm.outletPincode} onChange={e => setVisitForm({ ...visitForm, outletPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className={inp} />
+                              <input id="sfa-pincode" type="text" inputMode="numeric" maxLength={6} value={visitForm.outletPincode} onChange={e => setVisitForm({ ...visitForm, outletPincode: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 388001" className={inp} /><FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field="outletPincode" />
                             </div>
                             <div className="sm:col-span-2">
                               <label htmlFor="sfa-delivery-address" className={lbl}>Delivery address *</label>
-                              <textarea id="sfa-delivery-address" required rows="2" value={visitForm.outletAddress} onChange={e => setVisitForm({ ...visitForm, outletAddress: e.target.value })} placeholder="Shop number, street, area" className={inp + ' resize-none'} />
+                              <textarea id="sfa-delivery-address" rows="2" value={visitForm.outletAddress} onChange={e => setVisitForm({ ...visitForm, outletAddress: e.target.value })} placeholder="Shop number, street, area" className={inp + ' resize-none'} /><FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field="outletAddress" />
                               <p className="text-[10px] text-slate-500 mt-1">Where this order gets delivered. Dispatch cannot send goods to a city alone.</p>
                             </div>
                           </div>
@@ -1708,6 +1757,7 @@ export default function SFA() {
                   <textarea id="sfa-visit-notes" rows="3" placeholder="Retailer feedback, interest level, next steps…" value={visitForm.notes} onChange={e => setVisitForm({ ...visitForm, notes: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 resize-none" />
                 </div>
               </div>
+              <ErrorSummary errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} />
               {visitError && <p role="alert" className="text-sm font-medium text-red-400">⚠️ {visitError}</p>}
               <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                 <Button variant="secondary" onClick={() => setIsVisitModalOpen(false)}>Cancel</Button>

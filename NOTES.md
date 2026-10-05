@@ -206,3 +206,12 @@ Findings so far:
 - 094 first attempt failed (no company_settings.phone, rolled back); file corrected (stock qty >= 0, phone ignores spaces, schema_migrations (filename, note)) and then applied.
 - Still open (owner, on screen): O319 + O320 Correct condition → 50 Damaged; renumber abc123 → abc123-A/-B/-C. 085 not applied (keep-alive).
 - Next free migration: 095.
+
+## GAP 9 follow-up (2026-10-05) - built, 095 applied live, pushed and deployed at owner request
+- Shared rules `utils/formRules.js` (one mobile rule, qty <= 1,00,000, amount <= Rs 10 crore, adjustment +/-1,00,000), `utils/partnerForms.js`, `FieldError`/`ErrorSummary`/jump-to-error (`components/ui`). FieldError used to ignore `errors=`/`field=` props (earlier Gap 9 messages never showed) - fixed.
+- Wired: Inventory (Adjust/Count/Add Batch/Transfer), Dealers/Distributors/Retailers forms + Record Payment, Schemes, Product Catalog, Leads, Orders, Complaints, Sales Return, SFA beat + visit, vendor form, 3 sign-up pages. Orders/Leads are single scrolling forms (no step tabs): jump scrolls + focuses the first error; list near Save.
+- **NOT browser-checked** (click-through script `test-results/full-test/gap9b/ui.mjs` written, never run - owner interrupted). Run it: `CHROME_ARGS=--disable-quic node ui.mjs` with dev server on 5174; it aborts all writes.
+- Mobile rule: landlines dropped for partners/vendors. **Later idea: optional "office landline" field.**
+- 094 CHECKs were dropped by 095 (they blocked any edit of old bad-phone rows).
+- **Activation checklist - staff to correct (not changed):** 10 leads with prefixed phones to normalise (L1-L9, L28); 12 orders (O5, O23-O26, O57, O139, O140, O143, O144, O319, O320), 4 leads (L26, L27, L29, L30), 13 partner/vendor phones (DEAL-1790054296840; DIST-1789982501250, -1790054206208, -1790153503299, -1790153727813, -1790159023948, -1790265786389, -1790265916391, -1790404680208, -1790575498428, -1790575624420, -1790591885059; RET-1790054545559; V1790054615576) need real mobile numbers; none is a landline. 3 complaints (CMP-1..3) also have bad phones. Full list `test-results/full-test/gap9b/bad-data.txt`.
+- Tests 898, lint 64.

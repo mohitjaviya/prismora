@@ -10,7 +10,7 @@ import { downloadExcel } from '../utils/exportUtils';
 import { optionsFor, colorForKey, labelForKey } from '../utils/masterLists';
 import { territoryFields, territoryName } from '../utils/territory';
 import { attributionFor } from '../utils/attribution';
-import { PageHeader, DataTable, Button, IconButton, Badge, Select, FieldError, useFieldCheck } from '../components/ui';
+import { PageHeader, DataTable, Button, IconButton, Badge, Select, FieldError, ErrorSummary, useFieldCheck, jumpToFirstError } from '../components/ui';
 import { cleanForm, checkLines, hasErrors } from '../utils/formRules';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
@@ -28,8 +28,8 @@ const LEAD_SPEC = {
   dealValue: { label: 'Deal value', kind: 'amount', required: true },
 };
 const CONVERT_LINE_SPEC = {
-  quantity: { label: 'Quantity', kind: 'qty' },
-  unitPrice: { label: 'Unit price', kind: 'amount', required: true },
+  quantity: { label: 'Quantity', kind: 'qty', required: true },
+  unitPrice: { label: 'Unit price', kind: 'positiveAmount', required: true },
 };
 
 // Moving a lead into a conversion status means the customer has committed,
@@ -213,6 +213,7 @@ const Leads = () => {
     const named = convertItems.filter(r => r.name);
     if (hasErrors(convertLineErrors(convertItems)) || named.some(r => !String(r.quantity ?? '').trim())) {
       setConvertTried(true);
+      setTimeout(jumpToFirstError, 60);
       if (named.some(r => !String(r.quantity ?? '').trim())) setConvertError('Enter a quantity (more than 0) for every product, or remove the row.');
       return;
     }
@@ -808,7 +809,7 @@ const Leads = () => {
                 <div>
                   <label htmlFor="leads-name" className="block text-sm font-medium text-slate-300 mb-1.5">Name</label>
                   <input id="leads-name" type="text" required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
-                  <FieldError>{leadErrors.name}</FieldError>
+                  <FieldError field="name">{leadErrors.name}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="leads-company" className="block text-sm font-medium text-slate-300 mb-1.5">Company</label>
@@ -817,12 +818,12 @@ const Leads = () => {
                 <div>
                   <label htmlFor="leads-email" className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
                   <input id="leads-email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
-                  <FieldError>{leadErrors.email}</FieldError>
+                  <FieldError field="email">{leadErrors.email}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="leads-phone" className="block text-sm font-medium text-slate-300 mb-1.5">Phone</label>
                   <input id="leads-phone" type="text" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
-                  <FieldError>{leadErrors.phone}</FieldError>
+                  <FieldError field="phone">{leadErrors.phone}</FieldError>
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-300 mb-1.5">
@@ -888,7 +889,7 @@ const Leads = () => {
                 <div>
                   <label htmlFor="leads-deal-value" className="block text-sm font-medium text-slate-300 mb-1.5">Deal Value (₹)</label>
                   <input id="leads-deal-value" type="number" required value={formData.dealValue} onChange={e => setFormData({ ...formData, dealValue: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
-                  <FieldError>{leadErrors.dealValue}</FieldError>
+                  <FieldError field="dealValue">{leadErrors.dealValue}</FieldError>
                 </div>
 
                 <div>
@@ -999,6 +1000,7 @@ const Leads = () => {
                 <LeadAttachments leadId={editingLead?.id} canEdit={canEditLeads} pending={pendingFiles} onPendingChange={setPendingFiles} />
               </div>
 
+              <ErrorSummary errors={leadErrors} />
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
                 <button type="button" onClick={closeModal} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium">Cancel</button>
                 <button type="submit" disabled={savingLead} className="px-5 py-2 bg-brand-accent text-brand-primary font-bold rounded-lg hover:bg-brand-accent-light hover:shadow-lg hover:shadow-brand-accent/20 transition-all disabled:opacity-60">

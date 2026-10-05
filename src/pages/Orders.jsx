@@ -5,7 +5,7 @@ import { attributionFor } from '../utils/attribution';
 import { isUnassigned } from '../utils/orderRouting';
 import { format } from 'date-fns';
 import { Plus, Edit2, Trash2, Download, Package, CheckCircle, ShoppingCart, ClipboardCheck, ClipboardX, Undo2, X } from 'lucide-react';
-import { PageHeader, DataTable, Button, IconButton, Badge, Select, FieldError, useFieldCheck } from '../components/ui';
+import { PageHeader, DataTable, Button, IconButton, Badge, Select, FieldError, ErrorSummary, useFieldCheck } from '../components/ui';
 import { cleanForm } from '../utils/formRules';
 import { createPortal } from 'react-dom';
 import { downloadExcel, itemsText } from '../utils/exportUtils';
@@ -417,7 +417,7 @@ const Orders = () => {
     email: { label: 'Contact email', kind: 'email' },
     product: hasItemLines ? null : { label: 'Product', required: true },
     quantity: isQuantityLocked() ? null : { label: 'Quantity', kind: 'qty', required: true },
-    value: billedBy ? null : { label: 'Order value', kind: 'amount', required: true },
+    value: billedBy ? null : { label: 'Order value', kind: 'positiveAmount', required: true },
     state: { label: 'State', required: true },
     city: { label: 'City', required: true },
     date: { label: 'Order date', required: true },
@@ -1213,7 +1213,7 @@ const Orders = () => {
                     }}
                     className="w-full glass-input rounded-xl px-4 py-2.5 text-white focus:ring-1 focus:ring-brand-accent"
                   />
-                  <FieldError>{orderErrors.customerName}</FieldError>
+                  <FieldError field="customerName">{orderErrors.customerName}</FieldError>
                   {(formData.distributorId || formData.dealerId || formData.retailerId) && (
                     <p className="mt-1 text-[11px] text-emerald-400 flex items-center gap-1">
                       <CheckCircle size={11} />
@@ -1229,12 +1229,12 @@ const Orders = () => {
                 <div>
                   <label htmlFor="orders-contact-phone" className="block text-xs font-medium text-slate-300 mb-1.5">Contact Phone</label>
                   <input id="orders-contact-phone" type="text" placeholder="e.g. 9876543210" value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
-                  <FieldError>{orderErrors.phone}</FieldError>
+                  <FieldError field="phone">{orderErrors.phone}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="orders-contact-email" className="block text-xs font-medium text-slate-300 mb-1.5">Contact Email</label>
                   <input id="orders-contact-email" type="email" placeholder="e.g. client@prismora.com" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
-                  <FieldError>{orderErrors.email}</FieldError>
+                  <FieldError field="email">{orderErrors.email}</FieldError>
                 </div>
                 {!(Array.isArray(formData.items) && formData.items.length > 0) && (
                   <div className="col-span-2">
@@ -1280,7 +1280,7 @@ const Orders = () => {
                         <option value="__ADD_NEW__" className="bg-brand-primary text-brand-accent font-bold">+ Add Custom Product</option>
                       </select>
                     )}
-                    <FieldError>{orderErrors.product}</FieldError>
+                    <FieldError field="product">{orderErrors.product}</FieldError>
                     {formData.product && !isCustomProduct && (() => {
                       const avail = getAvailableQty(formData.product);
                       return (
@@ -1345,7 +1345,7 @@ const Orders = () => {
                     }}
                     className="w-full glass-input rounded-lg px-4 py-2.5 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <FieldError>{orderErrors.quantity}</FieldError>
+                  <FieldError field="quantity">{orderErrors.quantity}</FieldError>
                   {isQuantityLocked() && (
                     <p className="mt-1 text-[11px] text-amber-400">
                       Locked — stock has already moved against this order. Use Split or raise a new order to change quantity.
@@ -1355,7 +1355,7 @@ const Orders = () => {
                 <div>
                   <label htmlFor="orders-order-value" className="block text-sm font-medium text-slate-300 mb-1.5">Order Value (₹)</label>
                   <input id="orders-order-value" type="number" required disabled={Boolean(billedBy)} value={formData.value} onChange={e => setFormData({ ...formData, value: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white disabled:opacity-60" />
-                  <FieldError>{orderErrors.value}</FieldError>
+                  <FieldError field="value">{orderErrors.value}</FieldError>
                   {billedBy && (
                     <p className="mt-1 text-[11px] text-amber-500">Invoiced as {billedBy.id}: value, quantity and items can no longer change. To correct it, record a sales return or issue a credit note.</p>
                   )}
@@ -1378,12 +1378,12 @@ const Orders = () => {
                       <option key={s} value={s} className="bg-brand-primary">{s}</option>
                     ))}
                   </select>
-                  <FieldError>{orderErrors.state}</FieldError>
+                  <FieldError field="state">{orderErrors.state}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="orders-city" className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
                   <input id="orders-city" type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
-                  <FieldError>{orderErrors.city}</FieldError>
+                  <FieldError field="city">{orderErrors.city}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="orders-pincode" className="block text-sm font-medium text-slate-300 mb-1.5">Pincode *</label>
@@ -1440,7 +1440,7 @@ const Orders = () => {
                 <div>
                   <label htmlFor="orders-order-date" className="block text-sm font-medium text-slate-300 mb-1.5">Order Date</label>
                   <input id="orders-order-date" type="date" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
-                  <FieldError>{orderErrors.date}</FieldError>
+                  <FieldError field="date">{orderErrors.date}</FieldError>
                 </div>
               </div>
 
@@ -1464,6 +1464,7 @@ const Orders = () => {
                 );
               })()}
 
+              <ErrorSummary errors={orderErrors} />
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
                 <button type="button" onClick={closeModal} className="px-5 py-2 text-slate-300 hover:bg-brand-primary-lighter rounded-lg transition-colors font-medium">Cancel</button>
                 {canSubmitOrder && (

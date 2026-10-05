@@ -10,13 +10,14 @@ import {
   ChevronRight, Package2, AlertCircle, Eye, Wallet, IndianRupee, ArrowUpCircle, ArrowDownCircle
 } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
-import { Button, IconButton, PageHeader, FieldError, useFieldCheck } from '../components/ui';
+import { Button, IconButton, PageHeader, FieldError, ErrorSummary, useFieldCheck } from '../components/ui';
 import { cleanForm, lineFieldErrors } from '../utils/formRules';
 import { downloadExcel, itemsText } from '../utils/exportUtils';
 import { isAwaitingGoods } from '../utils/purchasing';
 import { buildVendorLedger } from '../utils/distributorUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
-import { contactProblem, normaliseGstin } from '../utils/contactChecks';
+import { normaliseGstin } from '../utils/contactChecks';
+import { partnerExtra } from '../utils/partnerForms';
 import { grnBatchProblem } from '../utils/batchNumber';
 
 // Gap 9: the shared input rules (utils/formRules.js).
@@ -41,7 +42,7 @@ const grnExtra = (f) => ({
   ...((f.items || []).some(i => Number(i.receivedQty) > 0) ? {} : { received: 'Quantity received must be more than 0 on at least one line' }),
 });
 const PAYMENT_SPEC = { amount: { label: 'Amount', kind: 'positiveAmount', required: true } };
-const VENDOR_SPEC = { name: { label: 'Vendor name', required: true }, email: { label: 'Email', kind: 'email' } };
+const VENDOR_SPEC = { name: { label: 'Vendor name', required: true }, phone: { label: 'Phone', kind: 'mobile' }, email: { label: 'Email', kind: 'email' } };
 
 
 const statusConfig = {
@@ -152,7 +153,7 @@ export default function Purchases() {
   const poErrors = poCheck.errors(poForm, PO_SPEC, poExtra);
   const grnErrors = grnCheck.errors(grnForm, GRN_SPEC, grnExtra);
   const paymentErrors = paymentCheck.errors(paymentForm, PAYMENT_SPEC);
-  const vendorErrors = vendorCheck.errors(vendorForm, VENDOR_SPEC);
+  const vendorErrors = vendorCheck.errors(vendorForm, VENDOR_SPEC, partnerExtra(editingVendor));
 
   const canManage = canAccess('purchases', 'full');
   // Warehouse receives the goods, so it records the GRN too — and only that
@@ -425,11 +426,9 @@ export default function Purchases() {
   const handleSubmitVendor = async (e) => {
     e.preventDefault();
     if (savingForm) return;
-    if (!vendorCheck.ok(vendorForm, VENDOR_SPEC)) return;
+    if (!vendorCheck.ok(vendorForm, VENDOR_SPEC, partnerExtra(editingVendor))) return;
     const clean = cleanForm(vendorForm, VENDOR_SPEC);
     const payload = { ...clean, gstin: normaliseGstin(clean.gstin) };
-    const problem = contactProblem(payload, editingVendor);
-    if (problem) { toast(problem, 'error'); return; }
     setSavingForm('vendor');
     const r = editingVendor ? await updateVendor(editingVendor.id, payload) : await addVendor(payload);
     setSavingForm(null);
@@ -764,6 +763,7 @@ export default function Purchases() {
                 <span>Credit to vendor payable:</span>
                 <span className="font-bold text-emerald-400">{formatCurrency(Number(returnForm.quantity) * Number(returnForm.unitCost) || 0)}</span>
               </div>
+              <ErrorSummary errors={returnErrors} />
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsReturnModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" disabled={savingReturn} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{savingReturn ? 'Saving…' : 'Record Return'}</button>
@@ -846,6 +846,7 @@ export default function Purchases() {
                 <textarea id="purchases-notes" rows="2" value={poForm.notes} onChange={e => setPOForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special instructions..." className={`${inputCls} resize-none`} />
               </div>
 
+              <ErrorSummary errors={poErrors} />
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsPOModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" disabled={!!savingForm} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{savingForm === 'po' ? 'Saving…' : 'Create Purchase Order'}</button>
@@ -926,6 +927,7 @@ export default function Purchases() {
                 <label htmlFor="purchases-notes-2" className={labelCls}>Notes</label>
                 <textarea id="purchases-notes-2" rows="2" value={grnForm.notes} onChange={e => setGRNForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
               </div>
+              <ErrorSummary errors={grnErrors} />
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsGRNModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" disabled={isSavingGRN} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingGRN ? 'Saving…' : 'Record GRN & Update Stock'}</button>
@@ -1043,6 +1045,7 @@ export default function Purchases() {
                 <label htmlFor="purchases-notes-3" className={labelCls}>Notes</label>
                 <textarea id="purchases-notes-3" rows="2" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
               </div>
+              <ErrorSummary errors={paymentErrors} />
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" disabled={!!savingForm} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{savingForm === 'payment' ? 'Saving…' : 'Record Payment'}</button>
@@ -1063,13 +1066,14 @@ export default function Purchases() {
             </div>
             <form onSubmit={handleSubmitVendor} noValidate className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2"><label htmlFor="purchases-vendor-name" className={labelCls}>Vendor Name *</label><input id="purchases-vendor-name" required type="text" value={vendorForm.name} onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Gujarat Herbal Supplies" className={inputCls} /><FieldError>{vendorErrors.name}</FieldError></div>
-                <div><label htmlFor="purchases-gstin" className={labelCls}>GSTIN</label><input id="purchases-gstin" type="text" value={vendorForm.gstin} onChange={e => setVendorForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className={inputCls} /></div>
+                <div className="col-span-2"><label htmlFor="purchases-vendor-name" className={labelCls}>Vendor Name *</label><input id="purchases-vendor-name" required type="text" value={vendorForm.name} onChange={e => setVendorForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Gujarat Herbal Supplies" className={inputCls} /><FieldError field="name">{vendorErrors.name}</FieldError></div>
+                <div><label htmlFor="purchases-gstin" className={labelCls}>GSTIN</label><input id="purchases-gstin" type="text" value={vendorForm.gstin} onChange={e => setVendorForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className={inputCls} /><FieldError errors={vendorErrors} field="gstin" /></div>
                 <div><label htmlFor="purchases-contact-person" className={labelCls}>Contact Person</label><input id="purchases-contact-person" type="text" value={vendorForm.contactPerson} onChange={e => setVendorForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="purchases-phone" className={labelCls}>Phone</label><input id="purchases-phone" type="text" value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="purchases-email" className={labelCls}>Email</label><input id="purchases-email" type="email" value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /><FieldError>{vendorErrors.email}</FieldError></div>
+                <div><label htmlFor="purchases-phone" className={labelCls}>Phone</label><input id="purchases-phone" type="text" value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /><FieldError errors={vendorErrors} field="phone" /></div>
+                <div><label htmlFor="purchases-email" className={labelCls}>Email</label><input id="purchases-email" type="email" value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /><FieldError field="email">{vendorErrors.email}</FieldError></div>
                 <div className="col-span-2"><label htmlFor="purchases-address" className={labelCls}>Address</label><textarea id="purchases-address" rows="2" value={vendorForm.address} onChange={e => setVendorForm(f => ({ ...f, address: e.target.value }))} className={`${inputCls} resize-none`} /></div>
               </div>
+              <ErrorSummary errors={vendorErrors} />
               <div className="flex gap-3 justify-end pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setIsVendorModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" disabled={!!savingForm} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{savingForm === 'vendor' ? 'Saving…' : editingVendor ? 'Save Changes' : 'Add Vendor'}</button>

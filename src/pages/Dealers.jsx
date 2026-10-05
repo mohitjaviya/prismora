@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, Truck, Clock, AlertTriangle } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import PartnerLoginAction from '../components/PartnerLoginAction';
-import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
+import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select, FieldError, ErrorSummary, useFieldCheck } from '../components/ui';
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadExcel } from '../utils/exportUtils';
 import { buildLedgerEntries, balanceStanding } from '../utils/distributorUtils';
@@ -16,7 +16,9 @@ import { refundableCredit } from '../utils/settlement';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
 import LastChanged from '../components/audit/LastChanged';
-import { contactProblem, normaliseGstin } from '../utils/contactChecks';
+import { normaliseGstin } from '../utils/contactChecks';
+import { cleanForm } from '../utils/formRules';
+import { partnerSpec, partnerExtra, PARTNER_PAYMENT_SPEC } from '../utils/partnerForms';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -32,6 +34,8 @@ const formatCurrency = (val) =>
 
 const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
+
+const PARTNER_SPEC = partnerSpec('parentDistributorId');
 
 const BLANK_FORM = {
   name: '', gstin: '', parentDistributorId: '', state: '', city: '', territoryId: '',
@@ -61,6 +65,8 @@ export default function Dealers() {
     if (linked) { setOpenedLink(linkedId); setViewingDealer(linked); }
   }
   const [form, setForm] = useState(BLANK_FORM);
+  const partnerCheck = useFieldCheck();
+  const paymentCheck = useFieldCheck();
   const [isSaving, setIsSaving] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
@@ -102,15 +108,14 @@ export default function Dealers() {
   const allStates = [...new Set(dealers.map(d => d.state).filter(Boolean))].sort();
   const activeDistributors = distributors.filter(d => d.status === 'Active');
 
-  const openAdd = () => { setEditingDealer(null); setForm(BLANK_FORM); setIsModalOpen(true); };
-  const openEdit = (d) => { setEditingDealer(d); setForm({ name: d.name, gstin: d.gstin || '', parentDistributorId: d.parentDistributorId || '', state: d.state || '', city: d.city || '', territoryId: d.territoryId || '', phone: d.phone || '', email: d.email || '', contactPerson: d.contactPerson || '', address: d.address || '', pincode: d.pincode || '', creditLimit: d.creditLimit || 100000, status: d.status || 'Active' }); setIsModalOpen(true); };
+  const openAdd = () => { partnerCheck.reset(); setEditingDealer(null); setForm(BLANK_FORM); setIsModalOpen(true); };
+  const openEdit = (d) => { partnerCheck.reset(); setEditingDealer(d); setForm({ name: d.name, gstin: d.gstin || '', parentDistributorId: d.parentDistributorId || '', state: d.state || '', city: d.city || '', territoryId: d.territoryId || '', phone: d.phone || '', email: d.email || '', contactPerson: d.contactPerson || '', address: d.address || '', pincode: d.pincode || '', creditLimit: d.creditLimit || 100000, status: d.status || 'Active' }); setIsModalOpen(true); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSaving) return;
-    const payload = { ...form, gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
-    const problem = contactProblem(payload, editingDealer) || (payload.creditLimit < 0 ? 'Credit limit cannot be negative.' : null);
-    if (problem) { toast(problem, 'error'); return; }
+    if (!partnerCheck.ok(form, PARTNER_SPEC, partnerExtra(editingDealer))) return;
+    const payload = { ...cleanForm(form, PARTNER_SPEC), gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
     // Waits for the database: closes only once it is saved, else says why.
     setIsSaving(true);
     const r = editingDealer ? await updateDealer(editingDealer.id, payload) : await addDealer(payload);
@@ -181,6 +186,7 @@ export default function Dealers() {
   const handleRecordPayment = async (e) => {
     e.preventDefault();
     if (!viewingDealer || isSavingPayment) return;
+    if (!paymentCheck.ok(paymentForm, PARTNER_PAYMENT_SPEC)) return;
     setIsSavingPayment(true);
     try {
       // Open until the database has the payment; the balance moves with it there.
@@ -412,7 +418,7 @@ export default function Dealers() {
                     <h4 className="text-sm font-bold text-white flex items-center gap-1.5"><Wallet size={14} className="text-brand-accent" />Outstanding Ledger</h4>
                     <div className="flex items-center gap-3">
                       {canRecordPayment && refundsOn && refundableCredit(viewingDealer.outstandingAmount) > 0 && <button onClick={() => setIsRefundOpen(true)} className="text-xs font-semibold text-emerald-400 hover:underline">Record Refund</button>}
-                      {canRecordPayment && <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
+                      {canRecordPayment && <button onClick={() => { paymentCheck.reset(); setIsPaymentModalOpen(true); }} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
                     </div>
                   </div>
                   <PartnerLedgerList entries={ledgerEntries} outstanding={viewingDealer.outstandingAmount} users={users} />
@@ -438,10 +444,10 @@ export default function Dealers() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><IndianRupee size={18} className="text-brand-accent" />Record Payment</h3>
               <button onClick={() => setIsPaymentModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={18} /></button>
             </div>
-            <form onSubmit={handleRecordPayment} className="space-y-4">
+            <form onSubmit={handleRecordPayment} noValidate className="space-y-4">
               <div>
                 <label htmlFor="dealers-amount" className={labelCls}>Amount (₹) *</label>
-                <input id="dealers-amount" required type="number" min="1" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
+                <input id="dealers-amount" type="number" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} /><FieldError errors={paymentCheck.errors(paymentForm, PARTNER_PAYMENT_SPEC)} field="amount" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -463,6 +469,7 @@ export default function Dealers() {
                 <label htmlFor="dealers-notes" className={labelCls}>Notes</label>
                 <textarea id="dealers-notes" rows="2" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
               </div>
+              <ErrorSummary errors={paymentCheck.errors(paymentForm, PARTNER_PAYMENT_SPEC)} />
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
                 <button type="submit" disabled={isSavingPayment} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingPayment ? 'Saving…' : 'Record Payment'}</button>
@@ -482,32 +489,32 @@ export default function Dealers() {
               {editingDealer && <LastChanged record={editingDealer} users={users} className="mt-0.5" />}
               <button onClick={() => setIsModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2"><label htmlFor="dealers-company-business-name" className={labelCls}>Company / Business Name *</label><input id="dealers-company-business-name" required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mohan Dealers" className={inputCls} /></div>
+                <div className="sm:col-span-2"><label htmlFor="dealers-company-business-name" className={labelCls}>Company / Business Name *</label><input id="dealers-company-business-name" type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mohan Dealers" className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="name" /></div>
                 <div className="sm:col-span-2">
                   <label htmlFor="dealers-parent-distributor" className={labelCls}>Parent Distributor *</label>
-                  <select id="dealers-parent-distributor" required value={form.parentDistributorId} onChange={e => setForm(f => ({ ...f, parentDistributorId: e.target.value }))} className={inputCls}>
+                  <select id="dealers-parent-distributor" value={form.parentDistributorId} onChange={e => setForm(f => ({ ...f, parentDistributorId: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Distributor --</option>
                     {activeDistributors.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({territoryName(territories, d)})</option>)}
-                  </select>
+                  </select><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="parentDistributorId" />
                 </div>
-                <div><label htmlFor="dealers-gstin" className={labelCls}>GSTIN</label><input id="dealers-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACG..." className={inputCls} /></div>
+                <div><label htmlFor="dealers-gstin" className={labelCls}>GSTIN</label><input id="dealers-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACG..." className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="gstin" /></div>
                 <div><label htmlFor="dealers-contact-person" className={labelCls}>Contact Person</label><input id="dealers-contact-person" type="text" value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="dealers-phone" className={labelCls}>Phone</label><input id="dealers-phone" type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="dealers-email" className={labelCls}>Email</label><input id="dealers-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="dealers-phone" className={labelCls}>Phone</label><input id="dealers-phone" type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="phone" /></div>
+                <div><label htmlFor="dealers-email" className={labelCls}>Email</label><input id="dealers-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="email" /></div>
                 <div>
                   <label htmlFor="dealers-state" className={labelCls}>State *</label>
-                  <select id="dealers-state" required value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
+                  <select id="dealers-state" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
                     {INDIAN_STATES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
-                  </select>
+                  </select><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="state" />
                 </div>
                 <div><label htmlFor="dealers-city" className={labelCls}>City</label><input id="dealers-city" type="text" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="dealers-pincode" className={labelCls}>Pincode *</label><input id="dealers-pincode" required type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /></div>
+                <div><label htmlFor="dealers-pincode" className={labelCls}>Pincode *</label><input id="dealers-pincode" type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="pincode" /></div>
                 <div className="sm:col-span-2">
                   <label htmlFor="dealers-delivery-address" className={labelCls}>Delivery Address *</label>
-                  <textarea id="dealers-delivery-address" required rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} />
+                  <textarea id="dealers-delivery-address" rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="address" />
                   <p className="text-[10px] text-slate-500 mt-1">Used as the default delivery address on their orders. Dispatch cannot send goods to a city alone.</p>
                 </div>
                 <div>
@@ -547,7 +554,7 @@ export default function Dealers() {
                     return null;
                   })()}
                 </div>
-                <div><label htmlFor="dealers-credit-limit" className={labelCls}>Credit Limit (₹)</label><input id="dealers-credit-limit" type="number" min="0" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="dealers-credit-limit" className={labelCls}>Credit Limit (₹)</label><input id="dealers-credit-limit" type="number" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="creditLimit" /></div>
                 <div>
                   <label htmlFor="dealers-status" className={labelCls}>Status</label>
                   <select id="dealers-status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
@@ -556,6 +563,7 @@ export default function Dealers() {
                   </select>
                 </div>
               </div>
+              <div className="mt-4"><ErrorSummary errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} /></div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
                 <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : editingDealer ? 'Save Changes' : 'Add Dealer'}</button>

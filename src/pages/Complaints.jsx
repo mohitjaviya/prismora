@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { MessageSquareWarning, Plus, Trash2, X, Download, CheckCircle, Clock, AlertTriangle, Eye, RotateCcw } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
-import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select, FieldError, useFieldCheck } from '../components/ui';
+import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select, FieldError, ErrorSummary, useFieldCheck } from '../components/ui';
 import { cleanForm } from '../utils/formRules';
 import { downloadExcel } from '../utils/exportUtils';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
@@ -379,8 +379,8 @@ export default function Complaints() {
             </div>
             <form onSubmit={handleSubmitAdd} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label htmlFor="complaints-customer-name" className={labelCls}>Customer Name *</label><input id="complaints-customer-name" required disabled={isParty} type="text" value={form.customerName} onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))} className={`${inputCls} ${isParty ? 'opacity-60 cursor-not-allowed' : ''}`} /><FieldError>{addErrors.customerName}</FieldError></div>
-                <div><label htmlFor="complaints-customer-phone" className={labelCls}>Customer Phone</label><input id="complaints-customer-phone" type="tel" value={form.customerPhone} onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))} placeholder="e.g. 9876543210" className={inputCls} /><FieldError>{addErrors.customerPhone}</FieldError></div>
+                <div><label htmlFor="complaints-customer-name" className={labelCls}>Customer Name *</label><input id="complaints-customer-name" required disabled={isParty} type="text" value={form.customerName} onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))} className={`${inputCls} ${isParty ? 'opacity-60 cursor-not-allowed' : ''}`} /><FieldError field="customerName">{addErrors.customerName}</FieldError></div>
+                <div><label htmlFor="complaints-customer-phone" className={labelCls}>Customer Phone</label><input id="complaints-customer-phone" type="tel" value={form.customerPhone} onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))} placeholder="e.g. 9876543210" className={inputCls} /><FieldError field="customerPhone">{addErrors.customerPhone}</FieldError></div>
                 <div>
                   <label htmlFor="complaints-product-involved" className={labelCls}>Product Involved</label>
                   <select id="complaints-product-involved" value={form.product} onChange={e => setForm(f => ({ ...f, product: e.target.value }))} className={inputCls}>
@@ -395,7 +395,7 @@ export default function Complaints() {
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Type --</option>
                     {complaintTypes.map(t => <option key={t} value={t} className="bg-brand-primary">{t}</option>)}
                   </select>
-                  <FieldError>{addErrors.complaintType}</FieldError>
+                  <FieldError field="complaintType">{addErrors.complaintType}</FieldError>
                 </div>
                 <div className="sm:col-span-2">
                   <label htmlFor="complaints-description" className={labelCls}>Description</label>
@@ -411,6 +411,7 @@ export default function Complaints() {
                   </div>
                 )}
               </div>
+              <ErrorSummary errors={addErrors} />
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsAddOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
                 <button type="submit" disabled={isSavingAdd} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingAdd ? 'Saving…' : 'Register Complaint'}</button>

@@ -1,0 +1,1 @@
+select table_name, column_name from information_schema.columns where table_schema='public' and (column_name ilike '%phone%' or column_name ilike '%email%' or column_name ilike '%contact%') order by 1,2;

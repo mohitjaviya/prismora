@@ -1,5 +1,5 @@
 /**
- * GSTIN, phone and pincode formats for partners and vendors.
+ * GSTIN and pincode formats (phone: the shared mobile rule) for partners and vendors.
  *
  * The same rules are in the database (078, `partner_contact_checks`), which
  * checks a field only when it is entered or changed: some old rows hold test
@@ -9,11 +9,9 @@
  * a form that requires one says so itself.
  */
 
+import { mobileProblem } from './formRules';
+
 export const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-// After dropping spaces and dashes: a 10-digit mobile (6–9 first) with an
-// optional +91, 91 or 0 in front, or an 11-digit landline starting with 0.
-const MOBILE_RE = /^(\+91|91|0)?[6-9][0-9]{9}$/;
-const LANDLINE_RE = /^0[1-9][0-9]{9}$/;
 export const PINCODE_RE = /^[1-9][0-9]{5}$/;
 
 const blank = (v) => !String(v ?? '').trim();
@@ -27,13 +25,8 @@ export function gstinProblem(v) {
     : 'GSTIN must be 15 characters, like 24AAACJ1234K1Z5 (2-digit state code, PAN, entity number, Z, check character).';
 }
 
-export function phoneProblem(v) {
-  if (blank(v)) return null;
-  const s = String(v).replace(/[\s-]/g, '');
-  return MOBILE_RE.test(s) || LANDLINE_RE.test(s)
-    ? null
-    : 'Phone must be a 10-digit mobile number starting 6–9 (+91 or 0 in front is fine), or an 11-digit landline starting with 0.';
-}
+// The one mobile rule lives in formRules.js (landlines are no longer accepted).
+export const phoneProblem = mobileProblem;
 
 export function pincodeProblem(v) {
   if (blank(v)) return null;

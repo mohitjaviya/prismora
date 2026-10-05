@@ -4,9 +4,9 @@ import { createPortal } from 'react-dom';
 import { Plus, Edit2, Trash2, Package, QrCode, X, Download } from 'lucide-react';
 import { downloadExcel } from '../../utils/exportUtils';
 import { useConfirm, useToast } from '../../context/DialogContext';
-import { Badge, Button, DataTable, IconButton, PageHeader } from '../../components/ui';
+import { Badge, Button, DataTable, IconButton, PageHeader, FieldError, ErrorSummary, useFieldCheck } from '../../components/ui';
 import { optionsFor } from '../../utils/masterLists';
-import { productPriceProblem } from '../../utils/valueRules';
+import { cleanForm } from '../../utils/formRules';
 
 /**
  * The product catalogue: what is sold, at what price, under which tax rate.
@@ -15,6 +15,25 @@ import { productPriceProblem } from '../../utils/valueRules';
  * invoice and stock figure is priced from. Its categories, units and statuses
  * are themselves master lists, so they are edited two clicks away.
  */
+
+const PRODUCT_SPEC = {
+  name: { label: 'Product name', required: true },
+  hsnCode: { label: 'HSN code', required: true },
+  mrp: { label: 'MRP', kind: 'amount' },
+  distributorPrice: { label: 'Distributor base price', kind: 'amount', required: true },
+  dealerPrice: { label: 'Dealer base price', kind: 'amount', required: true },
+  retailerPrice: { label: 'Retailer base price', kind: 'amount', required: true },
+};
+// A partner price may not be above the MRP (the database refuses it too).
+const priceVsMrp = (f) => {
+  const mrp = Number(f.mrp);
+  if (!f.mrp || !(mrp > 0)) return {};
+  const out = {};
+  for (const [k, label] of [['distributorPrice', 'Distributor'], ['dealerPrice', 'Dealer'], ['retailerPrice', 'Retailer']]) {
+    if (f[k] !== '' && Number(f[k]) > mrp) out[k] = `${label} price (₹${Number(f[k])}) cannot be above the MRP (₹${mrp})`;
+  }
+  return out;
+};
 
 const INDIAN_TAX_RATES = [0, 5, 12, 18, 28];
 
@@ -40,10 +59,12 @@ export default function ProductCatalog() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [productForm, setProductForm] = useState(BLANK_PRODUCT_FORM);
   const [isSaving, setIsSaving] = useState(false);
+  const productCheck = useFieldCheck();
   const [viewingQrProduct, setViewingQrProduct] = useState(null);
 
-  const openProductAdd = () => { setEditingProduct(null); setProductForm(BLANK_PRODUCT_FORM); setIsProductModalOpen(true); };
+  const openProductAdd = () => { productCheck.reset(); setEditingProduct(null); setProductForm(BLANK_PRODUCT_FORM); setIsProductModalOpen(true); };
   const openProductEdit = (p) => {
+    productCheck.reset();
     setEditingProduct(p);
     setProductForm({
       name: p.name, category: p.category || 'Wellness', hsnCode: p.hsnCode || '', sku: p.sku || '',
@@ -56,16 +77,15 @@ export default function ProductCatalog() {
 
   const handleProductSubmit = async (e) => {
     e.preventDefault();
+    if (!productCheck.ok(productForm, PRODUCT_SPEC, priceVsMrp)) return;
     const payload = {
-      ...productForm,
+      ...cleanForm(productForm, PRODUCT_SPEC),
       gstPct: Number(productForm.gstPct),
       mrp: Number(productForm.mrp || 0),
       distributorPrice: Number(productForm.distributorPrice || 0),
       dealerPrice: Number(productForm.dealerPrice || 0),
       retailerPrice: Number(productForm.retailerPrice || 0)
     };
-    const problem = productPriceProblem(payload);
-    if (problem) { toast(problem, 'error'); return; }
     if (isSaving) return;
     // Waits for the database (a rename is refused while the name is in use,
     // 078); keeps the form open with the reason, closes only once saved.
@@ -184,9 +204,9 @@ export default function ProductCatalog() {
                 <h3 className="text-lg font-bold text-white flex items-center gap-2"><Package className="text-brand-accent" size={20} />{editingProduct ? 'Edit Catalog Product' : 'Add New Product'}</h3>
                 <button onClick={() => setIsProductModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
               </div>
-              <form onSubmit={handleProductSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+              <form onSubmit={handleProductSubmit} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2"><label htmlFor="productcatalog-product-name" className={labelCls}>Product Name *</label><input id="productcatalog-product-name" required type="text" value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} placeholder="e.g. Brahmi Amla Shakar 200ml" className={inputCls} /></div>
+                  <div className="sm:col-span-2"><label htmlFor="productcatalog-product-name" className={labelCls}>Product Name *</label><input id="productcatalog-product-name" type="text" value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} placeholder="e.g. Brahmi Amla Shakar 200ml" className={inputCls} /><FieldError errors={productCheck.errors(productForm, PRODUCT_SPEC, priceVsMrp)} field="name" /></div>
                   <div>
                     <label htmlFor="productcatalog-category" className={labelCls}>Category</label>
                     <select id="productcatalog-category" value={productForm.category} onChange={e => setProductForm({ ...productForm, category: e.target.value })} className={inputCls}>
@@ -206,18 +226,19 @@ export default function ProductCatalog() {
                       {productStatuses.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
                     </select>
                   </div>
-                  <div><label htmlFor="productcatalog-hsn-code" className={labelCls}>HSN Code *</label><input id="productcatalog-hsn-code" required type="text" value={productForm.hsnCode} onChange={e => setProductForm({ ...productForm, hsnCode: e.target.value })} placeholder="e.g. 30049011" className={inputCls} /></div>
+                  <div><label htmlFor="productcatalog-hsn-code" className={labelCls}>HSN Code *</label><input id="productcatalog-hsn-code" type="text" value={productForm.hsnCode} onChange={e => setProductForm({ ...productForm, hsnCode: e.target.value })} placeholder="e.g. 30049011" className={inputCls} /><FieldError errors={productCheck.errors(productForm, PRODUCT_SPEC, priceVsMrp)} field="hsnCode" /></div>
                   <div>
                     <label htmlFor="productcatalog-gst-rate" className={labelCls}>GST Rate *</label>
                     <select id="productcatalog-gst-rate" value={productForm.gstPct} onChange={e => setProductForm({ ...productForm, gstPct: e.target.value })} className={inputCls}>
                       {INDIAN_TAX_RATES.map(r => <option key={r} value={r} className="bg-brand-primary">{r}% GST</option>)}
                     </select>
                   </div>
-                  <div><label htmlFor="productcatalog-mrp-retail-price-limit" className={labelCls}>MRP (Retail Price Limit) (₹)</label><input id="productcatalog-mrp-retail-price-limit" type="number" min="0" value={productForm.mrp} onChange={e => setProductForm({ ...productForm, mrp: e.target.value })} placeholder="0" className={inputCls} /></div>
-                  <div><label htmlFor="productcatalog-distributor-base-price" className={labelCls}>Distributor Base Price (₹) *</label><input id="productcatalog-distributor-base-price" required type="number" min="0" value={productForm.distributorPrice} onChange={e => setProductForm({ ...productForm, distributorPrice: e.target.value })} placeholder="0" className={inputCls} /></div>
-                  <div><label htmlFor="productcatalog-dealer-base-price" className={labelCls}>Dealer Base Price (₹) *</label><input id="productcatalog-dealer-base-price" required type="number" min="0" value={productForm.dealerPrice} onChange={e => setProductForm({ ...productForm, dealerPrice: e.target.value })} placeholder="0" className={inputCls} /></div>
-                  <div><label htmlFor="productcatalog-retailer-base-price" className={labelCls}>Retailer Base Price (₹) *</label><input id="productcatalog-retailer-base-price" required type="number" min="0" value={productForm.retailerPrice} onChange={e => setProductForm({ ...productForm, retailerPrice: e.target.value })} placeholder="0" className={inputCls} /></div>
+                  <div><label htmlFor="productcatalog-mrp-retail-price-limit" className={labelCls}>MRP (Retail Price Limit) (₹)</label><input id="productcatalog-mrp-retail-price-limit" type="number" value={productForm.mrp} onChange={e => setProductForm({ ...productForm, mrp: e.target.value })} placeholder="0" className={inputCls} /><FieldError errors={productCheck.errors(productForm, PRODUCT_SPEC, priceVsMrp)} field="mrp" /></div>
+                  <div><label htmlFor="productcatalog-distributor-base-price" className={labelCls}>Distributor Base Price (₹) *</label><input id="productcatalog-distributor-base-price" type="number" value={productForm.distributorPrice} onChange={e => setProductForm({ ...productForm, distributorPrice: e.target.value })} placeholder="0" className={inputCls} /><FieldError errors={productCheck.errors(productForm, PRODUCT_SPEC, priceVsMrp)} field="distributorPrice" /></div>
+                  <div><label htmlFor="productcatalog-dealer-base-price" className={labelCls}>Dealer Base Price (₹) *</label><input id="productcatalog-dealer-base-price" type="number" value={productForm.dealerPrice} onChange={e => setProductForm({ ...productForm, dealerPrice: e.target.value })} placeholder="0" className={inputCls} /><FieldError errors={productCheck.errors(productForm, PRODUCT_SPEC, priceVsMrp)} field="dealerPrice" /></div>
+                  <div><label htmlFor="productcatalog-retailer-base-price" className={labelCls}>Retailer Base Price (₹) *</label><input id="productcatalog-retailer-base-price" type="number" value={productForm.retailerPrice} onChange={e => setProductForm({ ...productForm, retailerPrice: e.target.value })} placeholder="0" className={inputCls} /><FieldError errors={productCheck.errors(productForm, PRODUCT_SPEC, priceVsMrp)} field="retailerPrice" /></div>
                 </div>
+                <ErrorSummary errors={productCheck.errors(productForm, PRODUCT_SPEC, priceVsMrp)} />
                 <div className="flex gap-3 justify-end pt-4 border-t border-white/5">
                   <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
                   <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : editingProduct ? 'Save Changes' : 'Create Product'}</button>

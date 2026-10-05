@@ -1,4 +1,5 @@
-import { cloneElement, isValidElement, useId } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useRef } from 'react';
+import { jumpTo } from './jumpToError';
 import { Search as SearchIcon, ChevronDown } from 'lucide-react';
 
 /**
@@ -108,8 +109,46 @@ export function SearchInput({ size = 'md', className = '', ...rest }) {
   );
 }
 
-/** The red line under a hand-built control; nothing when there is no message. */
-export function FieldError({ children }) {
-  if (!children) return null;
-  return <p role="alert" className="text-[10px] text-rose-400 mt-1 leading-snug">{children}</p>;
+/**
+ * The red line under a hand-built control; nothing when there is no message.
+ * Either `<FieldError>{message}</FieldError>` or `<FieldError errors={errs}
+ * field="quantity" />`. It marks the control above it (aria-invalid) while it
+ * shows, and is what "jump to the error" scrolls to (useFieldCheck).
+ */
+export function FieldError({ children, errors, field }) {
+  const message = children ?? (errors && field ? errors[field] : null);
+  const ref = useRef(null);
+  useEffect(() => {
+    const control = ref.current?.parentElement?.querySelector('input:not([type=hidden]), select, textarea');
+    if (!control || !message) return undefined;
+    control.setAttribute('aria-invalid', 'true');
+    return () => control.removeAttribute('aria-invalid');
+  }, [message]);
+  if (!message) return null;
+  return <p ref={ref} role="alert" data-field-error={field || ''} className="text-[10px] text-rose-400 mt-1 leading-snug">{message}</p>;
+}
+
+/**
+ * The list of problems next to Save: "Fix 3 things before saving", each line
+ * a link that jumps to its field. `errors` is the `{ field: message }` object
+ * the form already shows under its fields; nothing renders while it is empty.
+ */
+export function ErrorSummary({ errors }) {
+  const entries = Object.entries(errors || {}).filter(([, m]) => m);
+  if (entries.length === 0) return null;
+  const go = (e, field) => {
+    const root = e.currentTarget.closest('form') || document;
+    const target = (field && root.querySelector(`[data-field-error="${field.replace(/"/g, '')}"]`)) || root.querySelector('[data-field-error]');
+    jumpTo(target);
+  };
+  return (
+    <div role="alert" data-error-summary className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+      <p className="font-semibold mb-1">Fix {entries.length === 1 ? 'this' : `these ${entries.length} things`} before saving:</p>
+      <ul className="space-y-0.5 list-disc pl-4">
+        {entries.map(([field, message]) => (
+          <li key={field}><button type="button" onClick={(e) => go(e, field)} className="text-left underline-offset-2 hover:underline">{message}</button></li>
+        ))}
+      </ul>
+    </div>
+  );
 }

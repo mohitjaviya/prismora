@@ -2,19 +2,19 @@ import { describe, it, expect } from 'vitest';
 import {
   normaliseMobile, mobileProblem, emailProblem, normaliseEmail, quantityProblem, amountProblem,
   percentProblem, requiredProblem, checkForm, cleanForm, checkLines, hasErrors, firstError, countProblem, lineFieldErrors,
-  MOBILE_MESSAGE, EMAIL_MESSAGE,
+  MOBILE_MESSAGE, EMAIL_MESSAGE, adjustmentProblem,
 } from '../formRules';
 
 describe('mobile numbers', () => {
   it('accepts a 10-digit mobile starting 6–9, with +91 or 0 in front or spaces', () => {
-    for (const v of ['9876543210', '6000000000', '+919876543210', '09876543210', '+91 98765 43210', ' 98765 43210 ']) {
+    for (const v of ['9876543210', '6000000000', '+919876543210', '09876543210', '+91 98765 43210', ' 98765 43210 ', '919876543210', '98765-43210']) {
       expect(mobileProblem(v)).toBeNull();
       expect(normaliseMobile(v)).toBe(v.includes('6000') ? '6000000000' : '9876543210');
     }
   });
   it('refuses wrong length, wrong first digit, letters and symbols', () => {
-    for (const v of ['0654345678765', '1234567890', '5876543210', '987654321', '98765432101', '98765-43210',
-      '98765a3210', '919876543210', '+9198765432', '(987)6543210', '0987654321']) {
+    for (const v of ['0654345678765', '1234567890', '5876543210', '987654321', '98765432101', '022-12345678',
+      '98765a3210', '91 9876543', '+9198765432', '(987)6543210', '0987654321']) {
       expect(mobileProblem(v)).toBe(MOBILE_MESSAGE);
     }
   });
@@ -25,6 +25,28 @@ describe('mobile numbers', () => {
   });
   it('leaves a bad number trimmed but otherwise as typed', () => {
     expect(normaliseMobile(' 12345 ')).toBe('12345');
+  });
+});
+
+describe('limits and adjustments', () => {
+  it('quantity at most 1,00,000, whole', () => {
+    expect(quantityProblem('100000')).toBeNull();
+    expect(quantityProblem('100001')).toMatch(/1,00,000/);
+    expect(quantityProblem('2.5')).toMatch(/whole/);
+    expect(quantityProblem('-1')).toMatch(/more than 0/);
+  });
+  it('amount at most 10 crore, 2 decimals', () => {
+    expect(amountProblem('100000000')).toBeNull();
+    expect(amountProblem('100000001')).toMatch(/10 crore/);
+    expect(amountProblem('1.234')).toMatch(/2 decimals/);
+    expect(amountProblem('-5')).toMatch(/negative/);
+  });
+  it('adjustment: whole, not 0, within 1,00,000 either way', () => {
+    expect(adjustmentProblem('-5')).toBeNull();
+    expect(adjustmentProblem('0')).toMatch(/0/);
+    expect(adjustmentProblem('1.5')).toMatch(/whole/);
+    expect(adjustmentProblem('-100001')).toMatch(/1,00,000/);
+    expect(adjustmentProblem('')).toMatch(/required/);
   });
 });
 

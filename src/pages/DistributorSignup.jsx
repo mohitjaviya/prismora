@@ -5,7 +5,8 @@ import { Building2, Mail, Lock, User, Phone, MapPin, ArrowRight, ArrowLeft, Chec
 import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
 import { usePublicDirectory } from '../hooks/usePublicDirectory';
 import { emailCheckVerdict } from '../utils/signupChecks';
-import { validateSignup, successMessage } from '../utils/partnerSignup';
+import { validateSignup, signupFieldErrors, successMessage } from '../utils/partnerSignup';
+import { FieldError, ErrorSummary, useFieldCheck } from '../components/ui';
 import { PUBLIC_VIEWS } from '../utils/publicDirectory';
 import { territoryForPlace } from '../utils/territory';
 
@@ -24,6 +25,8 @@ const DistributorSignup = () => {
 
   const [form, setForm] = useState(BLANK_FORM);
   const [error, setError] = useState('');
+  const fieldCheck = useFieldCheck();
+  const fieldExtra = (f) => signupFieldErrors('distributor', f);
   const [submitted, setSubmitted] = useState(false);
   const [confirmationNeeded, setConfirmationNeeded] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -33,6 +36,7 @@ const DistributorSignup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (!fieldCheck.ok(form, {}, fieldExtra)) return;
 
     // Disabled before the round-trip, not after it. The check is a network
     // call now, and a live Submit button during it means a second click
@@ -113,26 +117,26 @@ const DistributorSignup = () => {
               <h2 className="text-xl md:text-2xl font-semibold text-white mb-1">Register as a Distributor</h2>
               <p className="text-slate-500 text-xs mb-5">Submit your details for admin approval. You'll be notified once your account is active.</p>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div>
                   <label htmlFor="distributorsignup-business-name" className={labelCls}>Business Name *</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Building2 size={16} /></div>
-                    <input id="distributorsignup-business-name" required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Gujarat Super Stockist" className={inputCls} />
-                  </div>
+                    <input id="distributorsignup-business-name" type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Gujarat Super Stockist" className={inputCls} />
+                  </div><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="name" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="distributorsignup-gstin" className={labelCls}>GSTIN</label>
-                    <input id="distributorsignup-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className="w-full glass-input h-11 px-3.5 text-sm" />
+                    <input id="distributorsignup-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACJ..." className="w-full glass-input h-11 px-3.5 text-sm" /><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="gstin" />
                   </div>
                   <div>
                     <label htmlFor="distributorsignup-contact-person" className={labelCls}>Contact Person *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><User size={16} /></div>
-                      <input id="distributorsignup-contact-person" required type="text" value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} />
-                    </div>
+                      <input id="distributorsignup-contact-person" type="text" value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} />
+                    </div><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="contactPerson" />
                   </div>
                 </div>
 
@@ -141,15 +145,15 @@ const DistributorSignup = () => {
                     <label htmlFor="distributorsignup-phone" className={labelCls}>Phone *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Phone size={16} /></div>
-                      <input id="distributorsignup-phone" required type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} />
-                    </div>
+                      <input id="distributorsignup-phone" type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} />
+                    </div><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="phone" />
                   </div>
                   <div>
                     <label htmlFor="distributorsignup-email-address" className={labelCls}>Email Address *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Mail size={16} /></div>
-                      <input id="distributorsignup-email-address" required type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="name@company.com" className={inputCls} />
-                    </div>
+                      <input id="distributorsignup-email-address" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="name@company.com" className={inputCls} />
+                    </div><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="email" />
                   </div>
                 </div>
 
@@ -158,18 +162,18 @@ const DistributorSignup = () => {
                     <label htmlFor="distributorsignup-state" className={labelCls}>State *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><MapPin size={16} /></div>
-                      <select id="distributorsignup-state" required value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value, city: '' }))} className={inputCls}>
+                      <select id="distributorsignup-state" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value, city: '' }))} className={inputCls}>
                         <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
                         {Object.keys(STATE_DISTRICTS).map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
                       </select>
-                    </div>
+                    </div><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="state" />
                   </div>
                   <div>
                     <label htmlFor="distributorsignup-city-district" className={labelCls}>City / District *</label>
-                    <select id="distributorsignup-city-district" required value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} disabled={!form.state} className="w-full glass-input h-11 px-3.5 text-sm">
+                    <select id="distributorsignup-city-district" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} disabled={!form.state} className="w-full glass-input h-11 px-3.5 text-sm">
                       <option value="" className="bg-brand-primary text-slate-500">-- Select --</option>
                       {districts.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
-                    </select>
+                    </select><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="city" />
                   </div>
                 </div>
 
@@ -180,12 +184,12 @@ const DistributorSignup = () => {
                     <label htmlFor="distributorsignup-address" className={labelCls}>Delivery Address *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><MapPin size={16} /></div>
-                      <input id="distributorsignup-address" required type="text" maxLength={300} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Shop / office, street, area" className={inputCls} />
-                    </div>
+                      <input id="distributorsignup-address" type="text" maxLength={300} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Shop / office, street, area" className={inputCls} />
+                    </div><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="address" />
                   </div>
                   <div>
                     <label htmlFor="distributorsignup-pincode" className={labelCls}>Pincode *</label>
-                    <input id="distributorsignup-pincode" required type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="380001" className="w-full glass-input rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500" />
+                    <input id="distributorsignup-pincode" type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="380001" className="w-full glass-input rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500" /><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="pincode" />
                   </div>
                 </div>
 
@@ -223,10 +227,11 @@ const DistributorSignup = () => {
                   <label htmlFor="distributorsignup-password" className={labelCls}>Password *</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><Lock size={16} /></div>
-                    <input id="distributorsignup-password" required minLength={6} type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" className={inputCls} />
-                  </div>
+                    <input id="distributorsignup-password" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" className={inputCls} />
+                  </div><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="password" />
                 </div>
 
+                <ErrorSummary errors={fieldCheck.errors(form, {}, fieldExtra)} />
                 {error && <p className="text-red-400 text-xs font-medium animate-fade-in-up">{error}</p>}
 
                 <button

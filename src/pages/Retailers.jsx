@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ShoppingBag, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, Network, Store, Clock, AlertTriangle } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import PartnerLoginAction from '../components/PartnerLoginAction';
-import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select } from '../components/ui';
+import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select, FieldError, ErrorSummary, useFieldCheck } from '../components/ui';
 import PartnerOrderHistory from '../components/PartnerOrderHistory';
 import { downloadExcel } from '../utils/exportUtils';
 import { buildLedgerEntries, balanceStanding } from '../utils/distributorUtils';
@@ -16,7 +16,9 @@ import { refundableCredit } from '../utils/settlement';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
 import LastChanged from '../components/audit/LastChanged';
-import { contactProblem, normaliseGstin } from '../utils/contactChecks';
+import { normaliseGstin } from '../utils/contactChecks';
+import { cleanForm } from '../utils/formRules';
+import { partnerSpec, partnerExtra, PARTNER_PAYMENT_SPEC } from '../utils/partnerForms';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -32,6 +34,8 @@ const formatCurrency = (val) =>
 
 const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
+
+const PARTNER_SPEC = partnerSpec('parentDealerId');
 
 const BLANK_FORM = {
   name: '', gstin: '', parentDealerId: '', state: '', city: '', territoryId: '',
@@ -61,6 +65,8 @@ export default function Retailers() {
     if (linked) { setOpenedLink(linkedId); setViewingRetailer(linked); }
   }
   const [form, setForm] = useState(BLANK_FORM);
+  const partnerCheck = useFieldCheck();
+  const paymentCheck = useFieldCheck();
   const [isSaving, setIsSaving] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
@@ -102,15 +108,14 @@ export default function Retailers() {
   const allStates = [...new Set(retailers.map(r => r.state).filter(Boolean))].sort();
   const activeDealers = dealers.filter(d => d.status === 'Active');
 
-  const openAdd = () => { setEditingRetailer(null); setForm(BLANK_FORM); setIsModalOpen(true); };
-  const openEdit = (r) => { setEditingRetailer(r); setForm({ name: r.name, gstin: r.gstin || '', parentDealerId: r.parentDealerId || '', state: r.state || '', city: r.city || '', territoryId: r.territoryId || '', phone: r.phone || '', email: r.email || '', contactPerson: r.contactPerson || '', address: r.address || '', pincode: r.pincode || '', creditLimit: r.creditLimit || 50000, status: r.status || 'Active' }); setIsModalOpen(true); };
+  const openAdd = () => { partnerCheck.reset(); setEditingRetailer(null); setForm(BLANK_FORM); setIsModalOpen(true); };
+  const openEdit = (r) => { partnerCheck.reset(); setEditingRetailer(r); setForm({ name: r.name, gstin: r.gstin || '', parentDealerId: r.parentDealerId || '', state: r.state || '', city: r.city || '', territoryId: r.territoryId || '', phone: r.phone || '', email: r.email || '', contactPerson: r.contactPerson || '', address: r.address || '', pincode: r.pincode || '', creditLimit: r.creditLimit || 50000, status: r.status || 'Active' }); setIsModalOpen(true); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSaving) return;
-    const payload = { ...form, gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
-    const problem = contactProblem(payload, editingRetailer) || (payload.creditLimit < 0 ? 'Credit limit cannot be negative.' : null);
-    if (problem) { toast(problem, 'error'); return; }
+    if (!partnerCheck.ok(form, PARTNER_SPEC, partnerExtra(editingRetailer))) return;
+    const payload = { ...cleanForm(form, PARTNER_SPEC), gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
     // Waits for the database: closes only once it is saved, else says why.
     setIsSaving(true);
     const r = editingRetailer ? await updateRetailer(editingRetailer.id, payload) : await addRetailer(payload);
@@ -181,6 +186,7 @@ export default function Retailers() {
   const handleRecordPayment = async (e) => {
     e.preventDefault();
     if (!viewingRetailer || isSavingPayment) return;
+    if (!paymentCheck.ok(paymentForm, PARTNER_PAYMENT_SPEC)) return;
     setIsSavingPayment(true);
     try {
       // Open until the database has the payment; the balance moves with it there.
@@ -408,7 +414,7 @@ export default function Retailers() {
                     <h4 className="text-sm font-bold text-white flex items-center gap-1.5"><Wallet size={14} className="text-brand-accent" />Outstanding Ledger</h4>
                     <div className="flex items-center gap-3">
                       {canRecordPayment && refundsOn && refundableCredit(viewingRetailer.outstandingAmount) > 0 && <button onClick={() => setIsRefundOpen(true)} className="text-xs font-semibold text-emerald-400 hover:underline">Record Refund</button>}
-                      {canRecordPayment && <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
+                      {canRecordPayment && <button onClick={() => { paymentCheck.reset(); setIsPaymentModalOpen(true); }} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
                     </div>
                   </div>
                   <PartnerLedgerList entries={ledgerEntries} outstanding={viewingRetailer.outstandingAmount} users={users} />
@@ -434,10 +440,10 @@ export default function Retailers() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><IndianRupee size={18} className="text-brand-accent" />Record Payment</h3>
               <button onClick={() => setIsPaymentModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={18} /></button>
             </div>
-            <form onSubmit={handleRecordPayment} className="space-y-4">
+            <form onSubmit={handleRecordPayment} noValidate className="space-y-4">
               <div>
                 <label htmlFor="retailers-amount" className={labelCls}>Amount (₹) *</label>
-                <input id="retailers-amount" required type="number" min="1" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} />
+                <input id="retailers-amount" type="number" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} /><FieldError errors={paymentCheck.errors(paymentForm, PARTNER_PAYMENT_SPEC)} field="amount" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -459,6 +465,7 @@ export default function Retailers() {
                 <label htmlFor="retailers-notes" className={labelCls}>Notes</label>
                 <textarea id="retailers-notes" rows="2" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
               </div>
+              <ErrorSummary errors={paymentCheck.errors(paymentForm, PARTNER_PAYMENT_SPEC)} />
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
                 <button type="submit" disabled={isSavingPayment} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingPayment ? 'Saving…' : 'Record Payment'}</button>
@@ -478,32 +485,32 @@ export default function Retailers() {
               {editingRetailer && <LastChanged record={editingRetailer} users={users} className="mt-0.5" />}
               <button onClick={() => setIsModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2"><label htmlFor="retailers-company-business-name" className={labelCls}>Company / Business Name *</label><input id="retailers-company-business-name" required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Geeta Retailers" className={inputCls} /></div>
+                <div className="sm:col-span-2"><label htmlFor="retailers-company-business-name" className={labelCls}>Company / Business Name *</label><input id="retailers-company-business-name" type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Geeta Retailers" className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} field="name" /></div>
                 <div className="sm:col-span-2">
                   <label htmlFor="retailers-parent-dealer" className={labelCls}>Parent Dealer *</label>
-                  <select id="retailers-parent-dealer" required value={form.parentDealerId} onChange={e => setForm(f => ({ ...f, parentDealerId: e.target.value }))} className={inputCls}>
+                  <select id="retailers-parent-dealer" value={form.parentDealerId} onChange={e => setForm(f => ({ ...f, parentDealerId: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Dealer --</option>
                     {activeDealers.map(d => <option key={d.id} value={d.id} className="bg-brand-primary">{d.name} ({territoryName(territories, d)})</option>)}
-                  </select>
+                  </select><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} field="parentDealerId" />
                 </div>
-                <div><label htmlFor="retailers-gstin" className={labelCls}>GSTIN</label><input id="retailers-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACG..." className={inputCls} /></div>
+                <div><label htmlFor="retailers-gstin" className={labelCls}>GSTIN</label><input id="retailers-gstin" type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} placeholder="24AAACG..." className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} field="gstin" /></div>
                 <div><label htmlFor="retailers-contact-person" className={labelCls}>Contact Person</label><input id="retailers-contact-person" type="text" value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="retailers-phone" className={labelCls}>Phone</label><input id="retailers-phone" type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="retailers-email" className={labelCls}>Email</label><input id="retailers-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="retailers-phone" className={labelCls}>Phone</label><input id="retailers-phone" type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} field="phone" /></div>
+                <div><label htmlFor="retailers-email" className={labelCls}>Email</label><input id="retailers-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} field="email" /></div>
                 <div>
                   <label htmlFor="retailers-state" className={labelCls}>State *</label>
-                  <select id="retailers-state" required value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
+                  <select id="retailers-state" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
                     {INDIAN_STATES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
-                  </select>
+                  </select><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} field="state" />
                 </div>
                 <div><label htmlFor="retailers-city" className={labelCls}>City</label><input id="retailers-city" type="text" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="retailers-pincode" className={labelCls}>Pincode *</label><input id="retailers-pincode" required type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /></div>
+                <div><label htmlFor="retailers-pincode" className={labelCls}>Pincode *</label><input id="retailers-pincode" type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} field="pincode" /></div>
                 <div className="sm:col-span-2">
                   <label htmlFor="retailers-delivery-address" className={labelCls}>Delivery Address *</label>
-                  <textarea id="retailers-delivery-address" required rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} />
+                  <textarea id="retailers-delivery-address" rows="2" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Building, street, area — where consignments should be delivered" className={inputCls + ' resize-none'} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} field="address" />
                   <p className="text-[10px] text-slate-500 mt-1">Used as the default delivery address on their orders. Dispatch cannot send goods to a city alone.</p>
                 </div>
                 <div>
@@ -543,7 +550,7 @@ export default function Retailers() {
                     return null;
                   })()}
                 </div>
-                <div><label htmlFor="retailers-credit-limit" className={labelCls}>Credit Limit (₹)</label><input id="retailers-credit-limit" type="number" min="0" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="retailers-credit-limit" className={labelCls}>Credit Limit (₹)</label><input id="retailers-credit-limit" type="number" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} field="creditLimit" /></div>
                 <div>
                   <label htmlFor="retailers-status" className={labelCls}>Status</label>
                   <select id="retailers-status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
@@ -552,6 +559,7 @@ export default function Retailers() {
                   </select>
                 </div>
               </div>
+              <div className="mt-4"><ErrorSummary errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingRetailer))} /></div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
                 <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : editingRetailer ? 'Save Changes' : 'Add Retailer'}</button>

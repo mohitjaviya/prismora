@@ -1,0 +1,1 @@
+select (select count(*) from pg_constraint where conname in ('orders_value_positive','inventory_counts_max')) c, (select count(*) from pg_proc where proname in ('is_indian_mobile','input_contact_checks')) f, (select count(*) from public.schema_migrations where filename like '095%') m;

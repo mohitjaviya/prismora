@@ -12,20 +12,27 @@
  * Old rows are not special: a record saved before these rules opens as it is,
  * and saving it asks for the bad field to be fixed.
  *
- * Partner/vendor GSTIN, phone and pincode keep their own rules
- * (`contactChecks.js`, which also allows landlines there).
+ * Partner/vendor GSTIN and pincode keep their own rules (`contactChecks.js`);
+ * their phone uses the mobile rule here (no landlines).
  */
 
-export const MOBILE_MESSAGE = 'Enter a valid 10-digit mobile number';
+export const MOBILE_MESSAGE = 'Enter a valid 10-digit mobile number starting with 6, 7, 8 or 9 (+91 in front is fine)';
+
+// Upper limits that catch typing mistakes (same numbers in migration 095).
+export const MAX_QTY = 100000;
+export const MAX_AMOUNT = 100000000; // ₹10 crore
+const MAX_QTY_TEXT = '1,00,000';
+const MAX_AMOUNT_TEXT = '₹10 crore';
 export const EMAIL_MESSAGE = 'Enter a valid email address, like name@domain.com';
 
-// Spaces are allowed for readability; +91 or 0 may be in front.
-const MOBILE_RE = /^(?:\+91|0)?([6-9][0-9]{9})$/;
+// The one mobile rule: 10 digits starting 6-9. Spaces and dashes are allowed
+// for readability; +91, 91 or 0 may be in front. Saved as the plain 10 digits.
+const MOBILE_RE = /^(?:\+91|91|0)?([6-9][0-9]{9})$/;
 const EMAIL_RE = /^[a-z0-9._%+'-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i;
 
 export const isBlank = (v) => (Array.isArray(v) ? v.length === 0 : !String(v ?? '').trim());
 
-const mobileDigits = (v) => String(v ?? '').replace(/\s/g, '').match(MOBILE_RE)?.[1] ?? null;
+const mobileDigits = (v) => String(v ?? '').replace(/[\s-]/g, '').match(MOBILE_RE)?.[1] ?? null;
 
 /** A valid mobile as its 10 digits; anything else trimmed, as it was. */
 export function normaliseMobile(v) {
@@ -59,6 +66,7 @@ export function quantityProblem(v, label = 'Quantity') {
   if (!Number.isFinite(n)) return `${label} must be a number`;
   if (n <= 0) return `${label} must be more than 0`;
   if (!Number.isInteger(n)) return `${label} must be a whole number`;
+  if (n > MAX_QTY) return `${label} cannot be more than ${MAX_QTY_TEXT}`;
   return null;
 }
 
@@ -69,6 +77,18 @@ export function countProblem(v, label = 'Quantity') {
   if (!Number.isFinite(n)) return `${label} must be a number`;
   if (n < 0) return `${label} cannot be negative`;
   if (!Number.isInteger(n)) return `${label} must be a whole number`;
+  if (n > MAX_QTY) return `${label} cannot be more than ${MAX_QTY_TEXT}`;
+  return null;
+}
+
+/** Stock adjustment: a whole number, + or -, not 0, at most 1,00,000 either way. */
+export function adjustmentProblem(v, label = 'Adjustment') {
+  if (isBlank(v)) return `${label} is required`;
+  const n = toNumber(v);
+  if (!Number.isFinite(n)) return `${label} must be a number`;
+  if (n === 0) return `${label} cannot be 0`;
+  if (!Number.isInteger(n)) return `${label} must be a whole number`;
+  if (Math.abs(n) > MAX_QTY) return `${label} cannot be more than ${MAX_QTY_TEXT} either way`;
   return null;
 }
 
@@ -83,6 +103,7 @@ export function amountProblem(v, label = 'Amount', { positive = false } = {}) {
   if (n < 0) return `${label} cannot be negative`;
   if (positive && n === 0) return `${label} must be more than 0`;
   if (moreThanTwoDecimals(n)) return `${label} can have at most 2 decimals`;
+  if (n > MAX_AMOUNT) return `${label} cannot be more than ${MAX_AMOUNT_TEXT}`;
   return null;
 }
 
@@ -102,6 +123,7 @@ const KIND_CHECKS = {
   email: (v) => emailProblem(v),
   qty: (v, label) => quantityProblem(v, label),
   count: (v, label) => countProblem(v, label),
+  adjustment: (v, label) => adjustmentProblem(v, label),
   amount: (v, label) => amountProblem(v, label),
   positiveAmount: (v, label) => amountProblem(v, label, { positive: true }),
   percent: (v, label) => percentProblem(v, label),
@@ -117,7 +139,7 @@ export function checkForm(form = {}, spec = {}) {
     if (!rule) continue;
     const { label = field, kind = 'text', required = false } = rule;
     const value = form?.[field];
-    const problem = (required && kind !== 'qty' ? requiredProblem(value, label) : null)
+    const problem = (required && kind !== 'qty' && kind !== 'adjustment' ? requiredProblem(value, label) : null)
       || (kind === 'qty' && !required && isBlank(value) ? null : KIND_CHECKS[kind]?.(value, label));
     if (problem) errors[field] = problem;
   }

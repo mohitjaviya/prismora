@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/DialogContext';
 import { returnsForOrder, conditionForReason, RETURN_CONDITIONS } from '../utils/salesReturns';
 import OrderReturnsList from './OrderReturnsList';
+import { FieldError, ErrorSummary, useFieldCheck } from './ui';
+import { quantityProblem, isBlank } from '../utils/formRules';
 
 const REASONS = ['Damaged in transit', 'Expired / near expiry', 'Wrong product', 'Quality complaint', 'Excess stock', 'Other'];
 const inputCls = 'w-full glass-input rounded-lg px-2.5 py-2 text-xs text-white';
@@ -34,6 +36,7 @@ export default function SalesReturnModal({ order, onClose }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const lineCheck = useFieldCheck();
   // Condition of the goods (086). Off until the database says it has the
   // column; while off, the form and what it sends are exactly as before 086.
   const [conditionOn, setConditionOn] = useState(false);
@@ -73,13 +76,38 @@ export default function SalesReturnModal({ order, onClose }) {
   const returnable = useMemo(() => (position || []).filter(p => Number(p.returnable) > 0), [position]);
   const setLine = (i, patch) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
+  // A line with a quantity typed is a line to return: whole units, more than 0,
+  // no more than what can still come back (the database refuses the same).
+  // Lines left blank are ignored, as long as one line has a quantity.
+  const lineExtra = (f) => {
+    const out = {};
+    const used = f.lines.map(l => !isBlank(l.quantity));
+    f.lines.forEach((l, i) => {
+      if (!used[i]) {
+        if (!used.some(Boolean) && i === 0) out['lines.0.quantity'] = 'Enter the quantity to return (whole units)';
+        return;
+      }
+      const max = lineMax(l);
+      const problem = quantityProblem(l.quantity, 'Quantity');
+      if (problem) out[`lines.${i}.quantity`] = problem;
+      else if (Number.isFinite(max) && Number(l.quantity) > max) out[`lines.${i}.quantity`] = `Only ${max} can still be returned`;
+      if (!l.inventoryId) out[`lines.${i}.inventoryId`] = 'Choose the batch this line goes back to';
+    });
+    return out;
+  };
+  const lineMax = (l) => {
+    const pos = position?.find(p => p.product === l.product);
+    const batchMax = batchesFor(l.product).find(b => b.id === l.inventoryId)?.max;
+    return Math.min(Number(pos?.returnable || 0), batchMax ?? Infinity);
+  };
+  const lineErrors = lineCheck.errors({ lines }, {}, lineExtra);
+
   const save = async (e) => {
     e.preventDefault();
     if (saving) return;
     setError('');
-    const clean = lines.filter(l => Number(l.quantity) > 0);
-    if (!clean.length) { setError('Enter a quantity to return on at least one line.'); return; }
-    if (clean.some(l => !l.inventoryId)) { setError('Choose the batch each returned line goes back to.'); return; }
+    if (!lineCheck.ok({ lines }, {}, lineExtra)) return;
+    const clean = lines.filter(l => !isBlank(l.quantity));
     setSaving(true);
     // Without 086 the lines are what they always were; with it, each carries its condition.
     const result = await recordSalesReturn(order.id, clean.map(l => ({
@@ -101,7 +129,7 @@ export default function SalesReturnModal({ order, onClose }) {
           <h3 className="text-lg font-bold text-white flex items-center gap-2"><Undo2 size={18} className="text-brand-accent" />Sales return — {order.id}</h3>
           <button type="button" title="Close" onClick={() => onClose(false)} className="p-1 text-slate-400 hover:text-white"><X size={18} /></button>
         </div>
-        <form onSubmit={save} className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
+        <form onSubmit={save} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
           {previous.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Previous returns</p>
@@ -123,10 +151,7 @@ export default function SalesReturnModal({ order, onClose }) {
                 ))}
               </div>
               {returnable.length === 0 ? <p className="text-sm text-amber-400">Everything delivered on this order has already come back.</p> : lines.map((l, i) => {
-                const pos = position.find(p => p.product === l.product);
                 const batchOpts = batchesFor(l.product);
-                const batchMax = batchOpts.find(b => b.id === l.inventoryId)?.max;
-                const max = Math.min(Number(pos?.returnable || 0), batchMax ?? Infinity);
                 return (
                   <div key={i} className="grid grid-cols-12 gap-2 items-end bg-brand-primary-lighter/20 rounded-xl p-3 border border-white/5">
                     <div className="col-span-12 sm:col-span-5">
@@ -145,11 +170,13 @@ export default function SalesReturnModal({ order, onClose }) {
                         <option value="" className="bg-brand-primary">Choose…</option>
                         {batchOpts.map(b => <option key={b.id} value={b.id} title={b.label} className="bg-brand-primary">{b.label}</option>)}
                       </select>
+                      <FieldError errors={lineErrors} field={`lines.${i}.inventoryId`} />
                     </div>
                     <div className={`col-span-4 ${conditionOn ? 'sm:col-span-2' : 'sm:col-span-3'}`}>
                       <label htmlFor={`sr-qty-${i}`} className="block text-[10px] text-slate-500 mb-1">Qty</label>
-                      <input id={`sr-qty-${i}`} type="number" min="1" max={Number.isFinite(max) ? max : undefined} className={inputCls}
+                      <input id={`sr-qty-${i}`} type="number" className={inputCls}
                         value={l.quantity} onChange={e => setLine(i, { quantity: e.target.value })} />
+                      <FieldError errors={lineErrors} field={`lines.${i}.quantity`} />
                     </div>
                     <div className={`col-span-7 ${conditionOn ? 'sm:col-span-5' : 'sm:col-span-8'}`}>
                       <label htmlFor={`sr-reason-${i}`} className="block text-[10px] text-slate-500 mb-1">Reason</label>
@@ -182,6 +209,7 @@ export default function SalesReturnModal({ order, onClose }) {
               </div>
             </>
           )}
+          <ErrorSummary errors={lineErrors} />
           {error && <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex justify-end gap-3 pt-2 border-t border-white/5">
             <button type="button" onClick={() => onClose(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>

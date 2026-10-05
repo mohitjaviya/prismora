@@ -13,17 +13,26 @@ import StockReconciliation from '../components/StockReconciliation';
 import DamagedStockModal from '../components/DamagedStockModal';
 import { batchNumberProblem } from '../utils/batchNumber';
 import { stockValueBreakdown, batchValues } from '../utils/stockValue';
-import { useFieldCheck, FieldError } from '../components/ui';
+import { useFieldCheck, FieldError, ErrorSummary } from '../components/ui';
 
 const INVENTORY_ADD_SPEC = {
-  quantity: { label: 'Quantity', kind: 'qty' },
-  unitCost: { label: 'Unit cost', kind: 'amount' }
+  product: { label: 'Product', required: true },
+  quantity: { label: 'Quantity', kind: 'qty', required: true },
+  unitCost: { label: 'Unit cost', kind: 'amount' },
+  reorderLevel: { label: 'Reorder level', kind: 'count' },
+  reserved: { label: 'Reserved', kind: 'count' },
+  transit: { label: 'Transit', kind: 'count' },
+  damaged: { label: 'Damaged', kind: 'count' }
+};
+const INVENTORY_ADJUST_SPEC = {
+  adjustment: { label: 'Adjustment', kind: 'adjustment' },
+  reason: { label: 'Reason', required: true }
 };
 const INVENTORY_TRANSFER_SPEC = {
   quantity: { label: 'Quantity to Transfer', kind: 'qty', required: true }
 };
 const INVENTORY_COUNT_SPEC = {
-  countedQty: { label: 'Counted quantity', kind: 'amount', required: true }
+  countedQty: { label: 'Counted quantity', kind: 'count', required: true }
 };
 
 // 'Damaged' is not a status: batches holding damaged units, whatever their status (Gap 17).
@@ -101,6 +110,7 @@ export default function Inventory() {
   const addCheck = useFieldCheck();
   const transferCheck = useFieldCheck();
   const countCheck = useFieldCheck();
+  const adjustCheck = useFieldCheck();
 
   // KPI derivations
   const withStatus = useMemo(() => inventory.map(i => ({ ...i, _status: getStockStatus(i) })), [inventory]);
@@ -147,8 +157,9 @@ export default function Inventory() {
       .sort((a, b) => a.product.localeCompare(b.product));
   }, [filtered]);
 
-  const openAdd = () => { setEditingItem(null); setForm(BLANK_FORM); setIsAddOpen(true); };
+  const openAdd = () => { addCheck.reset(); setEditingItem(null); setForm(BLANK_FORM); setIsAddOpen(true); };
   const openEdit = (item) => {
+    addCheck.reset();
     setEditingItem(item);
     setForm({
       product: item.product, batchNumber: item.batchNumber || '',
@@ -160,9 +171,9 @@ export default function Inventory() {
     });
     setIsAddOpen(true);
   };
-  const openAdjust = (item) => { setAdjustingItem(item); setAdjustForm(BLANK_ADJUST); setIsAdjustOpen(true); };
-  const openTransfer = (item) => { setTransferItem(item); setTransferForm({ toWarehouse: warehouses.find(w => w !== item.warehouse) || '', quantity: '', notes: '' }); };
-  const openCount = (item) => { setCountItem(item); setCountedQty(String(item.quantity)); };
+  const openAdjust = (item) => { adjustCheck.reset(); setAdjustingItem(item); setAdjustForm(BLANK_ADJUST); setIsAdjustOpen(true); };
+  const openTransfer = (item) => { transferCheck.reset(); setTransferItem(item); setTransferForm({ toWarehouse: warehouses.find(w => w !== item.warehouse) || '', quantity: '', notes: '' }); };
+  const openCount = (item) => { countCheck.reset(); setCountItem(item); setCountedQty(String(item.quantity)); };
 
   // Every form here waits for the database: the button says "Saving…", a
   // refusal is shown and the dialog stays open, and it closes only once saved.
@@ -177,7 +188,7 @@ export default function Inventory() {
   const handleTransfer = async (e) => {
     e.preventDefault();
     if (saving) return;
-    if (!transferCheck.ok(transferForm, INVENTORY_TRANSFER_SPEC)) return;
+    if (!transferCheck.ok(transferForm, INVENTORY_TRANSFER_SPEC, transferExtra)) return;
     // An impossible transfer gives back a reason; this shows it and keeps the
     // dialog open so the number can be corrected.
     setSaving('transfer');
@@ -198,13 +209,21 @@ export default function Inventory() {
     finish(result, `Stock set to ${counted} for ${countItem.product}.`, () => setCountItem(null));
   };
 
+  const transferExtra = (f) => (transferItem && Number(f.quantity) > transferItem.quantity
+    ? { quantity: `Only ${transferItem.quantity} in this batch to transfer` } : {});
+
+  // The quantity of an existing batch is not typed here (Adjust / Cycle Count), so it is not checked.
+  const addValues = { ...form, quantity: editingItem ? 1 : form.quantity };
+  const batchExtra = (f) => {
+    const problem = batchNumberProblem(f, inventory, editingItem);
+    return problem ? { batchNumber: problem } : {};
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
-    if (!addCheck.ok({ ...form, quantity: editingItem ? 1 : form.quantity }, INVENTORY_ADD_SPEC)) return;
     // Gap 18 (090): a number is required and used once per product.
-    const batchProblem = batchNumberProblem(form, inventory, editingItem);
-    if (batchProblem) { toast(batchProblem, 'error'); return; }
+    if (!addCheck.ok(addValues, INVENTORY_ADD_SPEC, batchExtra)) return;
     const payload = {
       ...form, batchNumber: form.batchNumber.trim(),
       quantity: Number(form.quantity), reorderLevel: Number(form.reorderLevel),
@@ -230,9 +249,17 @@ export default function Inventory() {
     finish(result, moveTo ? `Stock batch saved and its ${held} units moved to ${moveTo}.` : editingItem ? 'Stock batch saved.' : `Stock batch for ${payload.product} added.`, () => setIsAddOpen(false));
   };
 
+  // Stock cannot go below 0 (the database refuses it too): say so under the field.
+  const adjustBelowZero = (f) => {
+    const n = Number(f.adjustment);
+    return adjustingItem && Number.isInteger(n) && adjustingItem.quantity + n < 0
+      ? { adjustment: `Adjustment would take stock below 0 (only ${adjustingItem.quantity} in this batch)` } : {};
+  };
+
   const handleAdjust = async (e) => {
     e.preventDefault();
-    if (!adjustingItem || !adjustForm.reason.trim() || saving) return;
+    if (!adjustingItem || saving) return;
+    if (!adjustCheck.ok(adjustForm, INVENTORY_ADJUST_SPEC, adjustBelowZero)) return;
     setSaving('adjust');
     const result = await adjustStock(adjustingItem.id, Number(adjustForm.adjustment), adjustForm.reason);
     finish(result, `Stock for ${adjustingItem.product} is now ${result?.quantity}.`, () => setIsAdjustOpen(false));
@@ -376,7 +403,7 @@ export default function Inventory() {
               </h3>
               <div className="flex items-center gap-3">
                 {canManage && (
-                  <button onClick={() => { setEditingItem(null); setForm({ ...BLANK_FORM, product: viewingProduct }); setIsAddOpen(true); }} className="btn-accent px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                  <button onClick={() => { addCheck.reset(); setEditingItem(null); setForm({ ...BLANK_FORM, product: viewingProduct }); setIsAddOpen(true); }} className="btn-accent px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
                     <Plus size={14} /> Add Batch
                   </button>
                 )}
@@ -498,18 +525,20 @@ export default function Inventory() {
               </h3>
               <button onClick={() => setIsAddOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
                   <label htmlFor="inventory-product" className={labelCls}>Product *</label>
-                  <select id="inventory-product" required value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} className={inputCls}>
+                  <select id="inventory-product" value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} className={inputCls}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Product --</option>
                     {products.map(p => <option key={p} value={p} className="bg-brand-primary">{p}</option>)}
                   </select>
+                  <FieldError errors={addCheck.errors(addValues, INVENTORY_ADD_SPEC, batchExtra)} field="product" />
                 </div>
                 <div>
                   <label htmlFor="inventory-batch-number" className={labelCls}>Batch Number *</label>
-                  <input id="inventory-batch-number" type="text" required value={form.batchNumber} onChange={e => setForm({ ...form, batchNumber: e.target.value })} placeholder="e.g. RBH-2025-001" className={inputCls} />
+                  <input id="inventory-batch-number" type="text" value={form.batchNumber} onChange={e => setForm({ ...form, batchNumber: e.target.value })} placeholder="e.g. RBH-2025-001" className={inputCls} />
+                  <FieldError errors={addCheck.errors(addValues, INVENTORY_ADD_SPEC, batchExtra)} field="batchNumber" />
                 </div>
                 <div>
                   <label htmlFor="inventory-expiry-date" className={labelCls}>Expiry Date</label>
@@ -517,18 +546,19 @@ export default function Inventory() {
                 </div>
                 <div>
                   <label htmlFor="inventory-quantity" className={labelCls}>{editingItem ? 'Quantity' : 'Quantity *'}</label>
-                  <input id="inventory-quantity" required={!editingItem} readOnly={!!editingItem} type="number" min="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" className={inputCls + (editingItem ? ' opacity-60 cursor-not-allowed' : '')} />
-                  <FieldError errors={addCheck.errors(form, INVENTORY_ADD_SPEC)} field="quantity" />
+                  <input id="inventory-quantity" readOnly={!!editingItem} type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" className={inputCls + (editingItem ? ' opacity-60 cursor-not-allowed' : '')} />
+                  <FieldError errors={addCheck.errors(addValues, INVENTORY_ADD_SPEC, batchExtra)} field="quantity" />
                   {editingItem && <span className="block text-[10px] text-slate-500 mt-1">Use Adjust or Cycle Count to change it.</span>}
                 </div>
                 <div>
                   <label htmlFor="inventory-unit-cost" className={labelCls}>Unit Cost (₹)</label>
-                  <input id="inventory-unit-cost" type="number" min="0" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} placeholder="0" className={inputCls} />
-                  <FieldError errors={addCheck.errors(form, INVENTORY_ADD_SPEC)} field="unitCost" />
+                  <input id="inventory-unit-cost" type="number" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} placeholder="0" className={inputCls} />
+                  <FieldError errors={addCheck.errors(addValues, INVENTORY_ADD_SPEC, batchExtra)} field="unitCost" />
                 </div>
                 <div>
                   <label htmlFor="inventory-reorder-level" className={labelCls}>Reorder Level</label>
-                  <input id="inventory-reorder-level" type="number" min="0" value={form.reorderLevel} onChange={e => setForm({ ...form, reorderLevel: e.target.value })} className={inputCls} />
+                  <input id="inventory-reorder-level" type="number" value={form.reorderLevel} onChange={e => setForm({ ...form, reorderLevel: e.target.value })} className={inputCls} />
+                  <FieldError errors={addCheck.errors(addValues, INVENTORY_ADD_SPEC, batchExtra)} field="reorderLevel" />
                 </div>
                 <div>
                   <label htmlFor="inventory-warehouse" className={labelCls}>Warehouse</label>
@@ -538,20 +568,24 @@ export default function Inventory() {
                 </div>
                 <div>
                   <label htmlFor="inventory-reserved" className={labelCls}>Reserved</label>
-                  <input id="inventory-reserved" type="number" min="0" value={form.reserved} onChange={e => setForm({ ...form, reserved: e.target.value })} className={inputCls} />
+                  <input id="inventory-reserved" type="number" value={form.reserved} onChange={e => setForm({ ...form, reserved: e.target.value })} className={inputCls} />
+                  <FieldError errors={addCheck.errors(addValues, INVENTORY_ADD_SPEC, batchExtra)} field="reserved" />
                 </div>
                 <div>
                   <label htmlFor="inventory-transit" className={labelCls}>Transit</label>
-                  <input id="inventory-transit" type="number" min="0" value={form.transit} onChange={e => setForm({ ...form, transit: e.target.value })} className={inputCls} />
+                  <input id="inventory-transit" type="number" value={form.transit} onChange={e => setForm({ ...form, transit: e.target.value })} className={inputCls} />
+                  <FieldError errors={addCheck.errors(addValues, INVENTORY_ADD_SPEC, batchExtra)} field="transit" />
                 </div>
                 <div>
                   <label htmlFor="inventory-damaged" className={labelCls}>Damaged</label>
-                  <input id="inventory-damaged" type="number" min="0" value={form.damaged} onChange={e => setForm({ ...form, damaged: e.target.value })}
+                  <input id="inventory-damaged" type="number" value={form.damaged} onChange={e => setForm({ ...form, damaged: e.target.value })}
                     readOnly={!!editingItem && damagedLocked} title={editingItem && damagedLocked ? 'Changes only through Write off damaged or Return damaged to vendor (batch list)' : undefined}
                     className={`${inputCls} ${editingItem && damagedLocked ? 'opacity-60 cursor-not-allowed' : ''}`} />
                   {editingItem && damagedLocked && <p className="mt-1 text-[11px] text-slate-500">Read-only: use Write off or Return to vendor on the batch.</p>}
+                  <FieldError errors={addCheck.errors(addValues, INVENTORY_ADD_SPEC, batchExtra)} field="damaged" />
                 </div>
               </div>
+              <div className="mt-4"><ErrorSummary errors={addCheck.errors(addValues, INVENTORY_ADD_SPEC, batchExtra)} /></div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsAddOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
                 <button type="submit" disabled={!!saving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{saving === 'batch' ? 'Saving…' : editingItem ? 'Save Changes' : 'Add Batch'}</button>
@@ -576,21 +610,24 @@ export default function Inventory() {
               <p className="text-sm font-semibold text-white">{adjustingItem.product}</p>
               <p className="text-xs text-slate-400">Batch: {adjustingItem.batchNumber || '—'} · Current Qty: <span className="font-bold text-brand-accent">{adjustingItem.quantity}</span></p>
             </div>
-            <form onSubmit={handleAdjust} className="space-y-4">
+            <form onSubmit={handleAdjust} noValidate className="space-y-4">
               <div>
                 <label htmlFor="inventory-adjustment-to-add-to-subtract" className={labelCls}>Adjustment (+ to add, - to subtract)</label>
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setAdjustForm(f => ({ ...f, adjustment: f.adjustment === '' ? '-' : (Number(f.adjustment) < 0 ? String(-Number(f.adjustment)) : '-' + Math.abs(Number(f.adjustment))) }))}
                     className="p-2.5 glass-input rounded-xl text-red-400 hover:bg-red-400/10 transition-colors"><ArrowDown size={16} /></button>
-                  <input id="inventory-adjustment-to-add-to-subtract" type="number" required value={adjustForm.adjustment} onChange={e => setAdjustForm({ ...adjustForm, adjustment: e.target.value })} placeholder="e.g. 50 or -10" className={`${inputCls} flex-1`} />
+                  <input id="inventory-adjustment-to-add-to-subtract" type="number" value={adjustForm.adjustment} onChange={e => setAdjustForm({ ...adjustForm, adjustment: e.target.value })} placeholder="e.g. 50 or -10" className={`${inputCls} flex-1`} />
                   <button type="button" onClick={() => setAdjustForm(f => ({ ...f, adjustment: f.adjustment === '' ? '' : String(Math.abs(Number(f.adjustment))) }))}
                     className="p-2.5 glass-input rounded-xl text-emerald-400 hover:bg-emerald-400/10 transition-colors"><ArrowUp size={16} /></button>
                 </div>
+                <FieldError errors={adjustCheck.errors(adjustForm, INVENTORY_ADJUST_SPEC, adjustBelowZero)} field="adjustment" />
               </div>
               <div>
                 <label htmlFor="inventory-reason" className={labelCls}>Reason *</label>
-                <input id="inventory-reason" required type="text" value={adjustForm.reason} onChange={e => setAdjustForm({ ...adjustForm, reason: e.target.value })} placeholder="e.g. GRN received, Damaged goods, Stock count correction" className={inputCls} />
+                <input id="inventory-reason" type="text" value={adjustForm.reason} onChange={e => setAdjustForm({ ...adjustForm, reason: e.target.value })} placeholder="e.g. GRN received, Damaged goods, Stock count correction" className={inputCls} />
+                <FieldError errors={adjustCheck.errors(adjustForm, INVENTORY_ADJUST_SPEC, adjustBelowZero)} field="reason" />
               </div>
+              <ErrorSummary errors={adjustCheck.errors(adjustForm, INVENTORY_ADJUST_SPEC, adjustBelowZero)} />
               <div className="flex gap-3 justify-end pt-2">
                 <button type="button" onClick={() => setIsAdjustOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
                 <button type="submit" disabled={!!saving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{saving === 'adjust' ? 'Saving…' : 'Apply Adjustment'}</button>
@@ -613,7 +650,7 @@ export default function Inventory() {
               <p className="text-sm font-semibold text-white">{transferItem.product}</p>
               <p className="text-xs text-slate-400">Batch: {transferItem.batchNumber || '—'} · From: <span className="font-bold text-brand-accent">{transferItem.warehouse}</span> · Available: {transferItem.quantity}</p>
             </div>
-            <form onSubmit={handleTransfer} className="space-y-4">
+            <form onSubmit={handleTransfer} noValidate className="space-y-4">
               <div>
                 <label htmlFor="inventory-destination-warehouse" className={labelCls}>Destination Warehouse *</label>
                 <select id="inventory-destination-warehouse" required value={transferForm.toWarehouse} onChange={e => setTransferForm(f => ({ ...f, toWarehouse: e.target.value }))} className={inputCls}>
@@ -622,8 +659,8 @@ export default function Inventory() {
               </div>
               <div>
                 <label htmlFor="inventory-quantity-to-transfer-max" className={labelCls}>Quantity to Transfer * <span className="normal-case text-slate-500 font-normal">(max {transferItem.quantity})</span></label>
-                <input id="inventory-quantity-to-transfer-max" required type="number" min="1" max={transferItem.quantity} value={transferForm.quantity} onChange={e => setTransferForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} />
-                <FieldError errors={transferCheck.errors(transferForm, INVENTORY_TRANSFER_SPEC)} field="quantity" />
+                <input id="inventory-quantity-to-transfer-max" type="number" value={transferForm.quantity} onChange={e => setTransferForm(f => ({ ...f, quantity: e.target.value }))} className={inputCls} />
+                <FieldError errors={transferCheck.errors(transferForm, INVENTORY_TRANSFER_SPEC, transferExtra)} field="quantity" />
               </div>
               <div>
                 <label htmlFor="inventory-notes" className={labelCls}>Notes</label>
@@ -651,10 +688,10 @@ export default function Inventory() {
               <p className="text-sm font-semibold text-white">{countItem.product}</p>
               <p className="text-xs text-slate-400">Batch: {countItem.batchNumber || '—'} · System Qty: <span className="font-bold text-brand-accent">{countItem.quantity}</span></p>
             </div>
-            <form onSubmit={handleCount} className="space-y-4">
+            <form onSubmit={handleCount} noValidate className="space-y-4">
               <div>
                 <label htmlFor="inventory-physically-counted-quantity" className={labelCls}>Physically Counted Quantity *</label>
-                <input id="inventory-physically-counted-quantity" required type="number" min="0" value={countedQty} onChange={e => setCountedQty(e.target.value)} className={inputCls} autoFocus />
+                <input id="inventory-physically-counted-quantity" type="number" value={countedQty} onChange={e => setCountedQty(e.target.value)} className={inputCls} autoFocus />
                 <FieldError errors={countCheck.errors({ countedQty }, INVENTORY_COUNT_SPEC)} field="countedQty" />
               </div>
               {countedQty !== '' && Number(countedQty) !== countItem.quantity && (

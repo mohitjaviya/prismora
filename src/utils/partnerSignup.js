@@ -16,7 +16,8 @@
  */
 
 import { looksLikeEmail, normaliseEmail } from './signupChecks';
-import { contactProblem } from './contactChecks';
+import { contactProblem, gstinProblem, pincodeProblem } from './contactChecks';
+import { mobileProblem, emailProblem, normaliseMobile } from './formRules';
 
 /** The three kinds, and the words each one needs on screen. */
 export const SIGNUP_KINDS = {
@@ -94,7 +95,7 @@ export function signupPayload(kind, form = {}) {
     contactPerson: String(form.contactPerson ?? '').trim(),
     email: normaliseEmail(form.email),
     password: String(form.password ?? ''),
-    phone: String(form.phone ?? '').trim(),
+    phone: normaliseMobile(form.phone),
     state: String(form.state ?? '').trim(),
     city: String(form.city ?? '').trim(),
     address: String(form.address ?? '').trim(),
@@ -167,4 +168,32 @@ export function successMessage(businessName, { emailConfirmationRequired } = {})
   return emailConfirmationRequired
     ? `${base} We have sent a confirmation link to your email address: please open it, then you'll be able to sign in once the registration is approved.`
     : `${base} You'll be able to sign in once it is approved.`;
+}
+
+/**
+ * The same checks as `validateSignup`, one message per field, for the messages
+ * under the sign-up fields. Empty when the form may be sent.
+ */
+export function signupFieldErrors(kind, form = {}) {
+  const spec = SIGNUP_KINDS[kind];
+  const out = {};
+  if (!spec) return out;
+  const blank = (v) => !String(v ?? '').trim();
+  const need = {
+    name: 'Enter your business name',
+    contactPerson: 'Enter a contact person',
+    state: 'Choose your state',
+    city: 'Choose your city or district',
+    address: 'Enter your address: it is where your orders are delivered',
+    pincode: 'Enter your pincode',
+  };
+  if (spec.parentField && blank(form[spec.parentField])) out[spec.parentField] = `Choose the ${spec.parentLabel} you buy through`;
+  for (const [field, message] of Object.entries(need)) if (blank(form[field])) out[field] = message;
+  out.phone = blank(form.phone) ? 'Enter a phone number' : mobileProblem(form.phone);
+  out.email = blank(form.email) ? 'Enter your email address' : (looksLikeEmail(form.email) ? emailProblem(form.email) : 'Enter a valid email address, like name@domain.com');
+  if (!out.pincode) out.pincode = pincodeProblem(form.pincode);
+  out.gstin = gstinProblem(form.gstin);
+  out.password = String(form.password ?? '').length < 8 ? 'The password must be at least 8 characters' : null;
+  for (const k of Object.keys(out)) if (!out[k]) delete out[k];
+  return out;
 }

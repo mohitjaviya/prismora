@@ -4,11 +4,11 @@ import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Tag, Plus, Trash2, X, Edit2, CheckCircle, Clock, Download, Percent, Gift, Calendar, BarChart3, Zap, Trophy } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
-import { PageHeader, Button, StatCard, Card, SearchInput } from '../components/ui';
+import { PageHeader, Button, StatCard, Card, SearchInput, FieldError, ErrorSummary, useFieldCheck } from '../components/ui';
 import { downloadExcel } from '../utils/exportUtils';
 import { schemeLiveState } from '../utils/schemeUtils';
 import { optionsFor } from '../utils/masterLists';
-import { schemeProblem } from '../utils/valueRules';
+import { cleanForm } from '../utils/formRules';
 
 const APPLICABLE_TO = ['All', 'Distributor', 'Dealer', 'Retailer'];
 
@@ -34,6 +34,15 @@ const typeIcon = (type) => {
 const inputCls = "w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600";
 const labelCls = "block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide";
 
+const SCHEME_SPEC = {
+  name: { label: 'Scheme name', required: true },
+  discountPct: { label: 'Discount %', kind: 'percent' },
+  freeGoodsQty: { label: 'Free goods quantity', kind: 'count' },
+  minOrderValue: { label: 'Minimum order value', kind: 'amount' },
+};
+const schemeDates = (f) => (f.validFrom && f.validTo && new Date(f.validTo) < new Date(f.validFrom)
+  ? { validTo: 'Valid To cannot be before Valid From' } : {});
+
 const BLANK_FORM = {
   name: '', type: 'Flat Discount', discountPct: '', freeGoodsQty: '', freeGoodsProduct: '',
   minOrderValue: '', applicableTo: 'Distributor', applicableProducts: [], validFrom: '', validTo: '',
@@ -57,6 +66,7 @@ export default function Schemes() {
   const [editingScheme, setEditingScheme] = useState(null);
   const [form, setForm] = useState(BLANK_FORM);
   const [isSaving, setIsSaving] = useState(false);
+  const schemeCheck = useFieldCheck();
 
   // Performance analytics per scheme — reuses distributor_incentives, which
   // already records every auto-generated incentive per order/party/scheme.
@@ -109,8 +119,9 @@ export default function Schemes() {
     return matchSearch && matchStatus && matchApplicable;
   }), [schemes, search, filter, applicableFilter]);
 
-  const openAdd = () => { setEditingScheme(null); setForm(BLANK_FORM); setIsModalOpen(true); };
+  const openAdd = () => { schemeCheck.reset(); setEditingScheme(null); setForm(BLANK_FORM); setIsModalOpen(true); };
   const openEdit = (s) => {
+    schemeCheck.reset();
     setEditingScheme(s);
     setForm({
       name: s.name, type: s.type, discountPct: s.discountPct || '',
@@ -134,8 +145,9 @@ export default function Schemes() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSaving) return;
+    if (!schemeCheck.ok(form, SCHEME_SPEC, schemeDates)) return;
     const payload = {
-      ...form,
+      ...cleanForm(form, SCHEME_SPEC),
       discountPct: Number(form.discountPct || 0),
       freeGoodsQty: Number(form.freeGoodsQty || 0),
       freeGoodsProduct: form.freeGoodsProduct || null,
@@ -143,8 +155,6 @@ export default function Schemes() {
       validFrom: form.validFrom ? new Date(form.validFrom).toISOString() : null,
       validTo: form.validTo ? new Date(form.validTo).toISOString() : null,
     };
-    const problem = schemeProblem(payload);
-    if (problem) { toast(problem, 'error'); return; }
     // Waits for the database: closes only once it is saved, else says why.
     setIsSaving(true);
     const r = editingScheme ? await updateScheme(editingScheme.id, payload) : await addScheme(payload);
@@ -368,9 +378,9 @@ export default function Schemes() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2"><Tag className="text-brand-accent" size={20} />{editingScheme ? 'Edit Scheme' : 'Create New Scheme'}</h3>
               <button onClick={() => setIsModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg" title="Close"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2"><label htmlFor="schemes-scheme-name" className={labelCls}>Scheme Name *</label><input id="schemes-scheme-name" required type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Monsoon Mega Sale 2026" className={inputCls} /></div>
+                <div className="sm:col-span-2"><label htmlFor="schemes-scheme-name" className={labelCls}>Scheme Name *</label><input id="schemes-scheme-name" type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Monsoon Mega Sale 2026" className={inputCls} /><FieldError errors={schemeCheck.errors(form, SCHEME_SPEC, schemeDates)} field="name" /></div>
                 <div>
                   <label htmlFor="schemes-scheme-type" className={labelCls}>Scheme Type *</label>
                   <select id="schemes-scheme-type" required value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={inputCls}>
@@ -383,8 +393,8 @@ export default function Schemes() {
                     {APPLICABLE_TO.map(a => <option key={a} value={a} className="bg-brand-primary">{a}</option>)}
                   </select>
                 </div>
-                <div><label htmlFor="schemes-discount-if-applicable" className={labelCls}>Discount % (if applicable)</label><input id="schemes-discount-if-applicable" type="number" min="0" max="100" step="0.5" value={form.discountPct} onChange={e => setForm(f => ({ ...f, discountPct: e.target.value }))} placeholder="e.g. 10" className={inputCls} /></div>
-                <div><label htmlFor="schemes-free-goods-qty-if-applicable" className={labelCls}>Free Goods Qty (if applicable)</label><input id="schemes-free-goods-qty-if-applicable" type="number" min="0" value={form.freeGoodsQty} onChange={e => setForm(f => ({ ...f, freeGoodsQty: e.target.value }))} placeholder="e.g. 5 units" className={inputCls} /></div>
+                <div><label htmlFor="schemes-discount-if-applicable" className={labelCls}>Discount % (if applicable)</label><input id="schemes-discount-if-applicable" type="number" step="0.5" value={form.discountPct} onChange={e => setForm(f => ({ ...f, discountPct: e.target.value }))} placeholder="e.g. 10" className={inputCls} /><FieldError errors={schemeCheck.errors(form, SCHEME_SPEC, schemeDates)} field="discountPct" /></div>
+                <div><label htmlFor="schemes-free-goods-qty-if-applicable" className={labelCls}>Free Goods Qty (if applicable)</label><input id="schemes-free-goods-qty-if-applicable" type="number" value={form.freeGoodsQty} onChange={e => setForm(f => ({ ...f, freeGoodsQty: e.target.value }))} placeholder="e.g. 5 units" className={inputCls} /><FieldError errors={schemeCheck.errors(form, SCHEME_SPEC, schemeDates)} field="freeGoodsQty" /></div>
                 {/* Five of what. Without this the scheme awards a quantity with
                     no product, and nothing downstream can take the units out of
                     stock. */}
@@ -403,7 +413,7 @@ export default function Schemes() {
                     {(productCatalog || []).map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                   </select>
                 </div>
-                <div><label htmlFor="schemes-minimum-order-value" className={labelCls}>Minimum Order Value (₹)</label><input id="schemes-minimum-order-value" type="number" min="0" value={form.minOrderValue} onChange={e => setForm(f => ({ ...f, minOrderValue: e.target.value }))} placeholder="e.g. 50000" className={inputCls} /></div>
+                <div><label htmlFor="schemes-minimum-order-value" className={labelCls}>Minimum Order Value (₹)</label><input id="schemes-minimum-order-value" type="number" value={form.minOrderValue} onChange={e => setForm(f => ({ ...f, minOrderValue: e.target.value }))} placeholder="e.g. 50000" className={inputCls} /><FieldError errors={schemeCheck.errors(form, SCHEME_SPEC, schemeDates)} field="minOrderValue" /></div>
                 <div className="sm:col-span-2">
                   <span id="applicable-products-group" className={labelCls}>Applicable Products <span className="normal-case text-slate-500 font-normal">(leave all unchecked for "All Products")</span></span>
                   <div role="group" aria-labelledby="applicable-products-group" className="flex flex-wrap gap-2 p-3 glass-input rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
@@ -423,9 +433,10 @@ export default function Schemes() {
                   </select>
                 </div>
                 <div><label htmlFor="schemes-valid-from" className={labelCls}>Valid From</label><input id="schemes-valid-from" type="date" value={form.validFrom} onChange={e => setForm(f => ({ ...f, validFrom: e.target.value }))} className={inputCls} /></div>
-                <div><label htmlFor="schemes-valid-to" className={labelCls}>Valid To</label><input id="schemes-valid-to" type="date" value={form.validTo} onChange={e => setForm(f => ({ ...f, validTo: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="schemes-valid-to" className={labelCls}>Valid To</label><input id="schemes-valid-to" type="date" value={form.validTo} onChange={e => setForm(f => ({ ...f, validTo: e.target.value }))} className={inputCls} /><FieldError errors={schemeCheck.errors(form, SCHEME_SPEC, schemeDates)} field="validTo" /></div>
                 <div className="sm:col-span-2"><label htmlFor="schemes-description" className={labelCls}>Description</label><textarea id="schemes-description" rows="2" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description of the scheme terms..." className={`${inputCls} resize-none`} /></div>
               </div>
+              <div className="mt-4"><ErrorSummary errors={schemeCheck.errors(form, SCHEME_SPEC, schemeDates)} /></div>
               <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-white/5">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl" title="Close">Cancel</button>
                 <button type="submit" disabled={isSaving} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSaving ? 'Saving…' : editingScheme ? 'Save Changes' : 'Create Scheme'}</button>

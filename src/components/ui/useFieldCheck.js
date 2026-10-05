@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { checkForm, hasErrors } from '../../utils/formRules';
+import { jumpToFirstError } from './jumpToError';
 
 /**
  * Messages under the fields, shown once Save has been pressed and kept up to
@@ -9,6 +10,9 @@ import { checkForm, hasErrors } from '../../utils/formRules';
  *   const errors = check.errors(form, SPEC);       // in render
  *   if (!check.ok(form, SPEC)) return;              // in the save handler
  *   check.reset();                                  // when the form opens
+ *
+ * A failed `ok()` also jumps to the first message (scroll + focus). Put
+ * `<ErrorSummary errors={errors} />` beside Save for the list.
  *
  * `extra` (optional) adds form-specific messages: `(form) => ({ field: msg })`.
  */
@@ -20,6 +24,8 @@ export default function useFieldCheck() {
     ok(form, spec, extra) {
       const bad = hasErrors(all(form, spec, extra));
       setTried(bad);
+      // After the messages have rendered: scroll to the first one and focus its field.
+      if (bad) setTimeout(jumpToFirstError, 60);
       return !bad;
     },
     reset: () => setTried(false),
