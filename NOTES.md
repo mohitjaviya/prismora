@@ -201,3 +201,8 @@ Findings so far:
 4. **Waiting on others:** H17 TDS (accountant); QUIC network test on a phone hotspot (owner).
 5. **Carry-over tests:** P3-01..03 (login/register/shell), P3-35 layout/theme matrix, Reports date filters, Dealer/Retailer Incentives + Stock pages, Director Top States / Admin Lead Status read off screen, free-goods stock (F03), partner confirms receipt (E06), lead drag refusal on screen.
 6. Kept on purpose: O113 (owner), O187, O140, O145, TEST-P3 vendor/PO-12/GRN-20/21/batches, T-TEST-PUNE.
+
+## 2026-10-05 LIVE DB: migrations 086, 087, 089, 091, 090, 092, 093, 094 APPLIED (owner ran them; verified in schema_migrations + pg_constraint)
+- 094 first attempt failed (no company_settings.phone, rolled back); file corrected (stock qty >= 0, phone ignores spaces, schema_migrations (filename, note)) and then applied.
+- Still open (owner, on screen): O319 + O320 Correct condition → 50 Damaged; renumber abc123 → abc123-A/-B/-C. 085 not applied (keep-alive).
+- Next free migration: 095.
