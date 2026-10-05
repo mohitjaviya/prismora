@@ -27,7 +27,7 @@ Full detail: `test-results/full-test/SESSION-STATE.md`, `PHASE2-PROGRESS.md`, `F
 | 13 | 18 Batch number required + unique per product | see `git log` ("feat(gap 18)") | Built; 090 file only, not applied; forms check it now |
 | 14 | 17 Damaged/expired visibility on Inventory | see `git log` ("feat(gap 17)") | Built; screen parts live now, expired actions need 091 (file only, not applied); not browser-checked |
 | 15 | 7 Partner payment / ledger (A, B, D) | see `git log` ("feat(gap 7)") | A built: 092 file only, not applied (screen falls back to the same row until then); B + D screen, not browser-checked. **C BUILT (owner: option 2 + Record refund): 093 file only, not applied; no Refund button until it is** |
-Tests 868/868, build OK, lint 64 (unchanged) after the last gap commit. Branch is ahead of `origin` by these gap commits plus NOTES-only commits.
+Tests 891/891, build OK, lint 64. **2026-10-05: Orders crash fix `87579fd` (orderSpec moved below formData); branch pushed to GitHub at owner request (not merged to main, not deployed).**
 **Next:** apply 086 when the owner says so (command in migrations/README.md), then browser-check the Condition field; or the next gap (still open: 4, 5, 7, 8, 9). Gap 5 will need **087**.
 **Possible follow-up (owner, not built):** move damaged returned units back to sellable after inspection. Admin/Warehouse Manager only, reason required, done by a DB function that writes a movement row.
 **Seen 2026-10-04 (not mine):** a real sales return SR-1791104802738 on O187 at 14:36 IST (no note; probably the owner's Gap 11 test step 4): O187 is now fully returned, TEST-INV-3 45 → 46. The 086 dry run (`gap11/dryrun.mjs`) used O187's last unit, so to re-run it point it at another delivered TEST order with a returnable unit.
