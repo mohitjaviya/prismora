@@ -201,22 +201,6 @@ const Orders = () => {
     if (Number(formData.deliveredQty || 0) > 0) return true;
     return ['Shipped', 'Partially Delivered', 'Delivered'].includes(formData.status);
   };
-  // Gap 9: the shared input rules. A locked quantity or a billed value cannot
-  // be changed here, so it is not asked for.
-  const hasItemLines = Array.isArray(formData.items) && formData.items.length > 0;
-  const orderSpec = {
-    customerName: { label: 'Customer name', required: true },
-    phone: { label: 'Contact phone', kind: 'mobile' },
-    email: { label: 'Contact email', kind: 'email' },
-    product: hasItemLines ? null : { label: 'Product', required: true },
-    quantity: isQuantityLocked() ? null : { label: 'Quantity', kind: 'qty', required: true },
-    value: billedBy ? null : { label: 'Order value', kind: 'amount', required: true },
-    state: { label: 'State', required: true },
-    city: { label: 'City', required: true },
-    date: { label: 'Order date', required: true },
-  };
-  const orderErrors = orderCheck.errors(formData, orderSpec);
-
   const getStockShortfalls = (order, stock = inventory) => {
     // For a single-product order already part-delivered, only what's still
     // outstanding needs to be in stock — not the original full quantity.
@@ -423,6 +407,22 @@ const Orders = () => {
     assignedTo: (isSalesRole(user?.role) || isManagerRole(user?.role)) ? user.id : '',
     date: '', phone: '', email: ''
   });
+
+  // Gap 9: the shared input rules. A locked quantity or a billed value cannot
+  // be changed here, so it is not asked for. Declared after formData.
+  const hasItemLines = Array.isArray(formData.items) && formData.items.length > 0;
+  const orderSpec = {
+    customerName: { label: 'Customer name', required: true },
+    phone: { label: 'Contact phone', kind: 'mobile' },
+    email: { label: 'Contact email', kind: 'email' },
+    product: hasItemLines ? null : { label: 'Product', required: true },
+    quantity: isQuantityLocked() ? null : { label: 'Quantity', kind: 'qty', required: true },
+    value: billedBy ? null : { label: 'Order value', kind: 'amount', required: true },
+    state: { label: 'State', required: true },
+    city: { label: 'City', required: true },
+    date: { label: 'Order date', required: true },
+  };
+  const orderErrors = orderCheck.errors(formData, orderSpec);
 
   // Who an order can be for.
   //
