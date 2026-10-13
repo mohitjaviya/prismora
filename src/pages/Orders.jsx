@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useData } from '../context/DataContext';
-import { useAuth, isSalesRole, isAdminRole, isManagerRole } from '../context/AuthContext';
+import { useAuth, isSalesRole, isAdminRole, isManagerRole, roleLevel } from '../context/AuthContext';
 import { attributionFor } from '../utils/attribution';
 import { isUnassigned } from '../utils/orderRouting';
 import { format } from 'date-fns';
@@ -13,7 +13,7 @@ import { allParties } from '../utils/distributorUtils';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { optionsFor, badgeStyle } from '../utils/masterLists';
-import { canRecordReceipt, describeReceipt, receiptSourceOf, validateReceipt, RECEIPT_EVIDENCE } from '../utils/receipts';
+import { canRecordReceipt, describeReceipt, receiptSourceOf, validateReceipt, RECEIPT_EVIDENCE, mayRecordReceiptFor, mayWithdrawReceipt } from '../utils/receipts';
 import { useToast, useConfirm } from '../context/DialogContext';
 import { missingDelivery } from '../utils/delivery';
 import LastChanged from '../components/audit/LastChanged';
@@ -59,7 +59,7 @@ const INDIAN_STATES = [
 ];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded, invoices, salesReturns, returnCorrectionSupported } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded, invoices, salesReturns, returnCorrectionSupported, orderReceiptSupported } = useData();
   // From Master Lists. The stepper and the dropdown show the label; every
   // check in this file — STATUS_OWNERS, the stock guards, the delivery
   // branches — still compares the stored key, which cannot be renamed.
@@ -102,9 +102,26 @@ const Orders = () => {
 
   // Recording a receipt on a customer's behalf. Staff only: a party signed into
   // their own portal confirms it themselves, and that is the stronger claim.
+  // Gap 19 (096): the order's salesperson and their manager, Accounts, the
+  // warehouse, dispatch and administrators; withdraw = the recorder or Admin.
+  // Before 096 only full-Orders roles could save it, so only they get the buttons.
   const toast = useToast();
   const confirm = useConfirm();
-  const canStaffRecordReceipt = !['Distributor', 'Dealer', 'Retailer'].includes(user?.role);
+  const [receiptFnOn, setReceiptFnOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    orderReceiptSupported().then(ok => { if (live) setReceiptFnOn(ok); });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const receiptViewer = {
+    id: user?.id, role: user?.role, level: roleLevel(user?.role), managedUsers: user?.managedUsers,
+    salesFull: canAccess('leads', 'full') || canAccess('sfa', 'full'),
+  };
+  const receiptDirectOk = receiptFnOn || canAccess('orders', 'full');
+  const canRecordReceiptOn = (o) => receiptDirectOk && mayRecordReceiptFor(o, receiptViewer);
+  const canWithdrawReceiptOn = (o) => receiptFnOn
+    ? mayWithdrawReceipt(o, receiptViewer)
+    : canAccess('orders', 'full') && receiptSourceOf(o) === 'staff';
   // Returns move stock and money: the warehouse or Accounts, and administrators.
   const canRecordReturns = canAccess('accounting', 'full') || canAccess('inventory', 'full');
   const [receiptOrder, setReceiptOrder] = useState(null);
@@ -124,8 +141,9 @@ const Orders = () => {
       danger: true,
     });
     if (!ok) return;
-    if (await clearOrderReceipt(order.id)) toast(`Receipt withdrawn from ${order.id}.`, 'success');
-    else toast('The receipt could not be withdrawn. The reason is in the browser console.', 'error');
+    const res = await clearOrderReceipt(order.id);
+    if (res.ok) toast(`Receipt withdrawn from ${order.id}.`, 'success');
+    else toast(res.error || 'The receipt could not be withdrawn.', 'error');
   };
 
   const submitReceipt = async (e) => {
@@ -134,7 +152,7 @@ const Orders = () => {
     if (!check.ok) { toast(check.error, 'error'); return; }
 
     setSavingReceipt(true);
-    const { ok, proofSaved, needsMigration } = await recordOrderReceipt(receiptOrder.id, {
+    const { ok, proofSaved, needsMigration, error } = await recordOrderReceipt(receiptOrder.id, {
       evidence: receiptForm.evidence,
       note: receiptForm.note,
       recordedBy: user?.name || 'Staff',
@@ -146,7 +164,7 @@ const Orders = () => {
       return;
     }
     if (!ok) {
-      toast('The receipt could not be saved, so nothing has been recorded. The reason is in the browser console.', 'error');
+      toast(error || 'The receipt could not be saved, so nothing has been recorded. The reason is in the browser console.', 'error');
       return;
     }
     setReceiptOrder(null);
@@ -869,14 +887,14 @@ const Orders = () => {
         <div className="flex items-center justify-end gap-0.5">
           {/* A customer created by staff has no portal, so nobody could ever
               record that their delivery landed. */}
-          {canStaffRecordReceipt && canRecordReceipt(o) && (
+          {canRecordReceipt(o) && canRecordReceiptOn(o) && (
             <IconButton icon={ClipboardCheck} title="Record receipt" size="sm" tone="success"
               onClick={e => { e.stopPropagation(); openReceipt(o); }} />
           )}
           {/* Gap 11: two different actions that shared the ↩ icon. This one only
               takes back a staff-recorded "receipt confirmed" note; no goods move. */}
-          {canStaffRecordReceipt && receiptSourceOf(o) === 'staff' && (
-            <IconButton icon={ClipboardX} title="Withdraw the receipt you recorded (no goods move)" size="sm"
+          {canWithdrawReceiptOn(o) && (
+            <IconButton icon={ClipboardX} title="Withdraw this staff-recorded receipt (no goods move)" size="sm"
               onClick={e => { e.stopPropagation(); withdrawReceipt(o); }} />
           )}
           {/* Goods coming back: stock, credit note and balance (record_sales_return). */}
@@ -1084,12 +1102,32 @@ const Orders = () => {
                 </div>
               )}
 
-              {editingOrder && formData.receivedByDistributor && (
-                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 text-sm text-emerald-400 font-medium -mt-2">
-                  <CheckCircle size={16} className="flex-shrink-0" />
-                  Distributor confirmed receipt on {formData.receivedAt ? format(new Date(formData.receivedAt), 'MMM dd, yyyy') : 'N/A'}
-                </div>
-              )}
+              {/* Gap 19: who said the goods arrived, when, on what evidence. From
+                  the stored order (not the form), so it is what everyone sees. */}
+              {editingOrder && (() => {
+                const stored = orders.find(o => o.id === editingOrder.id) || editingOrder;
+                const source = receiptSourceOf(stored);
+                if (!source) return null;
+                const when = stored.receivedAt ? format(new Date(stored.receivedAt), 'dd MMM yyyy, hh:mm a') : 'date not recorded';
+                return source === 'partner' ? (
+                  <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 text-sm text-emerald-400 font-medium -mt-2">
+                    <CheckCircle size={16} className="flex-shrink-0" />
+                    Customer confirmed receipt in their portal on {when}
+                  </div>
+                ) : (
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-300 -mt-2 space-y-1">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <CheckCircle size={16} className="flex-shrink-0" />
+                      Receipt recorded by staff
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      By <span className="font-semibold text-white">{stored.receiptRecordedBy || 'staff'}</span> on {when}
+                      {stored.receiptEvidence ? <> · Evidence: {stored.receiptEvidence}</> : null}
+                    </div>
+                    {stored.receiptNote ? <div className="text-xs text-slate-300 whitespace-pre-wrap">Note: {stored.receiptNote}</div> : null}
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="flex items-center gap-2 cursor-pointer w-fit mb-2">

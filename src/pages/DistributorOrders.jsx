@@ -10,6 +10,8 @@ import { quantityProblem, normaliseMobile, normaliseEmail } from '../utils/formR
 import CancelMyOrderButton from '../components/CancelMyOrderButton';
 import { useToast } from '../context/DialogContext';
 import { isSchemeEligible } from '../utils/schemeUtils';
+// Gap 19: a staff-recorded receipt reads 'recorded by our team' (no name or evidence).
+import { partnerReceiptLabel } from '../utils/receipts';
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -172,7 +174,7 @@ export default function DistributorOrders() {
           <Badge>{statusConfig[o.status]?.icon}{o.status}</Badge>
           {o.receivedByDistributor && (
             <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
-              <CheckCircle size={10} /> Receipt confirmed
+              <CheckCircle size={10} /> {partnerReceiptLabel(o)}
             </div>
           )}
         </>
@@ -328,7 +330,7 @@ export default function DistributorOrders() {
             {liveOrder.receivedByDistributor ? (
               <div className="mt-4 flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 text-sm text-emerald-400 font-medium">
                 <CheckCircle size={16} className="flex-shrink-0" />
-                Receipt confirmed on {formatDate(liveOrder.receivedAt)}
+                {partnerReceiptLabel(liveOrder)} on {formatDate(liveOrder.receivedAt)}
               </div>
             ) : canConfirmReceipt ? (
               <button

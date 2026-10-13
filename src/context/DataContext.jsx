@@ -238,6 +238,14 @@ const ORDER_COLUMNS = [
 
 // Narrows an order object to just the persistable columns. Form-only fields
 // stay in React state and localStorage; only real columns go over the wire.
+// Receipt columns are written only by Record / Withdraw receipt (096).
+const RECEIPT_COLUMNS = ['receivedByDistributor', 'receivedAt', 'receiptSource', 'receiptRecordedBy', 'receiptEvidence', 'receiptNote'];
+const orderEditRow = (order) => {
+  const row = orderRow(order);
+  for (const key of RECEIPT_COLUMNS) delete row[key];
+  return row;
+};
+
 const orderRow = (order) => {
   const row = {};
   for (const key of ORDER_COLUMNS) {
@@ -1517,7 +1525,7 @@ export const DataProvider = ({ children }) => {
       // to either. They used to be three browser writes under the clicker's
       // own permissions, so a Dispatch delivery saved while its stock and its
       // invoice were both refused.
-      const result = await saveDelivery(id, orderRow(updatedData), oldOrder);
+      const result = await saveDelivery(id, orderEditRow(updatedData), oldOrder);
       if (!result.ok) return result;
       const who = updatedData.customerName || oldOrder.customerName;
       logEvent('order_delivered', oldOrder.fulfilledAt
@@ -1528,7 +1536,7 @@ export const DataProvider = ({ children }) => {
 
     // The database decides the stage rules and the invoiced lock (061, 062),
     // so its refusal is shown as it is and the row goes back to what it was.
-    const res = await saveUnlessChanged('orders', id, orderRow(updatedData), opts, `Order ${id}`, 'save this order');
+    const res = await saveUnlessChanged('orders', id, orderEditRow(updatedData), opts, `Order ${id}`, 'save this order');
     setOrders(prev => {
       const back = res.ok ? res.row : (res.conflict?.current || oldOrder);
       const next = back ? prev.map(o => (o.id === id ? { ...o, ...back } : o)) : prev;
@@ -1862,7 +1870,12 @@ export const DataProvider = ({ children }) => {
     const row = { ...patch };
     absentReceiptColumns.current.forEach(c => delete row[c]);
 
-    const { error } = await supabase.from('orders').update(row).eq('id', id);
+    // .select: a role the database does not let change the order gets no
+    // error, just 0 rows (Gap 19), which used to be shown as saved.
+    const { data, error } = await supabase.from('orders').update(row).eq('id', id).select('id');
+    if (!error && !data?.length) {
+      return { ok: false, dropped, error: 'Not saved: your role cannot change this order yet. Ask the order desk or an administrator.' };
+    }
     if (!error) return { ok: true, dropped };
 
     const message = String(error.message || '');
@@ -1898,6 +1911,47 @@ export const DataProvider = ({ children }) => {
     return { ok: true };
   };
 
+  // Whether the receipt functions are in the database (096). Asked once per
+  // session; until then (any error) receipts use the direct update, which
+  // only full-Orders roles can make.
+  const orderReceiptCheck = useRef(null);
+  const orderReceiptSupported = () => {
+    if (!orderReceiptCheck.current) {
+      orderReceiptCheck.current = supabase.rpc('order_receipt_enabled')
+        .then(({ data, error }) => !error && data === true, () => false)
+        .then(ok => { if (!ok) orderReceiptCheck.current = null; return ok; });
+    }
+    return orderReceiptCheck.current;
+  };
+
+  /**
+   * Undoing a receipt an employee recorded by mistake.
+   *
+   * Only one they recorded. A customer's own confirmation in their portal is
+   * theirs, and staff erasing it would be staff deciding that the customer did
+   * not say what they said. With 096 only the recorder or an administrator may.
+   * Nothing changes on screen until the database has said yes.
+   */
+  const clearOrderReceipt = async (id) => {
+    const order = orders.find(o => o.id === id);
+    if (!order || order.receiptSource !== 'staff') return { ok: false, error: 'This order has no receipt recorded by staff.' };
+
+    let result;
+    if (await orderReceiptSupported()) {
+      const { error } = await supabase.rpc('withdraw_order_receipt', { p_order_id: id });
+      result = error ? { ok: false, error: plainDatabaseError(error, 'withdraw this receipt') } : { ok: true };
+    } else {
+      result = await writeReceipt(id, {
+        receivedByDistributor: false, receivedAt: null, receiptSource: null,
+        receiptRecordedBy: null, receiptEvidence: null, receiptNote: null,
+      });
+    }
+    if (!result.ok) return { ok: false, error: result.error || 'The receipt could not be withdrawn. The reason is in the browser console.' };
+    await reloadRows('orders', setOrders, 'prismora_orders', 'id', [id]);
+    logEvent('order_receipt_cleared', `Receipt recorded against order ${id} was withdrawn`, order.assignedTo, id);
+    return { ok: true };
+  };
+
   /**
    * Staff recording receipt for a customer who has no portal to confirm it in.
    *
@@ -1907,59 +1961,42 @@ export const DataProvider = ({ children }) => {
    *
    * Returns { ok, proofSaved } -- proofSaved is false when the table has not
    * had ADD_RECEIPT_EVIDENCE.sql run against it, so the caller can say that
-   * out loud instead of letting the evidence disappear silently.
+   * out loud instead of letting the evidence disappear silently, and error
+   * with the database's own words when it refused.
    */
-  /**
-   * Undoing a receipt an employee recorded by mistake.
-   *
-   * Only one they recorded. A customer's own confirmation in their portal is
-   * theirs, and staff erasing it would be staff deciding that the customer did
-   * not say what they said.
-   */
-  const clearOrderReceipt = async (id) => {
-    const order = orders.find(o => o.id === id);
-    if (!order || order.receiptSource !== 'staff') return false;
-
-    const patch = {
-      receivedByDistributor: false,
-      receivedAt: null,
-      receiptSource: null,
-      receiptRecordedBy: null,
-      receiptEvidence: null,
-      receiptNote: null,
-    };
-    const next = orders.map(o => o.id === id ? { ...o, ...patch } : o);
-    setOrders(next);
-    localStorage.setItem('prismora_orders', JSON.stringify(next));
-
-    const { ok } = await writeReceipt(id, patch);
-    logEvent('order_receipt_cleared', `Receipt recorded against order ${id} was withdrawn`, order.assignedTo, id);
-    return ok;
-  };
-
+  // With 096 the database checks who may record it and stamps the name, user
+  // id and time itself; the row is read back so everyone sees what was stored.
   const recordOrderReceipt = async (id, { evidence, note, recordedBy } = {}) => {
     const order = orders.find(o => o.id === id);
     if (!order) return { ok: false, proofSaved: false };
-    if (!await canStoreReceiptProof()) return { ok: false, proofSaved: false, needsMigration: true };
 
-    const receivedAt = new Date().toISOString();
-    const patch = {
+    if (await orderReceiptSupported()) {
+      const { error } = await supabase.rpc('record_order_receipt', {
+        p_order_id: id, p_evidence: evidence || '', p_note: String(note || '').trim(),
+      });
+      if (error) return { ok: false, proofSaved: false, error: plainDatabaseError(error, 'record this receipt') };
+      await reloadRows('orders', setOrders, 'prismora_orders', 'id', [id]);
+      logEvent('order_receipt_recorded',
+        `${recordedBy || 'Staff'} recorded receipt of order ${id} for ${order.customerName} (${evidence || 'no evidence given'})`,
+        order.assignedTo, id);
+      return { ok: true, proofSaved: true };
+    }
+
+    if (!await canStoreReceiptProof()) return { ok: false, proofSaved: false, needsMigration: true };
+    const { ok, dropped, error } = await writeReceipt(id, {
       receivedByDistributor: true,
-      receivedAt,
+      receivedAt: new Date().toISOString(),
       receiptSource: 'staff',
       receiptRecordedBy: recordedBy || '',
       receiptEvidence: evidence || '',
       receiptNote: String(note || '').trim(),
-    };
-    const next = orders.map(o => o.id === id ? { ...o, ...patch } : o);
-    setOrders(next);
-    localStorage.setItem('prismora_orders', JSON.stringify(next));
-
-    const { ok, dropped } = await writeReceipt(id, patch);
+    });
+    if (!ok) return { ok: false, proofSaved: false, error };
+    await reloadRows('orders', setOrders, 'prismora_orders', 'id', [id]);
     logEvent('order_receipt_recorded',
       `${recordedBy || 'Staff'} recorded receipt of order ${id} for ${order.customerName} (${evidence || 'no evidence given'})`,
       order.assignedTo, id);
-    return { ok, proofSaved: ok && dropped.length === 0 };
+    return { ok: true, proofSaved: dropped.length === 0 };
   };
 
   // Splits an order when there isn't enough stock to fulfill it in full:
@@ -3956,7 +3993,7 @@ export const DataProvider = ({ children }) => {
       // Phase 1 Enterprise
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, receiveStock,
-      damagedLockSupported, writeOffDamaged, returnDamagedToVendor, expiredMovesSupported, writeOffExpired, returnExpiredToVendor, returnCorrectionSupported, correctReturnCondition,
+      damagedLockSupported, writeOffDamaged, returnDamagedToVendor, expiredMovesSupported, writeOffExpired, returnExpiredToVendor, returnCorrectionSupported, correctReturnCondition, orderReceiptSupported,
       masters, addMasterOption, updateMasterOption, deleteMasterOption,
       addVendor, updateVendor, deleteVendor,
       vendorPayments, addVendorPayment, deleteVendorPayment,

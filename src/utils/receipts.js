@@ -63,6 +63,45 @@ export function describeReceipt(order) {
 }
 
 /**
+ * Gap 19 (096): who may record a staff receipt, mirroring the database's
+ * can_record_order_receipt. viewer = { id, role, level, managedUsers,
+ * salesFull } where salesFull = Leads or SFA full. Status is checked by
+ * canRecordReceipt; this is only "is it yours to record".
+ */
+export const RECEIPT_RECORDER_ROLES = ['Admin', 'Super Admin', 'Accounts', 'Warehouse Manager', 'Dispatch Team'];
+export const RECEIPT_WITHDRAW_ROLES = ['Admin', 'Super Admin'];
+
+export function mayRecordReceiptFor(order, viewer) {
+  if (!order || !viewer?.id || viewer.level === 'partner') return false;
+  if (RECEIPT_RECORDER_ROLES.includes(viewer.role)) return true;
+  if (!viewer.salesFull) return false;
+  const people = [order.assignedTo, order.createdBy].filter(Boolean);
+  if (viewer.level === 'sales') return people.includes(viewer.id);
+  if (viewer.level === 'manager') {
+    const team = viewer.managedUsers || [];
+    return people.some(p => p === viewer.id || team.includes(p));
+  }
+  return false;
+}
+
+/** Only the person who recorded it (by id), or Admin / Super Admin (096). */
+export function mayWithdrawReceipt(order, viewer) {
+  if (receiptSourceOf(order) !== 'staff' || !viewer?.id || viewer.level === 'partner') return false;
+  if (RECEIPT_WITHDRAW_ROLES.includes(viewer.role)) return true;
+  return Boolean(order.receiptRecordedById) && order.receiptRecordedById === viewer.id;
+}
+
+/**
+ * What a partner is told: that a receipt is on the order, not which employee
+ * recorded it or on what evidence (owner, 2026-10-13).
+ */
+export function partnerReceiptLabel(order) {
+  const source = receiptSourceOf(order);
+  if (!source) return null;
+  return source === 'staff' ? 'Receipt recorded by our team' : 'Receipt confirmed';
+}
+
+/**
  * What a staff-recorded receipt needs before it can be saved.
  *
  * Evidence is required: a tick with nothing behind it is the thing this was
