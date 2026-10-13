@@ -233,8 +233,14 @@ Findings so far:
 - **Activation:** Accounts finalises the 23 existing proformas one by one (Convert or No GST), or they are deleted in the data cleanup. Nothing was changed on them.
 - Migrations 086-097 applied. 085 NOT applied. 088 reserved for Gap 5. **Next free: 098.**
 
+## 2026-10-13 - Gap 21 DONE (commit `6d866c5`, migration 098 applied live)
+- Problem: a proforma marked paid, then converted to GST, became Partially Paid with the GST due and could not be settled. Mark as Paid allowed one settling payment per invoice (the screen recorded nothing but said "settled"; 092 refused). Record Payment paid the partner's oldest open invoice first. Same for distributors, dealers and retailers.
+- Fix (098): `distributor_payments."invoiceId"`. A second Mark as Paid records only the due as `PAY-INV-<id>-N`. Record Payment has "Against invoice" (amount <= that invoice's due, refused otherwise). Statuses count tied payments. Mark unpaid removes only the Mark as Paid payments. The Mark as Paid toast shows the amount recorded (without 098 it explains instead). The invoice status shows "₹X due"; the ledger line says "— against <invoice>".
+- Proof: `test-results/full-test/gap21/` dryrun 35/35 (23 fail without), live 35/35, ui.mjs 28/28 (TEST O388-O391 removed, `cleanup.sql`). Tests 924, lint 64.
+- **Activation:** the 7 stuck Partially Paid invoices (₹11,685 due): INV-1791188761771 (Demo 21, 900), INV-1791534320877 (Retailer, 5,040), INV-1791534885666 / INV-1791778735634 / INV-1791779123343 (Dealer, 675 / 1,020 / 2,040), INV-1791633799891 / INV-1791634225402 (Krishna pharma, 1,200 / 810). Accounts presses Mark as Paid on each one where the GST was received, or they are deleted in the data cleanup. Not changed by script.
+- Migrations 086-098 applied. 085 NOT applied. 088 reserved for Gap 5. **Next free: 099 (Gap 8).**
+
 ### Still pending (one line each)
-- Gap 21 - (problem not recorded in the repo; owner to add the description)
 - Gap 8 - Payment mode + transaction details: only `method` + one free-text reference; missing cheque no/date/bank fields and per-mode required checks; Accounting "Mark as Paid" records no mode.
 - Gap 4 - Admin can't view employee performance: only the sales-role report + SFA leaderboard; no per-employee view for any role.
 - Gap 5 - Audit log retention (90 days, keep important): no retention function; `audit_log` grows forever (088 reserved).
