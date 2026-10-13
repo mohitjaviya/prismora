@@ -220,15 +220,31 @@ Findings so far:
 - Gap 9 done and live: commit `8e931d8` (pushed, `main` deployed, Vercel Ready, live read-only check passed as Admin + test distributor). Editing an existing record checks only changed fields (as 095); global search no longer crashes on a lead with no company.
 - Migrations 086-095 applied on the live DB. 085 (keep-alive) NOT applied. 088 reserved for Gap 5. Next free: 096.
 
+## 2026-10-13 - Gap 19 DONE (commit `ed9259a`, migration 096 applied live)
+- Staff "Record receipt" on Orders was a direct orders update; RLS (`orders_update` = Orders full) changed 0 rows with no error for Sales Exec / Sales Manager / Accounts, so the screen said recorded and nobody saw it. Now `record_order_receipt` / `withdraw_order_receipt`  (096): record = order's salesperson, their manager, Admin, Super Admin, Accounts, Warehouse Manager, Dispatch; withdraw = recorder (`receiptRecordedById`) or Admin/Super Admin; direct writes of receipt columns refused. Order detail Receipt panel (who/when/evidence/note); partner pages "Receipt recorded by our team on <date>".
+- Proof: `test-results/full-test/gap19/` dryrun 38/38 (36 fail without), ui.mjs 21/21. Tests 909, lint 64.
+- Migrations 086-096 applied. 085 NOT applied. 088 reserved for Gap 5. **Next free: 097.**
+
 ### Still pending (one line each)
 - Gap 8 - Payment mode + transaction details: only `method` + one free-text reference; missing cheque no/date/bank fields and per-mode required checks; Accounting "Mark as Paid" records no mode.
 - Gap 4 - Admin can't view employee performance: only the sales-role report + SFA leaderboard; no per-employee view for any role.
 - Gap 5 - Audit log retention (90 days, keep important): no retention function; `audit_log` grows forever (088 reserved).
-- Gap 19 - (problem not recorded in the repo; owner to add the description)
 - Gap 20 - (problem not recorded in the repo; owner to add the description)
 - Gap 21 - (problem not recorded in the repo; owner to add the description)
 
+### Possible future gap: silent failures on 0-row updates (found in Gap 19 audit, not fixed)
+These writes do not check rows changed; RLS refusal = 0 rows, no error, screen shows success. With today's role settings only allowed roles reach them.
+| Where | Write | Risk |
+|---|---|---|
+| Accounting "Mark unpaid" | `distributor_payments` delete (DataContext ~2399), invoice `markedPaid` (~2428) | Payment logic (ask first). Mark unpaid also ignores the result. Silent if a role ever gets Accounting view. |
+| Product Catalog edit | `products` update (~2232) | Page opens with Settings view; DB needs Settings full. No role has view today. |
+| SFA beat progress / status | `beat_plans` update (~3624, ~3645) | Manager editing a beat outside their team; ~3645 ignores the result. |
+| Roles page | `roles` update (`Roles.jsx:219`) | Admin-only today. |
+| Order split, inventory receive | orders (~2087), inventory (~2947) | Not reachable: split fails loudly on insert first; receiveStock is dead code. |
+
 ### Open items
+- Console warning "`value` prop on input should not be null" when opening an order detail - not investigated.
+- O329: its staff receipt (Accounts, 10 Oct) was never saved (Gap 19 bug) - needs re-recording.
 - SFA visit form: the wrong-email check did not run (email field only shows when an order is placed).
 - Bad old data to fix by hand (now editable without blocking other fields): 10 prefixed lead phones; 12 orders, 4 leads and 13 partner phones - list in `test-results/full-test/gap9b/bad-data.txt`.
 - The six unrelated uncommitted items (root scratch files, `src/pages/supabase/`, `supabase/.temp/cli-latest`) - still uncommitted on purpose.
