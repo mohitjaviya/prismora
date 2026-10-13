@@ -223,14 +223,21 @@ Findings so far:
 ## 2026-10-13 - Gap 19 DONE (commit `ed9259a`, migration 096 applied live)
 - Staff "Record receipt" on Orders was a direct orders update; RLS (`orders_update` = Orders full) changed 0 rows with no error for Sales Exec / Sales Manager / Accounts, so the screen said recorded and nobody saw it. Now `record_order_receipt` / `withdraw_order_receipt`  (096): record = order's salesperson, their manager, Admin, Super Admin, Accounts, Warehouse Manager, Dispatch; withdraw = recorder (`receiptRecordedById`) or Admin/Super Admin; direct writes of receipt columns refused. Order detail Receipt panel (who/when/evidence/note); partner pages "Receipt recorded by our team on <date>".
 - Proof: `test-results/full-test/gap19/` dryrun 38/38 (36 fail without), ui.mjs 21/21. Tests 909, lint 64.
-- Migrations 086-096 applied. 085 NOT applied. 088 reserved for Gap 5. **Next free: 097.**
+- Migrations 086-096 applied. 085 NOT applied. 088 reserved for Gap 5. Next free: 097.
+
+## 2026-10-13 - Gap 20 DONE (commit `b3abc6d`, migration 097 applied live)
+- Problem: a delivered order gets a proforma (GST 0); a proforma is not a sale, so orders billed without GST never reached net sales, receivables, Invoice Register or GSTR-1, even when paid (live: 23 proformas, Rs 60,350, Rs 58,800 received).
+- Fix: 097 adds invoice type `non_gst` + `nonGstReason`; `finalise_without_gst(invoice, reason)` (full Accounting, reason required, proformas only, no balance move); non-GST invoices locked like tax invoices; Convert refuses them. Screens: Accounting With GST / Without GST / Proforma filter, totals per kind, invoice Excel export, "No GST" action + reason form, print "INVOICE - NO GST"; Orders Taxable / GST / Total columns + export; Reports GST / Non-GST column, P&L split, GSTR-1 nil-rated line; ledger "(no GST)" / "(proforma)".
+- Proof: `test-results/full-test/gap20/` dryrun 20/20 (19 fail without), live 20/20, ui.mjs 12/12 (TEST O350/O351 removed, `cleanup.sql`). Tests 919, lint 64.
+- Note: Director can finalise without GST (has full Accounting in role settings, same as Convert). Accounts can't open the Ledger page in its role settings.
+- **Activation:** Accounts finalises the 23 existing proformas one by one (Convert or No GST), or they are deleted in the data cleanup. Nothing was changed on them.
+- Migrations 086-097 applied. 085 NOT applied. 088 reserved for Gap 5. **Next free: 098.**
 
 ### Still pending (one line each)
+- Gap 21 - (problem not recorded in the repo; owner to add the description)
 - Gap 8 - Payment mode + transaction details: only `method` + one free-text reference; missing cheque no/date/bank fields and per-mode required checks; Accounting "Mark as Paid" records no mode.
 - Gap 4 - Admin can't view employee performance: only the sales-role report + SFA leaderboard; no per-employee view for any role.
 - Gap 5 - Audit log retention (90 days, keep important): no retention function; `audit_log` grows forever (088 reserved).
-- Gap 20 - (problem not recorded in the repo; owner to add the description)
-- Gap 21 - (problem not recorded in the repo; owner to add the description)
 
 ### Possible future gap: silent failures on 0-row updates (found in Gap 19 audit, not fixed)
 These writes do not check rows changed; RLS refusal = 0 rows, no error, screen shows success. With today's role settings only allowed roles reach them.
