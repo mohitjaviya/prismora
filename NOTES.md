@@ -247,13 +247,24 @@ Findings so far:
 - **Open check:** proof upload not clicked through in the browser (bucket policies proven in the dry run only).
 - Migrations 086-099 applied. 085 NOT applied. 088 reserved for Gap 5. **Next free: 100.**
 
+## 2026-10-13 - Gap 4 DONE (commit `84a123f`, no migration; pushed and deployed)
+- New page `/team/<id>/performance` (`/team/performance` = own). Admin/Super Admin/Director open any employee, a manager self + `managedUsers`, everyone else self; partners never (`utils/employeePerformance.js`, same rule as the DB's `can_see_rep`). Sections only when they have data (sales, field, expenses, complaints, accounts, purchase/warehouse), period filter, plain message when nothing is linked; Activity card (audit_log) only for Super Admin/Admin/Director. Entry: Team Members "View performance" icon, SFA Performance leaderboard names, Profile "Full performance", switcher on the page.
+- Profile "Your Performance" now shows the signed-in person's OWN numbers for every role (admin level used to see company totals).
+- Proof: local click-through `test-results/full-test/gap4/ui.mjs` 25/25 (Admin, Sales Manager, Sales Executive, Distributor). Manager's DB reads for an outside rep: 0 leads/attendance/beats/visits/field expenses; partner orders still visible (existing rule). Tests 954, lint 64.
+- Migrations 086-099 applied. 085 NOT applied. 088 reserved for Gap 5. **Next free: 100.**
+
+### Later gaps (from Gap 4)
+- Employee targets and "achieved vs target" (no table yet).
+- Limit managers to their own team's partner orders (optional; today a manager sees all partner orders, rule from `sees_account_row`).
+- Clickable names in Reports -> Sales Executive Performance (shared report renderer).
+- Per-person stock movements (not loaded up front; Warehouse only in the Activity card).
+
 ### Later gaps (from Gap 8)
 - Reverse a bounced cheque (today Bounced is a label only, no balance change).
 - Admin-managed bank/cash accounts for "Received into" (today free text with suggestions).
 - Edit or withdraw a recorded payment (today only Mark as Paid payments can be redone via Mark unpaid; others need a DB fix).
 
-### Still pending (one line each)
-- Gap 4 - Admin can't view employee performance: only the sales-role report + SFA leaderboard; no per-employee view for any role.
+### Still pending (one line each) - Gap 5 only
 - Gap 5 - Audit log retention (90 days, keep important): no retention function; `audit_log` grows forever (088 reserved).
 
 ### Possible future gap: silent failures on 0-row updates (found in Gap 19 audit, not fixed)
