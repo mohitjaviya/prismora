@@ -16,7 +16,7 @@
  *  · What partners owe is the sum of the balances above zero. A partner in
  *    credit does not reduce what the others owe; credit held is shown apart.
  */
-import { isProforma } from './billing';
+import { isProforma, gstKindOf } from './billing';
 import { amountPaid, amountDue, isOpen, invoiceTotal } from './invoiceStatus';
 import { monthKey } from './months';
 
@@ -98,6 +98,25 @@ export const proformaSummary = (invoices) => {
     received: sum(list, amountPaid),
     due: sum(list.filter(isOpen), amountDue),
   };
+};
+
+/**
+ * Taxable value, GST and total by kind — GST, Non-GST, Proforma (Gap 20) —
+ * with what has been received and what is still due on each.
+ */
+export const gstKindTotals = (invoices) => {
+  const out = {};
+  ['GST', 'Non-GST', 'Proforma'].forEach(k => { out[k] = { count: 0, taxable: 0, gst: 0, total: 0, received: 0, due: 0 }; });
+  (invoices || []).forEach(i => {
+    const t = out[gstKindOf(i)];
+    t.count += 1;
+    t.taxable += n(i.amount);
+    t.gst += n(i.tax);
+    t.total += invoiceTotal(i);
+    t.received += amountPaid(i);
+    if (isOpen(i)) t.due += amountDue(i);
+  });
+  return out;
 };
 
 /** Tax invoices not yet settled, with what is still due on each. */

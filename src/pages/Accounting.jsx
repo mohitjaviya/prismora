@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { attributionFor } from '../utils/attribution';
@@ -16,14 +16,15 @@ import { MONTHS, monthKey } from '../utils/months';
 import { indiaDay } from '../utils/orderDate';
 import { unbookedPayouts, unbookedTotal } from '../utils/payouts';
 import { sendWhatsAppAlert, sendEmailAlert } from '../utils/notificationUtils';
-import { gstForOrder, productsMissingGst, isProforma } from '../utils/billing';
+import { gstForOrder, productsMissingGst, isProforma, isNonGstInvoice, gstKindOf, invoiceTypeLabel, NON_GST_REASONS } from '../utils/billing';
+import { downloadExcel } from '../utils/exportUtils';
 import InvoicesTable from '../components/accounting/InvoicesTable';
 import ExpensesTable from '../components/accounting/ExpensesTable';
 import CreditNotesTable from '../components/accounting/CreditNotesTable';
 import BalanceCheckPanel from '../components/accounting/BalanceCheckPanel';
 import { INDIAN_STATES, supplyTypeFor, invoiceGst } from '../utils/gst';
-import { INVOICE_STATUSES, isSettled, isOpen, amountDue } from '../utils/invoiceStatus';
-import { profitAndLoss, proformaSummary, receivables, netSalesByMonth } from '../utils/financials';
+import { INVOICE_STATUSES, isSettled, isOpen, amountDue, amountPaid } from '../utils/invoiceStatus';
+import { profitAndLoss, proformaSummary, receivables, netSalesByMonth, gstKindTotals } from '../utils/financials';
 
 
 const CREDIT_SPEC = { amount: { label: 'Credit amount', kind: 'amount', required: true } };
@@ -36,7 +37,7 @@ const Accounting = () => {
   const {
     orders: rawOrders, invoices: rawInvoices, expenses: rawExpenses, leads, productCatalog, distributors,
     distributorIncentives, schemeClaims, sfaExpenses, reconcilePayouts,
-    addInvoice, convertInvoice, updateInvoiceStatus, deleteInvoice,
+    addInvoice, convertInvoice, finaliseInvoiceWithoutGst, nonGstSupported, updateInvoiceStatus, deleteInvoice,
     addExpense, deleteExpense, creditNotes, addCreditNote, deleteCreditNote,
     grn, vendors, purchaseReturns, distributorPayments, dealers, retailers, companySettings
   } = useData();
@@ -63,7 +64,20 @@ const Accounting = () => {
   const [reconciling, setReconciling] = useState(false);
   const [reconcileResult, setReconcileResult] = useState(null);
   const [activeTab, setActiveTab] = useState(canAccess('accounting', 'full') ? 'overview' : 'invoices'); // 'overview' | 'invoices' | 'expenses'
-  const [invoiceFilter, setInvoiceFilter] = useState('All'); // 'All' | a status in INVOICE_STATUSES | 'Proforma'
+  const [invoiceFilter, setInvoiceFilter] = useState('All'); // 'All' | a status in INVOICE_STATUSES
+  const [gstFilter, setGstFilter] = useState('All'); // 'All' | 'GST' | 'Non-GST' | 'Proforma' (Gap 20)
+
+  // Finalise without GST (097). No button until the database has the function.
+  const [nonGstOn, setNonGstOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    nonGstSupported().then(ok => { if (live) setNonGstOn(ok); });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [finaliseTarget, setFinaliseTarget] = useState(null);
+  const [finaliseReason, setFinaliseReason] = useState('');
+  const [finaliseNote, setFinaliseNote] = useState('');
+  const [isFinalising, setIsFinalising] = useState(false);
 
   // Modals state
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
@@ -392,10 +406,60 @@ const Accounting = () => {
   };
 
   const filteredInvoices = invoices.filter(inv => {
+    if (gstFilter !== 'All' && gstKindOf(inv) !== gstFilter) return false;
     if (invoiceFilter === 'All') return true;
-    if (invoiceFilter === 'Proforma') return isProforma(inv);
     return inv.status === invoiceFilter;
   });
+  const kindTotals = gstKindTotals(invoices);
+
+  // The invoice list as Excel (Gap 2 formatting): taxable, the stored GST
+  // split and the total apart, and GST / Non-GST / Proforma with its reason.
+  const handleExportInvoices = () => {
+    if (filteredInvoices.length === 0) { toast('No invoices to export.', 'info'); return; }
+    downloadExcel(filteredInvoices.map(inv => {
+      const gst = invoiceGst(inv, companySettings || {});
+      const total = Number(inv.amount || 0) + Number(inv.tax || 0);
+      return {
+        'Invoice ID': inv.id,
+        Type: invoiceTypeLabel(inv),
+        'GST / Non-GST': gstKindOf(inv),
+        'No-GST reason': inv.nonGstReason || '',
+        Customer: inv.customerName || '',
+        'Order ID': inv.orderId || '',
+        Raised: inv.createdAt ? new Date(inv.createdAt) : '',
+        'Due date': inv.dueDate ? new Date(inv.dueDate) : '',
+        'Taxable (₹)': Number(inv.amount || 0),
+        'CGST (₹)': isProforma(inv) ? 0 : gst.cgst,
+        'SGST (₹)': isProforma(inv) ? 0 : gst.sgst,
+        'IGST (₹)': isProforma(inv) ? 0 : gst.igst,
+        'GST (₹)': Number(inv.tax || 0),
+        'Total (₹)': total,
+        'Received (₹)': amountPaid(inv),
+        'Due (₹)': isOpen(inv) ? amountDue(inv) : 0,
+        Status: inv.status,
+      };
+    }), 'PRISMORA_Invoices');
+  };
+
+  const handleFinaliseSubmit = async (e) => {
+    e.preventDefault();
+    if (!finaliseTarget || isFinalising) return;
+    const reason = finaliseReason === 'Other' ? finaliseNote.trim()
+      : [finaliseReason, finaliseNote.trim()].filter(Boolean).join(' — ');
+    if (!finaliseReason || reason.length < 3) {
+      toast(finaliseReason === 'Other' ? 'Describe why no GST is charged.' : 'Choose why no GST is charged.', 'error');
+      return;
+    }
+    setIsFinalising(true);
+    try {
+      const result = await finaliseInvoiceWithoutGst(finaliseTarget.id, reason);
+      if (!result.ok) { toast(result.error, 'error'); return; }
+      toast(`${finaliseTarget.id} is now a final invoice without GST.`, 'success');
+      setFinaliseTarget(null);
+    } finally {
+      setIsFinalising(false);
+    }
+  };
 
   const handleDeleteCreditNote = async (cn) => {
     const ok = await confirm({
@@ -554,10 +618,19 @@ const Accounting = () => {
           {convertingId === inv.id ? 'Converting…' : 'Convert'}
         </button>
       )}
+      {isProforma(inv) && nonGstOn && canAccess('accounting', 'full') && (
+        <button
+          onClick={() => { setFinaliseTarget(inv); setFinaliseReason(''); setFinaliseNote(''); }}
+          className="px-2 py-1 text-[10px] font-bold rounded-lg bg-slate-500/10 text-slate-300 border border-slate-500/30 hover:bg-slate-500/20 transition-colors whitespace-nowrap"
+          title="Make this a final invoice without GST (a reason is required)"
+        >
+          No GST
+        </button>
+      )}
       <button
         onClick={() => setPrintInvoice(inv)}
         className="p-1 text-slate-400 hover:text-brand-accent hover:bg-brand-accent/10 rounded-lg transition-colors"
-        title={isProforma(inv) ? 'Print proforma' : 'Print GST invoice'}
+        title={isProforma(inv) ? 'Print proforma' : isNonGstInvoice(inv) ? 'Print invoice (no GST)' : 'Print GST invoice'}
       >
         <Printer size={16} />
       </button>
@@ -903,20 +976,60 @@ const Accounting = () => {
                   {status}
                 </button>
               ))}
-              {/* Proformas raised on delivery carry no GST until Accounts
-                  converts them. The count is always shown so none is forgotten. */}
+            </div>
+            <Button icon={FileText} onClick={handleExportInvoices}>Export Excel</Button>
+          </div>
+
+          {/* GST / Non-GST / Proforma (Gap 20). Proformas raised on delivery
+              carry no GST until Accounts converts them or finalises them
+              without GST; the count is always shown so none is forgotten. */}
+          <div className="flex flex-wrap gap-2" role="group" aria-label="GST filter">
+            {[
+              { key: 'All', label: 'All invoices' },
+              { key: 'GST', label: `With GST (${kindTotals.GST.count})` },
+              { key: 'Non-GST', label: `Without GST (${kindTotals['Non-GST'].count})` },
+              { key: 'Proforma', label: `Proforma, not yet final (${proformaCount})` },
+            ].map(f => (
               <button
-                onClick={() => setInvoiceFilter('Proforma')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all ${invoiceFilter === 'Proforma'
-                  ? 'bg-amber-500/15 border-amber-500 text-amber-300'
-                  : proformaCount > 0
+                key={f.key}
+                onClick={() => setGstFilter(f.key)}
+                aria-pressed={gstFilter === f.key}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-all ${gstFilter === f.key
+                  ? (f.key === 'Proforma' ? 'bg-amber-500/15 border-amber-500 text-amber-300' : 'bg-brand-accent/15 border-brand-accent text-brand-accent')
+                  : f.key === 'Proforma' && proformaCount > 0
                     ? 'bg-amber-500/5 border-amber-500/30 text-amber-400 hover:text-amber-300'
                     : 'bg-brand-primary-lighter/40 border-white/5 text-slate-400 hover:text-white'
                   }`}
               >
-                Proforma drafts not yet converted ({proformaCount})
+                {f.label}
               </button>
-            </div>
+            ))}
+          </div>
+
+          {/* Taxable, GST and total apart, for each kind. Proformas are not
+              sales; they are shown so their value is not lost. */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { key: 'GST', title: 'With GST', note: 'Final tax invoices' },
+              { key: 'Non-GST', title: 'Without GST', note: 'Final, GST 0 (nil-rated / exempt / non-GST)' },
+              { key: 'Proforma', title: 'Proforma', note: 'Not a sale until converted or finalised' },
+            ].map(k => {
+              const t = kindTotals[k.key];
+              return (
+                <Card key={k.key} padding="p-4" className={k.key === 'Proforma' ? 'border-amber-500/20' : ''}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{k.title}</span>
+                    <span className="text-[11px] text-slate-500">{t.count} invoice{t.count === 1 ? '' : 's'}</span>
+                  </div>
+                  <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                    <div><dt className="text-slate-500">Taxable</dt><dd className="font-semibold text-slate-200 tabular-nums">{formatCurrency(t.taxable)}</dd></div>
+                    <div><dt className="text-slate-500">GST</dt><dd className="font-semibold text-slate-200 tabular-nums">{formatCurrency(t.gst)}</dd></div>
+                    <div><dt className="text-slate-500">Total</dt><dd className="font-bold text-white tabular-nums">{formatCurrency(t.total)}</dd></div>
+                  </dl>
+                  <p className="mt-2 text-[11px] text-slate-500">{k.note} · received {formatCurrency(t.received)} · due {formatCurrency(t.due)}</p>
+                </Card>
+              );
+            })}
           </div>
 
           <InvoicesTable
@@ -1406,6 +1519,60 @@ const Accounting = () => {
         document.body
       )}
 
+      {/* Modal: Finalise a proforma without GST (097) */}
+      {finaliseTarget && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-[8vh] overflow-hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setFinaliseTarget(null)}></div>
+          <div role="dialog" aria-modal="true" aria-labelledby="finalise-title" className="relative glass-panel bg-brand-primary w-full max-w-lg max-h-[90vh] rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-white/5 flex-shrink-0">
+              <h3 id="finalise-title" className="text-lg font-bold text-white flex items-center gap-2">
+                <FileText className="text-brand-accent" size={20} />
+                Finalise {finaliseTarget.id} without GST
+              </h3>
+              <button onClick={() => setFinaliseTarget(null)} className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors" aria-label="Close">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleFinaliseSubmit} className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+                <p className="text-sm text-slate-300">
+                  {finaliseTarget.customerName || 'The customer'} is billed {formatCurrency(finaliseTarget.amount)} with GST 0.
+                  It becomes a final invoice and counts as a sale; it cannot be converted to GST or deleted afterwards
+                  (a credit note corrects it). The balance does not change.
+                </p>
+                <div>
+                  <label htmlFor="finalise-reason" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Why no GST?</label>
+                  <select id="finalise-reason" required value={finaliseReason} onChange={e => setFinaliseReason(e.target.value)}
+                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
+                    <option value="" className="bg-brand-primary-light">Choose the reason…</option>
+                    {NON_GST_REASONS.map(r => <option key={r} value={r} className="bg-brand-primary-light">{r}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="finalise-note" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">
+                    {finaliseReason === 'Other' ? 'Describe the reason' : 'Note (optional)'}
+                  </label>
+                  <input id="finalise-note" type="text" value={finaliseNote} onChange={e => setFinaliseNote(e.target.value)}
+                    required={finaliseReason === 'Other'} maxLength={200}
+                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600"
+                    placeholder={finaliseReason === 'Other' ? 'e.g. goods supplied as samples' : 'e.g. partner has no GSTIN'} />
+                </div>
+              </div>
+              <div className="flex gap-3 justify-end p-6 border-t border-white/5 flex-shrink-0">
+                <button type="button" onClick={() => setFinaliseTarget(null)}
+                  className="px-4 py-2 text-sm bg-brand-primary-lighter hover:bg-brand-primary-lighter/80 text-slate-400 rounded-xl transition-all">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isFinalising} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">
+                  {isFinalising ? 'Finalising…' : 'Finalise without GST'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Modal: Print GST Invoice */}
       {printInvoice && createPortal(
         (() => {
@@ -1426,7 +1593,9 @@ const Accounting = () => {
           // A proforma is a request for payment, not a tax invoice, and must
           // never be mistaken for one — on screen or on paper.
           const proforma = isProforma(printInvoice);
-          const title = proforma ? 'PROFORMA INVOICE' : 'TAX INVOICE';
+          // Final without GST (097): an invoice, but never a tax invoice.
+          const noGst = isNonGstInvoice(printInvoice);
+          const title = proforma ? 'PROFORMA INVOICE' : noGst ? 'INVOICE – NO GST' : 'TAX INVOICE';
 
           // The invoice's own lines where it has them (every invoice since 039),
           // each with the HSN code and GST rate it was raised with. The old
@@ -1460,7 +1629,7 @@ const Accounting = () => {
                 <div className="bg-slate-100 px-6 py-4 flex justify-between items-center border-b border-slate-200 no-print flex-shrink-0">
                   <span className="font-bold text-slate-700 flex items-center gap-1.5">
                     <FileText size={18} className="text-brand-accent" />
-                    {proforma ? 'Proforma' : 'Tax Invoice'} Preview ({printInvoice.id})
+                    {proforma ? 'Proforma' : noGst ? 'Invoice (no GST)' : 'Tax Invoice'} Preview ({printInvoice.id})
                   </span>
                   <div className="flex gap-2">
                     <button
@@ -1499,6 +1668,13 @@ const Accounting = () => {
                         No GST is charged on this document and no input tax credit can be claimed against it.
                         A GST tax invoice will be issued in its place.
                       </p>
+                    </div>
+                  )}
+
+                  {noGst && (
+                    <div className="mt-6 border-2 border-slate-400 rounded-xl px-4 py-3 text-center font-sans">
+                      <p className="text-base font-black tracking-wide text-slate-700">NO GST CHARGED</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Reason: {printInvoice.nonGstReason || 'not recorded'}</p>
                     </div>
                   )}
 

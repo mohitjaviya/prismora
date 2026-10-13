@@ -48,7 +48,8 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
       date: inv.createdAt,
       type: 'Invoice',
       ref: inv.id,
-      description: `Invoice ${inv.id}${inv.status === 'Overdue' ? ' (Overdue)' : ''}`,
+      // Which kind it is (Gap 20), so a statement shows the bills without GST.
+      description: `Invoice ${inv.id}${inv.invoiceType === 'auto_draft' ? ' (proforma)' : Number(inv.tax || 0) > 0 ? '' : ' (no GST)'}${inv.status === 'Overdue' ? ' (Overdue)' : ''}`,
       debit: Number(inv.amount || 0) + Number(inv.tax || 0),
       credit: 0,
       // Carried through so a ledger can say who put each line there. Most

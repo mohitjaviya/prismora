@@ -9,7 +9,7 @@ import { isConvertedLead } from '../utils/leadStatus';
 import { amountPaid, amountDue, invoiceTotal } from '../utils/invoiceStatus';
 import { profitAndLoss, salesCreditNotes, openTaxInvoices } from '../utils/financials';
 import { taxInvoices, registerRow, gstHsnSummary } from '../utils/gstReport';
-import { orderLines } from '../utils/billing';
+import { orderLines, gstKindOf, orderBilling } from '../utils/billing';
 import { needsReorder } from '../utils/expiry';
 import { inIndiaDayRange } from '../utils/orderDate';
 
@@ -111,12 +111,17 @@ export default function Reports() {
         key: 'order_status',
         label: 'Order Status Report',
         desc: 'All orders with their current status.',
-        generate: () => orders.filter(o => inRange(o.date || o.createdAt)).map(o => ({
-          id: o.id, customer: o.customerName, city: o.city, product: o.product,
-          qty: o.quantity, value: o.value, status: o.status, date: formatDate(o.date)
-        })),
-        columns: ['id', 'customer', 'city', 'product', 'qty', 'value', 'status', 'date'],
-        labels: ['ID', 'Customer', 'City', 'Product', 'Qty', 'Value (₹)', 'Status', 'Date'],
+        generate: () => orders.filter(o => inRange(o.date || o.createdAt)).map(o => {
+          // Gap 20: taxable, GST and total from the order's invoice.
+          const b = orderBilling(o, invoices);
+          return {
+            id: o.id, customer: o.customerName, city: o.city, product: o.product,
+            qty: o.quantity, value: b.taxable, gst: b.gst ?? '', total: b.total ?? '', kind: b.kind,
+            status: o.status, date: formatDate(o.date)
+          };
+        }),
+        columns: ['id', 'customer', 'city', 'product', 'qty', 'value', 'gst', 'total', 'kind', 'status', 'date'],
+        labels: ['ID', 'Customer', 'City', 'Product', 'Qty', 'Taxable (₹)', 'GST (₹)', 'Total (₹)', 'GST / Non-GST', 'Status', 'Date'],
       },
     ],
     inventory: [
@@ -166,34 +171,36 @@ export default function Reports() {
       {
         key: 'invoice_report',
         label: 'Invoice Register',
-        desc: 'Tax invoices with the CGST / SGST / IGST each was issued with. Proformas are not tax invoices and are left out.',
+        desc: 'Final invoices — with GST (the CGST / SGST / IGST each was issued with) and without GST (GST 0, with the reason). Proformas are not final and are left out.',
         generate: () => taxInvoices(invoices).filter(i => inRange(i.createdAt)).map(i => {
           const r = registerRow(i, gstSeller);
           const dist = distributors?.find(d => d.name?.toLowerCase() === i.customerName?.toLowerCase());
           const gstinVal = dist?.gstin || i.customerGSTIN || '—';
           return {
             id: i.id, customer: i.customerName, gstin: gstinVal, placeOfSupply: r.placeOfSupply,
+            kind: gstKindOf(i), reason: i.nonGstReason || '',
             subtotal: r.subtotal, cgst: r.cgst, sgst: r.sgst, igst: r.igst, total: r.total,
             status: i.status, date: formatDate(i.createdAt)
           };
         }),
-        columns: ['id', 'customer', 'gstin', 'placeOfSupply', 'subtotal', 'cgst', 'sgst', 'igst', 'total', 'status', 'date'],
-        labels: ['Invoice ID', 'Customer', 'GSTIN', 'Place of Supply', 'Subtotal (₹)', 'CGST (₹)', 'SGST (₹)', 'IGST (₹)', 'Total (₹)', 'Status', 'Date'],
+        columns: ['id', 'customer', 'gstin', 'placeOfSupply', 'kind', 'reason', 'subtotal', 'cgst', 'sgst', 'igst', 'total', 'status', 'date'],
+        labels: ['Invoice ID', 'Customer', 'GSTIN', 'Place of Supply', 'GST / Non-GST', 'No-GST reason', 'Taxable (₹)', 'CGST (₹)', 'SGST (₹)', 'IGST (₹)', 'Total (₹)', 'Status', 'Date'],
       },
       {
         key: 'outstanding_receivables',
         label: 'Outstanding Receivables',
-        desc: 'Tax invoices not yet settled, with what is still due after part-payments and credit notes.',
+        desc: 'Final invoices (with and without GST) not yet settled, with what is still due after part-payments and credit notes.',
         // What is still due, as Accounting shows it: part-payments and credit
         // notes taken off; proformas are not receivables.
         generate: () => openTaxInvoices(invoices)
           .map(i => ({
-            id: i.id, customer: i.customerName,
+            id: i.id, customer: i.customerName, kind: gstKindOf(i),
+            taxable: Number(i.amount || 0), gst: Number(i.tax || 0),
             total: invoiceTotal(i), paid: amountPaid(i), due: amountDue(i),
             status: i.status, date: formatDate(i.createdAt)
           })),
-        columns: ['id', 'customer', 'total', 'paid', 'due', 'status', 'date'],
-        labels: ['Invoice ID', 'Customer', 'Invoice Total (₹)', 'Received (₹)', 'Due (₹)', 'Status', 'Date'],
+        columns: ['id', 'customer', 'kind', 'taxable', 'gst', 'total', 'paid', 'due', 'status', 'date'],
+        labels: ['Invoice ID', 'Customer', 'GST / Non-GST', 'Taxable (₹)', 'GST (₹)', 'Invoice Total (₹)', 'Received (₹)', 'Due (₹)', 'Status', 'Date'],
       },
       {
         key: 'expense_report',
@@ -218,8 +225,11 @@ export default function Reports() {
         // Accounting's definition (utils/financials.js). It used to be
         // everything paid, GST and proformas included, less expenses only.
         generate: () => {
+          const inPeriod = invoices.filter(i => inRange(i.createdAt));
+          // Gap 20: paid sales split by GST and Non-GST (both are sales).
+          const paidOf = (kind) => profitAndLoss({ invoices: inPeriod.filter(i => gstKindOf(i) === kind) }).invoicedPaid;
           const r = profitAndLoss({
-            invoices: invoices.filter(i => inRange(i.createdAt)),
+            invoices: inPeriod,
             creditNotes: salesCreditNotes(creditNotes, invoices).filter(cn => inRange(cn.createdAt)),
             expenses: expenses.filter(e => inRange(e.date)),
             grn: grn.filter(g => inRange(g.receivedDate || g.createdAt)),
@@ -227,6 +237,8 @@ export default function Reports() {
           });
           return [
             { metric: 'Invoiced and Paid (ex-GST)', value: paise(r.invoicedPaid) },
+            { metric: '  of which with GST', value: paise(paidOf('GST')) },
+            { metric: '  of which without GST (nil-rated / exempt / non-GST)', value: paise(paidOf('Non-GST')) },
             { metric: 'Less Credit Notes (ex-GST)', value: -paise(r.creditNoteValue) },
             { metric: 'Net Sales', value: paise(r.netSales) },
             { metric: 'Expenses', value: paise(r.expenses) },
@@ -242,7 +254,7 @@ export default function Reports() {
       {
         key: 'gst_summary',
         label: 'GST / HSN Summary (GSTR-1)',
-        desc: 'Tax invoices by HSN code and GST rate, with the CGST / SGST / IGST each invoice was issued with. Proformas are left out.',
+        desc: 'Invoices with GST by HSN code and rate, with the CGST / SGST / IGST each was issued with; invoices without GST as one nil-rated / exempt / non-GST line. Proformas are left out.',
         generate: () => gstHsnSummary(
           invoices.filter(i => inRange(i.createdAt)),
           { orders, productCatalog, seller: gstSeller }

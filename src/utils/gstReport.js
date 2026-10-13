@@ -13,7 +13,7 @@
  * does not belong in a GST return, so both reports leave it out.
  */
 import { invoiceGst } from './gst';
-import { isProforma } from './billing';
+import { isProforma, gstKindOf } from './billing';
 
 const paise = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -53,14 +53,20 @@ const linesOf = (inv, order, productCatalog) => {
   }];
 };
 
+/** Final invoices with no GST on them (Gap 20): GSTR-1's nil-rated / exempt / non-GST line. */
+export const NIL_RATED_HSN = 'Nil-rated / exempt / non-GST';
+
 /**
  * GSTR-1 HSN summary: taxable value and tax by HSN code and rate, with each
  * invoice's stored CGST / SGST / IGST shared across its lines in proportion
  * to each line's tax. Totals therefore equal the invoices' stored figures.
+ * Final invoices without GST are not in the HSN rows: they are one separate
+ * nil-rated / non-GST line at the end, as GSTR-1 reports them apart.
  */
 export const gstHsnSummary = (invoices, { orders = [], productCatalog = [], seller = {} } = {}) => {
   const byKey = {};
-  taxInvoices(invoices).forEach(inv => {
+  const nonGst = taxInvoices(invoices).filter(inv => gstKindOf(inv) === 'Non-GST');
+  taxInvoices(invoices).filter(inv => gstKindOf(inv) === 'GST').forEach(inv => {
     const order = orders.find(o => o.id === inv.orderId);
     const gst = invoiceGst(inv, seller);
     const lines = linesOf(inv, order, productCatalog);
@@ -87,7 +93,12 @@ export const gstHsnSummary = (invoices, { orders = [], productCatalog = [], sell
       r.total += amount + invTax * share;
     });
   });
-  return Object.values(byKey)
+  const rows = Object.values(byKey)
     .map(r => ({ ...r, taxable: paise(r.taxable), cgst: paise(r.cgst), sgst: paise(r.sgst), igst: paise(r.igst), total: paise(r.total) }))
     .sort((a, b) => b.total - a.total);
+  if (nonGst.length > 0) {
+    const taxable = paise(nonGst.reduce((sum, inv) => sum + Number(inv.amount || 0), 0));
+    rows.push({ hsn: NIL_RATED_HSN, rate: '0%', taxable, cgst: 0, sgst: 0, igst: 0, total: taxable });
+  }
+  return rows;
 };

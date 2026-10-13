@@ -124,6 +124,45 @@ export function productsMissingGst(order, catalogue) {
 
 /** An invoice's type, as shown to people. A proforma is never a tax invoice. */
 export const invoiceTypeLabel = (invoice) =>
-  invoice?.invoiceType === 'auto_draft' ? 'Proforma – not a tax invoice' : 'Tax invoice';
+  invoice?.invoiceType === 'auto_draft' ? 'Proforma – not a tax invoice'
+    : invoice?.invoiceType === 'non_gst' ? 'Invoice – no GST' : 'Tax invoice';
 
 export const isProforma = (invoice) => invoice?.invoiceType === 'auto_draft';
+
+/** A proforma finalised without GST (097): final, a sale, GST 0, with a reason. */
+export const isNonGstInvoice = (invoice) => invoice?.invoiceType === 'non_gst';
+
+/**
+ * GST / Non-GST / Proforma (Gap 20). A final invoice with GST on it is "GST";
+ * a final one with none — finalised without GST (097) or billed "Without
+ * GST" from Generate Invoice — is "Non-GST". Read from the stored tax, so it
+ * works whether or not 097 is applied.
+ */
+export const gstKindOf = (invoice) => {
+  if (isProforma(invoice)) return 'Proforma';
+  return Number(invoice?.tax || 0) > 0 ? 'GST' : 'Non-GST';
+};
+
+/**
+ * What an order was billed (Gap 20): taxable, GST and total from its invoice.
+ * Not invoiced yet (or the invoice not visible to this user): the order value
+ * as taxable and no GST or total, since none has been charged.
+ */
+export const orderBilling = (order, invoices) => {
+  const invoice = order ? (invoices || []).find(i => i?.orderId === order.id) : null;
+  if (!invoice) {
+    return { invoice: null, kind: 'Not invoiced', taxable: Number(order?.value) || 0, gst: null, total: null };
+  }
+  const taxable = Number(invoice.amount) || 0;
+  const gst = Number(invoice.tax) || 0;
+  return { invoice, kind: gstKindOf(invoice), taxable, gst, total: taxable + gst };
+};
+
+/** The reasons offered on Finalise without GST. */
+export const NON_GST_REASONS = [
+  'Unregistered partner (no GSTIN)',
+  'Exempt goods',
+  'Nil-rated goods',
+  'Non-GST supply',
+  'Other',
+];

@@ -29,7 +29,7 @@ export default function InvoicesTable({ invoices, formatCurrency, formatDate, ra
       render: inv => (
         <div className="whitespace-nowrap">
           <div className="font-bold text-white">{inv.id}</div>
-          <Badge size="sm" tone={isProforma(inv) ? 'warning' : 'success'} className="mt-1">{invoiceTypeLabel(inv)}</Badge>
+          <Badge size="sm" tone={isProforma(inv) ? 'warning' : inv.invoiceType === 'non_gst' ? 'neutral' : 'success'} className="mt-1">{invoiceTypeLabel(inv)}</Badge>
         </div>
       ),
     },
@@ -68,7 +68,17 @@ export default function InvoicesTable({ invoices, formatCurrency, formatDate, ra
       key: 'tax', header: 'GST', align: 'right', sort: inv => Number(inv.tax || 0),
       render: inv => (isProforma(inv)
         ? <span className="text-[11px] text-amber-400/80 whitespace-nowrap">none yet</span>
-        : <span className={`${money} text-slate-400`}>{formatCurrency(inv.tax)}</span>),
+        : Number(inv.tax || 0) > 0
+          ? <span className={`${money} text-slate-400`}>{formatCurrency(inv.tax)}</span>
+          // Final with no GST (Gap 20): say so, with the reason where 097 kept one.
+          : (
+            <div className="text-right max-w-[9rem] ml-auto">
+              <span className={`${money} text-slate-400`}>{formatCurrency(0)}</span>
+              <div className="text-[10px] text-slate-500 truncate" title={inv.nonGstReason || 'Billed without GST'}>
+                no GST{inv.nonGstReason ? ` · ${inv.nonGstReason}` : ''}
+              </div>
+            </div>
+          )),
     },
     {
       key: 'total', header: 'Total', align: 'right', sort: total,

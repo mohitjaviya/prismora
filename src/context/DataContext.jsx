@@ -2335,6 +2335,32 @@ export const DataProvider = ({ children }) => {
     return { ok: true, tax: data?.tax };
   };
 
+  // Whether finalise_without_gst is in the database (097, Gap 20). Asked once
+  // per session; until then there is no Finalise without GST button. The feed
+  // entry uses invoice_converted, a money event (049) only Accounting sees.
+  const nonGstCheck = useRef(null);
+  const nonGstSupported = () => {
+    if (!nonGstCheck.current) {
+      nonGstCheck.current = supabase.rpc('non_gst_invoice_enabled')
+        .then(({ data, error }) => !error && data === true, () => false)
+        .then(ok => { if (!ok) nonGstCheck.current = null; return ok; });
+    }
+    return nonGstCheck.current;
+  };
+
+  /**
+   * A proforma made final without GST (097): the reason is kept on the
+   * invoice, GST stays 0 and the partner's balance does not move (it was
+   * charged the subtotal at delivery). Read back from the database.
+   */
+  const finaliseInvoiceWithoutGst = async (invoiceId, reason) => {
+    const { error } = await supabase.rpc('finalise_without_gst', { p_invoice_id: invoiceId, p_reason: reason });
+    if (error) return { ok: false, error: plainDatabaseError(error, 'finalise this invoice') };
+    await reloadRows('invoices', setInvoices, 'prismora_invoices', 'id', [invoiceId]);
+    logEvent('invoice_converted', `Proforma ${invoiceId} finalised without GST: ${reason}`, signedInUser?.id, invoiceId);
+    return { ok: true };
+  };
+
   /**
    * Just the status. Used by the payment path, which has already moved the
    * money and must not set off a second payment by doing so.
@@ -3987,7 +4013,9 @@ export const DataProvider = ({ children }) => {
       addLead, updateLead, deleteLead, convertLeadToOrder,
       addOrder: logged('add order', addOrder), updateOrder, deleteOrder, confirmOrderReceipt, cancelMyOrder: logged('cancel my order', cancelMyOrder), recordOrderReceipt, clearOrderReceipt, splitOrder, deliverPartial,
       addProduct, updateProduct, deleteProduct,
-      addInvoice: logged('add invoice', addInvoice), convertInvoice: logged('convert invoice', convertInvoice), updateInvoiceStatus, deleteInvoice,
+      addInvoice: logged('add invoice', addInvoice), convertInvoice: logged('convert invoice', convertInvoice),
+      finaliseInvoiceWithoutGst: logged('finalise invoice without GST', finaliseInvoiceWithoutGst), nonGstSupported,
+      updateInvoiceStatus, deleteInvoice,
       creditNotes, addCreditNote, deleteCreditNote,
       addExpense, deleteExpense, reconcilePayouts, correctPartyBalance,
       // Phase 1 Enterprise

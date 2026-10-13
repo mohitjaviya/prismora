@@ -9,6 +9,7 @@ import { PageHeader, DataTable, Button, IconButton, Badge, Select, FieldError, E
 import { cleanForm } from '../utils/formRules';
 import { createPortal } from 'react-dom';
 import { downloadExcel, itemsText } from '../utils/exportUtils';
+import { orderBilling } from '../utils/billing';
 import { allParties } from '../utils/distributorUtils';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
@@ -743,18 +744,27 @@ const Orders = () => {
   const conditionsKept = (salesReturns || []).some(r => r && 'condition' in r);
 
   const handleExport = () => {
-    const formattedData = visibleOrders.map(o => ({
-      ...o,
-      items: itemsText(o.items),
-      Company: o.companyName || 'N/A',
-      date: o.date ? format(new Date(o.date), 'yyyy-MM-dd') : null,
-      salesperson: mockUsers.find(u => u.id === o.assignedTo)?.name || 'Unassigned',
-      // Gap 11: what came back on the order (status blank when nothing did).
-      'Returned Qty': returnStateOf(o).returned,
-      'Return Status': returnStateOf(o).label,
-      // 086: only once the database keeps conditions (select * then carries the key).
-      ...(conditionsKept ? { 'Return Condition': returnConditionText(returnsForOrder(salesReturns, o.id)) } : {}),
-    }));
+    const formattedData = visibleOrders.map(o => {
+      const b = orderBilling(o, invoices);
+      return {
+        ...o,
+        items: itemsText(o.items),
+        // Gap 20: what was billed, from the order's invoice.
+        'Invoice ID': b.invoice?.id || '',
+        'GST / Non-GST': b.kind,
+        'Taxable (₹)': b.taxable,
+        'GST (₹)': b.gst ?? '',
+        'Total (₹)': b.total ?? '',
+        Company: o.companyName || 'N/A',
+        date: o.date ? format(new Date(o.date), 'yyyy-MM-dd') : null,
+        salesperson: mockUsers.find(u => u.id === o.assignedTo)?.name || 'Unassigned',
+        // Gap 11: what came back on the order (status blank when nothing did).
+        'Returned Qty': returnStateOf(o).returned,
+        'Return Status': returnStateOf(o).label,
+        // 086: only once the database keeps conditions (select * then carries the key).
+        ...(conditionsKept ? { 'Return Condition': returnConditionText(returnsForOrder(salesReturns, o.id)) } : {}),
+      };
+    });
     downloadExcel(formattedData, 'PRISMORA_Orders');
   };
 
@@ -817,9 +827,33 @@ const Orders = () => {
         </>
       ),
     },
+    // Taxable, GST and total apart (Gap 20), from the order's invoice; before
+    // it is invoiced the value is the taxable amount and no GST is charged yet.
     {
-      key: 'value', header: 'Value', align: 'right', sort: o => Number(o.value) || 0,
-      render: o => <span className="font-semibold text-white">&#8377;{Number(o.value || 0).toLocaleString('en-IN')}</span>,
+      key: 'value', header: 'Taxable', align: 'right', sort: o => orderBilling(o, invoices).taxable,
+      render: o => <span className="font-semibold text-white">&#8377;{orderBilling(o, invoices).taxable.toLocaleString('en-IN')}</span>,
+    },
+    {
+      key: 'gst', header: 'GST', align: 'right', hideBelow: 'md', sort: o => orderBilling(o, invoices).gst ?? -1,
+      render: o => {
+        const b = orderBilling(o, invoices);
+        if (b.gst === null) return <span className="text-[11px] text-slate-500 whitespace-nowrap">not invoiced</span>;
+        return (
+          <div className="whitespace-nowrap">
+            <span className="text-slate-300 tabular-nums">&#8377;{b.gst.toLocaleString('en-IN')}</span>
+            <div className={`text-[10px] ${b.kind === 'Proforma' ? 'text-amber-400/80' : 'text-slate-500'}`}>{b.kind === 'Proforma' ? 'proforma' : b.kind}</div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'total', header: 'Total', align: 'right', hideBelow: 'md', sort: o => orderBilling(o, invoices).total ?? -1,
+      render: o => {
+        const b = orderBilling(o, invoices);
+        return b.total === null
+          ? <span className="text-slate-500">—</span>
+          : <span className="font-semibold text-white tabular-nums">&#8377;{b.total.toLocaleString('en-IN')}</span>;
+      },
     },
     ...(isSalesRole(user?.role) ? [] : [{
       key: 'salesperson', header: 'Salesperson', hideBelow: 'lg',
