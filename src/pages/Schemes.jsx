@@ -121,7 +121,7 @@ export default function Schemes() {
 
   const openAdd = () => { schemeCheck.reset(); setEditingScheme(null); setForm(BLANK_FORM); setIsModalOpen(true); };
   const openEdit = (s) => {
-    schemeCheck.reset();
+    schemeCheck.reset(s);
     setEditingScheme(s);
     setForm({
       name: s.name, type: s.type, discountPct: s.discountPct || '',
@@ -147,7 +147,7 @@ export default function Schemes() {
     if (isSaving) return;
     if (!schemeCheck.ok(form, SCHEME_SPEC, schemeDates)) return;
     const payload = {
-      ...cleanForm(form, SCHEME_SPEC),
+      ...cleanForm(form, SCHEME_SPEC, schemeCheck.before),
       discountPct: Number(form.discountPct || 0),
       freeGoodsQty: Number(form.freeGoodsQty || 0),
       freeGoodsProduct: form.freeGoodsProduct || null,

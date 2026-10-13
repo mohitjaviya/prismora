@@ -159,7 +159,7 @@ export default function Inventory() {
 
   const openAdd = () => { addCheck.reset(); setEditingItem(null); setForm(BLANK_FORM); setIsAddOpen(true); };
   const openEdit = (item) => {
-    addCheck.reset();
+    addCheck.reset(item);
     setEditingItem(item);
     setForm({
       product: item.product, batchNumber: item.batchNumber || '',

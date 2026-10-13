@@ -113,7 +113,7 @@ const Leads = () => {
   });
 
   const handleOpenModal = (lead = null) => {
-    leadCheck.reset();
+    leadCheck.reset(lead);
     if (lead) {
       setEditingLead(lead);
       // Normalize productInterest to always be an array
@@ -239,7 +239,7 @@ const Leads = () => {
 
   const submitLeadForm = async () => {
     if (!leadCheck.ok(formData, LEAD_SPEC)) return;
-    const clean = cleanForm(formData, LEAD_SPEC);
+    const clean = cleanForm(formData, LEAD_SPEC, leadCheck.before);
 
     if (formData.status === 'Converted') {
       if (!formData.state || !formData.state.trim() || !formData.city || !formData.city.trim()) {

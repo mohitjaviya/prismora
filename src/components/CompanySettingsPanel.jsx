@@ -35,7 +35,8 @@ export default function CompanySettingsPanel({ canEdit }) {
   const check = useFieldCheck();
 
   useEffect(() => { if (!companySettings) loadCompanySettings(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (companySettings) setForm({ ...companySettings }); }, [companySettings]);
+  // Always an edit of the one saved row: only the fields changed from it are checked.
+  useEffect(() => { if (companySettings) { setForm({ ...companySettings }); check.reset(companySettings); } }, [companySettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!form) return <p className="text-sm text-slate-500">Loading company details…</p>;
   const errors = check.errors(form, COMPANY_SPEC, gstinError);
@@ -44,7 +45,7 @@ export default function CompanySettingsPanel({ canEdit }) {
     e.preventDefault();
     if (saving) return;
     if (!check.ok(form, COMPANY_SPEC, gstinError)) return;
-    const clean = cleanForm(form, COMPANY_SPEC);
+    const clean = cleanForm(form, COMPANY_SPEC, check.before);
     setSaving(true);
     const result = await updateCompanySettings({
       companyName: String(clean.companyName || ''),

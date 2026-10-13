@@ -566,7 +566,7 @@ const Orders = () => {
   };
 
   const handleOpenModal = (order = null) => {
-    orderCheck.reset();
+    orderCheck.reset(order);
     setStatusError('');
     const choice = customerChoiceFor(order);
     setCustomerChoice(choice);
@@ -625,7 +625,7 @@ const Orders = () => {
 
   const submitOrder = async () => {
     if (!orderCheck.ok(formData, orderSpec)) return;
-    const clean = cleanForm(formData, orderSpec);
+    const clean = cleanForm(formData, orderSpec, orderCheck.before);
 
     // An order already cleared for fulfilment can have its quantity raised
     // above what's in stock. The status guard only runs on a status *change*,

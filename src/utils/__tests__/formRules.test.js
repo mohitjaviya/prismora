@@ -143,3 +143,24 @@ describe('count and flat line errors', () => {
       .toEqual({ 'items.1.quantity': 'Qty must be more than 0' });
   });
 });
+
+describe('editing an existing record: only changed fields are checked (as 095)', () => {
+  const SPEC = { phone: { label: 'Phone', kind: 'mobile' }, email: { label: 'Email', kind: 'email' }, quantity: { label: 'Quantity', kind: 'qty', required: true } };
+  const old = { phone: '1122334455', email: 'bad@', quantity: 2.5, notes: '' };
+  it('an old bad value left as it was does not block saving', () => {
+    expect(checkForm({ ...old, notes: 'called back' }, SPEC, old)).toEqual({});
+    expect(checkForm({ ...old, quantity: '2.5', phone: ' 1122334455 ' }, SPEC, old)).toEqual({});
+  });
+  it('a changed field is checked in full', () => {
+    expect(checkForm({ ...old, phone: '1122334466' }, SPEC, old)).toEqual({ phone: MOBILE_MESSAGE });
+    expect(checkForm({ ...old, quantity: '0' }, SPEC, old)).toEqual({ quantity: 'Quantity must be more than 0' });
+  });
+  it('a new record (no before) is checked in full', () => {
+    expect(Object.keys(checkForm(old, SPEC))).toEqual(['phone', 'email', 'quantity']);
+  });
+  it('cleanForm keeps an unchanged phone/email exactly as stored, and cleans a changed one', () => {
+    const before = { phone: '1122334455 ', email: 'Old@X.com' };
+    expect(cleanForm({ phone: '1122334455', email: 'Old@X.com' }, SPEC, before)).toEqual(before);
+    expect(cleanForm({ phone: '+91 98765 43210', email: ' New@X.com ' }, SPEC, before)).toEqual({ phone: '9876543210', email: 'new@x.com' });
+  });
+});

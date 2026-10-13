@@ -106,13 +106,13 @@ export default function Distributors() {
   const allStates = [...new Set(distributors.map(d => d.state).filter(Boolean))].sort();
 
   const openAdd = () => { partnerCheck.reset(); setEditingDist(null); setForm(BLANK_FORM); setIsModalOpen(true); };
-  const openEdit = (d) => { partnerCheck.reset(); setEditingDist(d); setForm({ name: d.name, gstin: d.gstin || '', state: d.state || '', city: d.city || '', territoryId: d.territoryId || '', phone: d.phone || '', email: d.email || '', contactPerson: d.contactPerson || '', address: d.address || '', pincode: d.pincode || '', creditLimit: d.creditLimit || 100000, status: d.status || 'Active' }); setIsModalOpen(true); };
+  const openEdit = (d) => { partnerCheck.reset(d); setEditingDist(d); setForm({ name: d.name, gstin: d.gstin || '', state: d.state || '', city: d.city || '', territoryId: d.territoryId || '', phone: d.phone || '', email: d.email || '', contactPerson: d.contactPerson || '', address: d.address || '', pincode: d.pincode || '', creditLimit: d.creditLimit || 100000, status: d.status || 'Active' }); setIsModalOpen(true); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSaving) return;
     if (!partnerCheck.ok(form, PARTNER_SPEC, partnerExtra(editingDist))) return;
-    const payload = { ...cleanForm(form, PARTNER_SPEC), gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
+    const payload = { ...cleanForm(form, PARTNER_SPEC, partnerCheck.before), gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
     // Waits for the database: closes only once it is saved, else says why.
     setIsSaving(true);
     const r = editingDist ? await updateDistributor(editingDist.id, payload) : await addDistributor(payload);

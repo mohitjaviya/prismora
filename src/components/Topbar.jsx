@@ -57,20 +57,16 @@ const Topbar = ({ setIsMobileMenuOpen }) => {
       return;
     }
 
-    const lowerQuery = query.toLowerCase();
-    
+    const lowerQuery = query.trim().toLowerCase();
+    // Any of these may be empty on an old row (a lead with no company).
+    const has = (v) => String(v ?? '').toLowerCase().includes(lowerQuery);
+
     const visibleLeads = leads.filter(l => canAccessData(l.assignedTo));
     const visibleOrders = orders.filter(o => canAccessData(o.assignedTo));
 
-    const matchedLeads = visibleLeads.filter(l => 
-      l.name.toLowerCase().includes(lowerQuery) || 
-      l.company.toLowerCase().includes(lowerQuery)
-    ).slice(0, 3);
+    const matchedLeads = visibleLeads.filter(l => has(l.name) || has(l.company)).slice(0, 3);
 
-    const matchedOrders = visibleOrders.filter(o => 
-      o.id.toLowerCase().includes(lowerQuery) || 
-      o.customerName.toLowerCase().includes(lowerQuery)
-    ).slice(0, 3);
+    const matchedOrders = visibleOrders.filter(o => has(o.id) || has(o.customerName)).slice(0, 3);
 
     setSearchResults({ leads: matchedLeads, orders: matchedOrders });
   };

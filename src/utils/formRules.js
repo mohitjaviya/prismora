@@ -6,11 +6,14 @@
  * 'Phone' }, … }` — and gets back a message per field from `checkForm` and a
  * cleaned copy to save from `cleanForm` (all text trimmed, mobile numbers as
  * 10 digits, emails in lowercase). The same phone, email, quantity and amount
- * rules are in the database (094); these copies give the sentence under the
+ * rules are in the database (095); these copies give the sentence under the
  * field before the round-trip.
  *
- * Old rows are not special: a record saved before these rules opens as it is,
- * and saving it asks for the bad field to be fixed.
+ * Editing an existing record: pass the row as `before` and only the fields
+ * that were changed are checked, as in the database (095 checks a phone or
+ * email only when it is entered or changed). An old row with a bad test phone
+ * can still have its notes or status saved; the phone is asked for again only
+ * once someone edits it. New records (no `before`) are checked in full.
  *
  * Partner/vendor GSTIN and pincode keep their own rules (`contactChecks.js`);
  * their phone uses the mobile rule here (no landlines).
@@ -129,14 +132,19 @@ const KIND_CHECKS = {
   percent: (v, label) => percentProblem(v, label),
 };
 
+/** A field left as it was on the row being edited (text compared trimmed). */
+export const unchanged = (form, before, field) =>
+  Boolean(before) && String(form?.[field] ?? '').trim() === String(before[field] ?? '').trim();
+
 /**
  * `{ field: message }` for every field that breaks its rule (empty when the
  * form may be saved). Spec per field: `{ label, kind = 'text', required }`.
+ * `before`: the row being edited; a field left as it was is not checked.
  */
-export function checkForm(form = {}, spec = {}) {
+export function checkForm(form = {}, spec = {}, before = null) {
   const errors = {};
   for (const [field, rule] of Object.entries(spec)) {
-    if (!rule) continue;
+    if (!rule || unchanged(form, before, field)) continue;
     const { label = field, kind = 'text', required = false } = rule;
     const value = form?.[field];
     const problem = (required && kind !== 'qty' && kind !== 'adjustment' ? requiredProblem(value, label) : null)
@@ -149,12 +157,20 @@ export function checkForm(form = {}, spec = {}) {
 export const hasErrors = (errors) => Object.keys(errors || {}).length > 0;
 export const firstError = (errors) => Object.values(errors || {})[0] || null;
 
-/** Every top-level string trimmed; spec'd mobiles as 10 digits, emails lowercase. */
-export function cleanForm(form = {}, spec = {}) {
+/**
+ * Every top-level string trimmed; spec'd mobiles as 10 digits, emails
+ * lowercase. With `before` (the row being edited), a phone or email left as it
+ * was is saved exactly as stored, so the database sees no change to check.
+ */
+export function cleanForm(form = {}, spec = {}, before = null) {
   const out = {};
   for (const [k, v] of Object.entries(form)) out[k] = typeof v === 'string' ? v.trim() : v;
   for (const [field, rule] of Object.entries(spec)) {
     if (!rule || typeof out[field] !== 'string') continue;
+    if (unchanged(form, before, field) && typeof before[field] === 'string' && before[field]) {
+      if (rule.kind === 'mobile' || rule.kind === 'email') out[field] = before[field];
+      continue;
+    }
     if (rule.kind === 'mobile') out[field] = normaliseMobile(out[field]);
     if (rule.kind === 'email') out[field] = normaliseEmail(out[field]);
   }

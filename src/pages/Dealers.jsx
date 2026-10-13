@@ -109,13 +109,13 @@ export default function Dealers() {
   const activeDistributors = distributors.filter(d => d.status === 'Active');
 
   const openAdd = () => { partnerCheck.reset(); setEditingDealer(null); setForm(BLANK_FORM); setIsModalOpen(true); };
-  const openEdit = (d) => { partnerCheck.reset(); setEditingDealer(d); setForm({ name: d.name, gstin: d.gstin || '', parentDistributorId: d.parentDistributorId || '', state: d.state || '', city: d.city || '', territoryId: d.territoryId || '', phone: d.phone || '', email: d.email || '', contactPerson: d.contactPerson || '', address: d.address || '', pincode: d.pincode || '', creditLimit: d.creditLimit || 100000, status: d.status || 'Active' }); setIsModalOpen(true); };
+  const openEdit = (d) => { partnerCheck.reset(d); setEditingDealer(d); setForm({ name: d.name, gstin: d.gstin || '', parentDistributorId: d.parentDistributorId || '', state: d.state || '', city: d.city || '', territoryId: d.territoryId || '', phone: d.phone || '', email: d.email || '', contactPerson: d.contactPerson || '', address: d.address || '', pincode: d.pincode || '', creditLimit: d.creditLimit || 100000, status: d.status || 'Active' }); setIsModalOpen(true); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSaving) return;
     if (!partnerCheck.ok(form, PARTNER_SPEC, partnerExtra(editingDealer))) return;
-    const payload = { ...cleanForm(form, PARTNER_SPEC), gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
+    const payload = { ...cleanForm(form, PARTNER_SPEC, partnerCheck.before), gstin: normaliseGstin(form.gstin), creditLimit: Number(form.creditLimit) };
     // Waits for the database: closes only once it is saved, else says why.
     setIsSaving(true);
     const r = editingDealer ? await updateDealer(editingDealer.id, payload) : await addDealer(payload);

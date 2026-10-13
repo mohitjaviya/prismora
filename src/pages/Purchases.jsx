@@ -422,12 +422,12 @@ export default function Purchases() {
   };
 
   const openAddVendor = () => { setEditingVendor(null); setVendorForm({ name: '', gstin: '', phone: '', email: '', address: '', contactPerson: '', status: 'Active' }); vendorCheck.reset(); setIsVendorModalOpen(true); };
-  const openEditVendor = (v) => { setEditingVendor(v); setVendorForm({ name: v.name, gstin: v.gstin || '', phone: v.phone || '', email: v.email || '', address: v.address || '', contactPerson: v.contactPerson || '', status: v.status || 'Active' }); vendorCheck.reset(); setIsVendorModalOpen(true); };
+  const openEditVendor = (v) => { setEditingVendor(v); setVendorForm({ name: v.name, gstin: v.gstin || '', phone: v.phone || '', email: v.email || '', address: v.address || '', contactPerson: v.contactPerson || '', status: v.status || 'Active' }); vendorCheck.reset(v); setIsVendorModalOpen(true); };
   const handleSubmitVendor = async (e) => {
     e.preventDefault();
     if (savingForm) return;
     if (!vendorCheck.ok(vendorForm, VENDOR_SPEC, partnerExtra(editingVendor))) return;
-    const clean = cleanForm(vendorForm, VENDOR_SPEC);
+    const clean = cleanForm(vendorForm, VENDOR_SPEC, vendorCheck.before);
     const payload = { ...clean, gstin: normaliseGstin(clean.gstin) };
     setSavingForm('vendor');
     const r = editingVendor ? await updateVendor(editingVendor.id, payload) : await addVendor(payload);

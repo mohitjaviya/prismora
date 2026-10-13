@@ -64,7 +64,7 @@ export default function ProductCatalog() {
 
   const openProductAdd = () => { productCheck.reset(); setEditingProduct(null); setProductForm(BLANK_PRODUCT_FORM); setIsProductModalOpen(true); };
   const openProductEdit = (p) => {
-    productCheck.reset();
+    productCheck.reset(p);
     setEditingProduct(p);
     setProductForm({
       name: p.name, category: p.category || 'Wellness', hsnCode: p.hsnCode || '', sku: p.sku || '',
@@ -79,7 +79,7 @@ export default function ProductCatalog() {
     e.preventDefault();
     if (!productCheck.ok(productForm, PRODUCT_SPEC, priceVsMrp)) return;
     const payload = {
-      ...cleanForm(productForm, PRODUCT_SPEC),
+      ...cleanForm(productForm, PRODUCT_SPEC, productCheck.before),
       gstPct: Number(productForm.gstPct),
       mrp: Number(productForm.mrp || 0),
       distributorPrice: Number(productForm.distributorPrice || 0),
