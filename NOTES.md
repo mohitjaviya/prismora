@@ -264,8 +264,29 @@ Findings so far:
 - Admin-managed bank/cash accounts for "Received into" (today free text with suggestions).
 - Edit or withdraw a recorded payment (today only Mark as Paid payments can be redone via Mark unpaid; others need a DB fix).
 
-### Still pending (one line each) - Gap 5 only
-- Gap 5 - Audit log retention (90 days, keep important): no retention function; `audit_log` grows forever (088 reserved).
+## 2026-10-14 - Gap 5 DONE (commit `c8cd68a`, migration 088 applied live, dry_run = true)
+- Routine `audit_log` rows removed after 90 days by pg_cron `audit-retention-nightly` (01:00 IST, `purge_audit_log()`, batches); important rows (deletes, money, prices, stock corrections, users/roles, settings, staff receipts) kept for good. One settings row `audit_retention_settings`; each run in `audit_retention_runs`. Audit tab: "Kept permanently" badge + 90-day note.
+- Live: 1,777 important / 1,169 routine of 2,946. First dry run: would delete 0. **Nothing can be deleted before 2026-12-24.** `invoice-status-nightly` unchanged.
+- **Switch dry_run off (owner decides):** `UPDATE public.audit_retention_settings SET dry_run = false WHERE id = 1;`
+- Proof: `test-results/full-test/gap5/dryrun.mjs` 63/63 (1/63 without), live 63/63, rolled back. Tests 956, lint 64.
+
+## STATUS 2026-10-14: ALL 21 GAPS BUILT. Next free migration: 100. 085 NOT applied.
+
+### Later gaps
+- Record logins, exports and failed logins in an audit table (not recorded today).
+- Retention for `events` and `client_write_log`.
+- Employee targets and "achieved vs target".
+- Reverse a bounced cheque.
+- Admin-managed bank/cash accounts for "Received into".
+- Edit or withdraw a recorded payment.
+- Limit managers to their own team's partner orders.
+
+### Remaining activation work
+- Delete the demo data.
+- Gap 13 keep-alive: apply 085, add GitHub secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY`, put back the `schedule:` lines in `.github/workflows/supabase-keepalive.yml`, run once by hand.
+- Review the six unrelated uncommitted files.
+- Renumber the Aloevera "abc123" batches; give numbers to the 4 batches without one (skip if the batches are deleted).
+- The 7 stuck Partially Paid invoices, 23 proformas and bad phone numbers (skip if the demo data is deleted).
 
 ### Possible future gap: silent failures on 0-row updates (found in Gap 19 audit, not fixed)
 These writes do not check rows changed; RLS refusal = 0 rows, no error, screen shows success. With today's role settings only allowed roles reach them.
