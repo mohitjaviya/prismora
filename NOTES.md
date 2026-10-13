@@ -215,3 +215,25 @@ Findings so far:
 - 094 CHECKs were dropped by 095 (they blocked any edit of old bad-phone rows).
 - **Activation checklist - staff to correct (not changed):** 10 leads with prefixed phones to normalise (L1-L9, L28); 12 orders (O5, O23-O26, O57, O139, O140, O143, O144, O319, O320), 4 leads (L26, L27, L29, L30), 13 partner/vendor phones (DEAL-1790054296840; DIST-1789982501250, -1790054206208, -1790153503299, -1790153727813, -1790159023948, -1790265786389, -1790265916391, -1790404680208, -1790575498428, -1790575624420, -1790591885059; RET-1790054545559; V1790054615576) need real mobile numbers; none is a landline. 3 complaints (CMP-1..3) also have bad phones. Full list `test-results/full-test/gap9b/bad-data.txt`.
 - Tests 898, lint 64.
+
+## 2026-10-13 - Gap 9 DONE and LIVE
+- Gap 9 done and live: commit `8e931d8` (pushed, `main` deployed, Vercel Ready, live read-only check passed as Admin + test distributor). Editing an existing record checks only changed fields (as 095); global search no longer crashes on a lead with no company.
+- Migrations 086-095 applied on the live DB. 085 (keep-alive) NOT applied. 088 reserved for Gap 5. Next free: 096.
+
+### Still pending (one line each)
+- Gap 8 - Payment mode + transaction details: only `method` + one free-text reference; missing cheque no/date/bank fields and per-mode required checks; Accounting "Mark as Paid" records no mode.
+- Gap 4 - Admin can't view employee performance: only the sales-role report + SFA leaderboard; no per-employee view for any role.
+- Gap 5 - Audit log retention (90 days, keep important): no retention function; `audit_log` grows forever (088 reserved).
+- Gap 19 - (problem not recorded in the repo; owner to add the description)
+- Gap 20 - (problem not recorded in the repo; owner to add the description)
+- Gap 21 - (problem not recorded in the repo; owner to add the description)
+
+### Open items
+- SFA visit form: the wrong-email check did not run (email field only shows when an order is placed).
+- Bad old data to fix by hand (now editable without blocking other fields): 10 prefixed lead phones; 12 orders, 4 leads and 13 partner phones - list in `test-results/full-test/gap9b/bad-data.txt`.
+- The six unrelated uncommitted items (root scratch files, `src/pages/supabase/`, `supabase/.temp/cli-latest`) - still uncommitted on purpose.
+- Gap 13 activation: uncomment `schedule:` in `.github/workflows/supabase-keepalive.yml`, apply 085, add GitHub secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY`, push, run the workflow once by hand.
+
+### Working rules
+- Demo data: no backups needed.
+- Ask before changing payment or accounting logic.
