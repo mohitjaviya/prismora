@@ -1,4 +1,5 @@
 import { recordedById } from './attribution';
+import { paymentApplications, paymentLedgerText } from './paymentDetails';
 // Every distributor, dealer and retailer as one selectable list, each tagged
 // with the tier it came from.
 //
@@ -58,6 +59,10 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
       recordedBy: recordedById(inv),
     }));
 
+  // Which invoices each payment paid (Gap 8): tied ones their invoice, the
+  // rest oldest first, as the database counts them; what is left is advance.
+  const applications = paymentApplications(party.id, invoices, payments, creditNotes, inv => invoiceParty(inv, orderById));
+
   const creditRows = (payments || [])
     .filter(p => partyIdOf(p) === party.id)
     .map(p => ({
@@ -66,7 +71,8 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
       at: p.createdAt || p.date,
       type: 'Payment',
       ref: p.id,
-      description: `Payment received${p.method ? ` via ${p.method}` : ''}${p.reference ? ` (Ref: ${p.reference})` : ''}${p.invoiceId && p.invoiceId !== p.reference ? ` — against ${p.invoiceId}` : ''}`,
+      description: paymentLedgerText(p, applications.get(p.id)),
+      chequeStatus: p.chequeStatus || null,
       debit: 0,
       credit: Number(p.amount || 0),
       recordedBy: recordedById(p),

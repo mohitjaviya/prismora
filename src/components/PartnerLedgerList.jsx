@@ -35,7 +35,7 @@ export default function PartnerLedgerList({ entries, outstanding, users }) {
             <div className="flex items-center gap-2 min-w-0">
               {row.debit > 0 ? <ArrowUpCircle size={13} className="text-rose-400 flex-shrink-0" /> : <ArrowDownCircle size={13} className="text-emerald-400 flex-shrink-0" />}
               <div className="min-w-0">
-                <p className="text-slate-300 break-words">{row.description}</p>
+                <p className="text-slate-300 break-words">{row.description}{row.chequeStatus === 'Bounced' && <span className="ml-1.5 inline-block rounded-md bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-300">Cheque bounced</span>}</p>
                 {/* Who put this line in the ledger. Blank for an invoice
                     raised by delivery, which nobody typed. */}
                 <p className="text-[10px] text-slate-500">

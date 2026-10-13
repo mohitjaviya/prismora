@@ -22,6 +22,11 @@ import InvoicesTable from '../components/accounting/InvoicesTable';
 import ExpensesTable from '../components/accounting/ExpensesTable';
 import CreditNotesTable from '../components/accounting/CreditNotesTable';
 import BalanceCheckPanel from '../components/accounting/BalanceCheckPanel';
+import InvoicePaymentHistory from '../components/accounting/InvoicePaymentHistory';
+import PartnerPaymentModal from '../components/PartnerPaymentModal';
+import { partyForInvoice } from '../utils/settlement';
+import { invoiceParty } from '../utils/distributorUtils';
+import { applicationsForAll, paymentReferenceText } from '../utils/paymentDetails';
 import { INDIAN_STATES, supplyTypeFor, invoiceGst } from '../utils/gst';
 import { INVOICE_STATUSES, isSettled, isOpen, amountDue, amountPaid } from '../utils/invoiceStatus';
 import { profitAndLoss, proformaSummary, receivables, netSalesByMonth, gstKindTotals } from '../utils/financials';
@@ -84,6 +89,8 @@ const Accounting = () => {
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isSavingExpense, setIsSavingExpense] = useState(false);
   const [printInvoice, setPrintInvoice] = useState(null);
+  // Mark as Paid on a partner's invoice opens the one payment form (Gap 8).
+  const [payTarget, setPayTarget] = useState(null);
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [creditForm, setCreditForm] = useState({ customerName: '', invoiceId: '', amount: '', reason: 'Sales Return' });
   const [isSavingCredit, setIsSavingCredit] = useState(false);
@@ -414,9 +421,18 @@ const Accounting = () => {
 
   // The invoice list as Excel (Gap 2 formatting): taxable, the stored GST
   // split and the total apart, and GST / Non-GST / Proforma with its reason.
+  const paymentApplicationsAll = () => {
+    const orderById = new Map(rawOrders.map(o => [o.id, o]));
+    return applicationsForAll(rawInvoices, distributorPayments, creditNotes, inv => invoiceParty(inv, orderById));
+  };
+  const paymentById = new Map((distributorPayments || []).map(p => [p.id, p]));
+
   const handleExportInvoices = () => {
     if (filteredInvoices.length === 0) { toast('No invoices to export.', 'info'); return; }
+    const { byInvoice } = paymentApplicationsAll();
+    const uniq = (xs) => [...new Set(xs.filter(Boolean))].join(', ');
     downloadExcel(filteredInvoices.map(inv => {
+      const pays = (byInvoice.get(inv.id) || []).map(x => paymentById.get(x.paymentId)).filter(Boolean);
       const gst = invoiceGst(inv, companySettings || {});
       const total = Number(inv.amount || 0) + Number(inv.tax || 0);
       return {
@@ -434,11 +450,49 @@ const Accounting = () => {
         'IGST (₹)': isProforma(inv) ? 0 : gst.igst,
         'GST (₹)': Number(inv.tax || 0),
         'Total (₹)': total,
-        'Received (₹)': amountPaid(inv),
-        'Due (₹)': isOpen(inv) ? amountDue(inv) : 0,
+        'Paid (₹)': amountPaid(inv),
+        'Balance due (₹)': isOpen(inv) ? amountDue(inv) : 0,
         Status: inv.status,
+        'Payment modes': uniq(pays.map(p => (p.method && p.method !== 'Invoice settled' ? p.method : 'Not recorded'))),
+        'Payment references': uniq(pays.map(p => paymentReferenceText(p)).filter(r => r !== 'Not recorded')),
       };
     }), 'PRISMORA_Invoices');
+  };
+
+  // Every partner payment with how it came and what it paid (Gap 8).
+  const handleExportPayments = () => {
+    if (!distributorPayments?.length) { toast('No payments to export.', 'info'); return; }
+    const { byPayment } = paymentApplicationsAll();
+    const partyOf = (p) => (p.distributorId && [distributors.find(x => x.id === p.distributorId), 'Distributor'])
+      || (p.dealerId && [dealers.find(x => x.id === p.dealerId), 'Dealer'])
+      || (p.retailerId && [retailers.find(x => x.id === p.retailerId), 'Retailer']) || [null, ''];
+    const rows = [...distributorPayments]
+      .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')))
+      .map(p => {
+        const [party, type] = partyOf(p);
+        const app = byPayment.get(p.id);
+        const instrument = p.method === 'Cheque' || p.method === 'Demand Draft';
+        return {
+          'Payment ID': p.id,
+          Date: p.date || p.createdAt ? new Date(p.date || p.createdAt) : '',
+          Partner: party?.name || p.distributorId || p.dealerId || p.retailerId || '',
+          'Partner type': type,
+          'Amount (₹)': Number(p.amount || 0),
+          Mode: p.method && p.method !== 'Invoice settled' ? p.method : 'Not recorded',
+          'Reference / UTR': !instrument && p.reference ? p.reference : (instrument ? '' : 'Not recorded'),
+          'Cheque / DD no.': instrument ? (p.instrumentNumber || 'Not recorded') : '',
+          'Cheque / DD date': instrument && p.instrumentDate ? new Date(p.instrumentDate) : '',
+          Bank: instrument ? (p.bankName || 'Not recorded') : '',
+          'Cheque status': p.method === 'Cheque' ? (p.chequeStatus || 'Not recorded') : '',
+          'Other (description)': p.method === 'Other' ? (p.modeDetail || 'Not recorded') : '',
+          'Received into': p.receivedInto || 'Not recorded',
+          'Applied to': (app?.applied || []).map(a => `${a.invoiceId}${a.orderId ? ` (${a.orderId})` : ''}: ₹${a.amount}`).join(', '),
+          'Advance (₹)': app ? app.advance : 0,
+          'Proof attached': p.proofPath ? 'Yes' : 'No',
+          Notes: p.notes || '',
+        };
+      });
+    downloadExcel(rows, 'PRISMORA_Payments');
   };
 
   const handleFinaliseSubmit = async (e) => {
@@ -571,7 +625,10 @@ const Accounting = () => {
       {isOpen(inv) && (
         <button
           onClick={async () => {
-            // Money moves, so it asks first (Phase 2 A15).
+            // A partner's invoice: the payment form, invoice chosen, amount = what is due (Gap 8).
+            const { party, type } = partyForInvoice(inv, { distributors, dealers, retailers, orders: rawOrders });
+            if (party) { setPayTarget({ invoice: inv, party, type }); return; }
+            // A walk-in has no ledger: money moves, so it asks first (Phase 2 A15).
             if (!await confirm({
               title: `Mark ${inv.id} as paid?`,
               body: `This records a payment of ${formatCurrency(amountDue(inv))} from ${inv.customerName} and settles the invoice.`,
@@ -983,6 +1040,7 @@ const Accounting = () => {
               ))}
             </div>
             <Button icon={FileText} onClick={handleExportInvoices}>Export Excel</Button>
+            {(canAccess('accounting', 'full') || canAccess('ledger', 'full')) && <Button icon={FileText} onClick={handleExportPayments}>Export payments</Button>}
           </div>
 
           {/* GST / Non-GST / Proforma (Gap 20). Proformas raised on delivery
@@ -1838,11 +1896,16 @@ const Accounting = () => {
 
                 </div>
 
+                <InvoicePaymentHistory invoice={printInvoice} />
               </div>
             </div>
           );
         })(),
         document.body
+      )}
+
+      {payTarget && (
+        <PartnerPaymentModal partyType={payTarget.type} party={payTarget.party} invoice={payTarget.invoice} idPrefix="accounting" onClose={() => setPayTarget(null)} />
       )}
     </div>
   );

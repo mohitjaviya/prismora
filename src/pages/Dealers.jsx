@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, IndianRupee, Eye, ShieldCheck, ShieldX, Wallet, Truck, Clock, AlertTriangle } from 'lucide-react';
+import { Network, Plus, Edit2, Trash2, X, Download, Phone, Mail, MapPin, CreditCard, Eye, ShieldCheck, ShieldX, Wallet, Truck, Clock, AlertTriangle } from 'lucide-react';
 import { useConfirm, useToast } from '../context/DialogContext';
 import PartnerLoginAction from '../components/PartnerLoginAction';
 import { PageHeader, DataTable, Button, IconButton, Badge, StatCard, Card, SearchInput, Select, FieldError, ErrorSummary, useFieldCheck } from '../components/ui';
@@ -12,14 +12,14 @@ import { downloadExcel } from '../utils/exportUtils';
 import { buildLedgerEntries, balanceStanding } from '../utils/distributorUtils';
 import PartnerLedgerList from '../components/PartnerLedgerList';
 import PartnerRefundModal from '../components/PartnerRefundModal';
-import { refundableCredit, openInvoicesForParty, againstInvoiceProblem } from '../utils/settlement';
-import PaymentInvoiceSelect from '../components/PaymentInvoiceSelect';
+import { refundableCredit } from '../utils/settlement';
+import PartnerPaymentModal from '../components/PartnerPaymentModal';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
 import LastChanged from '../components/audit/LastChanged';
 import { normaliseGstin } from '../utils/contactChecks';
 import { cleanForm } from '../utils/formRules';
-import { partnerSpec, partnerExtra, PARTNER_PAYMENT_SPEC } from '../utils/partnerForms';
+import { partnerSpec, partnerExtra } from '../utils/partnerForms';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
@@ -44,11 +44,11 @@ const BLANK_FORM = {
 };
 
 export default function Dealers() {
-  const { dealers, addDealer, updateDealer, deleteDealer, distributors, invoices, distributorPayments, addDealerPayment, orders, territories,
+  const { dealers, addDealer, updateDealer, deleteDealer, distributors, invoices, distributorPayments, orders, territories,
     distributorIncentives, schemeClaims, complaints, retailers, creditNotes, partnerRefunds, partnerRefundSupported } = useData();
   const confirm = useConfirm();
   const toast = useToast();
-  const { user, users, deleteUser, canAccess } = useAuth();
+  const { users, deleteUser, canAccess } = useAuth();
 
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState('');
@@ -67,11 +67,8 @@ export default function Dealers() {
   }
   const [form, setForm] = useState(BLANK_FORM);
   const partnerCheck = useFieldCheck();
-  const paymentCheck = useFieldCheck();
   const [isSaving, setIsSaving] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [isSavingPayment, setIsSavingPayment] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '', invoiceId: '' });
 
   const canManage = canAccess('dealers', 'full');
   // Money received is Accounts' work: Ledger or Accounting full records it,
@@ -183,38 +180,6 @@ export default function Dealers() {
   };
 
   const ledgerEntries = useMemo(() => viewingDealer ? buildLedgerEntries(viewingDealer, invoices, distributorPayments, orders, creditNotes, partnerRefunds) : [], [viewingDealer, invoices, distributorPayments, orders, creditNotes, partnerRefunds]);
-
-  const handleRecordPayment = async (e) => {
-    e.preventDefault();
-    if (!viewingDealer || isSavingPayment) return;
-    if (!paymentCheck.ok(paymentForm, PARTNER_PAYMENT_SPEC)) return;
-    // Against an invoice: no more than its due (098 checks again).
-    if (paymentForm.invoiceId) {
-      const chosen = openInvoicesForParty(invoices, viewingDealer, orders).find(o => o.id === paymentForm.invoiceId);
-      const problem = againstInvoiceProblem(paymentForm.amount, paymentForm.invoiceId, chosen?.due ?? 0);
-      if (problem) { toast(problem, 'error'); return; }
-    }
-    setIsSavingPayment(true);
-    try {
-      // Open until the database has the payment; the balance moves with it there.
-      const result = await addDealerPayment({
-      dealerId: viewingDealer.id,
-      amount: Number(paymentForm.amount),
-      method: paymentForm.method,
-      reference: paymentForm.reference,
-      date: paymentForm.date ? new Date(paymentForm.date).toISOString() : new Date().toISOString(),
-      notes: paymentForm.notes,
-      againstInvoiceId: paymentForm.invoiceId || null,
-      recordedBy: user?.id
-      });
-      if (!result?.ok) { toast(result?.error || 'The payment could not be saved. Nothing was recorded.', 'error'); return; }
-      toast(`Payment of ₹${Number(paymentForm.amount).toLocaleString('en-IN')} recorded${paymentForm.invoiceId ? ` against ${paymentForm.invoiceId}` : ''}.`, 'success');
-      setIsPaymentModalOpen(false);
-      setPaymentForm({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '', invoiceId: '' });
-    } finally {
-      setIsSavingPayment(false);
-    }
-  };
 
   const dealerColumns = [
     {
@@ -426,7 +391,7 @@ export default function Dealers() {
                     <h4 className="text-sm font-bold text-white flex items-center gap-1.5"><Wallet size={14} className="text-brand-accent" />Outstanding Ledger</h4>
                     <div className="flex items-center gap-3">
                       {canRecordPayment && refundsOn && refundableCredit(viewingDealer.outstandingAmount) > 0 && <button onClick={() => setIsRefundOpen(true)} className="text-xs font-semibold text-emerald-400 hover:underline">Record Refund</button>}
-                      {canRecordPayment && <button onClick={() => { paymentCheck.reset(); setPaymentForm(f => ({ ...f, invoiceId: '' })); setIsPaymentModalOpen(true); }} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
+                      {canRecordPayment && <button onClick={() => setIsPaymentModalOpen(true)} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
                     </div>
                   </div>
                   <PartnerLedgerList entries={ledgerEntries} outstanding={viewingDealer.outstandingAmount} users={users} />
@@ -443,50 +408,8 @@ export default function Dealers() {
 
       {isRefundOpen && viewingDealer && <PartnerRefundModal partyType="Dealer" party={viewingDealer} onClose={() => setIsRefundOpen(false)} />}
 
-      {/* Record Payment Modal */}
-      {isPaymentModalOpen && viewingDealer && createPortal(
-        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsPaymentModalOpen(false)} />
-          <div className="relative glass-panel bg-brand-primary w-full max-w-md rounded-2xl shadow-2xl border border-brand-accent/30 animate-fade-in-up z-10 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2"><IndianRupee size={18} className="text-brand-accent" />Record Payment</h3>
-              <button onClick={() => setIsPaymentModalOpen(false)} className="p-1 text-slate-400 hover:text-white rounded-lg"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleRecordPayment} noValidate className="space-y-4">
-              <div>
-                <label htmlFor="dealers-amount" className={labelCls}>Amount (₹) *</label>
-                <input id="dealers-amount" type="number" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} /><FieldError errors={paymentCheck.errors(paymentForm, PARTNER_PAYMENT_SPEC)} field="amount" />
-              </div>
-              <PaymentInvoiceSelect party={viewingDealer} value={paymentForm.invoiceId} amount={paymentForm.amount} onChange={v => setPaymentForm(f => ({ ...f, invoiceId: v }))} idPrefix="dealers" inputCls={inputCls} labelCls={labelCls} />
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="dealers-method" className={labelCls}>Method</label>
-                  <select id="dealers-method" value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} className={inputCls}>
-                    {['Bank Transfer', 'Cheque', 'UPI', 'Cash', 'Other'].map(m => <option key={m} value={m} className="bg-brand-primary">{m}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="dealers-date" className={labelCls}>Date</label>
-                  <input id="dealers-date" type="date" value={paymentForm.date} onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))} className={inputCls} style={{ colorScheme: 'dark' }} />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="dealers-reference-utr" className={labelCls}>Reference / UTR</label>
-                <input id="dealers-reference-utr" type="text" value={paymentForm.reference} onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label htmlFor="dealers-notes" className={labelCls}>Notes</label>
-                <textarea id="dealers-notes" rows="2" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className={`${inputCls} resize-none`} />
-              </div>
-              <ErrorSummary errors={paymentCheck.errors(paymentForm, PARTNER_PAYMENT_SPEC)} />
-              <div className="flex gap-3 justify-end pt-2">
-                <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 text-sm bg-brand-primary-lighter text-slate-400 rounded-xl">Cancel</button>
-                <button type="submit" disabled={isSavingPayment} className="px-4 py-2 text-sm btn-accent rounded-xl disabled:opacity-60">{isSavingPayment ? 'Saving…' : 'Record Payment'}</button>
-              </div>
-            </form>
-          </div>
-        </div>, document.body
-      )}
+      {/* Record Payment: the one payment form (Gap 8) */}
+      {isPaymentModalOpen && viewingDealer && <PartnerPaymentModal partyType="Dealer" party={viewingDealer} idPrefix="dealers" onClose={() => setIsPaymentModalOpen(false)} />}
 
       {/* Add / Edit Modal */}
       {isModalOpen && createPortal(

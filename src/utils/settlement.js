@@ -205,6 +205,9 @@ export const partnerPaymentRpcArgs = (partyType, partyId, payment = {}, invoiceI
   // Record Payment against one invoice (098). Sent only when chosen, so a
   // database without 098 never sees a parameter it does not have.
   ...(!invoiceId && payment.againstInvoiceId ? { p_against_invoice: payment.againstInvoiceId } : {}),
+  // How the money came (099, Gap 8). Sent only with the Gap 8 form's details,
+  // so a database without 099 never sees it and the old checks apply.
+  ...(payment.details ? { p_details: payment.details } : {}),
 });
 
 /**
@@ -236,7 +239,7 @@ export const againstInvoiceProblem = (amount, invoiceId, due) => {
 /**
  * The invoices a payment from this partner can be recorded against (098):
  * theirs, with money still due, oldest first (the order the pool pays them).
- * Each is { id, due, label }.
+ * Each is { id, orderId, date, total, paid, due, label }.
  */
 export const openInvoicesForParty = (invoices = [], party, orders = []) => {
   if (!party?.id) return [];
@@ -246,11 +249,11 @@ export const openInvoicesForParty = (invoices = [], party, orders = []) => {
       const total = invoiceTotal(inv);
       const paid = Math.min(Math.max(Number(inv.amountPaid) || 0, 0), total);
       const settled = inv.status === 'Settled' || inv.status === 'Paid';
-      return { inv, due: settled ? 0 : Math.round((total - paid) * 100) / 100 };
+      return { inv, total, paid, due: settled ? 0 : Math.round((total - paid) * 100) / 100 };
     })
     .filter(x => x.due > 0.005)
     .sort((a, b) => String(a.inv.createdAt || '').localeCompare(String(b.inv.createdAt || '')) || String(a.inv.id).localeCompare(String(b.inv.id)))
-    .map(({ inv, due }) => ({ id: inv.id, due, label: `${inv.id} — ${rupees(due)} due of ${rupees(invoiceTotal(inv))}` }));
+    .map(({ inv, total, paid, due }) => ({ id: inv.id, orderId: inv.orderId || null, date: inv.createdAt || null, total, paid, due, label: `${inv.id} — ${rupees(due)} due of ${rupees(total)}` }));
 };
 
 /**

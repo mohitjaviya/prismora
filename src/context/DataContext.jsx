@@ -16,6 +16,7 @@ import { beatStatusFor } from '../utils/beatVisits';
 import { localDateStr } from '../utils/beatDates';
 import { sellableQty } from '../utils/expiry';
 import { LEAD_ATTACHMENT_BUCKET, attachmentError, attachmentPath, contentTypeFor } from '../utils/leadAttachments';
+import { PAYMENT_PROOF_BUCKET, proofFileProblem, proofPath } from '../utils/paymentProofs';
 import { shouldFetchData, dataCacheKeysToClear } from '../utils/dataSession';
 import { journaled, noteEvent, startJournal } from '../utils/writeJournal';
 import { indiaDay } from '../utils/orderDate';
@@ -2405,7 +2406,7 @@ export const DataProvider = ({ children }) => {
    * pressing it after recording the payment by hand, collides on the primary
    * key rather than crediting the partner twice.
    */
-  const settleInvoiceAsPayment = async (invoice) => {
+  const settleInvoiceAsPayment = async (invoice, payment = {}) => {
     const { party, type } = partyForInvoice(invoice);
     if (!party) return { ok: true };      // a walk-in invoice has no ledger to credit
     // What is still due — part of it may already be paid (057).
@@ -2418,7 +2419,8 @@ export const DataProvider = ({ children }) => {
       return { ok: false, error: secondSettlementText(invoice.id, due) };
     }
     // The same payment Record Payment makes, tied to this invoice (Gap 7 A).
-    const result = await recordPartnerPayment(type, party.id, {}, invoice);
+    // With the Gap 8 form, how the money came travels with it (099).
+    const result = await recordPartnerPayment(type, party.id, payment, invoice);
     return result.ok ? { ok: true, amount: Number(result.row?.amount) || due } : result;
   };
 
@@ -2453,7 +2455,7 @@ export const DataProvider = ({ children }) => {
    * Paid, Unpaid or Overdue from the money. Answers { ok, error?, amount? }:
    * `amount` is what was recorded, so the screen never claims more.
    */
-  const updateInvoiceStatus = async (id, status) => {
+  const updateInvoiceStatus = async (id, status, payment = {}) => {
     const invoice = invoices.find(inv => inv.id === id);
     if (!invoice) return { ok: false, error: 'This invoice is no longer in the list. Refresh the page.' };
     const settle = status === 'Settled' || status === 'Paid';
@@ -2462,7 +2464,7 @@ export const DataProvider = ({ children }) => {
 
     if (party) {
       if (settle && !isSettled(invoice)) {
-        const result = await settleInvoiceAsPayment(invoice);
+        const result = await settleInvoiceAsPayment(invoice, payment);
         if (!result.ok) { await reloadInvoices(); return result; }
         amount = result.amount;
       } else if (!settle) {
@@ -3878,6 +3880,53 @@ export const DataProvider = ({ children }) => {
     return invoicePaymentLinkCheck.current;
   };
 
+  // Whether payments carry their mode's details (099, Gap 8): cheque / DD
+  // number, date, bank, cheque status, received into, proof. Asked once.
+  const paymentDetailsCheck = useRef(null);
+  const paymentDetailsSupported = () => {
+    if (!paymentDetailsCheck.current) {
+      paymentDetailsCheck.current = supabase.rpc('payment_details_enabled')
+        .then(({ data, error }) => !error && data === true, () => false)
+        .then(ok => { if (!ok) paymentDetailsCheck.current = null; return ok; });
+    }
+    return paymentDetailsCheck.current;
+  };
+
+  // A cheque's status is a label (099): no balance or invoice moves with it.
+  const setChequeStatus = async (paymentId, status) => {
+    const { data, error } = await supabase.rpc('set_cheque_status', { p_payment_id: paymentId, p_status: status });
+    if (error || !data) return { ok: false, error: error ? plainDatabaseError(error, 'change the cheque status') : 'The cheque status could not be changed.' };
+    setDistributorPayments(prev => {
+      const next = prev.map(p => (p.id === data.id ? data : p));
+      localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
+      return next;
+    });
+    return { ok: true, row: data };
+  };
+
+  // Proof of payment (099): a private bucket only full Accounting can use;
+  // filed under the partner, opened by a short-lived link, never a public one.
+  const paymentProofStore = () => supabase.storage.from(PAYMENT_PROOF_BUCKET);
+  const uploadPaymentProof = async (partyId, file) => {
+    const problem = proofFileProblem(file);
+    if (problem) return { ok: false, error: problem };
+    const path = proofPath(partyId, file.name);
+    const { error } = await paymentProofStore().upload(path, file, { contentType: contentTypeFor(file), upsert: false });
+    if (error) return { ok: false, error: `${file.name} could not be attached: ${error.message}` };
+    return { ok: true, path };
+  };
+  const removePaymentProof = async (path) => {
+    if (!path) return { ok: true };
+    const { error } = await paymentProofStore().remove([path]);
+    return error ? { ok: false, error: error.message } : { ok: true };
+  };
+  const openPaymentProof = async (path) => {
+    const { data, error } = await paymentProofStore().createSignedUrl(path, 120);
+    if (error || !data?.signedUrl) return { ok: false, error: `The proof could not be opened: ${error?.message || 'no link'}` };
+    window.open(data.signedUrl, '_blank', 'noopener');
+    return { ok: true };
+  };
+
   /**
    * The one way a partner's payment is recorded, for "Record Payment" and for
    * Accounting's "Mark as Paid" alike (Gap 7 A). With 092 the database builds
@@ -4078,6 +4127,7 @@ export const DataProvider = ({ children }) => {
       // Distributor / Dealer / Retailer Portal
       distributorPayments, addDistributorPayment, addDealerPayment, addRetailerPayment,
       partnerRefunds, partnerRefundSupported, recordPartnerRefund, invoicePaymentLinkSupported,
+      paymentDetailsSupported, setChequeStatus, uploadPaymentProof, removePaymentProof, openPaymentProof,
       schemeClaims, addSchemeClaim, updateSchemeClaimStatus,
       distributorIncentives, markIncentivePaid,
     }, loadGate.current, (name, ms) => noteEvent('save waited for data load', `${name} ${ms} ms`))}>
