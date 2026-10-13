@@ -579,8 +579,11 @@ const Accounting = () => {
             })) return;
             // Settles what is still due. The payment and the partner's balance
             // move together in the database; a refusal is said, not swallowed.
-            if (await updateInvoiceStatus(inv.id, 'Settled')) toast(`${inv.id} settled: ${formatCurrency(amountDue(inv))} recorded.`, 'success');
-            else toast(`${inv.id} could not be marked paid. Nothing was changed.`, 'error');
+            // The toast names what the database recorded, never what the screen
+            // expected: Mark as Paid after a Convert records only the GST due (Gap 21).
+            const result = await updateInvoiceStatus(inv.id, 'Settled');
+            if (result.ok) toast(`${inv.id} settled: ${formatCurrency(result.amount ?? amountDue(inv))} recorded.`, 'success');
+            else toast(result.error || `${inv.id} could not be marked paid. Nothing was changed.`, 'error');
           }}
           className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
           title="Mark as Paid"
@@ -595,10 +598,12 @@ const Accounting = () => {
             // misclick moves money. It has to be undoable.
             if (await confirm({
               title: 'Mark this invoice unpaid again?',
-              body: 'The payment recorded against the partner will be removed and their balance put back.',
+              body: "The payments recorded by Mark as Paid will be removed and the partner's balance put back. Payments recorded with Record Payment stay.",
               confirmLabel: 'Mark unpaid',
             })) {
-              updateInvoiceStatus(inv.id, 'Unpaid');
+              const result = await updateInvoiceStatus(inv.id, 'Unpaid');
+              if (result.ok) toast(`${inv.id} marked unpaid.`, 'success');
+              else toast(result.error || `${inv.id} could not be marked unpaid.`, 'error');
             }
           }}
           className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors"

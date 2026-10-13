@@ -21,8 +21,9 @@ export const invoiceTotal = (inv) => (Number(inv?.amount) || 0) + (Number(inv?.t
  *
  * Derived from the invoice rather than the clock, so marking the same invoice
  * paid twice is refused by the primary key instead of quietly crediting the
- * partner twice. `distributor_payments` has no invoiceId column, so this id is
- * also the only link back.
+ * partner twice. Since 098 a payment can also name its invoice in
+ * `invoiceId` (a second Mark as Paid after Convert, or Record Payment
+ * against an invoice); this id stays the link for the first one.
  */
 export const paymentIdForInvoice = (invoiceId) => `PAY-INV-${invoiceId}`;
 
@@ -201,7 +202,63 @@ export const partnerPaymentRpcArgs = (partyType, partyId, payment = {}, invoiceI
   p_date: payment.date || null,
   p_notes: payment.notes || null,
   p_invoice_id: invoiceId || null,
+  // Record Payment against one invoice (098). Sent only when chosen, so a
+  // database without 098 never sees a parameter it does not have.
+  ...(!invoiceId && payment.againstInvoiceId ? { p_against_invoice: payment.againstInvoiceId } : {}),
 });
+
+/**
+ * The payments "Mark as Paid" made for an invoice: PAY-INV-<id>, and after a
+ * Convert added GST, PAY-INV-<id>-2, -3, … (098). "Mark unpaid" removes these
+ * and nothing else; a Record Payment against the invoice stays.
+ */
+export const markPaidPaymentIds = (invoiceId, payments = []) => {
+  const first = paymentIdForInvoice(invoiceId);
+  return (payments || []).map(p => p?.id).filter(id => id === first || (typeof id === 'string' && id.startsWith(`${first}-`)));
+};
+
+const rupees = (n) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * Why a payment against this invoice can't be recorded, or null. The same rule
+ * as record_partner_payment (098): no more than what is still due there; the
+ * extra is recorded as a separate payment. `due` is the invoice's amount due.
+ */
+export const againstInvoiceProblem = (amount, invoiceId, due) => {
+  if (!invoiceId) return null;
+  const value = Math.round(Number(amount) * 100) / 100;
+  const owed = Math.round(Number(due) * 100) / 100;
+  if (!(owed > 0)) return `Invoice ${invoiceId} has nothing left to pay.`;
+  if (value > owed + 0.005) return `${rupees(value)} is more than the ${rupees(owed)} still due on invoice ${invoiceId}. Record ${rupees(owed)} against the invoice, and the rest as a separate payment (not against an invoice).`;
+  return null;
+};
+
+/**
+ * The invoices a payment from this partner can be recorded against (098):
+ * theirs, with money still due, oldest first (the order the pool pays them).
+ * Each is { id, due, label }.
+ */
+export const openInvoicesForParty = (invoices = [], party, orders = []) => {
+  if (!party?.id) return [];
+  return (invoices || [])
+    .filter(inv => invoiceBelongsToParty(inv, party, orders))
+    .map(inv => {
+      const total = invoiceTotal(inv);
+      const paid = Math.min(Math.max(Number(inv.amountPaid) || 0, 0), total);
+      const settled = inv.status === 'Settled' || inv.status === 'Paid';
+      return { inv, due: settled ? 0 : Math.round((total - paid) * 100) / 100 };
+    })
+    .filter(x => x.due > 0.005)
+    .sort((a, b) => String(a.inv.createdAt || '').localeCompare(String(b.inv.createdAt || '')) || String(a.inv.id).localeCompare(String(b.inv.id)))
+    .map(({ inv, due }) => ({ id: inv.id, due, label: `${inv.id} — ${rupees(due)} due of ${rupees(invoiceTotal(inv))}` }));
+};
+
+/**
+ * Mark as Paid on an invoice that already has its settling payment, before
+ * 098: the database would refuse a second one, so say what to do instead.
+ */
+export const secondSettlementText = (invoiceId, due) =>
+  `Invoice ${invoiceId} already has its Mark as Paid payment, so nothing was recorded. Record the ${rupees(due)} still due (GST added when it was converted) with Record Payment on the partner; it is applied to their oldest open invoice first.`;
 
 /** What can be refunded to a partner: their credit balance (a negative balance), else 0. */
 export const refundableCredit = (outstanding) => {

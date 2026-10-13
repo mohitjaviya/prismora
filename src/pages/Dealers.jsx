@@ -12,7 +12,8 @@ import { downloadExcel } from '../utils/exportUtils';
 import { buildLedgerEntries, balanceStanding } from '../utils/distributorUtils';
 import PartnerLedgerList from '../components/PartnerLedgerList';
 import PartnerRefundModal from '../components/PartnerRefundModal';
-import { refundableCredit } from '../utils/settlement';
+import { refundableCredit, openInvoicesForParty, againstInvoiceProblem } from '../utils/settlement';
+import PaymentInvoiceSelect from '../components/PaymentInvoiceSelect';
 import { deleteWarning } from '../utils/partyDependants';
 import { territoryFields, territoryName, territoryForPlace } from '../utils/territory';
 import LastChanged from '../components/audit/LastChanged';
@@ -70,7 +71,7 @@ export default function Dealers() {
   const [isSaving, setIsSaving] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '' });
+  const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '', invoiceId: '' });
 
   const canManage = canAccess('dealers', 'full');
   // Money received is Accounts' work: Ledger or Accounting full records it,
@@ -187,6 +188,12 @@ export default function Dealers() {
     e.preventDefault();
     if (!viewingDealer || isSavingPayment) return;
     if (!paymentCheck.ok(paymentForm, PARTNER_PAYMENT_SPEC)) return;
+    // Against an invoice: no more than its due (098 checks again).
+    if (paymentForm.invoiceId) {
+      const chosen = openInvoicesForParty(invoices, viewingDealer, orders).find(o => o.id === paymentForm.invoiceId);
+      const problem = againstInvoiceProblem(paymentForm.amount, paymentForm.invoiceId, chosen?.due ?? 0);
+      if (problem) { toast(problem, 'error'); return; }
+    }
     setIsSavingPayment(true);
     try {
       // Open until the database has the payment; the balance moves with it there.
@@ -197,12 +204,13 @@ export default function Dealers() {
       reference: paymentForm.reference,
       date: paymentForm.date ? new Date(paymentForm.date).toISOString() : new Date().toISOString(),
       notes: paymentForm.notes,
+      againstInvoiceId: paymentForm.invoiceId || null,
       recordedBy: user?.id
       });
-      if (!result?.ok) { toast('The payment could not be saved. Nothing was recorded.', 'error'); return; }
-      toast(`Payment of ₹${Number(paymentForm.amount).toLocaleString('en-IN')} recorded.`, 'success');
+      if (!result?.ok) { toast(result?.error || 'The payment could not be saved. Nothing was recorded.', 'error'); return; }
+      toast(`Payment of ₹${Number(paymentForm.amount).toLocaleString('en-IN')} recorded${paymentForm.invoiceId ? ` against ${paymentForm.invoiceId}` : ''}.`, 'success');
       setIsPaymentModalOpen(false);
-      setPaymentForm({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '' });
+      setPaymentForm({ amount: '', method: 'Bank Transfer', reference: '', date: new Date().toISOString().split('T')[0], notes: '', invoiceId: '' });
     } finally {
       setIsSavingPayment(false);
     }
@@ -418,7 +426,7 @@ export default function Dealers() {
                     <h4 className="text-sm font-bold text-white flex items-center gap-1.5"><Wallet size={14} className="text-brand-accent" />Outstanding Ledger</h4>
                     <div className="flex items-center gap-3">
                       {canRecordPayment && refundsOn && refundableCredit(viewingDealer.outstandingAmount) > 0 && <button onClick={() => setIsRefundOpen(true)} className="text-xs font-semibold text-emerald-400 hover:underline">Record Refund</button>}
-                      {canRecordPayment && <button onClick={() => { paymentCheck.reset(); setIsPaymentModalOpen(true); }} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
+                      {canRecordPayment && <button onClick={() => { paymentCheck.reset(); setPaymentForm(f => ({ ...f, invoiceId: '' })); setIsPaymentModalOpen(true); }} className="text-xs font-semibold text-brand-accent hover:underline">+ Record Payment</button>}
                     </div>
                   </div>
                   <PartnerLedgerList entries={ledgerEntries} outstanding={viewingDealer.outstandingAmount} users={users} />
@@ -449,6 +457,7 @@ export default function Dealers() {
                 <label htmlFor="dealers-amount" className={labelCls}>Amount (₹) *</label>
                 <input id="dealers-amount" type="number" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} className={inputCls} /><FieldError errors={paymentCheck.errors(paymentForm, PARTNER_PAYMENT_SPEC)} field="amount" />
               </div>
+              <PaymentInvoiceSelect party={viewingDealer} value={paymentForm.invoiceId} amount={paymentForm.amount} onChange={v => setPaymentForm(f => ({ ...f, invoiceId: v }))} idPrefix="dealers" inputCls={inputCls} labelCls={labelCls} />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="dealers-method" className={labelCls}>Method</label>

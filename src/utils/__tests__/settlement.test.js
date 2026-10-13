@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  alreadySettled, balanceAfterPayment, invoiceBelongsToParty, invoicePartyFields, invoiceTotal, invoicesSettledBy, isOverpayment, partyForInvoice, paymentFieldFor, paymentIdForInvoice, settlementRowFor, partnerPaymentRpcArgs, refundableCredit, refundProblem, partnerRefundRpcArgs,
+  alreadySettled, balanceAfterPayment, invoiceBelongsToParty, invoicePartyFields, invoiceTotal, invoicesSettledBy, isOverpayment, partyForInvoice, paymentFieldFor, paymentIdForInvoice, settlementRowFor, partnerPaymentRpcArgs, refundableCredit, refundProblem, partnerRefundRpcArgs, markPaidPaymentIds, againstInvoiceProblem, openInvoicesForParty, secondSettlementText,
 } from '../settlement';
 
 describe('invoiceTotal', () => {
@@ -387,5 +387,47 @@ describe('partner refunds (Gap 7 C, 093)', () => {
       p_party_type: 'Dealer', p_party_id: 'DL-1', p_amount: 500, p_date: '2026-10-04',
       p_method: 'Bank Transfer', p_reference: 'UTR1', p_reason: 'Credit paid back',
     });
+  });
+});
+
+describe('invoice-tied payments (Gap 21, 098)', () => {
+  it('Record Payment against an invoice sends p_against_invoice; without one the key is absent (pre-098 safe)', () => {
+    const args = partnerPaymentRpcArgs('Dealer', 'DL-1', { amount: '18', againstInvoiceId: 'INV-5' });
+    expect(args.p_against_invoice).toBe('INV-5');
+    expect(args.p_amount).toBe(18);
+    expect(args.p_invoice_id).toBeNull();
+    expect(Object.keys(partnerPaymentRpcArgs('Dealer', 'DL-1', { amount: 1 }))).not.toContain('p_against_invoice');
+    expect(Object.keys(partnerPaymentRpcArgs('Dealer', 'DL-1', { againstInvoiceId: 'INV-5' }, 'INV-5'))).not.toContain('p_against_invoice');
+  });
+
+  it('Mark unpaid finds PAY-INV-<id> and its -N payments only', () => {
+    const pays = [{ id: 'PAY-INV-INV-1' }, { id: 'PAY-INV-INV-1-2' }, { id: 'PAY-INV-INV-12' }, { id: 'PAY-17900' }, { id: 'PAY-INV-INV-1-3' }];
+    expect(markPaidPaymentIds('INV-1', pays)).toEqual(['PAY-INV-INV-1', 'PAY-INV-INV-1-2', 'PAY-INV-INV-1-3']);
+    expect(markPaidPaymentIds('INV-9', pays)).toEqual([]);
+  });
+
+  it('an amount above the due is refused with the due named; up to the due is fine', () => {
+    expect(againstInvoiceProblem(200, 'INV-1', 118)).toMatch(/₹200\.00 is more than the ₹118\.00 still due on invoice INV-1/);
+    expect(againstInvoiceProblem(118, 'INV-1', 118)).toBeNull();
+    expect(againstInvoiceProblem(50, 'INV-1', 118)).toBeNull();
+    expect(againstInvoiceProblem(5, 'INV-1', 0)).toMatch(/nothing left to pay/);
+    expect(againstInvoiceProblem(5, '', 0)).toBeNull();
+  });
+
+  it('lists the partner\'s invoices with money due, oldest first', () => {
+    const party = { id: 'DL-1', name: 'Dealer' };
+    const invoices = [
+      { id: 'INV-B', dealerId: 'DL-1', amount: 100, tax: 18, amountPaid: 100, status: 'Partially Paid', createdAt: '2026-10-02' },
+      { id: 'INV-A', dealerId: 'DL-1', amount: 50, tax: 0, amountPaid: 0, status: 'Unpaid', createdAt: '2026-10-01' },
+      { id: 'INV-C', dealerId: 'DL-1', amount: 10, tax: 0, amountPaid: 10, status: 'Settled', createdAt: '2026-09-01' },
+      { id: 'INV-X', dealerId: 'DL-2', amount: 10, tax: 0, amountPaid: 0, status: 'Unpaid', createdAt: '2026-09-01' },
+    ];
+    const list = openInvoicesForParty(invoices, party, []);
+    expect(list.map(o => [o.id, o.due])).toEqual([['INV-A', 50], ['INV-B', 18]]);
+    expect(list[1].label).toBe('INV-B — ₹18.00 due of ₹118.00');
+  });
+
+  it('before 098, a second Mark as Paid explains instead of claiming success', () => {
+    expect(secondSettlementText('INV-1', 18)).toMatch(/already has its Mark as Paid payment, so nothing was recorded.*₹18\.00/);
   });
 });

@@ -66,7 +66,7 @@ export const buildLedgerEntries = (party, invoices = [], payments = [], orders =
       at: p.createdAt || p.date,
       type: 'Payment',
       ref: p.id,
-      description: `Payment received${p.method ? ` via ${p.method}` : ''}${p.reference ? ` (Ref: ${p.reference})` : ''}`,
+      description: `Payment received${p.method ? ` via ${p.method}` : ''}${p.reference ? ` (Ref: ${p.reference})` : ''}${p.invoiceId && p.invoiceId !== p.reference ? ` — against ${p.invoiceId}` : ''}`,
       debit: 0,
       credit: Number(p.amount || 0),
       recordedBy: recordedById(p),

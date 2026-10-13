@@ -104,6 +104,10 @@ export default function InvoicesTable({ invoices, formatCurrency, formatDate, ra
                     : `${formatCurrency(paid)} of ${formatCurrency(total(inv))} paid`}
               </span>
             )}
+            {/* What is still due, e.g. the GST a Convert added after the proforma was paid (Gap 21). */}
+            {paid > 0 && paid < total(inv) - 0.005 && (
+              <span className="text-[10px] font-semibold text-amber-300 whitespace-nowrap">{formatCurrency(total(inv) - paid)} due</span>
+            )}
           </div>
         );
       },

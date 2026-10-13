@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { linkedExpenseId, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { amountDue, isSettled } from '../utils/invoiceStatus';
-import { paymentIdForInvoice, partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled, paymentFieldFor, partnerPaymentRpcArgs, partnerRefundRpcArgs } from '../utils/settlement';
+import { partyForInvoice as resolveInvoiceParty, settlementRowFor, alreadySettled, markPaidPaymentIds, secondSettlementText, paymentFieldFor, partnerPaymentRpcArgs, partnerRefundRpcArgs } from '../utils/settlement';
 import { batchToReceiveInto, canTransfer, receiptPatchFor, canReceive } from '../utils/stockMoves';
 import { splitLines, canSplit, planPartialDelivery } from '../utils/fulfilment';
 import { territoryFor } from '../utils/territory';
@@ -2407,57 +2407,78 @@ export const DataProvider = ({ children }) => {
    */
   const settleInvoiceAsPayment = async (invoice) => {
     const { party, type } = partyForInvoice(invoice);
-    if (!party) return true;              // a walk-in invoice has no ledger to credit
+    if (!party) return { ok: true };      // a walk-in invoice has no ledger to credit
     // What is still due — part of it may already be paid (057).
-    if (amountDue(invoice) <= 0) return true;
-    if (alreadySettled(invoice.id, distributorPayments)) return true;
+    const due = amountDue(invoice);
+    if (due <= 0) return { ok: true, amount: 0 };
+    // Already marked paid once, and Convert has since added GST (Gap 21). With
+    // 098 the database records the GST due as a second payment tied to the
+    // invoice; without it, it would refuse, so nothing is sent and we say so.
+    if (alreadySettled(invoice.id, distributorPayments) && !(await invoicePaymentLinkSupported())) {
+      return { ok: false, error: secondSettlementText(invoice.id, due) };
+    }
     // The same payment Record Payment makes, tied to this invoice (Gap 7 A).
     const result = await recordPartnerPayment(type, party.id, {}, invoice);
-    return result.ok;
+    return result.ok ? { ok: true, amount: Number(result.row?.amount) || due } : result;
   };
 
-  /** Moving an invoice back out of Paid takes the credit away again. */
+  /**
+   * Moving an invoice back out of Paid takes the credit away again: the
+   * payments Mark as Paid made (PAY-INV-<id>, and -2… after a Convert), not
+   * a Record Payment against the invoice. Answers whether they all went.
+   */
   const reverseInvoiceSettlement = async (invoice) => {
-    const payId = paymentIdForInvoice(invoice.id);
-    if (!distributorPayments.some(x => x.id === payId)) return;
+    const payIds = markPaidPaymentIds(invoice.id, distributorPayments);
+    if (!payIds.length) return true;
     const { party, type } = partyForInvoice(invoice);
-    const ok = await persist('distributor_payments delete (unsettled)',
-      supabase.from('distributor_payments').delete().eq('id', payId));
-    if (!ok) return;
+    // One statement, so they all go or none do; RLS refusing is 0 rows, not an error.
+    const { data, error } = await supabase.from('distributor_payments').delete().in('id', payIds).select('id');
+    const gone = (data || []).map(r => r.id);
+    if (error || gone.length !== payIds.length) {
+      console.error('[Prismora] Mark unpaid removed', gone.length, 'of', payIds.length, 'payments', error?.message || '');
+    }
     setDistributorPayments(prev => {
-      const next = prev.filter(x => x.id !== payId);
+      const next = prev.filter(x => !gone.includes(x.id));
       localStorage.setItem('prismora_distributor_payments', JSON.stringify(next));
       return next;
     });
     if (party) await reloadParty(type, party.id);
+    return !error && gone.length === payIds.length;
   };
 
   /**
    * Mark an invoice paid, or not. The status itself is the database's (057):
    * a partner's invoice gets the payment that settles what is still due, and
    * a walk-in's is marked; the database then works out Settled, Partially
-   * Paid, Unpaid or Overdue from the money.
+   * Paid, Unpaid or Overdue from the money. Answers { ok, error?, amount? }:
+   * `amount` is what was recorded, so the screen never claims more.
    */
   const updateInvoiceStatus = async (id, status) => {
     const invoice = invoices.find(inv => inv.id === id);
-    if (!invoice) return false;
+    if (!invoice) return { ok: false, error: 'This invoice is no longer in the list. Refresh the page.' };
     const settle = status === 'Settled' || status === 'Paid';
     const { party } = partyForInvoice(invoice);
+    let amount;
 
     if (party) {
       if (settle && !isSettled(invoice)) {
-        if (!await settleInvoiceAsPayment(invoice)) return false;
+        const result = await settleInvoiceAsPayment(invoice);
+        if (!result.ok) { await reloadInvoices(); return result; }
+        amount = result.amount;
       } else if (!settle) {
-        await reverseInvoiceSettlement(invoice);
+        if (!await reverseInvoiceSettlement(invoice)) {
+          await reloadInvoices();
+          return { ok: false, error: `Invoice ${id} could not be marked unpaid. Refresh the page and check its payments.` };
+        }
       }
     } else {
       const { error } = await supabase.from('invoices').update({ markedPaid: settle }).eq('id', id);
-      if (error) return false;
+      if (error) return { ok: false, error: plainDatabaseError(error, 'change this invoice') };
     }
 
     await reloadInvoices();
     logEvent('invoice_status_update', `Invoice ${id} marked as ${settle ? 'paid' : 'unpaid'}`, invoice.assignedTo, id);
-    return true;
+    return { ok: true, amount };
   };
 
   const deleteInvoice = async (id) => {
@@ -3845,6 +3866,18 @@ export const DataProvider = ({ children }) => {
     return partnerPaymentCheck.current;
   };
 
+  // Whether a payment can be tied to an invoice (098, Gap 21): a second Mark as
+  // Paid after Convert, and Record Payment against an invoice. Asked once.
+  const invoicePaymentLinkCheck = useRef(null);
+  const invoicePaymentLinkSupported = () => {
+    if (!invoicePaymentLinkCheck.current) {
+      invoicePaymentLinkCheck.current = supabase.rpc('invoice_payment_link_enabled')
+        .then(({ data, error }) => !error && data === true, () => false)
+        .then(ok => { if (!ok) invoicePaymentLinkCheck.current = null; return ok; });
+    }
+    return invoicePaymentLinkCheck.current;
+  };
+
   /**
    * The one way a partner's payment is recorded, for "Record Payment" and for
    * Accounting's "Mark as Paid" alike (Gap 7 A). With 092 the database builds
@@ -3895,9 +3928,11 @@ export const DataProvider = ({ children }) => {
     const field = paymentFieldFor(partyType);
     const partyId = paymentData[field];
     const result = await recordPartnerPayment(partyType, partyId, paymentData);
-    if (!result.ok) return null;
+    // The refusal travels back so the form can say why (Gap 21: more than the invoice's due).
+    if (!result.ok) return result;
     const party = list.find(x => x.id === partyId);
-    logEvent(eventType, `Payment of ₹${result.row.amount} recorded for ${party?.name || partyId}`, null, result.id);
+    const against = result.row?.invoiceId ? ` against invoice ${result.row.invoiceId}` : '';
+    logEvent(eventType, `Payment of ₹${result.row.amount} recorded for ${party?.name || partyId}${against}`, null, result.id);
     return result;
   };
   const addDistributorPayment = addPartnerPayment('Distributor', distributors, 'distributor_payment');
@@ -4042,7 +4077,7 @@ export const DataProvider = ({ children }) => {
       sfaExpenses, addSFAExpense, updateSFAExpense,
       // Distributor / Dealer / Retailer Portal
       distributorPayments, addDistributorPayment, addDealerPayment, addRetailerPayment,
-      partnerRefunds, partnerRefundSupported, recordPartnerRefund,
+      partnerRefunds, partnerRefundSupported, recordPartnerRefund, invoicePaymentLinkSupported,
       schemeClaims, addSchemeClaim, updateSchemeClaimStatus,
       distributorIncentives, markIncentivePaid,
     }, loadGate.current, (name, ms) => noteEvent('save waited for data load', `${name} ${ms} ms`))}>
