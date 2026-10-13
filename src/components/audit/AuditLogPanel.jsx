@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { History, RefreshCw } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { DataTable, Badge } from '../ui';
-import { actorLabel, changedFields, summarise, tableLabel, TABLE_LABELS } from '../../utils/audit';
+import { actorLabel, changedFields, retentionNote, summarise, tableLabel, TABLE_LABELS } from '../../utils/audit';
 
 /**
  * The Audit Log: every change the database recorded, with the person who made
@@ -46,6 +46,17 @@ export default function AuditLogPanel({ users }) {
   const [rows, setRows] = useState([]);
   const [state, setState] = useState('loading'); // loading | ready | missing | error
   const [message, setMessage] = useState('');
+  const [retention, setRetention] = useState(null);
+
+  // Retention setting (088). Before 088 the call fails and no note is shown.
+  useEffect(() => {
+    let live = true;
+    supabase.rpc('audit_retention_info').then(({ data, error }) => {
+      if (live) setRetention(error ? null : data);
+    });
+    return () => { live = false; };
+  }, []);
+  const note = retentionNote(retention);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -103,6 +114,11 @@ export default function AuditLogPanel({ users }) {
         <div className="whitespace-nowrap">
           <Badge tone={ACTION_TONE[e.action] || 'neutral'}>{e.action}</Badge>
           <div className="text-[10px] text-slate-500 mt-1">{tableLabel(e.table_name)}</div>
+          {e.important === true && (
+            <div className="mt-1" title={e.important_reason ? `Kept because: ${e.important_reason}` : undefined}>
+              <Badge tone="warning">Kept permanently</Badge>
+            </div>
+          )}
         </div>
       ),
     },
@@ -154,6 +170,7 @@ export default function AuditLogPanel({ users }) {
 
   return (
     <div className="space-y-2">
+      {note && <p className="text-[11px] text-slate-400">{note}</p>}
       <DataTable
         title="Audit trail"
         columns={columns}

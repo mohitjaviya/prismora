@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canViewAuditLog, actorLabel, changedFields, summarise, lastChangedBy, tableLabel } from '../audit';
+import { canViewAuditLog, actorLabel, changedFields, summarise, lastChangedBy, tableLabel, retentionNote } from '../audit';
 
 describe('who may open the Audit Log', () => {
   it('is Super Admin, Admin and Director only — not every role with Settings access', () => {
@@ -58,5 +58,18 @@ describe('last changed by', () => {
   });
   it('is nothing until a row has been stamped', () => {
     expect(lastChangedBy({}, users)).toBeNull();
+  });
+});
+
+describe('retention note (088)', () => {
+  it('is null until 088 is applied or when the setting is not visible', () => {
+    expect(retentionNote(null)).toBeNull();
+    expect(retentionNote(undefined)).toBeNull();
+    expect(retentionNote({})).toBeNull();
+    expect(retentionNote({ keep_days: 0 })).toBeNull();
+  });
+  it('names the days, and says when the clean-up is only a trial', () => {
+    expect(retentionNote({ keep_days: 90, dry_run: false })).toMatch(/^Routine entries are removed after 90 days\. .*kept permanently\.$/);
+    expect(retentionNote({ keep_days: 90, dry_run: true })).toMatch(/trial mode: nothing has been removed yet\.$/);
   });
 });

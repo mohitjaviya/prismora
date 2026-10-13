@@ -72,3 +72,14 @@ export function lastChangedBy(record, users = []) {
   const person = (users || []).find(u => u?.id === id);
   return { id, name: person?.name || id, at: record.updatedAt };
 }
+
+/**
+ * The retention note for the Audit Log (088): null until 088 is applied, or
+ * for anyone the database does not show the setting to.
+ */
+export function retentionNote(info) {
+  const days = Number(info?.keep_days);
+  if (!info || !Number.isFinite(days) || days <= 0) return null;
+  const text = `Routine entries are removed after ${days} days. Important ones (deletions, money, prices, stock corrections, users and roles, settings, staff receipts) are kept permanently.`;
+  return info.dry_run ? `${text} The clean-up is in trial mode: nothing has been removed yet.` : text;
+}
