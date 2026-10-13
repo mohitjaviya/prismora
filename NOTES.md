@@ -240,8 +240,19 @@ Findings so far:
 - **Activation:** the 7 stuck Partially Paid invoices (₹11,685 due): INV-1791188761771 (Demo 21, 900), INV-1791534320877 (Retailer, 5,040), INV-1791534885666 / INV-1791778735634 / INV-1791779123343 (Dealer, 675 / 1,020 / 2,040), INV-1791633799891 / INV-1791634225402 (Krishna pharma, 1,200 / 810). Accounts presses Mark as Paid on each one where the GST was received, or they are deleted in the data cleanup. Not changed by script.
 - Migrations 086-098 applied. 085 NOT applied. 088 reserved for Gap 5. **Next free: 099 (Gap 8).**
 
+## 2026-10-13 - Gap 8 DONE (commit `09afd0f`, migration 099 applied live)
+- Problem: a partner payment had only `method` + one free-text reference; no cheque/DD number, date, bank; no per-mode checks; Mark as Paid recorded no mode.
+- Fix (099): new columns on `distributor_payments` (instrumentNumber/Date, bankName, chequeStatus, modeDetail, receivedInto, proofPath); `record_partner_payment` + `p_details` (per-mode required fields when details are sent; without them = 098); no future payment date (all calls); `set_cheque_status` (label only); private `payment-proofs` bucket (full Accounting only). One form `PartnerPaymentModal` for Mark as Paid (amount = due; lower = against-invoice payment, not removed by Mark unpaid) and partner Record Payment (unpaid invoices table); preview + advance note; duplicate UTR/cheque warning; ledger "applied to INV (O)" / "Advance received via"; invoice payment history; Payments export; Invoices export Paid / Balance due / modes / references. Old payments show "Not recorded".
+- Proof: `test-results/full-test/gap8/` dryrun 51/51 (11 fail without), live 51/51, ui.mjs 25/25, exports.mjs 5/5 (TEST O398/O399 removed, `cleanup.sql`). Tests 944, lint 64.
+- **Open check:** proof upload not clicked through in the browser (bucket policies proven in the dry run only).
+- Migrations 086-099 applied. 085 NOT applied. 088 reserved for Gap 5. **Next free: 100.**
+
+### Later gaps (from Gap 8)
+- Reverse a bounced cheque (today Bounced is a label only, no balance change).
+- Admin-managed bank/cash accounts for "Received into" (today free text with suggestions).
+- Edit or withdraw a recorded payment (today only Mark as Paid payments can be redone via Mark unpaid; others need a DB fix).
+
 ### Still pending (one line each)
-- Gap 8 - Payment mode + transaction details: only `method` + one free-text reference; missing cheque no/date/bank fields and per-mode required checks; Accounting "Mark as Paid" records no mode.
 - Gap 4 - Admin can't view employee performance: only the sales-role report + SFA leaderboard; no per-employee view for any role.
 - Gap 5 - Audit log retention (90 days, keep important): no retention function; `audit_log` grows forever (088 reserved).
 
