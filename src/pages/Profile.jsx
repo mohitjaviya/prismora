@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react';
-import { useAuth, isAdminRole, isManagerRole, isSalesRole } from '../context/AuthContext';
+import { useAuth, isAdminRole, isManagerRole, isSalesRole, roleLevel } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { User, Lock, Users, Shield, Eye, EyeOff, TrendingUp, ShoppingBag, Target, Star, Activity, Package } from 'lucide-react';
 import { PageHeader } from '../components/ui';
-import { isConvertedLead } from '../utils/leadStatus';
-import { isSettled } from '../utils/invoiceStatus';
+import { Link } from 'react-router-dom';
+import { ownSalesStats } from '../utils/employeePerformance';
 
 const Profile = () => {
   const { user, users: allUsers, updateUser, verifyCurrentPassword } = useAuth();
+  const isPartnerLevel = roleLevel(user?.role) === 'partner';
   const { leads, orders, invoices } = useData();
 
   const [passwordForm, setPasswordForm] = useState({
@@ -18,44 +19,9 @@ const Profile = () => {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // ── Performance Stats for current user ───────────────────────────────────
-  const stats = useMemo(() => {
-    const myLeads = isAdminRole(user?.role)
-      ? leads
-      : leads.filter(l => l.assignedTo === user?.id);
-    const myOrders = isAdminRole(user?.role)
-      ? orders
-      : orders.filter(o => o.assignedTo === user?.id);
-    const myInvoices = isAdminRole(user?.role)
-      ? invoices
-      : invoices.filter(inv => inv.assignedTo === user?.id);
-
-    // Order value booked, not revenue (Phase 2 H: revenue is Accounting's
-    // net sales). Cancelled orders were counted in as well.
-    const booked = myOrders.filter(o => o.status !== 'Cancelled');
-    const totalRevenue = booked.reduce((s, o) => s + (o.value || 0), 0);
-    const converted = myLeads.filter(isConvertedLead).length;
-    const conversionRate = myLeads.length > 0
-      ? Math.round((converted / myLeads.length) * 100)
-      : 0;
-    const pendingOrders = myOrders.filter(o => o.status === 'Pending' || o.status === 'Processing').length;
-    const paidInvoices = myInvoices.filter(isSettled).length;
-
-    // Month-over-month order value
-    const now = new Date();
-    const thisMonth = booked.filter(o => {
-      const d = new Date(o.date || o.createdAt);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }).reduce((s, o) => s + (o.value || 0), 0);
-    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonth = booked.filter(o => {
-      const d = new Date(o.date || o.createdAt);
-      return d.getMonth() === lastMonthDate.getMonth() && d.getFullYear() === lastMonthDate.getFullYear();
-    }).reduce((s, o) => s + (o.value || 0), 0);
-    const growthPct = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : (thisMonth > 0 ? 100 : 0);
-
-    return { totalLeads: myLeads.length, converted, conversionRate, totalOrders: myOrders.length, pendingOrders, totalRevenue, thisMonth, growthPct, paidInvoices };
-  }, [leads, orders, invoices, user]);
+  // ── Performance Stats: the signed-in person's OWN numbers, whatever their
+  // role (Gap 4). Company totals are in Reports and the Director dashboard.
+  const stats = useMemo(() => ownSalesStats(user?.id, { leads, orders, invoices }), [leads, orders, invoices, user]);
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -141,7 +107,8 @@ const Profile = () => {
         <div className="flex items-center gap-3 mb-5">
           <Activity size={20} className="text-brand-accent" />
           <h2 className="text-lg font-bold text-white">Your Performance</h2>
-          <span className="ml-auto text-xs text-slate-500">All-time metrics</span>
+          <span className="ml-auto text-xs text-slate-500">All-time, your own records</span>
+          {!isPartnerLevel && <Link to="/team/performance" className="text-xs font-semibold text-brand-accent hover:underline">Full performance</Link>}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
           {[

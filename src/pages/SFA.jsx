@@ -22,7 +22,8 @@ import { territoryFor, territoryFields, territoryName } from '../utils/territory
 import { submitOutletVisit } from '../utils/beatVisits';
 import VisitReportsTable from '../components/sfa/VisitReportsTable';
 import { localDateStr, checkInState, isOpenRequest, isMissedBeat, beatDisplayStatus, canDecideRequest } from '../utils/beatDates';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
+import { canViewEmployee } from '../utils/employeePerformance';
 
 const SFA_EXPENSE_SPEC = { amount: { label: 'Amount', kind: 'amount', required: true } };
 
@@ -1435,7 +1436,12 @@ export default function SFA() {
                             <td className="p-4 font-semibold text-white">
                               <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-full bg-brand-accent/15 text-brand-accent flex items-center justify-center font-bold text-xs">{rep.name.substring(0, 2).toUpperCase()}</div>
-                                <div><p className="text-sm">{rep.name}</p><p className="text-[10px] text-slate-500">{rep.role}</p></div>
+                                <div>
+                                  {canViewEmployee(user, roleLevel(user?.role), rep, roleLevel(rep.role))
+                                    ? <Link to={`/team/${rep.id}/performance`} title="View performance" className="text-sm hover:text-brand-accent hover:underline">{rep.name}</Link>
+                                    : <p className="text-sm">{rep.name}</p>}
+                                  <p className="text-[10px] text-slate-500">{rep.role}</p>
+                                </div>
                               </div>
                             </td>
                             <td className="p-4 text-center font-black text-blue-400 text-lg">{stats.visits}</td>

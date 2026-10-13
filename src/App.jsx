@@ -22,6 +22,7 @@ const ProductCatalog = lazy(() => import('./pages/masters/ProductCatalog'));
 const Roles = lazy(() => import('./pages/masters/Roles'));
 const Customers = lazy(() => import('./pages/Customers'));
 const Profile = lazy(() => import('./pages/Profile'));
+const EmployeePerformance = lazy(() => import('./pages/EmployeePerformance'));
 const Accounting = lazy(() => import('./pages/Accounting'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const Purchases = lazy(() => import('./pages/Purchases'));
@@ -170,6 +171,10 @@ function AppRoutes() {
         <Route path="masters/products" element={<PermissionGuard module="settings"><ProductCatalog /></PermissionGuard>} />
         <Route path="masters/roles" element={<PermissionGuard module="settings"><Roles /></PermissionGuard>} />
         <Route path="profile" element={<Profile />} />
+        {/* Gap 4: one employee's performance. The page checks who may open
+            whom (own / team / anyone) and refuses partners. */}
+        <Route path="team/performance" element={<EmployeePerformance />} />
+        <Route path="team/:id/performance" element={<EmployeePerformance />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

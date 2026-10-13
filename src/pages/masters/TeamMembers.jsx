@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useAuth, USER_ROLES, isManagerRole, isSalesRole, isAdminRole, roleLevel } from '../../context/AuthContext';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'react-router-dom';
-import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X, Download, UserX, UserCheck } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Plus, Edit2, Trash2, CheckSquare, Square, Users, X, Download, UserX, UserCheck, Activity } from 'lucide-react';
 import { downloadExcel } from '../../utils/exportUtils';
 import { useConfirm } from '../../context/DialogContext';
 import { useToast } from '../../context/DialogContext';
 import { Badge, Button, DataTable, IconButton, PageHeader, FieldError, useFieldCheck } from '../../components/ui';
 import { cleanForm } from '../../utils/formRules';
+import { canViewEmployee } from '../../utils/employeePerformance';
 import { rolesAssignableBy, mayManageAccount, internalUsersOf, isInternalLevel } from '../../utils/roleUtils';
 
 /**
@@ -64,6 +65,7 @@ export default function TeamMembers() {
   // only place to switch one off or delete it, so they keep a tab here.
   // Roles' Members "View" (Gap 10) links here with ?tab=partners&q=<email>.
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [tab, setTab] = useState(() => (searchParams.get('tab') === 'partners' ? 'partners' : 'team'));
   const [linkedTab] = useState(tab);
   const linkedQuery = tab === linkedTab ? (searchParams.get('q') || '') : '';
@@ -203,11 +205,14 @@ export default function TeamMembers() {
         : <span className="text-slate-600">—</span>),
     },
     {
-      key: 'actions', header: '', align: 'center', width: 'w-28',
+      key: 'actions', header: '', align: 'center', width: 'w-36',
       render: u => (
         <div className="flex items-center justify-center gap-0.5">
           {/* No Edit for a partner login: the form offers staff roles only,
               so saving it could turn a partner's account into a staff one. */}
+          {!onPartnerTab && canViewEmployee(user, roleLevel(user?.role), u, roleLevel(u.role)) && (
+            <IconButton icon={Activity} title="View performance" size="sm" tone="accent" onClick={() => navigate(`/team/${u.id}/performance`)} />
+          )}
           {!onPartnerTab && mayManageAccount(user?.role, u.role) && <IconButton icon={Edit2} title="Edit user" size="sm" tone="accent" onClick={() => openUserEdit(u)} />}
           {u.id !== user.id && mayManageAccount(user?.role, u.role) && (u.status === 'Inactive'
             ? <IconButton icon={UserCheck} title="Reactivate user" size="sm" tone="accent" onClick={() => setActive(u, true)} />
