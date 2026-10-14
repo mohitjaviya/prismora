@@ -49,3 +49,10 @@ backups/
 
 # Browser test screenshots
 test-results/
+
+# Local clutter (2026-10-14)
+supabase/.temp/
+**/supabase/.temp/
+INTERVIEW_PREP.md
+/*.txt
+scratch/
