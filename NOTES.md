@@ -330,3 +330,9 @@ These writes do not check rows changed; RLS refusal = 0 rows, no error, screen s
 - Workflow `.github/workflows/supabase-keepalive.yml`: `schedule:` back on (`17 3 */2 * *` = 03:17 UTC / 08:47 IST on odd days of the month); "Run workflow" button kept. GitHub secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY` added by the owner.
 - Note: `*/2` in the day field = days 1, 3, 5, …, 31, so at a month end with 31 days there are two runs in a row (31st, 1st); never more than 2 days between runs.
 - Remaining: review the six unrelated uncommitted files; final walkthrough.
+
+## 2026-10-14 - Partners, vendors and partner logins deleted (live DB, owner-approved one-off exception)
+- One block, no trigger disabled: 24 partner users deleted first (071 `users_delete_login` removed their 24 auth accounts), then retailers 4, dealers 4, distributors 19, vendors 4. Pre-commit checks: 0 partners/vendors, users 24 (none at level partner), auth.users = exactly the 24 staff e-mails, masters unchanged, no trigger disabled. 55 audit rows for these deletes kept (important). No storage files existed.
+- After: users 24, auth 24, products 30, roles 15, warehouses 3, schemes 3, company_settings 1, masters 76, territories 2.
+- Check (`test-results/full-test/wipe/partners-ui.mjs`, `reg.mjs`): the 12 staff TEST logins sign in; Dashboard, Orders, Leads, Inventory, Accounting load with no errors; /register (type picker), /register-distributor, -dealer, -retailer open with no errors (dealer/retailer forms say no parent available yet).
+- **7 TEST partner logins no longer exist:** TEST_DISTRIBUTOR, TEST_DISTRIBUTOR_2, TEST_DEALER, TEST_DEALER_2, TEST_RETAILER, TEST_RETAILER_2, TEST_P2E_DIST (still listed in `.env.test-accounts.local`). **Partner-portal checks need new test partners** (and D-TEST-*/DL-TEST-*/R-TEST-* records, used by older dry runs, are gone).
