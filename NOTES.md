@@ -321,14 +321,15 @@ These writes do not check rows changed; RLS refusal = 0 rows, no error, screen s
 - **No more demo-data fixes needed:** the 7 stuck invoices, 23 proformas, bad phone numbers (`gap9b/bad-data.txt`), unnumbered/abc123 batches, O319/O320 condition and the O329 receipt no longer exist.
 
 ### Remaining (2026-10-14)
-- Gap 13 keep-alive: apply 085, add GitHub secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY`, put back the `schedule:` lines in `.github/workflows/supabase-keepalive.yml`, run once by hand.
+- ~~Gap 13 keep-alive~~ DONE 2026-10-14 (see below: confirmed working).
 - Review the six unrelated uncommitted files.
 - Final walkthrough.
 
-## 2026-10-14 - Gap 13 keep-alive ACTIVATED
+## 2026-10-14 - Gap 13 keep-alive ACTIVATED and CONFIRMED WORKING
 - 085 applied live (plus a `schema_migrations` row, since the file doesn't record itself). `system_heartbeat` has 1 row; RLS on, no policies, no table rights for anon/authenticated; `heartbeat_ping`/`heartbeat_status` run by anon only. Anon-key REST check: both RPCs 200; direct read/update/insert refused (42501).
 - Workflow `.github/workflows/supabase-keepalive.yml`: `schedule:` back on (`17 3 */2 * *` = 03:17 UTC / 08:47 IST on odd days of the month); "Run workflow" button kept. GitHub secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY` added by the owner.
 - Note: `*/2` in the day field = days 1, 3, 5, …, 31, so at a month end with 31 days there are two runs in a row (31st, 1st); never more than 2 days between runs.
+- **Confirmed 2026-10-14:** workflow run #1 (manual, `main`) succeeded after the secrets were fixed ("Heartbeat OK"; GitHub API: conclusion success). First failure was the "Check secrets are set" step (a secret empty), not the script or the DB. Next scheduled run 2026-10-15 03:17 UTC.
 - Remaining: review the six unrelated uncommitted files; final walkthrough.
 
 ## 2026-10-14 - Partners, vendors and partner logins deleted (live DB, owner-approved one-off exception)
