@@ -281,7 +281,7 @@ Findings so far:
 - Edit or withdraw a recorded payment.
 - Limit managers to their own team's partner orders.
 
-### Remaining activation work
+### Remaining activation work (SUPERSEDED 2026-10-14 - see "Demo data wiped" at the end)
 - Delete the demo data.
 - Gap 13 keep-alive: apply 085, add GitHub secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY`, put back the `schedule:` lines in `.github/workflows/supabase-keepalive.yml`, run once by hand.
 - Review the six unrelated uncommitted files.
@@ -309,3 +309,18 @@ These writes do not check rows changed; RLS refusal = 0 rows, no error, screen s
 ### Working rules
 - Demo data: no backups needed.
 - Ask before changing payment or accounting logic.
+
+## 2026-10-14 - Demo data wiped (live DB, owner-approved one-off exception)
+- One transaction (single DO block, `test-results/full-test/wipe/`): own user triggers off only on the 29 cleared tables, FKs on, children before parents, no TRUNCATE; triggers back on and checked before commit (0 disabled).
+- **Empty now:** orders, leads, invoices, distributor_payments, partner_refunds, credit_notes, sales_returns, purchase_orders, grn, purchase_returns, vendor_payments, stock_movements, stock_transfers, inventory (all batches), complaints, scheme_claims, distributor_incentives, expenses, sfa_expenses, attendance, beat_plans, beat_checkin_requests, visit_reports, notifications, events, client_write_log, signup_attempts, bank_transactions, audit_log.
+- **Kept:** products 30 (incl. TEST), roles 15, users 48 (incl. 24 partner logins), auth users 48, warehouses 3, schemes 3 (incl. TEST), company_settings 1, masters 76, territories 2 (incl. T-TEST-PUNE), distributors 19, dealers 4, retailers 4, vendors 4, audit_retention_settings 1, audit_retention_runs 2, schema_migrations 96.
+- All partner and vendor balances 0 (Janki Herbal's ₹2,65,500 was demo too).
+- Counters restarted at 1: order_number_seq, complaints_number_seq, stock_movements_id_seq, audit_log_id_seq, client_write_log_id_seq, signup_attempts_id_seq. `audit_retention_runs_id_seq` left alone (kept rows use ids up to 7).
+- Storage: the one lead file (L11/...TEST-P2-visiting-card.pdf) deleted; all buckets empty.
+- Check: live Dashboard, Orders, Leads, Inventory, Distributors, Ledger load with no errors as TEST Admin (`wipe/ui.mjs`, `ui.out`).
+- **No more demo-data fixes needed:** the 7 stuck invoices, 23 proformas, bad phone numbers (`gap9b/bad-data.txt`), unnumbered/abc123 batches, O319/O320 condition and the O329 receipt no longer exist.
+
+### Remaining (2026-10-14)
+- Gap 13 keep-alive: apply 085, add GitHub secrets `SUPABASE_URL` + `SUPABASE_ANON_KEY`, put back the `schedule:` lines in `.github/workflows/supabase-keepalive.yml`, run once by hand.
+- Review the six unrelated uncommitted files.
+- Final walkthrough.
