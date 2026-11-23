@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
+import { StateSelect, CitySelect } from '../components/GeoSelect';
 import { useData } from '../context/DataContext';
 import { useAuth, isSalesRole, isAdminRole, isManagerRole, roleLevel } from '../context/AuthContext';
 import { attributionFor } from '../utils/attribution';
@@ -49,18 +50,9 @@ const canSetOrderStatus = (role, targetStatus) => {
   return (STATUS_STAGE_OWNERS[targetStatus] || []).includes(role);
 };
 
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
-  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
-  'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
-  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
-  'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Puducherry', 'Chandigarh'
-];
 
 const Orders = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded, invoices, salesReturns, returnCorrectionSupported, orderReceiptSupported } = useData();
+  const { orders, addOrder, updateOrder, deleteOrder, products, addProduct, leads, inventory, splitOrder, deliverPartial, recordOrderReceipt, clearOrderReceipt, distributors, dealers, retailers, productCatalog, masters, whenLoaded, invoices, salesReturns, returnCorrectionSupported, orderReceiptSupported, geo } = useData();
   // From Master Lists. The stepper and the dropdown show the label; every
   // check in this file — STATUS_OWNERS, the stock guards, the delivery
   // branches — still compares the stored key, which cannot be renamed.
@@ -1439,22 +1431,16 @@ const Orders = () => {
                 </div>
                 <div>
                   <label htmlFor="orders-state" className="block text-sm font-medium text-slate-300 mb-1.5">State *</label>
-                  <select id="orders-state"
-                    required
-                    value={formData.state}
-                    onChange={e => setFormData({ ...formData, state: e.target.value })}
-                    className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
-                  >
-                    <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
-                    {INDIAN_STATES.map(s => (
-                      <option key={s} value={s} className="bg-brand-primary">{s}</option>
-                    ))}
-                  </select>
+                  <StateSelect geo={geo} id="orders-state" required value={formData.state}
+                    onChange={v => setFormData({ ...formData, state: v, city: '' })}
+                    className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                   <FieldError field="state">{orderErrors.state}</FieldError>
                 </div>
                 <div>
                   <label htmlFor="orders-city" className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
-                  <input id="orders-city" type="text" required value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="e.g. Mumbai, Pune..." className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
+                  <CitySelect geo={geo} id="orders-city" required state={formData.state} value={formData.city}
+                    onChange={v => setFormData({ ...formData, city: v })} placeholder="-- Select City --"
+                    className="w-full glass-input rounded-lg px-4 py-2.5 text-white" />
                   <FieldError field="city">{orderErrors.city}</FieldError>
                 </div>
                 <div>

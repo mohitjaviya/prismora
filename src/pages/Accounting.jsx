@@ -27,7 +27,8 @@ import PartnerPaymentModal from '../components/PartnerPaymentModal';
 import { partyForInvoice } from '../utils/settlement';
 import { invoiceParty } from '../utils/distributorUtils';
 import { applicationsForAll, paymentReferenceText } from '../utils/paymentDetails';
-import { INDIAN_STATES, supplyTypeFor, invoiceGst } from '../utils/gst';
+import { supplyTypeFor, invoiceGst } from '../utils/gst';
+import { StateSelect } from '../components/GeoSelect';
 import { INVOICE_STATUSES, isSettled, isOpen, amountDue, amountPaid } from '../utils/invoiceStatus';
 import { profitAndLoss, proformaSummary, receivables, netSalesByMonth, gstKindTotals } from '../utils/financials';
 
@@ -44,7 +45,8 @@ const Accounting = () => {
     distributorIncentives, schemeClaims, sfaExpenses, reconcilePayouts,
     addInvoice, convertInvoice, finaliseInvoiceWithoutGst, nonGstSupported, updateInvoiceStatus, deleteInvoice,
     addExpense, deleteExpense, creditNotes, addCreditNote, deleteCreditNote,
-    grn, vendors, purchaseReturns, distributorPayments, dealers, retailers, companySettings
+    grn, vendors, purchaseReturns, distributorPayments, dealers, retailers, companySettings,
+    geo,
   } = useData();
 
 
@@ -1307,11 +1309,8 @@ const Accounting = () => {
                     </div>
                     <div>
                       <label htmlFor="accounting-place-of-supply" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Customer State (Place of Supply)</label>
-                      <select id="accounting-place-of-supply" required value={invoiceState} onChange={(e) => setInvoiceState(e.target.value)}
-                        className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white">
-                        <option value="" className="bg-brand-primary-light">Choose a state…</option>
-                        {INDIAN_STATES.map(s => <option key={s} value={s} className="bg-brand-primary-light">{s}</option>)}
-                      </select>
+                      <StateSelect geo={geo} id="accounting-place-of-supply" required value={invoiceState} onChange={setInvoiceState} placeholder="Choose a state…"
+                        optionClassName="bg-brand-primary-light" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white" />
                       {invoiceState && companySettings?.state && (
                         <p className="text-[11px] text-slate-500 mt-1">
                           {supplyTypeFor(invoiceState, companySettings.state) === 'intra'

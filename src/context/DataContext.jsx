@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
+import { buildGeo, geoKey, canAddCity } from '../utils/geo';
 import { supabase } from '../supabaseClient';
 import { linkedExpenseId, unbookedPayouts, expenseRowFor, alreadyBooked } from '../utils/payouts';
 import { amountDue, isSettled } from '../utils/invoiceStatus';
@@ -3988,6 +3989,74 @@ export const DataProvider = ({ children }) => {
   const addDealerPayment = addPartnerPayment('Dealer', dealers, 'dealer_payment');
   const addRetailerPayment = addPartnerPayment('Retailer', retailers, 'retailer_payment');
 
+  // ── State and city masters (migration 100) ─────────────────────────────────
+  // geo_states / geo_cities, read once per sign-in. Until 100 is applied the read
+  // fails, geoRows stays empty and `geo` is the lists that are in the code, so
+  // every dropdown works either way. Adding a city goes through add_city (Sales
+  // roles too); renaming / switching off / deleting is Admin and Super Admin
+  // (database policies). A rename rewrites the stored text in the same
+  // transaction, so the rows it touched are read again afterwards.
+  const [geoRows, setGeoRows] = useState({ states: [], cities: [] });
+  const loadGeo = async () => {
+    try {
+      const s = await supabase.from('geo_states').select('*').order('name');
+      if (s.error) return false;
+      const cities = [];
+      for (let from = 0; from < 20000; from += 1000) {
+        const c = await supabase.from('geo_cities').select('*').order('id').range(from, from + 999);
+        if (c.error) return false;
+        cities.push(...(c.data || []));
+        if ((c.data || []).length < 1000) break;
+      }
+      setGeoRows({ states: s.data || [], cities });
+      return true;
+    } catch { return false; }
+  };
+  useEffect(() => { if (signedInUser?.id) Promise.resolve().then(loadGeo); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const geoStateRow = (name) => geoRows.states.find(s => geoKey(s.name) === geoKey(name));
+  /** Add a city to a state: { ok, name, existing } or { ok: false, error }. */
+  const addCity = async (stateName, cityName) => {
+    const st = geoStateRow(stateName);
+    if (!st) return { ok: false, error: 'That state is not in the list.' };
+    const res = await confirmSave('add city', 'add a city', () => supabase.rpc('add_city', { p_state_id: st.id, p_name: cityName }));
+    if (!res.ok) return res;
+    const row = res.data;
+    if (!row?.existing) setGeoRows(prev => ({ ...prev, cities: [...prev.cities, { id: row.id, stateId: row.stateId, name: row.name, active: row.active }] }));
+    return { ok: true, name: row.name, existing: Boolean(row.existing) };
+  };
+  const geo = useMemo(
+    () => buildGeo(geoRows.states, geoRows.cities, { canAdd: canAddCity(signedInUser?.role), addCity }),
+    [geoRows, signedInUser?.role] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const geoMastersSupported = geoRows.states.length > 0;
+
+  // Rows whose state/city text a rename may have rewritten (100's trigger), read again.
+  const reloadAfterGeoRename = async () => {
+    const sets = { leads: setLeads, orders: setOrders, distributors: setDistributors, dealers: setDealers, retailers: setRetailers, territories: setTerritories, schemes: setSchemes };
+    await Promise.all(Object.entries(sets).map(async ([table, setter]) => {
+      const { data, error } = await supabase.from(table).select('*');
+      if (error || !data) return;
+      setter(table === 'leads' || table === 'orders' ? [...data].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))) : data);
+      try { localStorage.setItem(CACHE_KEYS_BY_TABLE[table], JSON.stringify(data)); } catch { /* storage full */ }
+    }));
+    loadCompanySettings();
+  };
+  const geoWrite = async (label, action, run, { renamed = false } = {}) => {
+    const res = await confirmSave(label, action, run);
+    if (!res.ok) return res;
+    await loadGeo();
+    if (renamed) await reloadAfterGeoRename();
+    return { ok: true };
+  };
+  const addGeoState = (name) => geoWrite('add state', 'add a state', () => supabase.from('geo_states').insert([{ name }]).select('id'));
+  const renameGeo = (kind, id, name) => geoWrite(`rename ${kind}`, `rename a ${kind}`,
+    () => supabase.from(kind === 'state' ? 'geo_states' : 'geo_cities').update({ name }).eq('id', id).select('id'), { renamed: true });
+  const setGeoActive = (kind, id, active) => geoWrite(`switch ${kind} ${active ? 'on' : 'off'}`, `switch a ${kind} on or off`,
+    () => supabase.from(kind === 'state' ? 'geo_states' : 'geo_cities').update({ active }).eq('id', id).select('id'));
+  const deleteGeo = (kind, id) => geoWrite(`delete ${kind}`, `delete a ${kind}`,
+    () => supabase.from(kind === 'state' ? 'geo_states' : 'geo_cities').delete().eq('id', id).select('id'));
+
   // ── Partner refunds (Gap 7 C, 093) ─────────────────────────────────────────
   // A credit balance paid back to the partner. Only through
   // record_partner_refund; until 093 is applied the check is false, nothing is
@@ -4107,6 +4176,7 @@ export const DataProvider = ({ children }) => {
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, receiveStock,
       damagedLockSupported, writeOffDamaged, returnDamagedToVendor, expiredMovesSupported, writeOffExpired, returnExpiredToVendor, returnCorrectionSupported, correctReturnCondition, orderReceiptSupported,
       masters, addMasterOption, updateMasterOption, deleteMasterOption,
+      geo, geoRows, geoMastersSupported, addCity, addGeoState, renameGeo, setGeoActive, deleteGeo, reloadGeo: loadGeo,
       addVendor, updateVendor, deleteVendor,
       vendorPayments, addVendorPayment, deleteVendorPayment,
       purchaseReturns, addPurchaseReturn, deletePurchaseReturn,

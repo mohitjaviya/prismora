@@ -1,7 +1,7 @@
 import { useState, useMemo, Fragment } from 'react';
 import { useData } from '../context/DataContext';
 import { INDIA_STATE_PATHS, INDIA_VIEWBOX } from '../utils/indiaMap';
-import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
+import { StateSelect, AddCityBox } from '../components/GeoSelect';
 import { useAuth, isSalesRole } from '../context/AuthContext';
 import { 
   ArrowUpDown, Plus, Edit2, Trash2, MapPin, Globe, ChevronRight, X, Compass, Check
@@ -11,12 +11,6 @@ import { Button, PageHeader } from '../components/ui';
 import { territoryFor, territoryDependants } from '../utils/territory';
 import { createPortal } from 'react-dom';
 
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 
-  'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 
-  'Madhya Pradesh', 'Maharashtra', 'Odisha', 'Punjab', 'Rajasthan', 
-  'Tamil Nadu', 'Telangana', 'Uttar Pradesh', 'West Bengal', 'Delhi'
-];
 
 const BLANK_TERRITORY_FORM = { name: '', state: 'Gujarat', districts: [], executiveId: '' };
 
@@ -27,7 +21,7 @@ const BLANK_TERRITORY_FORM = { name: '', state: 'Gujarat', districts: [], execut
 const norm = (s) => String(s || '').trim().toLowerCase();
 
 export default function Geography() {
-  const { orders, territories, addTerritory, updateTerritory, deleteTerritory, beatPlans, leads, distributors, dealers, retailers } = useData();
+  const { orders, territories, addTerritory, updateTerritory, deleteTerritory, beatPlans, leads, distributors, dealers, retailers, geo } = useData();
   const confirm = useConfirm();
   const { users: allUsers, canAccessData, canAccess } = useAuth();
   // Follows the role's Geography setting, not its level: Director is admin
@@ -47,6 +41,8 @@ export default function Geography() {
   // Districts saved by the old free-text box that match no real district, so
   // the modal can say what it is about to drop instead of doing it quietly.
   const [droppedDistricts, setDroppedDistricts] = useState([]);
+  const [addingCity, setAddingCity] = useState(false);
+  const cityChoices = geo.citiesOf(formData.state);
   // Which zone's district list is opened out in the matrix, one at a time.
   const [expandedDistricts, setExpandedDistricts] = useState(null);
 
@@ -210,7 +206,7 @@ export default function Geography() {
     const saved = Array.isArray(t.districts)
       ? t.districts
       : String(t.districts || '').split(',').map(d => d.trim()).filter(Boolean);
-    const byNorm = new Map((STATE_DISTRICTS[stateName] || []).map(d => [norm(d), d]));
+    const byNorm = new Map(geo.citiesOf(stateName).map(d => [norm(d), d]));
     const matched = [];
     const unknown = [];
     saved.forEach(d => {
@@ -776,17 +772,12 @@ export default function Geography() {
 
               <div>
                 <label htmlFor="geography-state-coverage" className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">State Coverage *</label>
-                <select id="geography-state-coverage"
+                <StateSelect geo={geo} id="geography-state-coverage"
                   value={formData.state}
                   // Districts belong to the state, so changing it clears them
                   // rather than leaving Anand ticked under Maharashtra.
-                  onChange={e => setFormData({ ...formData, state: e.target.value, districts: [] })}
-                  className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white"
-                >
-                  {INDIAN_STATES.map(st => (
-                    <option key={st} value={st} className="bg-brand-primary">{st}</option>
-                  ))}
-                </select>
+                  onChange={v => { setAddingCity(false); setFormData({ ...formData, state: v, districts: [] }); }}
+                  className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-white" />
               </div>
 
               <div>
@@ -823,7 +814,7 @@ export default function Geography() {
 
                 <div className="glass-input rounded-xl p-2 max-h-52 overflow-y-auto">
                   <div className="grid grid-cols-2 gap-1">
-                    {(STATE_DISTRICTS[formData.state] || []).map(dist => {
+                    {cityChoices.map(dist => {
                       const picked = formData.districts.includes(dist);
                       return (
                         <button
@@ -850,7 +841,7 @@ export default function Geography() {
                         </button>
                       );
                     })}
-                    {(STATE_DISTRICTS[formData.state] || []).length === 0 && (
+                    {cityChoices.length === 0 && (
                       <p className="col-span-2 text-xs italic text-slate-500 py-3 text-center">
                         No district list for {formData.state} yet.
                       </p>
@@ -858,6 +849,15 @@ export default function Geography() {
                   </div>
                 </div>
 
+                {geo.canAdd && formData.state && (addingCity ? (
+                  <AddCityBox geo={geo} state={formData.state}
+                    onAdded={(n) => { setAddingCity(false); setFormData(f => (f.districts.some(d => norm(d) === norm(n)) ? f : { ...f, districts: [...f.districts, n] })); }}
+                    onCancel={() => setAddingCity(false)} />
+                ) : (
+                  <button type="button" onClick={() => setAddingCity(true)} className="mt-2 text-xs font-semibold text-brand-accent hover:underline">
+                    + Add a city that is missing from {formData.state}
+                  </button>
+                ))}
                 <p className={`text-[10px] mt-1.5 ${formData.districts.length ? 'text-brand-accent' : 'text-amber-400'}`}>
                   {formData.districts.length
                     ? `${formData.districts.length} district${formData.districts.length > 1 ? 's' : ''} selected`

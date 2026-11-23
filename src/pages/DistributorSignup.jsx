@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Building2, Mail, Lock, User, Phone, MapPin, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
+import { usePublicGeo } from '../hooks/usePublicGeo';
+import { StateSelect, CitySelect } from '../components/GeoSelect';
 import { usePublicDirectory } from '../hooks/usePublicDirectory';
 import { emailCheckVerdict } from '../utils/signupChecks';
 import { validateSignup, signupFieldErrors, successMessage } from '../utils/partnerSignup';
@@ -31,7 +32,7 @@ const DistributorSignup = () => {
   const [confirmationNeeded, setConfirmationNeeded] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const districts = form.state ? (STATE_DISTRICTS[form.state] || []) : [];
+  const geo = usePublicGeo();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -162,18 +163,12 @@ const DistributorSignup = () => {
                     <label htmlFor="distributorsignup-state" className={labelCls}>State *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><MapPin size={16} /></div>
-                      <select id="distributorsignup-state" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value, city: '' }))} className={inputCls}>
-                        <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
-                        {Object.keys(STATE_DISTRICTS).map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
-                      </select>
+                      <StateSelect geo={geo} id="distributorsignup-state" value={form.state} onChange={v => setForm(f => ({ ...f, state: v, city: '' }))} className={inputCls} />
                     </div><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="state" />
                   </div>
                   <div>
                     <label htmlFor="distributorsignup-city-district" className={labelCls}>City / District *</label>
-                    <select id="distributorsignup-city-district" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} disabled={!form.state} className="w-full glass-input h-11 px-3.5 text-sm">
-                      <option value="" className="bg-brand-primary text-slate-500">-- Select --</option>
-                      {districts.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
-                    </select><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="city" />
+                    <CitySelect geo={geo} id="distributorsignup-city-district" state={form.state} value={form.city} onChange={v => setForm(f => ({ ...f, city: v }))} className="w-full glass-input h-11 px-3.5 text-sm" /><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="city" />
                   </div>
                 </div>
 

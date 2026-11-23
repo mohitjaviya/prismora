@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Building2, Mail, Lock, User, Phone, MapPin, Truck, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
+import { usePublicGeo } from '../hooks/usePublicGeo';
+import { StateSelect, CitySelect } from '../components/GeoSelect';
 import { usePublicDirectory } from '../hooks/usePublicDirectory';
 import { emailCheckVerdict } from '../utils/signupChecks';
 import { validateSignup, signupFieldErrors, successMessage } from '../utils/partnerSignup';
@@ -29,7 +30,7 @@ const DealerSignup = () => {
   const [confirmationNeeded, setConfirmationNeeded] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const districts = form.state ? (STATE_DISTRICTS[form.state] || []) : [];
+  const geo = usePublicGeo();
   // Not from DataContext: it reads the distributors table, which returns zero
   // rows to a visitor who has no account -- so this dropdown was empty on a
   // required field for every real signup. The view filters to Active itself.
@@ -180,18 +181,12 @@ const DealerSignup = () => {
                     <label htmlFor="dealersignup-state" className={labelCls}>State *</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500"><MapPin size={16} /></div>
-                      <select id="dealersignup-state" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value, city: '' }))} className={inputCls}>
-                        <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
-                        {Object.keys(STATE_DISTRICTS).map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
-                      </select>
+                      <StateSelect geo={geo} id="dealersignup-state" value={form.state} onChange={v => setForm(f => ({ ...f, state: v, city: '' }))} className={inputCls} />
                     </div><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="state" />
                   </div>
                   <div>
                     <label htmlFor="dealersignup-city-district" className={labelCls}>City / District *</label>
-                    <select id="dealersignup-city-district" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} disabled={!form.state} className="w-full glass-input h-11 px-3.5 text-sm">
-                      <option value="" className="bg-brand-primary text-slate-500">-- Select --</option>
-                      {districts.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
-                    </select><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="city" />
+                    <CitySelect geo={geo} id="dealersignup-city-district" state={form.state} value={form.city} onChange={v => setForm(f => ({ ...f, city: v }))} className="w-full glass-input h-11 px-3.5 text-sm" /><FieldError errors={fieldCheck.errors(form, {}, fieldExtra)} field="city" />
                   </div>
                 </div>
 

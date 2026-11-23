@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { StateSelect, CitySelect } from '../components/GeoSelect';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
@@ -21,13 +22,6 @@ import { normaliseGstin } from '../utils/contactChecks';
 import { cleanForm } from '../utils/formRules';
 import { partnerSpec, partnerExtra } from '../utils/partnerForms';
 
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
-  'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh',
-  'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
-  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh',
-  'Uttarakhand', 'West Bengal', 'Delhi', 'Jammu & Kashmir', 'Ladakh'
-];
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -45,7 +39,7 @@ const BLANK_FORM = {
 
 export default function Dealers() {
   const { dealers, addDealer, updateDealer, deleteDealer, distributors, invoices, distributorPayments, orders, territories,
-    distributorIncentives, schemeClaims, complaints, retailers, creditNotes, partnerRefunds, partnerRefundSupported } = useData();
+    distributorIncentives, schemeClaims, complaints, retailers, creditNotes, partnerRefunds, partnerRefundSupported, geo } = useData();
   const confirm = useConfirm();
   const toast = useToast();
   const { users, deleteUser, canAccess } = useAuth();
@@ -437,12 +431,9 @@ export default function Dealers() {
                 <div><label htmlFor="dealers-email" className={labelCls}>Email</label><input id="dealers-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="email" /></div>
                 <div>
                   <label htmlFor="dealers-state" className={labelCls}>State *</label>
-                  <select id="dealers-state" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
-                    <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
-                    {INDIAN_STATES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
-                  </select><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="state" />
+                  <StateSelect geo={geo} id="dealers-state" value={form.state} onChange={v => setForm(f => ({ ...f, state: v, city: '' }))} className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="state" />
                 </div>
-                <div><label htmlFor="dealers-city" className={labelCls}>City</label><input id="dealers-city" type="text" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className={inputCls} /></div>
+                <div><label htmlFor="dealers-city" className={labelCls}>City</label><CitySelect geo={geo} id="dealers-city" state={form.state} value={form.city} onChange={v => setForm(f => ({ ...f, city: v }))} className={inputCls} placeholder="-- Select City --" /></div>
                 <div><label htmlFor="dealers-pincode" className={labelCls}>Pincode *</label><input id="dealers-pincode" type="text" inputMode="numeric" maxLength={6} value={form.pincode} onChange={e => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 388001" className={inputCls} /><FieldError errors={partnerCheck.errors(form, PARTNER_SPEC, partnerExtra(editingDealer))} field="pincode" /></div>
                 <div className="sm:col-span-2">
                   <label htmlFor="dealers-delivery-address" className={labelCls}>Delivery Address *</label>

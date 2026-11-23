@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Building2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/DialogContext';
-import { INDIAN_STATES } from '../utils/gst';
+import { StateSelect } from './GeoSelect';
 import { FieldError, useFieldCheck } from './ui';
 import { cleanForm } from '../utils/formRules';
 import { gstinProblem, normaliseGstin } from '../utils/contactChecks';
@@ -28,7 +28,7 @@ const labelCls = 'block text-xs font-semibold text-slate-400 mb-1.5 uppercase tr
  * save; the database refuses anyone else.
  */
 export default function CompanySettingsPanel({ canEdit }) {
-  const { companySettings, loadCompanySettings, updateCompanySettings } = useData();
+  const { companySettings, loadCompanySettings, updateCompanySettings, geo } = useData();
   const toast = useToast();
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -97,9 +97,7 @@ export default function CompanySettingsPanel({ canEdit }) {
         </div>
         <div>
           <label htmlFor="company-state" className={labelCls}>State</label>
-          <select id="company-state" required disabled={!canEdit} value={form.state || ''} onChange={set('state')} className={inputCls}>
-            {INDIAN_STATES.map(s => <option key={s} value={s} className="bg-brand-primary">{s}</option>)}
-          </select>
+          <StateSelect geo={geo} id="company-state" required disabled={!canEdit} value={form.state || ''} onChange={v => set('state')({ target: { value: v } })} className={inputCls} />
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="company-address" className={labelCls}>Address (optional)</label>

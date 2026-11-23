@@ -20,6 +20,7 @@ const Masters = lazy(() => import('./pages/Masters'));
 const TeamMembers = lazy(() => import('./pages/masters/TeamMembers'));
 const ProductCatalog = lazy(() => import('./pages/masters/ProductCatalog'));
 const Roles = lazy(() => import('./pages/masters/Roles'));
+const GeoMasters = lazy(() => import('./pages/masters/GeoMasters'));
 const Customers = lazy(() => import('./pages/Customers'));
 const Profile = lazy(() => import('./pages/Profile'));
 const EmployeePerformance = lazy(() => import('./pages/EmployeePerformance'));
@@ -170,6 +171,7 @@ function AppRoutes() {
         <Route path="masters/team" element={<PermissionGuard module="settings"><TeamMembers /></PermissionGuard>} />
         <Route path="masters/products" element={<PermissionGuard module="settings"><ProductCatalog /></PermissionGuard>} />
         <Route path="masters/roles" element={<PermissionGuard module="settings"><Roles /></PermissionGuard>} />
+        <Route path="masters/places" element={<PermissionGuard module="settings"><GeoMasters /></PermissionGuard>} />
         <Route path="profile" element={<Profile />} />
         {/* Gap 4: one employee's performance. The page checks who may open
             whom (own / team / anyone) and refuses partners. */}

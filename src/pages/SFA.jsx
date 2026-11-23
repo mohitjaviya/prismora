@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useData } from '../context/DataContext';
-import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
+import { CitySelect } from '../components/GeoSelect';
 import { useAuth } from '../context/AuthContext';
 import { isSalesRole, roleLevel } from '../context/AuthContext';
 import { internalUsersOf } from '../utils/roleUtils';
@@ -99,7 +99,7 @@ export default function SFA() {
     visitReports: allVisitReports, addVisitReport,
     beatCheckinRequests, requestEarlyCheckin, decideEarlyCheckin,
     sfaExpenses: allSfaExpenses, addSFAExpense, updateSFAExpense,
-    addOrder, productCatalog, territories, retailers, dealers, masters } = useData();
+    addOrder, productCatalog, territories, retailers, dealers, masters, geo } = useData();
   // Options come from Master Lists; masterLists.js holds the fallback.
   const expenseCategories = optionsFor(masters, 'expense_category').map(o => o.key);
 
@@ -343,17 +343,6 @@ export default function SFA() {
 
   const visitTerritory = territoryFor(territories, selectedBeatForVisit?.beat);
 
-  // The territory's own districts come first because they are the likely ones,
-  // followed by the rest of that state so a rep is never blocked by a district
-  // nobody configured.
-  const cityOptions = useMemo(() => {
-    const ofTerritory = visitTerritory?.districts || [];
-    const ofState = visitTerritory?.state ? (STATE_DISTRICTS[visitTerritory.state] || []) : [];
-    return [...new Set([...ofTerritory, ...ofState])];
-  }, [visitTerritory]);
-
-  const [cityIsOther, setCityIsOther] = useState(false);
-
   const orderLines = (visitForm.orderItems || [])
     .map(i => ({ name: i.name, quantity: Number(i.quantity || 0), unitPrice: Number(i.unitPrice || 0), total: Number(i.quantity || 0) * Number(i.unitPrice || 0) }))
     .filter(i => i.name && i.quantity > 0);
@@ -396,7 +385,6 @@ export default function SFA() {
       outcome,
       notVisitedReason: '',
     });
-    setCityIsOther(false);
     setVisitError('');
     visitCheck.reset();
     visitAttempt.current = { orderId: null, visitId: null };
@@ -1690,34 +1678,13 @@ export default function SFA() {
                             </div>
                             <div>
                               <label htmlFor="sfa-city" className={lbl}>City *</label>
-                              {cityOptions.length > 0 && !cityIsOther ? (
-                                <select id="sfa-city"
-                                 
-                                  value={visitForm.outletCity}
-                                  onChange={e => {
-                                    if (e.target.value === '__other__') { setCityIsOther(true); setVisitForm({ ...visitForm, outletCity: '' }); return; }
-                                    setVisitForm({ ...visitForm, outletCity: e.target.value });
-                                  }}
-                                  className={inp}
-                                  style={{ colorScheme: 'dark' }}
-                                >
-                                  <option value="" className="bg-brand-primary">Select a city…</option>
-                                  {cityOptions.map(d => <option key={d} value={d} className="bg-brand-primary">{d}</option>)}
-                                  <option value="__other__" className="bg-brand-primary">Other — type it in</option>
-                                </select>
+                              {visitTerritory?.state ? (
+                                <CitySelect geo={geo} id="sfa-city" required state={visitTerritory.state} value={visitForm.outletCity}
+                                  onChange={v => setVisitForm({ ...visitForm, outletCity: v })} placeholder="Select a city…"
+                                  className={inp} style={{ colorScheme: 'dark' }} />
                               ) : (
-                                <div className="flex gap-2">
-                                  <input
-                                    type="text" required autoFocus
-                                    placeholder="City or town"
-                                    value={visitForm.outletCity}
-                                    onChange={e => setVisitForm({ ...visitForm, outletCity: e.target.value })}
-                                    className={inp}
-                                  />
-                                  {cityOptions.length > 0 && (
-                                    <button type="button" onClick={() => { setCityIsOther(false); setVisitForm({ ...visitForm, outletCity: '' }); }} className="px-3 text-xs text-slate-400 hover:text-white whitespace-nowrap">Back to list</button>
-                                  )}
-                                </div>
+                                <input id="sfa-city" type="text" required placeholder="City or town" value={visitForm.outletCity}
+                                  onChange={e => setVisitForm({ ...visitForm, outletCity: e.target.value })} className={inp} />
                               )}
                               <FieldError errors={visitCheck.errors(visitForm, visitSpec(visitForm), visitExtra)} field="outletCity" />
                               <p className="text-[10px] text-slate-500 mt-1">

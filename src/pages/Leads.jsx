@@ -13,7 +13,7 @@ import { attributionFor } from '../utils/attribution';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select, FieldError, ErrorSummary, useFieldCheck, jumpToFirstError } from '../components/ui';
 import { cleanForm, checkLines, hasErrors } from '../utils/formRules';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { STATE_DISTRICTS } from '../utils/indianStatesDistricts';
+import { StateSelect, CitySelect } from '../components/GeoSelect';
 import { isConvertedStatus, isOpenLead } from '../utils/leadStatus';
 import { missingDelivery } from '../utils/delivery';
 import LastChanged from '../components/audit/LastChanged';
@@ -37,18 +37,9 @@ const CONVERT_LINE_SPEC = {
 // have to recognise it.
 const isConversion = isConvertedStatus;
 
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
-  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
-  'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
-  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
-  'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Puducherry', 'Chandigarh'
-];
 
 const Leads = () => {
-  const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog, masters, territories, uploadLeadAttachment } = useData();
+  const { leads, addLead, updateLead, deleteLead, products, addProduct, convertLeadToOrder, productCatalog, masters, territories, uploadLeadAttachment, geo } = useData();
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -929,42 +920,15 @@ const Leads = () => {
                 </div>
                 <div>
                   <label htmlFor="leads-state-optional" className="block text-sm font-medium text-slate-300 mb-1.5">State (Optional)</label>
-                  <select id="leads-state-optional"
-                    value={formData.state || ''}
-                    onChange={e => setFormData({ ...formData, state: e.target.value, city: '' })}
-                    className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
-                    style={{ colorScheme: 'dark' }}
-                  >
-                    <option value="" className="bg-brand-primary text-slate-500">-- Select State --</option>
-                    {INDIAN_STATES.map(s => (
-                      <option key={s} value={s} className="bg-brand-primary">{s}</option>
-                    ))}
-                  </select>
+                  <StateSelect geo={geo} id="leads-state-optional" value={formData.state || ''}
+                    onChange={v => setFormData({ ...formData, state: v, city: '' })}
+                    className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
                 </div>
                 <div>
                   <label htmlFor="leads-city-district-optional" className="block text-sm font-medium text-slate-300 mb-1.5">City / District (Optional)</label>
-                  {formData.state && STATE_DISTRICTS[formData.state] ? (
-                    <select id="leads-city-district-optional"
-                      value={formData.city || ''}
-                      onChange={e => setFormData({ ...formData, city: e.target.value })}
-                      className="w-full glass-input rounded-lg px-4 py-2.5 text-white"
-                      style={{ colorScheme: 'dark' }}
-                    >
-                      <option value="" className="bg-brand-primary text-slate-500">-- Select City / District --</option>
-                      {STATE_DISTRICTS[formData.state].map(d => (
-                        <option key={d} value={d} className="bg-brand-primary">{d}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={formData.city || ''}
-                      onChange={e => setFormData({ ...formData, city: e.target.value })}
-                      placeholder={formData.state ? `Enter city/district in ${formData.state}...` : "Select a state first..."}
-                      disabled={!formData.state}
-                      className="w-full glass-input rounded-lg px-4 py-2.5 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                  )}
+                  <CitySelect geo={geo} id="leads-city-district-optional" state={formData.state} value={formData.city || ''}
+                    onChange={v => setFormData({ ...formData, city: v })} placeholder="-- Select City / District --"
+                    className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }} />
                 </div>
                 <div>
                   <label htmlFor="leads-territory-optional" className="block text-sm font-medium text-slate-300 mb-1.5">Territory (Optional)</label>
@@ -1096,23 +1060,15 @@ const Leads = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label htmlFor="leads-convert-state" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">State</label>
-                    <select id="leads-convert-state"
-                      value={convertDelivery.state}
-                      onChange={e => setConvertDelivery(d => ({ ...d, state: e.target.value }))}
-                      className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
-                      style={{ colorScheme: 'dark' }}
-                    >
-                      <option value="" className="bg-brand-primary">Select a state…</option>
-                      {INDIAN_STATES.map(st => <option key={st} value={st} className="bg-brand-primary">{st}</option>)}
-                    </select>
+                    <StateSelect geo={geo} id="leads-convert-state" value={convertDelivery.state} placeholder="Select a state…"
+                      onChange={v => setConvertDelivery(d => ({ ...d, state: v, city: '' }))}
+                      className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white" style={{ colorScheme: 'dark' }} />
                   </div>
                   <div>
                     <label htmlFor="leads-convert-city" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">City</label>
-                    <input id="leads-convert-city"
-                      type="text" value={convertDelivery.city}
-                      onChange={e => setConvertDelivery(d => ({ ...d, city: e.target.value }))}
-                      className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white"
-                    />
+                    <CitySelect geo={geo} id="leads-convert-city" state={convertDelivery.state} value={convertDelivery.city} placeholder="Select a city…"
+                      onChange={v => setConvertDelivery(d => ({ ...d, city: v }))}
+                      className="w-full glass-input rounded-lg px-3 py-2 text-sm text-white" style={{ colorScheme: 'dark' }} />
                   </div>
                   <div>
                     <label htmlFor="leads-convert-pincode" className="block text-[10px] font-medium text-slate-500 uppercase tracking-wide mb-1">Pincode</label>

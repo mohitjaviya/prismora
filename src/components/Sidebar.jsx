@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2, MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck, Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical, Layers, Shield, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Users, ShoppingCart, Map, Settings, Briefcase, UserCircle, X, Wallet, Package2, ShoppingBag, Network, Store, Building2, MessageSquareWarning, Tag, BarChart3, ChevronDown, ChevronRight, CalendarCheck, Boxes, Tags, FileCheck2, Gift, Brain, FlaskConical, Layers, Shield, ShieldCheck, MapPinned } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { canViewAuditLog } from '../utils/audit';
 import { ML_LABS_ENABLED } from '../utils/features';
@@ -106,6 +106,7 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
         // out of that workflow — but this is where people look for it.
         { name: 'Vendors', path: '/purchases?tab=vendors', icon: <Briefcase size={18} />, module: 'purchases', tab: 'vendors' },
         { name: 'Option Lists', path: '/masters/lists', icon: <Layers size={18} />, module: 'settings' },
+        { name: 'States & Cities', path: '/masters/places', icon: <MapPinned size={18} />, module: 'settings' },
       ]
     }
   ];
