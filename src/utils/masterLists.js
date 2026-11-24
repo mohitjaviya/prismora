@@ -49,7 +49,10 @@ export const MASTER_LISTS = [
     ['Exhibition', 'Reference', 'Website', 'WhatsApp', 'IndiaMart', 'Cold Call',
       'Instagram', 'LinkedIn', 'Trade Show', 'Walk-in', 'Other']),
 
-  free('complaint_type', 'Complaint Types', 'What a customer is complaining about.',
+  free('lead_type', 'Lead Types', 'The kind of party a lead is. Only Admin and Super Admin can change this list.',
+    ['Distributor', 'Super Stockist', 'Dealer', 'Retailer']),
+
+  free('complaint_type','Complaint Types', 'What a customer is complaining about.',
     ['Quality Issue', 'Wrong Product', 'Damaged Packaging', 'Short Expiry',
       'Missing Item', 'Billing Error', 'Delivery Issue', 'Other']),
 

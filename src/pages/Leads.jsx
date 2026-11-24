@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { downloadExcel } from '../utils/exportUtils';
 import { optionsFor, colorForKey, labelForKey } from '../utils/masterLists';
+import { leadTypeOptions, leadTypeProblem } from '../utils/leadTypes';
 import { territoryFields, territoryName } from '../utils/territory';
 import { attributionFor } from '../utils/attribution';
 import { PageHeader, DataTable, Button, IconButton, Badge, Select, FieldError, ErrorSummary, useFieldCheck, jumpToFirstError } from '../components/ui';
@@ -231,6 +232,10 @@ const Leads = () => {
   const submitLeadForm = async () => {
     if (!leadCheck.ok(formData, LEAD_SPEC)) return;
     const clean = cleanForm(formData, LEAD_SPEC, leadCheck.before);
+
+    // New or changed type must be an active Lead Type; an unchanged old value never blocks (101).
+    const typeProblem = leadTypeProblem(masters, formData.leadType, editingLead?.leadType, !editingLead);
+    if (typeProblem) { toast(typeProblem, 'error'); return; }
 
     if (formData.status === 'Converted') {
       if (!formData.state || !formData.state.trim() || !formData.city || !formData.city.trim()) {
@@ -755,7 +760,7 @@ const Leads = () => {
                     </div>
                     <div>
                       <p className="text-xs text-slate-400">Lead Type</p>
-                      <p className="text-white font-medium">{selectedLeadView.leadType || 'Not specified'}</p>
+                      <p className="text-white font-medium">{selectedLeadView.leadType ? labelForKey(masters, 'lead_type', selectedLeadView.leadType) : 'Not specified'}</p>
                     </div>
                   </div>
                 </div>
@@ -894,10 +899,7 @@ const Leads = () => {
                   <label htmlFor="leads-lead-type" className="block text-sm font-medium text-slate-300 mb-1.5">Lead Type</label>
                   <select id="leads-lead-type" value={formData.leadType || ''} onChange={e => setFormData({ ...formData, leadType: e.target.value })} className="w-full glass-input rounded-lg px-4 py-2.5 text-white" style={{ colorScheme: 'dark' }}>
                     <option value="" className="bg-brand-primary text-slate-500">-- Select Lead Type --</option>
-                    <option value="Distributor" className="bg-brand-primary">Distributor</option>
-                    <option value="Super Stockist" className="bg-brand-primary">Super Stockist</option>
-                    <option value="Dealer" className="bg-brand-primary">Dealer</option>
-                    <option value="Retailer" className="bg-brand-primary">Retailer</option>
+                    {leadTypeOptions(masters, formData.leadType).map(o => <option key={o.key} value={o.key} className="bg-brand-primary">{o.label}</option>)}
                   </select>
                 </div>
                 {!isSalesRole(user?.role) && (

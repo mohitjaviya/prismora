@@ -1752,6 +1752,12 @@ export const DataProvider = ({ children }) => {
     if (before.locked) {
       return { ok: false, error: 'This one is part of a workflow and cannot be removed. Switch it off instead.' };
     }
+    if (before.list === 'lead_type') {
+      const used = leads.filter(l => l.leadType === before.key).length;
+      if (used > 0) {
+        return { ok: false, error: `Cannot remove "${before.label}": ${used} lead${used === 1 ? '' : 's'} use it. Switch it off instead; old leads keep showing it.` };
+      }
+    }
     const res = await confirmSave('masters delete', 'remove this option',
       () => supabase.from('masters').delete().eq('id', id).select('id'));
     if (!res.ok) return res;
@@ -1759,6 +1765,37 @@ export const DataProvider = ({ children }) => {
     setMasters(next);
     localStorage.setItem('prismora_masters', JSON.stringify(next));
     logEvent('master_removed', `Removed "${before.label}" from ${before.list}`, null, id);
+    return { ok: true };
+  };
+
+  // Renaming a lead type changes the stored value on every lead that uses
+  // it, so the database does both in one transaction (101). Before 101 the
+  // function is missing and the rename stays label-only.
+  const renameLeadType = async (id, newName) => {
+    const before = masters.find(m => m.id === id);
+    if (!before || before.list !== 'lead_type') return { ok: false, error: 'That option no longer exists.' };
+    const clean = String(newName || '').trim();
+    if (!clean) return { ok: false, error: 'An option needs a name.' };
+    if (clean === before.key && clean === before.label) return { ok: true };
+    if (masters.some(m => m.list === 'lead_type' && m.id !== id && (sameOption(m.key, clean) || sameOption(m.label, clean)))) {
+      return { ok: false, error: `"${clean}" is already in this list.` };
+    }
+    const { error } = await supabase.rpc('rename_lead_type', { p_old: before.key, p_new: clean });
+    if (error) {
+      const missing = error.code === 'PGRST202' || error.code === '42883'
+        || (/rename_lead_type/.test(String(error.message)) && /could not find|does not exist/i.test(String(error.message)));
+      if (missing) return updateMasterOption(id, { label: clean });
+      return { ok: false, error: plainDatabaseError(error, 'rename this lead type') };
+    }
+    const nextMasters = masters.map(m => m.id === id ? { ...m, key: clean, label: clean } : m);
+    setMasters(nextMasters);
+    localStorage.setItem('prismora_masters', JSON.stringify(nextMasters));
+    setLeads(prev => {
+      const next = prev.map(l => l.leadType === before.key ? { ...l, leadType: clean } : l);
+      localStorage.setItem('prismora_leads', JSON.stringify(next));
+      return next;
+    });
+    logEvent('master_renamed', `Renamed lead type "${before.key}" to "${clean}"`, null, id);
     return { ok: true };
   };
 
@@ -4175,7 +4212,7 @@ export const DataProvider = ({ children }) => {
       inventory, vendors, purchaseOrders, grn, distributors, dealers, retailers, schemes, complaints,
       addInventoryItem, updateInventoryItem, deleteInventoryItem, adjustStock, countStock, transferStock, receiveStock,
       damagedLockSupported, writeOffDamaged, returnDamagedToVendor, expiredMovesSupported, writeOffExpired, returnExpiredToVendor, returnCorrectionSupported, correctReturnCondition, orderReceiptSupported,
-      masters, addMasterOption, updateMasterOption, deleteMasterOption,
+      masters, addMasterOption, updateMasterOption, deleteMasterOption, renameLeadType,
       geo, geoRows, geoMastersSupported, addCity, addGeoState, renameGeo, setGeoActive, deleteGeo, reloadGeo: loadGeo,
       addVendor, updateVendor, deleteVendor,
       vendorPayments, addVendorPayment, deleteVendorPayment,

@@ -7,6 +7,7 @@ import { downloadExcel } from '../utils/exportUtils';
 import { useConfirm } from '../context/DialogContext';
 import { Button, PageHeader } from '../components/ui';
 import { MASTER_LISTS, optionsFor, badgeStyle } from '../utils/masterLists';
+import { canManageLeadTypes } from '../utils/leadTypes';
 
 // Offered as swatches so a colour can be picked without knowing hex. The free
 // text box stays, for a brand colour that is not on this list.
@@ -26,11 +27,11 @@ const PRESET_COLOURS = [
  * cannot be deleted. Switching one off is how you retire it.
  */
 export default function Masters() {
-  const { masters, addMasterOption, updateMasterOption, deleteMasterOption } = useData();
+  const { masters, addMasterOption, updateMasterOption, deleteMasterOption, renameLeadType } = useData();
   // The app's dialog: the browser's own confirm() printed the options object
   // as "[object Object]".
   const confirm = useConfirm();
-  const { canAccess } = useAuth();
+  const { canAccess, user } = useAuth();
 
   const [activeList, setActiveList] = useState(MASTER_LISTS[0].id);
   const [newLabel, setNewLabel] = useState('');
@@ -43,6 +44,7 @@ export default function Masters() {
   const [detailId, setDetailId] = useState(null);
 
   const list = MASTER_LISTS.find(l => l.id === activeList);
+  const readOnly = activeList === 'lead_type' && !canManageLeadTypes(user?.role);
   const allRows = useMemo(
     () => optionsFor(masters, activeList, { includeInactive: true }),
     [masters, activeList]
@@ -83,7 +85,10 @@ export default function Masters() {
   const startEdit = (row) => { setEditingId(row.id); setEditLabel(row.label); setError(''); };
 
   const saveEdit = async (row) => {
-    const r = await say(await updateMasterOption(row.id, { label: editLabel.trim() }));
+    // A lead type's name is what leads store, so renaming it also updates the leads (101).
+    const r = await say(activeList === 'lead_type'
+      ? await renameLeadType(row.id, editLabel)
+      : await updateMasterOption(row.id, { label: editLabel.trim() }));
     if (r.ok) setEditingId(null);
   };
 
@@ -178,6 +183,11 @@ export default function Masters() {
             </div>
           )}
 
+          {readOnly && (
+            <p className="mt-3 text-[11px] text-slate-400">Only Admin and Super Admin can change the Lead Types. You can see them here.</p>
+          )}
+
+          <fieldset disabled={readOnly} className="contents">
           <div className="mt-4 space-y-1.5">
             {rows.map((row, idx) => (
               <div
@@ -356,6 +366,7 @@ export default function Masters() {
               <Plus size={15} /> Add
             </button>
           </form>
+          </fieldset>
 
           <p className="mt-3 text-[11px] text-slate-600 leading-relaxed">
             Switching an option off hides it from new records without touching the ones that already use it —
