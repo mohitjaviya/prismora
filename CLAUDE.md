@@ -23,6 +23,13 @@
 - Deploy: commit on `fix/erp-session-2026-09`, push, ff-merge into `main`, push; check `npx vercel ls prismora`
 - Test logins: `.env.test-accounts.local` (`TEST_<ROLE>_EMAIL/_PASSWORD`). Never print or commit.
 
+## Deploy
+- Hostinger: Node.js Web App (React), live at https://clever-tan-mosquito-20.hostingersite.com (temporary domain, will change to the Prismora domain later). Auto-deploys from `main`.
+- Output dir `build` (set in `vite.config.js`). Env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+- SPA fallback via `public/.htaccess` (and `public/assets/.htaccess` for asset cache).
+- Vercel also deploys `main` from the same `build` dir (`vercel.json` outputDirectory).
+- Supabase Redirect URLs include the Hostinger address. Site URL is still localhost:3000 (to fix later).
+
 ## Conventions
 - Every DB change = new numbered migration + README entry. Never edit old ones.
 - Rules live in the database (RLS/triggers), not just the screen. Screen mirrors them (`utils/orderFlow.js`).
